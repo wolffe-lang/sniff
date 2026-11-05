@@ -38,5 +38,13 @@
     "macho-uuid-and-compact-boundary",
     "macho-dsym-address-only",
     "macho-dsym-mixed-sections"
+  ],
+  "line_test.lu": [
+    "dwarf-line-v4-vliw-resets",
+    "dwarf-line-v5-dwarf64-metadata",
+    "dwarf-line-v4-define-file",
+    "dwarf-line-resource-limits",
+    "dwarf-line-named-refusals",
+    "dwarf-line-hostile-boundaries"
   ]
 }
