@@ -1,0 +1,9 @@
+{
+  "command": [
+    "/Library/Developer/CommandLineTools/usr/bin/llvm-dwarfdump",
+    "--version"
+  ],
+  "exit_code": 0,
+  "sha256_read_1": "93be00ae40dad30cd857f8335e92bbc1bfbd967ea98571ba29a13bb08569c906",
+  "sha256_read_2": "93be00ae40dad30cd857f8335e92bbc1bfbd967ea98571ba29a13bb08569c906"
+}

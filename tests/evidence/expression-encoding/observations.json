@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "oracle": "Apple LLVM version 21.0.0; exact binary identity and complete output alongside this file",
+  "observed_mappings": {
+    "DW_OP_GNU_push_tls_address": {
+      "opcode": 224,
+      "encoded_operands": 0,
+      "evidence": "tls-followed-by-known-ops preserves adjacent lit0 and lit1/stack_value"
+    },
+    "DW_OP_GNU_entry_value": {
+      "opcode": 243,
+      "encoded_layout": "unsigned base-128 length prefix followed by nested expression bytes",
+      "evidence": [
+        "entry-one-byte-register: 01 length, reg0 closes before outer stack_value",
+        "entry-two-byte-uleb-length: 80 01 prefix consumed before 127 NOPs and reg0",
+        "entry-nested: nested standard entry_value recognized"
+      ]
+    }
+  },
+  "limits": [
+    "No evaluation semantics inferred",
+    "The pinned oracle exits 0 and prints unbalanced parentheses for the long/nested/truncated probes; do not use that exit as validity evidence",
+    "Decoder bounds are enforced independently; truncated blocks must be refused",
+    "Other vendor operation names discovered are not expression decoder support claims"
+  ]
+}

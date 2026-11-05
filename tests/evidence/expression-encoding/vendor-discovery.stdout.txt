@@ -1,0 +1,137 @@
+target/expression-probes/vendor-discovery.macho:	file format Mach-O arm64
+
+.debug_info contents:
+0x00000000: Compile Unit: length = 0x0000022a, format = DWARF32, version = 0x0004, abbr_offset = 0x0000, addr_size = 0x08 (next unit at 0x0000022e)
+
+0x0000000b: DW_TAG_compile_unit
+              DW_AT_name	("synthetic-expression-observation")
+
+0x0000002d:   DW_TAG_variable
+                DW_AT_name	("vendor-e0")
+                DW_AT_location	(DW_OP_GNU_push_tls_address, <decoding error> 00 50 9f)
+
+0x0000003d:   DW_TAG_variable
+                DW_AT_name	("vendor-e1")
+                DW_AT_location	(<decoding error> e1 00 50 9f)
+
+0x0000004d:   DW_TAG_variable
+                DW_AT_name	("vendor-e2")
+                DW_AT_location	(<decoding error> e2 00 50 9f)
+
+0x0000005d:   DW_TAG_variable
+                DW_AT_name	("vendor-e3")
+                DW_AT_location	(<decoding error> e3 00 50 9f)
+
+0x0000006d:   DW_TAG_variable
+                DW_AT_name	("vendor-e4")
+                DW_AT_location	(<decoding error> e4 00 50 9f)
+
+0x0000007d:   DW_TAG_variable
+                DW_AT_name	("vendor-e5")
+                DW_AT_location	(<decoding error> e5 00 50 9f)
+
+0x0000008d:   DW_TAG_variable
+                DW_AT_name	("vendor-e6")
+                DW_AT_location	(<decoding error> e6 00 50 9f)
+
+0x0000009d:   DW_TAG_variable
+                DW_AT_name	("vendor-e7")
+                DW_AT_location	(<decoding error> e7 00 50 9f)
+
+0x000000ad:   DW_TAG_variable
+                DW_AT_name	("vendor-e8")
+                DW_AT_location	(<decoding error> e8 00 50 9f)
+
+0x000000bd:   DW_TAG_variable
+                DW_AT_name	("vendor-e9")
+                DW_AT_location	(<decoding error> e9 00 50 9f)
+
+0x000000cd:   DW_TAG_variable
+                DW_AT_name	("vendor-ea")
+                DW_AT_location	(<decoding error> ea 00 50 9f)
+
+0x000000dd:   DW_TAG_variable
+                DW_AT_name	("vendor-eb")
+                DW_AT_location	(<decoding error> eb 00 50 9f)
+
+0x000000ed:   DW_TAG_variable
+                DW_AT_name	("vendor-ec")
+                DW_AT_location	(<decoding error> ec 00 50 9f)
+
+0x000000fd:   DW_TAG_variable
+                DW_AT_name	("vendor-ed")
+                DW_AT_location	(DW_OP_WASM_location 0x0 0x50, DW_OP_stack_value)
+
+0x0000010d:   DW_TAG_variable
+                DW_AT_name	("vendor-ee")
+                DW_AT_location	(<decoding error> ee 00 50 9f)
+
+0x0000011d:   DW_TAG_variable
+                DW_AT_name	("vendor-ef")
+                DW_AT_location	(<decoding error> ef 00 50 9f)
+
+0x0000012d:   DW_TAG_variable
+                DW_AT_name	("vendor-f0")
+                DW_AT_location	(<decoding error> f0 00 50 9f)
+
+0x0000013d:   DW_TAG_variable
+                DW_AT_name	("vendor-f1")
+                DW_AT_location	(<decoding error> f1 00 50 9f)
+
+0x0000014d:   DW_TAG_variable
+                DW_AT_name	("vendor-f2")
+                DW_AT_location	(DW_OP_GNU_implicit_pointer 0x0 +0, DW_OP_reg0 W0, DW_OP_stack_value)
+
+0x0000015d:   DW_TAG_variable
+                DW_AT_name	("vendor-f3")
+                DW_AT_location	(DW_OP_GNU_entry_value(DW_OP_reg0 W0, DW_OP_stack_value)
+
+0x0000016d:   DW_TAG_variable
+                DW_AT_name	("vendor-f4")
+                DW_AT_location	(<decoding error> f4 00 50 9f)
+
+0x0000017d:   DW_TAG_variable
+                DW_AT_name	("vendor-f5")
+                DW_AT_location	(<decoding error> f5 00 50 9f)
+
+0x0000018d:   DW_TAG_variable
+                DW_AT_name	("vendor-f6")
+                DW_AT_location	(<decoding error> f6 00 50 9f)
+
+0x0000019d:   DW_TAG_variable
+                DW_AT_name	("vendor-f7")
+                DW_AT_location	(<decoding error> f7 00 50 9f)
+
+0x000001ad:   DW_TAG_variable
+                DW_AT_name	("vendor-f8")
+                DW_AT_location	(<decoding error> f8 00 50 9f)
+
+0x000001bd:   DW_TAG_variable
+                DW_AT_name	("vendor-f9")
+                DW_AT_location	(<decoding error> f9 00 50 9f)
+
+0x000001cd:   DW_TAG_variable
+                DW_AT_name	("vendor-fa")
+                DW_AT_location	(<decoding error> fa 00 50 9f)
+
+0x000001dd:   DW_TAG_variable
+                DW_AT_name	("vendor-fb")
+                DW_AT_location	(DW_OP_GNU_addr_index 0x0, DW_OP_reg0 W0, DW_OP_stack_value)
+
+0x000001ed:   DW_TAG_variable
+                DW_AT_name	("vendor-fc")
+                DW_AT_location	(DW_OP_GNU_const_index 0x0, DW_OP_reg0 W0, DW_OP_stack_value)
+
+0x000001fd:   DW_TAG_variable
+                DW_AT_name	("vendor-fd")
+                DW_AT_location	(<decoding error> fd 00 50 9f)
+
+0x0000020d:   DW_TAG_variable
+                DW_AT_name	("vendor-fe")
+                DW_AT_location	(<decoding error> fe 00 50 9f)
+
+0x0000021d:   DW_TAG_variable
+                DW_AT_name	("vendor-ff")
+                DW_AT_location	(<decoding error> ff 00 50 9f)
+
+0x0000022d:   NULL

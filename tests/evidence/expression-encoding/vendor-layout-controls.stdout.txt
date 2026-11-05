@@ -1,0 +1,29 @@
+target/expression-probes/vendor-layout-controls.macho:	file format Mach-O arm64
+
+.debug_info contents:
+0x00000000: Compile Unit: length = 0x0000013a, format = DWARF32, version = 0x0004, abbr_offset = 0x0000, addr_size = 0x08 (next unit at 0x0000013e)
+
+0x0000000b: DW_TAG_compile_unit
+              DW_AT_name	("synthetic-expression-observation")
+
+0x0000002d:   DW_TAG_variable
+                DW_AT_name	("tls-followed-by-known-ops")
+                DW_AT_location	(DW_OP_lit0, DW_OP_GNU_push_tls_address, DW_OP_lit1, DW_OP_stack_value)
+
+0x0000004d:   DW_TAG_variable
+                DW_AT_name	("entry-one-byte-register")
+                DW_AT_location	(DW_OP_GNU_entry_value(DW_OP_reg0 W0), DW_OP_stack_value)
+
+0x0000006b:   DW_TAG_variable
+                DW_AT_name	("entry-two-byte-uleb-length")
+                DW_AT_location	(DW_OP_GNU_entry_value(DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_nop, DW_OP_reg0 W0, DW_OP_stack_value)
+
+0x0000010d:   DW_TAG_variable
+                DW_AT_name	("entry-nested")
+                DW_AT_location	(DW_OP_GNU_entry_value(DW_OP_entry_value(DW_OP_reg1 W1), DW_OP_stack_value)
+
+0x00000122:   DW_TAG_variable
+                DW_AT_name	("entry-truncated-block")
+                DW_AT_location	(DW_OP_GNU_entry_value(DW_OP_reg0 W0)
+
+0x0000013d:   NULL
