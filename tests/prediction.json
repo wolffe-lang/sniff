@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "written_before_code": "2026-11-05",
+  "reader_scope_is_provisional_until_census": true,
+  "S1": {
+    "containers": ["ELF64 little-endian x86-64", "Mach-O64 little-endian arm64", "dSYM companion with UUID match"],
+    "dwarf": ["4", "5", "DWARF32 and DWARF64 unit sizes independent of target address size", "abbreviations and DIE tree", "line machine and sequence boundaries", "string and address indexes", "ranges and locations", "eh_frame and debug_frame", "symbols"],
+    "predicted_wolf": ["base_type", "subprogram", "formal_parameter", "variable", "DW_OP_fbreg", "DW_OP_reg6 on x86-64; architecture-specific frame-base register on arm64", "C11 language tag", "statement rows and prologue_end"],
+    "predicted_c_O2": ["inlined_subroutine", "abstract_origin", "location lists", "register and composite locations", "unavailable optimized-out values"],
+    "must_separate": ["wolf producer units", "bundled runtime units", "compiler-produced C units", "linked system frame information"]
+  },
+  "S2": {
+    "run,kill,continue": ["wolf/scalars"],
+    "break function,file:line,address; info breakpoints; delete": ["wolf/scalars", "wolf/shared-name"],
+    "step,next,finish,until": ["wolf/nested", "wolf/loops"],
+    "bt,frame,up,down": ["wolf/nested", "c/recursion"],
+    "print,info locals,info args": ["wolf/scalars", "wolf/nested"],
+    "x,info registers": ["c/aggregates"],
+    "future-only": ["c/inlining", "c/threads"]
+  },
+  "compiler_gap_hypotheses": [
+    "s283: aggregates, strings, lists, enums and error-union DIEs absent from wolf's own units",
+    "s283: wolf-owned CFI absent; runtime eh_frame presence cannot prove wolf frames unwind",
+    "later: whole-function spill locations do not establish lexical scope or live ranges",
+    "later: source inlining and optimized locations need separate support",
+    "module-qualified source names and C main shim can make break main resolve more than once"
+  ],
+  "harness_red_first": ["wrong-value", "wrong-line-order", "missing-frame"],
+  "normalizations": ["instruction addresses, not every hexadecimal scalar", "inferior pids, not arbitrary integers", "explicit debugger timestamps only", "exact configured lane-root prefix only"],
+  "reproducibility": "Two builds in the same fixed container path must hash identically; timestamps, build IDs and debug paths must be controlled, never normalized out of the binary comparison.",
+  "honesty": "S0 does not implement sniff. Oracle captures and harness selftests are not debugger parity. A SKIP is not a measurement."
+}
