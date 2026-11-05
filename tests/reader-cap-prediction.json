@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "status": "Pre-implementation resource policy for the remaining readers; this file is not a claim that these limits are enforced yet",
+  "source": "tests/evidence/linux/census.json and the pinned baseline fixture/oracle captures",
+  "measured": {
+    "largest_die_count": 392124,
+    "largest_attribute_count": 1428600,
+    "count_fixture": "wolf/types/wolf-debug",
+    "largest_linux_fixture_bytes": 14259616,
+    "size_fixture": "wolf/shared-name/wolf-debug",
+    "types_info_show_form_stdout_bytes": 184100847,
+    "types_line_verbose_stdout_bytes": 32287500,
+    "types_frames_stdout_bytes": 370519,
+    "largest_line_row_count_from_census": 128785,
+    "line_row_fixture": "linux/wolf/nested/wolf-debug"
+  },
+  "planned_caps": {
+    "input_bytes": 67108864,
+    "dies": 1048576,
+    "attributes": 4194304,
+    "line_rows": 1048576,
+    "emitted_bytes": 1073741824,
+    "work_units": 1500000000,
+    "logical_allocation_bytes": 1610612736
+  },
+  "headroom": {
+    "input_bytes": "4.70 times the largest measured Linux fixture",
+    "dies": "2.67 times the largest recorded count",
+    "attributes": "2.94 times the largest recorded count",
+    "emitted_bytes": "5.83 times the measured verbose/form-bearing info capture; dump output is streamed, never accumulated to this size",
+    "work_units": "Provisional charged-operation budget, not a measured timing claim. Count byte reads, table/reference walks and output work; measure actual complete-corpus maxima before finalizing and retain at least fourfold observed headroom.",
+    "logical_allocation_bytes": "Provisional explicit allocation-accounting budget, including geometric list growth and output buffers. Measure before finalizing; do not infer allocator bytes from DIE counts alone.",
+    "line_rows": "8.14 times the census-derived maximum (special opcodes + copy + end_sequence); independently confirm using the implemented reader before finalizing"
+  },
+  "requirements": [
+    "No cap may exclude a recorded fixture",
+    "Unknown formats and encodings are distinct from resource exhaustion",
+    "Charge repeated scans and reference traversal, not merely input length",
+    "Use flattened DIE and attribute storage to avoid per-reference deep copies",
+    "Stream rendered output through bounded buffers and retire per-row temporary allocations",
+    "Native and checked tests exercise low caller-supplied limits and overflow boundaries",
+    "Full fixture matrices measure the implemented counters before final gauntlets"
+  ]
+}
