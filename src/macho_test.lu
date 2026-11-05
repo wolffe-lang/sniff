@@ -211,6 +211,7 @@ fn macho_test_dsym_mixed_sections() {
     macho_test_put(mut data, 232, 336, 4)
     macho_test_put(mut data, 296, 352, 4)
     macho_test_put(mut data, 304, 368, 4)
+    data[336] = 123 as byte
     let result = readers.macho_read(data, 10000)
     let object = result else |err| {
         print("FAIL macho-dsym-mixed-sections {err}")
@@ -222,6 +223,16 @@ fn macho_test_dsym_mixed_sections() {
     assert(object.sections[0].address == 4096 && object.sections[0].size == 16)
     assert(object.sections[1].has_file_data && object.sections[1].file_offset == 336)
     assert(object.sections[1].address == 4112 && object.sections[1].size == 16)
+    var payload = readers.cursor(
+        object.sections[1].file_offset as int,
+        (object.sections[1].file_offset + object.sections[1].size) as int,
+        100,
+    )
+    let first_byte = readers.uint_le(data, mut payload, 1)
+    assert("{first_byte}" == "123")
+    macho_test_put(mut data, 12, 2, 4)
+    let ordinary = readers.macho_read(data, 10000)
+    assert("{ordinary}" == "invalid_section")
     print("PASS macho-dsym-mixed-sections")
 }
 
