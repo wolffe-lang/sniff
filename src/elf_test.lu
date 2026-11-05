@@ -1,0 +1,137 @@
+//! member: false
+use readers
+
+fn put(mut data: List[byte], at: int, value: u64, width: int) {
+    var i: int = 0
+    while i < width {
+        data[at + i] = ((value >> (i * 8) as u64) & 255) as int as byte
+        i += 1
+    }
+}
+
+fn fixture() -> List[byte] {
+    var data: List[byte] = []
+    var i: int = 0
+    while i < 512 { (mut data).push(0 as byte); i += 1 }
+    put(mut data, 0, 1179403647, 4)
+    put(mut data, 4, 2, 1)
+    put(mut data, 5, 1, 1)
+    put(mut data, 6, 1, 1)
+    put(mut data, 16, 2, 2)
+    put(mut data, 18, 62, 2)
+    put(mut data, 20, 1, 4)
+    put(mut data, 24, 4198400, 8)
+    put(mut data, 40, 64, 8)
+    put(mut data, 52, 64, 2)
+    put(mut data, 58, 64, 2)
+    put(mut data, 60, 5, 2)
+    put(mut data, 62, 1, 2)
+    // Section 1: shared section/symbol string table, names are raw spans.
+    put(mut data, 128, 1, 4)
+    put(mut data, 132, 3, 4)
+    put(mut data, 152, 384, 8)
+    put(mut data, 160, 34, 8)
+    put(mut data, 176, 1, 8)
+    let names = "\0.strtab\0.symtab\0.bss\0.shndx\0item\0".bytes()
+    i = 0
+    while i < names.len { data[384 + i] = names[i]; i += 1 }
+    // Section 2: two Elf64_Sym entries.
+    put(mut data, 192, 9, 4)
+    put(mut data, 196, 2, 4)
+    put(mut data, 216, 424, 8)
+    put(mut data, 224, 48, 8)
+    put(mut data, 232, 1, 4)
+    put(mut data, 236, 1, 4)
+    put(mut data, 240, 8, 8)
+    put(mut data, 248, 24, 8)
+    // NOBITS need not occupy bytes in the file.
+    put(mut data, 256, 17, 4)
+    put(mut data, 260, 8, 4)
+    put(mut data, 272, 4198400, 8)
+    put(mut data, 280, 18446744073709551615, 8)
+    put(mut data, 288, 4096, 8)
+    put(mut data, 304, 16, 8)
+    // A SHNDX section paired with section 2.
+    put(mut data, 320, 22, 4)
+    put(mut data, 324, 18, 4)
+    put(mut data, 344, 472, 8)
+    put(mut data, 352, 8, 8)
+    put(mut data, 360, 2, 4)
+    put(mut data, 368, 4, 8)
+    put(mut data, 376, 4, 8)
+    put(mut data, 448, 29, 4)
+    put(mut data, 452, 17, 1)
+    put(mut data, 454, 3, 2)
+    put(mut data, 456, 4198400, 8)
+    put(mut data, 464, 16, 8)
+    data
+}
+
+fn expect_bad(data: List[byte], expected: str) {
+    let result = readers.elf_read(data, 100, 100, 10000)
+    assert("{result}" == expected)
+}
+
+fn main() {
+    var data = fixture()
+    let object = readers.elf_read(data, 100, 100, 10000) else { assert(false); return }
+    assert(object.file_type == 2 && object.entry == 4198400)
+    assert(object.sections.len == 5 && object.symbols.len == 2)
+    assert(object.sections[3].kind == 8 && object.sections[3].size == 4096)
+    assert(object.sections[1].name.start == 385 && object.sections[1].name.length == 7)
+    assert(object.symbols[1].name.start == 413 && object.symbols[1].name.length == 4)
+    assert(object.symbols[1].value == 4198400 && object.symbols[1].size == 16)
+    assert(object.symbols[1].section_index == 3 && object.symbols[1].info == 17)
+    print("PASS elf-valid-symbols-nobits")
+    // Extended header numbering and symbol section index use section zero/SHNDX.
+    put(mut data, 60, 0, 2)
+    put(mut data, 62, 65535, 2)
+    put(mut data, 96, 5, 8)
+    put(mut data, 104, 1, 4)
+    put(mut data, 454, 65535, 2)
+    put(mut data, 476, 3, 4)
+    let extended = readers.elf_read(data, 100, 100, 10000) else { assert(false); return }
+    assert(extended.sections.len == 5 && extended.symbols[1].section_index == 3)
+    print("PASS elf-extended-indexes")
+    data = fixture()
+    expect_bad(data[0..63], "elf_truncated")
+    put(mut data, 40, 18446744073709551615, 8)
+    expect_bad(data, "elf_offset_overflow")
+    data = fixture()
+    put(mut data, 216, 500, 8)
+    expect_bad(data, "elf_offset_overflow")
+    print("PASS elf-truncation-offsets")
+    data = fixture()
+    put(mut data, 232, 3, 4)
+    expect_bad(data, "elf_invalid_link")
+    data = fixture()
+    put(mut data, 448, 34, 4)
+    expect_bad(data, "elf_invalid_string")
+    data = fixture()
+    put(mut data, 160, 33, 8)
+    expect_bad(data, "elf_invalid_string")
+    print("PASS elf-links-strings")
+    data = fixture()
+    let section_limit = readers.elf_read(data, 4, 100, 10000)
+    assert("{section_limit}" == "elf_resource_limit")
+    let symbol_limit = readers.elf_read(data, 100, 1, 10000)
+    assert("{symbol_limit}" == "elf_resource_limit")
+    let work_limit = readers.elf_read(data, 100, 100, 1)
+    assert("{work_limit}" == "elf_resource_limit")
+    print("PASS elf-resource-limits")
+    put(mut data, 4, 1, 1)
+    expect_bad(data, "elf_unsupported_class")
+    data = fixture()
+    put(mut data, 5, 2, 1)
+    expect_bad(data, "elf_unsupported_endian")
+    data = fixture()
+    put(mut data, 18, 183, 2)
+    expect_bad(data, "elf_unsupported_machine")
+    data = fixture()
+    put(mut data, 16, 1, 2)
+    expect_bad(data, "elf_unsupported_relocatable")
+    data = fixture()
+    put(mut data, 136, 2048, 8)
+    expect_bad(data, "elf_unsupported_compression")
+    print("PASS elf-named-refusals")
+}
