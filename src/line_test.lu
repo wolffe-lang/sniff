@@ -87,7 +87,14 @@ fn dwarf_line_fixture(version: int, wide: bool, define_file: bool, unknown_stand
     dwarf_line_address(mut b, 4096, address_width)
     let first: List[int] = [5,3,7,10,12,2,0,2,4,7,1,2,3,3,2,6,11,32,9,3,0,8,1,0,1,1]
     i = 0
-    while i < first.len { dwarf_line_append(mut b, first[i] as u64, 1); i += 1 }
+    while i < first.len {
+        dwarf_line_append(mut b, first[i] as u64, 1)
+        if version == 5 && i == 10 {
+            dwarf_line_append(mut b, 4, 1)
+            dwarf_line_append(mut b, 0, 1)
+        }
+        i += 1
+    }
     if define_file {
         dwarf_line_append(mut b, 0, 1)
         dwarf_line_append(mut b, 11, 1)
@@ -150,10 +157,13 @@ fn main() {
     assert(line5.files[1].name.start == five.strings.start+7)
     assert(line5.files[0].has_md5 && line5.files[0].md5.length == 16)
     assert(line5.rows[0].file == 1 && line5.rows[0].address == 4096)
+    assert(line5.rows[1].file == 0 && line5.rows[4].file == 1)
+    assert(line5.initial_file_count == 2)
     print("PASS dwarf-line-v5-dwarf64-metadata")
     let defined = dwarf_line_fixture(4, false, true, false)
     let added = dwarf_line_decode(defined, 10000, 100) else { assert(false); return }
     assert(added.files.len == 2 && added.files[1].size == 12 && added.rows[4].file == 2)
+    assert(added.initial_file_count == 1)
     print("PASS dwarf-line-v4-define-file")
     let low_rows = dwarf_line_decode(four, 10000, 5)
     assert("{low_rows}" == "resource_limit")
