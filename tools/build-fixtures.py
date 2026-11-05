@@ -64,8 +64,12 @@ def main():
                 commands = [[producer, '-g', '-gdwarf-5', '-' + opt, '-pthread',
                     '-fdebug-prefix-map=' + str(ROOT) + '=/source',
                     '-ffile-prefix-map=' + str(ROOT) + '=/source', '-c', source, '-o', obj],
-                    [producer, '-g', '-pthread', obj, '-o', exe]]
-            for command in commands: run(command, env)
+                    [producer, '-g', '-pthread', *(['-Wl,-reproducible'] if mac else []), obj, '-o', exe]]
+            for command in commands:
+                run(command, env)
+                if producer != 'wolf' and '-c' in command:
+                    # Mach-O's OSO debug-map entries otherwise inherit wall time.
+                    os.utime(directory / 'main.o', (1700000000, 1700000000))
             if mac and producer != 'wolf': run(['dsymutil', exe, '-o', str(exe) + '.dSYM'], env)
             run([exe], env)
             files = {str(f.relative_to(directory)): sha(f) for f in sorted(directory.rglob('*')) if f.is_file()}
@@ -79,7 +83,9 @@ def main():
                                    .replace(str(args.out), '<OUT>') for v in c] for c in commands]})
         print(('PASS ' if equal else 'FAIL ') + 'fixture-reproducibility ' + ident, flush=True)
     result = {'schema': 1, 'platform': platform.system() + '-' + platform.machine(),
-              'versions': versions, 'wolf_debug_mode': 'default emits DWARF; -g is not a supported flag',
+              'versions': versions, 'source_date_epoch': 1700000000,
+              'c_object_mtime': 1700000000, 'macho_link_control': '-Wl,-reproducible' if mac else None,
+              'wolf_debug_mode': 'default emits DWARF; -g is not a supported flag',
               'fixtures': rows}
     (args.out / 'builds.json').write_text(json.dumps(result, indent=2) + '\n')
     if not all(row['reproducible'] for row in rows): return 1
