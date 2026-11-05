@@ -17,6 +17,7 @@ The readers come first, then the Linux process core, then macOS and PAX.
 | Linux behavioral oracle | GDB 15.1 (Ubuntu 15.1-1ubuntu1~24.04.1), binary SHA-256 pinned |
 | macOS behavioral oracle | Apple LLDB 2100.0.16.4, Apple Swift 6.3 |
 | Reader oracles | Ubuntu llvm-dwarfdump 18.1.3 and readelf 2.42, binary SHA-256 pinned; SDK llvm-dwarfdump on macOS |
+| macOS symbol oracle | SDK llvm-nm, Apple LLVM 21.0.0; version and binary SHA-256 pinned |
 | C producers | GCC 13.3.0 and clang 18.1.3 on Linux; Apple clang 21.0.0 on macOS |
 | Wolf value oracle | lupin 0.1.59 |
 | Bootstrap compiler | wolf 0.2.37, whole release archives pinned by SHA-256 |
@@ -24,9 +25,11 @@ The readers come first, then the Linux process core, then macOS and PAX.
 `wolf-toolchain.toml` pins archive bytes, including wolf's bundled standard
 library and runtime. `sniff-oracle.toml`, `ci/packages.txt` and
 `ci/oracle-binaries.lock` bind the Linux image recipe, its complete package
-closure and the five oracle/producer binaries. A mismatch stops the gate.
-Nothing is installed globally. Built fixture binaries and downloads are not
-committed.
+closure and the five oracle/producer binaries. The macOS symbol oracle is
+also pinned in `sniff-oracle.toml`. The symbol guard checks `--version` and
+SHA-256 before fixture work on either platform; a mismatched PATH binary is
+refused by name. Nothing is installed globally. Built fixture binaries and
+downloads are not committed.
 
 ## Build and measure
 
