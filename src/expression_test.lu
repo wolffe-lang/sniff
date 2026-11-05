@@ -1,0 +1,204 @@
+//! member: false
+use readers
+
+fn dwarf_expr_bytes(values: List[int]) -> List[byte] {
+    var result: List[byte] = []
+    var i: int = 0
+    while i < values.len { (mut result).push(values[i] as byte); i += 1 }
+    result
+}
+fn dwarf_expr_context(length: int, address_size: int, offset_size: int) -> readers.DwarfUnit {
+    readers.DwarfUnit {start: 0, body: 0, end: length, version: 5,
+        offset_size: offset_size, address_size: address_size, kind: 1,
+        abbrev: 0, signature: 0, type_offset: 0}
+}
+fn dwarf_expr_decode(data: List[byte]) -> readers.DwarfExprProgram ! readers.DwarfExprError {
+    readers.dwarf_expr_read(data, readers.ByteSpan {start: 0, length: data.len},
+        dwarf_expr_context(data.len, 8, 4), readers.ByteSpan {start: 0, length: data.len},
+        100000, 4096, 64)?
+}
+fn dwarf_expr_cover(program: readers.DwarfExprProgram) {
+    var i: int = 0
+    while i < program.ops.len { print("COVER {program.ops[i].opcode}"); i += 1 }
+}
+fn dwarf_expr_expect(data: List[byte], expected: str) {
+    let result = dwarf_expr_decode(data)
+    assert("{result}" == expected)
+}
+fn dwarf_expr_families() {
+    var data: List[byte] = []
+    var i: int = 0
+    while i < 32 {
+        (mut data).push((0x30+i) as byte)
+        (mut data).push((0x50+i) as byte)
+        (mut data).push((0x70+i) as byte)
+        (mut data).push(0x7f as byte)
+        i += 1
+    }
+    let program = dwarf_expr_decode(data) else { assert(false); return }
+    assert(program.ops.len == 96)
+    i = 0
+    while i < 32 {
+        assert(program.ops[i*3].implicit == i as u64 && program.ops[i*3].operand_count == 0)
+        assert(program.ops[i*3+1].implicit == i as u64 && program.ops[i*3+1].operand_count == 0)
+        assert(program.ops[i*3+2].implicit == i as u64 && program.ops[i*3+2].signed1 == -1)
+        assert(program.ops[i*3+2].first_signed && program.ops[i*3+2].operand_count == 1)
+        i += 1
+    }
+    dwarf_expr_cover(program)
+    let simple = dwarf_expr_bytes([0x06,0x12,0x13,0x14,0x16,0x17,0x18,0x19,0x1a,
+        0x1b,0x1c,0x1d,0x1e,0x1f,0x20,0x21,0x22,0x24,0x25,0x26,0x27,
+        0x29,0x2a,0x2b,0x2c,0x2d,0x2e,0x96,0x97,0x9b,0x9c,0x9f,0xe0])
+    let operations = dwarf_expr_decode(simple) else { assert(false); return }
+    assert(operations.ops.len == simple.len)
+    i = 0
+    while i < operations.ops.len { assert(operations.ops[i].operand_count == 0); i += 1 }
+    dwarf_expr_cover(operations)
+    print("PASS dwarf-expr-families-stack-arithmetic")
+}
+fn dwarf_expr_constants() {
+    let data = dwarf_expr_bytes([
+        0x08,0xff, 0x09,0x80, 0x0a,0xff,0xff, 0x0b,0,0x80,
+        0x0c,0xff,0xff,0xff,0xff, 0x0d,0,0,0,0x80,
+        0x0e,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
+        0x0f,0,0,0,0,0,0,0,0x80,
+        0x10,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,1,
+        0x11,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x80,0x7f])
+    let program = dwarf_expr_decode(data) else { assert(false); return }
+    assert(program.ops.len == 10)
+    assert(program.ops[0].unsigned1 == 255 && !program.ops[0].first_signed)
+    assert(program.ops[1].signed1 == -128 && program.ops[1].first_signed)
+    assert(program.ops[1].unsigned1 == 128)
+    assert(program.ops[2].unsigned1 == 65535 && program.ops[3].signed1 == -32768)
+    assert(program.ops[4].unsigned1 == 4294967295 && program.ops[5].signed1 == -2147483648)
+    assert(program.ops[6].unsigned1 == 18446744073709551615)
+    assert("{program.ops[7].signed1}" == "-9223372036854775808")
+    assert(program.ops[8].unsigned1 == 18446744073709551615)
+    assert("{program.ops[9].signed1}" == "-9223372036854775808")
+    assert(program.ops[3].operand_span.length == 2 && program.ops[7].operand_span.length == 8)
+    dwarf_expr_cover(program)
+    print("PASS dwarf-expr-signed-unsigned-constants")
+}
+fn dwarf_expr_operands() {
+    let data = dwarf_expr_bytes([0x03,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
+        0x15,255, 0x23,0x81,1, 0x90,33, 0x91,0x78, 0x92,0x81,1,0x7c,
+        0x93,4, 0x94,8, 0x95,4, 0x9d,8,16, 0xa1,0x82,1, 0xa2,0x83,1])
+    let program = dwarf_expr_decode(data) else { assert(false); return }
+    assert(program.ops.len == 12)
+    assert(program.ops[0].unsigned1 == 18446744073709551615)
+    assert(program.ops[1].unsigned1 == 255 && program.ops[2].unsigned1 == 129)
+    assert(program.ops[3].unsigned1 == 33 && program.ops[4].signed1 == -8)
+    assert(program.ops[5].unsigned1 == 129 && program.ops[5].signed2 == -4)
+    assert(!program.ops[5].first_signed && program.ops[5].second_signed)
+    assert(program.ops[6].unsigned1 == 4 && program.ops[7].unsigned1 == 8)
+    assert(program.ops[9].unsigned1 == 8 && program.ops[9].unsigned2 == 16)
+    assert(program.ops[10].unsigned1 == 130 && program.ops[11].unsigned1 == 131)
+    dwarf_expr_cover(program)
+    print("PASS dwarf-expr-register-piece-index-operands")
+}
+fn dwarf_expr_nested() {
+    // GNU f3 layout is observed in tests/evidence/expression-encoding.
+    let data = dwarf_expr_bytes([0xa3,4,0xf3,1,0x50,0x96,0x9f])
+    let program = dwarf_expr_decode(data) else { assert(false); return }
+    assert(program.ops.len == 5)
+    assert(program.ops[0].block.start == 2 && program.ops[0].block.length == 4)
+    assert(program.ops[0].parent == -1 && program.ops[0].depth == 0 && program.ops[0].subtree_end == 4)
+    assert(program.ops[1].parent == 0 && program.ops[1].depth == 1 && program.ops[1].subtree_end == 3)
+    assert(program.ops[2].parent == 1 && program.ops[2].depth == 2 && program.ops[2].offset == 4)
+    assert(program.ops[3].parent == 0 && program.ops[3].depth == 1)
+    assert(program.ops[4].parent == -1 && program.ops[4].offset == 6)
+    dwarf_expr_cover(program)
+    let opaque = dwarf_expr_bytes([0x9e,3,0xf3,0xff,0,0x30])
+    let preserved = dwarf_expr_decode(opaque) else { assert(false); return }
+    assert(preserved.ops.len == 2 && preserved.ops[0].block.length == 3)
+    assert(preserved.ops[1].offset == 5 && preserved.ops[0].subtree_end == 1)
+    dwarf_expr_cover(preserved)
+    print("PASS dwarf-expr-flat-nesting-opaque-blocks")
+}
+fn dwarf_expr_branches() {
+    let forward = dwarf_expr_bytes([0x28,1,0,0x30,0x31])
+    let branch = dwarf_expr_decode(forward) else { assert(false); return }
+    assert(branch.ops[0].branch_target == 4 && branch.ops[0].signed1 == 1)
+    let back = dwarf_expr_bytes([0x2f,0xfd,0xff])
+    let looping = dwarf_expr_decode(back) else { assert(false); return }
+    assert(looping.ops[0].branch_target == 0 && looping.ops[0].signed1 == -3)
+    let end = dwarf_expr_bytes([0x2f,1,0,0x30])
+    let ending = dwarf_expr_decode(end) else { assert(false); return }
+    assert(ending.ops[0].branch_target == 4)
+    let nested_exit = dwarf_expr_bytes([0xa3,3,0x2f,0,0,0x30])
+    let exiting = dwarf_expr_decode(nested_exit) else { assert(false); return }
+    assert(exiting.ops[1].branch_target == 5 && exiting.ops[1].scope_end == 5)
+    dwarf_expr_expect(dwarf_expr_bytes([0x2f,2,0,0x30]), "dwarf_expr_invalid_branch")
+    dwarf_expr_expect(dwarf_expr_bytes([0x2f,0xfc,0xff]), "dwarf_expr_invalid_branch")
+    dwarf_expr_expect(dwarf_expr_bytes([0x2f,2,0,0x9e,3,0xaa,0xbb,0xcc,0x30]), "dwarf_expr_invalid_branch")
+    dwarf_expr_expect(dwarf_expr_bytes([0x2f,2,0,0xa3,1,0x50]), "dwarf_expr_invalid_branch")
+    dwarf_expr_expect(dwarf_expr_bytes([0xa3,3,0x2f,1,0,0x30]), "dwarf_expr_invalid_branch")
+    dwarf_expr_cover(branch)
+    dwarf_expr_cover(looping)
+    print("PASS dwarf-expr-bounded-branch-boundaries")
+}
+fn dwarf_expr_reference_parse(payload: List[byte], format_width: int) -> readers.DwarfExprProgram ! readers.DwarfExprError {
+    var data: List[byte] = []
+    var i: int = 0
+    while i < 128 { (mut data).push(0 as byte); i += 1 }
+    i = 0
+    while i < payload.len { data[i] = payload[i]; i += 1 }
+    let unit = readers.DwarfUnit {start: 16, body: 24, end: 64, version: 5,
+        offset_size: format_width, address_size: 4, kind: 1, abbrev: 0, signature: 0, type_offset: 0}
+    readers.dwarf_expr_read(data, readers.ByteSpan {start: 0, length: payload.len}, unit,
+        readers.ByteSpan {start: 8, length: 64}, 100000, 4096, 64)?
+}
+fn dwarf_expr_references() {
+    let data = dwarf_expr_bytes([0x98,12,0,0x99,16,0,0,0,0x9a,32,0,0,0,
+        0xa0,20,0,0,0,0x78,0xa4,12,2,255,127,0xa5,33,12,
+        0xa6,2,12,0xa7,4,12,0xa8,0,0xa9,12])
+    let program = dwarf_expr_reference_parse(data, 4) else { assert(false); return }
+    assert(program.ops.len == 10)
+    assert(program.ops[0].reference == 28 && program.ops[0].reference_kind == 1)
+    assert(program.ops[1].reference == 32 && program.ops[2].reference == 40 && program.ops[2].reference_kind == 2)
+    assert(program.ops[3].reference == 28 && program.ops[3].signed2 == -8)
+    assert(program.ops[4].block.length == 2 && program.ops[4].reference == 28)
+    assert(program.ops[5].unsigned1 == 33 && program.ops[5].reference == 28)
+    assert(program.ops[8].reference_kind == 3 && program.ops[8].reference == -1)
+    let width = dwarf_expr_reference_parse(dwarf_expr_bytes([0x9a,32,0,0,0,0,0,0,0,0x03,1,2,3,4]), 8) else { assert(false); return }
+    assert(width.ops.len == 2 && width.ops[0].end == 9 && width.ops[1].end == 14)
+    assert(width.ops[1].unsigned1 == 67305985)
+    let header = dwarf_expr_reference_parse(dwarf_expr_bytes([0x98,1,0]), 4)
+    assert("{header}" == "dwarf_expr_invalid_reference")
+    let outside = dwarf_expr_reference_parse(dwarf_expr_bytes([0x9a,64,0,0,0]), 4)
+    assert("{outside}" == "dwarf_expr_invalid_reference")
+    dwarf_expr_cover(program)
+    dwarf_expr_cover(width)
+    print("PASS dwarf-expr-reference-domains-independent-widths")
+}
+fn dwarf_expr_limits() {
+    let data = dwarf_expr_bytes([0xa3,3,0xa3,1,0x50])
+    let unit = dwarf_expr_context(data.len, 8, 4)
+    let span = readers.ByteSpan {start: 0, length: data.len}
+    let depth = readers.dwarf_expr_read(data, span, unit, span, 1000, 4096, 1)
+    assert("{depth}" == "dwarf_expr_depth_limit")
+    let count = readers.dwarf_expr_read(data, span, unit, span, 1000, 1, 64)
+    assert("{count}" == "dwarf_expr_operation_limit")
+    let fuel = readers.dwarf_expr_read(data, span, unit, span, 1, 4096, 64)
+    assert("{fuel}" == "resource_limit")
+    dwarf_expr_expect(dwarf_expr_bytes([0xff]), "dwarf_expr_unknown_opcode")
+    dwarf_expr_expect(dwarf_expr_bytes([0xa3,1,0xff]), "dwarf_expr_unknown_opcode")
+    dwarf_expr_expect(dwarf_expr_bytes([0xa3,2,0x50]), "truncated")
+    dwarf_expr_expect(dwarf_expr_bytes([0xf3,2,0x50]), "truncated")
+    dwarf_expr_expect(dwarf_expr_bytes([0x10,0x80]), "unterminated_leb128")
+    dwarf_expr_expect(dwarf_expr_bytes([0x0e,1,2]), "truncated")
+    dwarf_expr_expect(dwarf_expr_bytes([0x94,9]), "dwarf_expr_invalid_operand")
+    let empty: List[byte] = []
+    let empty_program = dwarf_expr_decode(empty) else { assert(false); return }
+    assert(empty_program.ops.len == 0)
+    print("PASS dwarf-expr-hostile-bounds-and-caps")
+}
+fn main() {
+    dwarf_expr_families()
+    dwarf_expr_constants()
+    dwarf_expr_operands()
+    dwarf_expr_nested()
+    dwarf_expr_branches()
+    dwarf_expr_references()
+    dwarf_expr_limits()
+}
