@@ -28,5 +28,14 @@
     "elf-program-headers-and-shared",
     "elf-invalid-symbol-layouts",
     "elf-inactive-sections"
+  ],
+  "macho_test.lu": [
+    "macho-valid-sections-symbols-uuid",
+    "macho-format-refusals",
+    "macho-command-bounds",
+    "macho-section-bounds-zerofill-names",
+    "macho-symbol-bounds",
+    "macho-uuid-and-compact-boundary",
+    "macho-dsym-address-only"
   ]
 }
