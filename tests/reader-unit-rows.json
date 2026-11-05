@@ -17,5 +17,16 @@
     "dwarf-form-zero-and-indirect",
     "dwarf-form-spans",
     "dwarf-form-refusals"
+  ],
+  "elf_test.lu": [
+    "elf-valid-symbols-nobits",
+    "elf-extended-indexes",
+    "elf-truncation-offsets",
+    "elf-links-strings",
+    "elf-resource-limits",
+    "elf-named-refusals",
+    "elf-program-headers-and-shared",
+    "elf-invalid-symbol-layouts",
+    "elf-inactive-sections"
   ]
 }
