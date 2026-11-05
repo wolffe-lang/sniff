@@ -5,5 +5,10 @@
     "bytes-uleb64",
     "bytes-sleb64",
     "bytes-strings-and-offsets"
+  ],
+  "dwarf_test.lu": [
+    "dwarf-unit-widths",
+    "dwarf-unit-refusals",
+    "dwarf-abbreviations"
   ]
 }
