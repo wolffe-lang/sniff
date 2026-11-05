@@ -1,0 +1,284 @@
+// Apple macOS SDK mach-o/loader.h and nlist.h declarations and format comments.
+// Structural parsing only: no relocations, dyld fixups or compact-unwind decoding.
+
+/// Recoverable malformed-input, format-profile and resource-limit failures.
+pub error MachError = {
+    invalid_bounds, truncated, unsupported_width, unterminated_string,
+    unterminated_leb128, leb128_overflow,
+    offset_overflow, resource_limit, invalid_macho_magic, unsupported_object_class,
+    unsupported_endianness, unsupported_architecture, unsupported_fat_macho,
+    unsupported_filetype, invalid_load_commands, invalid_segment, invalid_section,
+    unsupported_compressed_section, duplicate_symtab, duplicate_uuid,
+    invalid_symbol_string, invalid_symbol_section, missing_uuid,
+    dsym_uuid_mismatch, unsupported_compact_unwind,
+}
+
+/// Section metadata in load-command order; names are bounded source spans.
+/// Zero-fill sections have no readable file payload despite their memory size.
+pub struct MachSection {
+    pub name: ByteSpan,
+    pub segment_name: ByteSpan,
+    pub address: u64,
+    pub size: u64,
+    pub file_offset: u64,
+    pub alignment_power: u64,
+    pub flags: u64,
+    pub relocation_offset: u64,
+    pub relocation_count: u64,
+    pub reserved1: u64,
+    pub reserved2: u64,
+    pub reserved3: u64,
+    pub zero_fill: bool,
+}
+
+/// Raw nlist_64 fields and bounded names, preserving original table order.
+/// N_INDR values are string indexes; they are not resolved as addresses.
+pub struct MachSymbol {
+    pub name: ByteSpan,
+    pub string_index: u64,
+    pub kind: u64,
+    pub section: u64,
+    pub description: u64,
+    pub value: u64,
+    pub has_indirect_name: bool,
+    pub indirect_name: ByteSpan,
+}
+
+/// Thin little-endian arm64 Mach-O metadata. Spans index the original buffer.
+pub struct MachObject {
+    pub cpu_subtype: u64,
+    pub filetype: u64,
+    pub flags: u64,
+    pub sections: List[MachSection],
+    pub symbols: List[MachSymbol],
+    pub has_uuid: bool,
+    pub uuid: ByteSpan,
+    pub has_compact_unwind: bool,
+}
+
+fn macho_range(offset: u64, size: u64, limit: int) -> ByteSpan ! MachError {
+    if limit < 0 { return offset_overflow }
+    let bound = limit as u64
+    if offset > bound { return offset_overflow }
+    if size > bound - offset { return offset_overflow }
+    ByteSpan {start: offset as int, length: size as int}
+}
+
+fn macho_u(data: List[byte], mut c: Cursor, at: int, width: int) -> u64 ! MachError {
+    c.pos = at
+    uint_le(data, mut c, width)?
+}
+
+fn macho_fixed_name(data: List[byte], mut c: Cursor, at: int) -> ByteSpan ! MachError {
+    c.pos = at
+    let span = take_span(data, mut c, 16)?
+    var length: int = 0
+    while length < 16 && data[span.start + length] as int != 0 { length += 1 }
+    ByteSpan {start: span.start, length: length}
+}
+
+fn macho_name_prefix(data: List[byte], span: ByteSpan, text: str) -> bool {
+    let expected = text.bytes()
+    if span.length < expected.len { return false }
+    var i: int = 0
+    while i < expected.len {
+        if data[span.start + i] != expected[i] { return false }
+        i += 1
+    }
+    true
+}
+
+fn macho_name_is(data: List[byte], span: ByteSpan, text: str) -> bool {
+    span.length == text.len && macho_name_prefix(data, span, text)
+}
+
+fn macho_string(data: List[byte], mut c: Cursor, table: ByteSpan, index: u64) -> ByteSpan ! MachError {
+    // n_strx == 0 is defined as an empty name, regardless of string-table byte 0.
+    if index == 0 { return ByteSpan {start: table.start, length: 0} }
+    if index >= table.length as u64 { return invalid_symbol_string }
+    let old_end = c.end
+    c.pos = table.start + index as int
+    c.end = table.start + table.length
+    let result = cstring(data, mut c)?
+    c.end = old_end
+    result
+}
+
+/// Parse thin Mach-O64 little-endian arm64 data with an explicit byte-work budget.
+/// Caps are 65,536 commands/sections and 1,048,576 symbols; malformed data never
+/// indexes unchecked. Unknown load commands remain opaque bounded records.
+/// This does not apply relocations, open dSYM bundles or decode compact unwind.
+pub fn macho_read(data: List[byte], fuel: int) -> MachObject ! MachError {
+    var c = cursor(0, data.len, fuel)
+    let magic = uint_le(data, mut c, 4)?
+    if magic == 0xbebafeca || magic == 0xbfbafeca || magic == 0xcafebabe || magic == 0xcafebabf {
+        return unsupported_fat_macho
+    }
+    if magic == 0xcffaedfe || magic == 0xcefaedfe { return unsupported_endianness }
+    if magic == 0xfeedface { return unsupported_object_class }
+    if magic != 0xfeedfacf { return invalid_macho_magic }
+    if data.len < 32 { return truncated }
+    let cpu = uint_le(data, mut c, 4)?
+    if cpu != 0x0100000c { return unsupported_architecture }
+    let subtype = uint_le(data, mut c, 4)?
+    // arm64e authentication is not silently treated as plain arm64.
+    if (subtype & 0x00ffffff) > 1 { return unsupported_architecture }
+    let filetype = uint_le(data, mut c, 4)?
+    if filetype != 1 && filetype != 2 && filetype != 6 && filetype != 8 && filetype != 10 {
+        return unsupported_filetype
+    }
+    let count = uint_le(data, mut c, 4)?
+    let size = uint_le(data, mut c, 4)?
+    let flags = uint_le(data, mut c, 4)?
+    let _reserved = uint_le(data, mut c, 4)?
+    let commands = macho_range(32, size, data.len)?
+    let command_end = commands.start + commands.length
+    if count > 65536 { return resource_limit }
+    if count > size / 8 { return invalid_load_commands }
+    var object = MachObject {
+        cpu_subtype: subtype, filetype: filetype, flags: flags,
+        sections: [], symbols: [], has_uuid: false,
+        uuid: ByteSpan {start: 0, length: 0}, has_compact_unwind: false,
+    }
+    var has_symbols = false
+    var symbol_offset: u64 = 0
+    var symbol_count: u64 = 0
+    var string_offset: u64 = 0
+    var string_size: u64 = 0
+    var command: int = 32
+    var number: u64 = 0
+    while number < count {
+        if command > command_end || command_end - command < 8 { return invalid_load_commands }
+        c.end = command_end
+        let kind = macho_u(data, mut c, command, 4)?
+        let command_size = uint_le(data, mut c, 4)?
+        if command_size < 8 || command_size % 8 != 0 { return invalid_load_commands }
+        if command_size > (command_end - command) as u64 { return invalid_load_commands }
+        let next = command + command_size as int
+        c.end = next
+        if kind == 0x19 {
+            if command_size < 72 { return invalid_load_commands }
+            let vmaddr = macho_u(data, mut c, command + 24, 8)?
+            let vmsize = uint_le(data, mut c, 8)?
+            let fileoff = uint_le(data, mut c, 8)?
+            let filesize = uint_le(data, mut c, 8)?
+            let section_count = macho_u(data, mut c, command + 64, 4)?
+            if section_count > 65536 || section_count > (65536 - object.sections.len) as u64 {
+                return resource_limit
+            }
+            if command_size != 72 + section_count * 80 { return invalid_load_commands }
+            let _segment_file = macho_range(fileoff, filesize, data.len)?
+            if filesize > vmsize || vmsize > 18446744073709551615 - vmaddr { return invalid_segment }
+            var section_at = command + 72
+            var index: u64 = 0
+            while index < section_count {
+                let name = macho_fixed_name(data, mut c, section_at)?
+                let segment_name = macho_fixed_name(data, mut c, section_at + 16)?
+                let address = uint_le(data, mut c, 8)?
+                let section_size = uint_le(data, mut c, 8)?
+                let offset = uint_le(data, mut c, 4)?
+                let alignment = uint_le(data, mut c, 4)?
+                let relocation_offset = uint_le(data, mut c, 4)?
+                let relocation_count = uint_le(data, mut c, 4)?
+                let section_flags = uint_le(data, mut c, 4)?
+                let reserved1 = uint_le(data, mut c, 4)?
+                let reserved2 = uint_le(data, mut c, 4)?
+                let reserved3 = uint_le(data, mut c, 4)?
+                if address < vmaddr || address - vmaddr > vmsize { return invalid_section }
+                if section_size > vmsize - (address - vmaddr) { return invalid_section }
+                if alignment > 63 { return invalid_section }
+                let section_type = section_flags & 255
+                let zero = section_type == 1 || section_type == 12 || section_type == 18
+                if !zero {
+                    let _payload = macho_range(offset, section_size, data.len)?
+                    if offset < fileoff || offset - fileoff > filesize { return invalid_section }
+                    if section_size > filesize - (offset - fileoff) { return invalid_section }
+                }
+                // Relocations remain metadata; eight-byte table entries are bounded.
+                let _relocations = macho_range(relocation_offset, relocation_count * 8, data.len)?
+                if macho_name_prefix(data, name, "__zdebug_") { return unsupported_compressed_section }
+                if macho_name_is(data, name, "__unwind_info") || macho_name_is(data, name, "__compact_unwind") {
+                    object.has_compact_unwind = true
+                }
+                (mut object.sections).push(MachSection {
+                    name: name, segment_name: segment_name, address: address,
+                    size: section_size, file_offset: offset, alignment_power: alignment,
+                    flags: section_flags, relocation_offset: relocation_offset,
+                    relocation_count: relocation_count, reserved1: reserved1,
+                    reserved2: reserved2, reserved3: reserved3, zero_fill: zero,
+                })
+                section_at += 80
+                index += 1
+            }
+        } else if kind == 2 {
+            if command_size != 24 { return invalid_load_commands }
+            if has_symbols { return duplicate_symtab }
+            has_symbols = true
+            symbol_offset = macho_u(data, mut c, command + 8, 4)?
+            symbol_count = uint_le(data, mut c, 4)?
+            string_offset = uint_le(data, mut c, 4)?
+            string_size = uint_le(data, mut c, 4)?
+        } else if kind == 0x1b {
+            if command_size != 24 { return invalid_load_commands }
+            if object.has_uuid { return duplicate_uuid }
+            c.pos = command + 8
+            object.uuid = take_span(data, mut c, 16)?
+            object.has_uuid = true
+        }
+        command = next
+        number += 1
+    }
+    if command != command_end { return invalid_load_commands }
+    c.end = data.len
+    if has_symbols {
+        if symbol_count > 1048576 { return resource_limit }
+        let table = macho_range(symbol_offset, symbol_count * 16, data.len)?
+        let strings = macho_range(string_offset, string_size, data.len)?
+        var at = table.start
+        var i: u64 = 0
+        while i < symbol_count {
+            let strx = macho_u(data, mut c, at, 4)?
+            let kind = uint_le(data, mut c, 1)?
+            let section = uint_le(data, mut c, 1)?
+            let description = uint_le(data, mut c, 2)?
+            let value = uint_le(data, mut c, 8)?
+            if section > object.sections.len as u64 { return invalid_symbol_section }
+            if kind & 0xe0 == 0 && kind & 0x0e == 0x0e && section == 0 { return invalid_symbol_section }
+            let name = macho_string(data, mut c, strings, strx)?
+            let indirect = kind & 0xe0 == 0 && kind & 0x0e == 0x0a
+            var indirect_name = ByteSpan {start: strings.start, length: 0}
+            if indirect { indirect_name = macho_string(data, mut c, strings, value)? }
+            (mut object.symbols).push(MachSymbol {
+                name: name, string_index: strx, kind: kind, section: section,
+                description: description, value: value, has_indirect_name: indirect,
+                indirect_name: indirect_name,
+            })
+            at += 16
+            i += 1
+        }
+    }
+    object
+}
+
+/// Require matching present UUIDs and CPU subtypes for an image/dSYM pair.
+/// UUID spans are revalidated before reading, including caller-constructed objects.
+pub fn macho_match_uuid(left: List[byte], a: MachObject, right: List[byte], b: MachObject) -> () ! MachError {
+    if !a.has_uuid || !b.has_uuid { return missing_uuid }
+    if a.cpu_subtype != b.cpu_subtype { return dsym_uuid_mismatch }
+    if a.uuid.start < 0 || b.uuid.start < 0 || a.uuid.length != 16 || b.uuid.length != 16 {
+        return invalid_bounds
+    }
+    let lhs = macho_range(a.uuid.start as u64, 16, left.len)?
+    let rhs = macho_range(b.uuid.start as u64, 16, right.len)?
+    var i: int = 0
+    while i < 16 {
+        if left[lhs.start + i] != right[rhs.start + i] { return dsym_uuid_mismatch }
+        i += 1
+    }
+}
+
+/// Refuse compact-unwind metadata by name; this never decodes it or equates
+/// absent DWARF CFI with absent unwind metadata.
+pub fn macho_require_dwarf_unwind(object: MachObject) -> () ! MachError {
+    if object.has_compact_unwind { return unsupported_compact_unwind }
+}
