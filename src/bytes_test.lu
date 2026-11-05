@@ -30,7 +30,7 @@ fn fixed_widths() {
     var four = readers.cursor(0, 4, 100)
     let value4 = readers.uint_le(data, mut four, 4)
     assert("{value4}" == "67305985")
-    print("PASS bytes-fixed-widths\n")
+    print("PASS bytes-fixed-widths")
 }
 
 fn bounded_reads() {
@@ -55,7 +55,7 @@ fn bounded_reads() {
     var wrong = readers.cursor(0, 2, 100)
     let result10 = readers.uint_le(data, mut wrong, 3)
     assert("{result10}" == "unsupported_width")
-    print("PASS bytes-bounds-and-work\n")
+    print("PASS bytes-bounds-and-work")
 }
 
 fn unsigned_leb() {
@@ -115,7 +115,7 @@ fn unsigned_leb() {
     var budget = readers.cursor(0, example.len, 2)
     let limited = readers.uleb64(example, mut budget)
     assert("{limited}" == "resource_limit")
-    print("PASS bytes-uleb64\n")
+    print("PASS bytes-uleb64")
 }
 
 fn signed_leb() {
@@ -176,7 +176,7 @@ fn signed_leb() {
     var n = readers.cursor(0, 1, 100)
     let negative = readers.sleb64(minus_one, mut n)
     assert("{negative}" == "-1")
-    print("PASS bytes-sleb64\n")
+    print("PASS bytes-sleb64")
 }
 
 fn strings_and_offsets() {
@@ -186,14 +186,16 @@ fn strings_and_offsets() {
     assert(span.start == 0 && span.length == 2 && c.pos == 3)
     let result19 = readers.cstring(data, mut c)
     assert("{result19}" == "unterminated_string")
-    assert("{readers.checked_offset(10, 20, 30)}" == "30")
-    assert("{readers.checked_offset(10, 21, 30)}" == "offset_overflow")
-    assert(
-        "{readers.checked_offset(9223372036854775807, 1, 9223372036854775807)}" ==
-            "offset_overflow",
-    )
-    assert("{readers.checked_offset(-1, 1, 4)}" == "offset_overflow")
-    print("PASS bytes-strings-and-offsets\n")
+    // wolf-lang#1050: bind fallible results before interpolation.
+    let offset_ok = readers.checked_offset(10, 20, 30)
+    assert("{offset_ok}" == "30")
+    let too_far = readers.checked_offset(10, 21, 30)
+    assert("{too_far}" == "offset_overflow")
+    let overflowing = readers.checked_offset(9223372036854775807, 1, 9223372036854775807)
+    assert("{overflowing}" == "offset_overflow")
+    let negative = readers.checked_offset(-1, 1, 4)
+    assert("{negative}" == "offset_overflow")
+    print("PASS bytes-strings-and-offsets")
 }
 
 fn main() {

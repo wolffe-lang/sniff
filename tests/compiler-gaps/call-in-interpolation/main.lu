@@ -1,3 +1,5 @@
+// wolf-lang#1050: native renders both error-row values; wolf 0.2.37 checked
+// propagates the direct call's row. Keep this separate from reader acceptance.
 fn bounded(value: int) -> int ! {outside} {
     if value > 3 { return outside }
     value
