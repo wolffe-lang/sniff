@@ -1,0 +1,442 @@
+//! member: false
+
+use readers
+
+fn dwarf_index_test_bytes(size: int) -> List[byte] {
+    var data: List[byte] = []
+    var i: int = 0
+    while i < size { (mut data).push(0 as byte); i += 1 }
+    data
+}
+
+fn dwarf_index_test_put(mut data: List[byte], at: int, value: u64, width: int) {
+    var i: int = 0
+    while i < width {
+        data[at + i] = (value >> (i * 8) as u64 & 255) as int as byte
+        i += 1
+    }
+}
+
+fn dwarf_index_test_str32() -> List[byte] {
+    var data = dwarf_index_test_bytes(40)
+    dwarf_index_test_put(mut data, 4, 12, 4)
+    dwarf_index_test_put(mut data, 8, 5, 2)
+    dwarf_index_test_put(mut data, 12, 1, 4)
+    dwarf_index_test_put(mut data, 16, 5, 4)
+    data[29] = 97 as byte
+    data[30] = 98 as byte
+    data[31] = 99 as byte
+    data[33] = 122 as byte
+    data
+}
+
+fn dwarf_index_test_addr32() -> List[byte] {
+    var data = dwarf_index_test_bytes(32)
+    dwarf_index_test_put(mut data, 4, 20, 4)
+    dwarf_index_test_put(mut data, 8, 5, 2)
+    dwarf_index_test_put(mut data, 10, 8, 1)
+    dwarf_index_test_put(mut data, 12, 0x1122334455667788, 8)
+    dwarf_index_test_put(mut data, 20, 18446744073709551615, 8)
+    data
+}
+
+fn dwarf_index_test_addr64() -> List[byte] {
+    var data = dwarf_index_test_bytes(27)
+    dwarf_index_test_put(mut data, 3, 0xffffffff, 4)
+    dwarf_index_test_put(mut data, 7, 12, 8)
+    dwarf_index_test_put(mut data, 15, 5, 2)
+    dwarf_index_test_put(mut data, 17, 4, 1)
+    dwarf_index_test_put(mut data, 19, 0x10203040, 4)
+    dwarf_index_test_put(mut data, 23, 0xffffffff, 4)
+    data
+}
+
+fn dwarf_index_test_str64() -> List[byte] {
+    var data = dwarf_index_test_bytes(48)
+    dwarf_index_test_put(mut data, 2, 0xffffffff, 4)
+    dwarf_index_test_put(mut data, 6, 20, 8)
+    dwarf_index_test_put(mut data, 14, 5, 2)
+    dwarf_index_test_put(mut data, 18, 1, 8)
+    dwarf_index_test_put(mut data, 26, 18446744073709551615, 8)
+    data[41] = 81 as byte
+    data
+}
+
+fn dwarf_index_test_list32() -> List[byte] {
+    var data = dwarf_index_test_bytes(40)
+    dwarf_index_test_put(mut data, 3, 18, 4)
+    dwarf_index_test_put(mut data, 7, 5, 2)
+    dwarf_index_test_put(mut data, 9, 8, 1)
+    dwarf_index_test_put(mut data, 11, 2, 4)
+    dwarf_index_test_put(mut data, 15, 8, 4)
+    dwarf_index_test_put(mut data, 19, 9, 4)
+    // Two empty list payloads at 23 and 24, beyond the offset array.
+    data
+}
+
+fn dwarf_index_test_list64() -> List[byte] {
+    var data = dwarf_index_test_bytes(40)
+    dwarf_index_test_put(mut data, 2, 0xffffffff, 4)
+    dwarf_index_test_put(mut data, 6, 26, 8)
+    dwarf_index_test_put(mut data, 14, 5, 2)
+    dwarf_index_test_put(mut data, 16, 4, 1)
+    dwarf_index_test_put(mut data, 18, 2, 4)
+    dwarf_index_test_put(mut data, 22, 16, 8)
+    dwarf_index_test_put(mut data, 30, 17, 8)
+    data
+}
+
+fn dwarf_index_test_headers() {
+    let strings = dwarf_index_test_str32()
+    var c = readers.cursor(4, 20, 1500000000)
+    let t = readers.dwarf_index_header(strings, mut c, readers.dwarf_index_str_offsets) else {
+        assert(false)
+        return
+    }
+    assert(t.start == 4 && t.end == 20 && t.base == 12)
+    assert(t.offset_size == 4 && t.address_size == 0 && t.entry_size == 4)
+    assert(t.count == 2 && t.entries_end == 20 && t.payload_start == 20)
+    assert(c.pos == 20 && c.end == 20 && c.fuel < 1500000000)
+    let addresses = dwarf_index_test_addr64()
+    var a = readers.cursor(3, 27, 1500000000)
+    let wide = readers.dwarf_index_header(addresses, mut a, readers.dwarf_index_addr) else {
+        assert(false)
+        return
+    }
+    assert(wide.offset_size == 8 && wide.address_size == 4 && wide.entry_size == 4)
+    assert(wide.base == 19 && wide.count == 2 && wide.end == 27)
+    var work = readers.cursor(0, 0, 1500000000)
+    let value = readers.dwarf_index_raw(addresses, wide, 1, mut work)
+    assert("{value}" == "4294967295")
+    let wide_section = readers.ByteSpan { start: 3, length: 24 }
+    let resolved = readers.dwarf_index_address(addresses, wide_section, 16, 1, 8, 4, mut work)
+    assert("{resolved}" == "4294967295")
+    print("PASS indexes-header-widths-and-boundaries")
+}
+
+fn dwarf_index_test_strings_addresses() {
+    let data = dwarf_index_test_str32()
+    let offsets = readers.ByteSpan { start: 4, length: 16 }
+    let strings = readers.ByteSpan { start: 28, length: 7 }
+    var work = readers.cursor(2, 3, 1500000000)
+    let name = readers.dwarf_index_string(data, offsets, strings, 8, 0, 4, mut work) else {
+        assert(false)
+        return
+    }
+    assert(name.start == 29 && name.length == 3 && data[name.start] as int == 97)
+    let suffix = readers.dwarf_index_string(data, offsets, strings, 8, 1, 4, mut work) else {
+        assert(false)
+        return
+    }
+    assert(suffix.start == 33 && suffix.length == 1)
+    let addr = dwarf_index_test_addr32()
+    let section = readers.ByteSpan { start: 4, length: 24 }
+    let first = readers.dwarf_index_address(addr, section, 8, 0, 4, 8, mut work)
+    let last = readers.dwarf_index_address(addr, section, 8, 1, 4, 8, mut work)
+    assert("{first}" == "1234605616436508552")
+    assert("{last}" == "18446744073709551615")
+    assert(work.pos == 2 && work.end == 3 && work.fuel < 1500000000)
+    let wide = dwarf_index_test_str64()
+    let wide_offsets = readers.ByteSpan { start: 2, length: 32 }
+    let wide_strings = readers.ByteSpan { start: 40, length: 4 }
+    let q = readers.dwarf_index_string(wide, wide_offsets, wide_strings, 16, 0, 8, mut work) else {
+        assert(false)
+        return
+    }
+    assert(q.start == 41 && q.length == 1)
+    let overflow = readers.dwarf_index_string(wide, wide_offsets, wide_strings, 16, 1, 8, mut work)
+    assert("{overflow}" == "invalid_index_target")
+    print("PASS indexes-string-and-address-resolution")
+}
+
+fn dwarf_index_test_lists() {
+    let data = dwarf_index_test_list32()
+    let section = readers.ByteSpan { start: 3, length: 22 }
+    var work = readers.cursor(1, 2, 1500000000)
+    let table = readers.dwarf_index_find(
+        data,
+        section,
+        12,
+        readers.dwarf_index_rnglists,
+        4,
+        8,
+        mut work,
+    ) else { assert(false); return }
+    assert(table.base == 15 && table.entries_end == 23 && table.payload_start == 23)
+    let raw = readers.dwarf_index_raw(data, table, 0, mut work)
+    assert("{raw}" == "8")
+    let first = readers.dwarf_index_list_at(data, table, 0, mut work) else { assert(false); return }
+    assert(first.start == 23 && first.length == 2)
+    let second = readers.dwarf_index_list(
+        data,
+        section,
+        readers.dwarf_index_rnglists,
+        12,
+        1,
+        4,
+        8,
+        mut work,
+    ) else { assert(false); return }
+    assert(second.start == 24 && second.length == 1)
+    // Using contribution start + 8 would yield 11, inside the header: wrong.
+    assert(first.start != table.start + 8)
+    let loc = dwarf_index_test_list64()
+    let loc_section = readers.ByteSpan { start: 2, length: 38 }
+    let target = readers.dwarf_index_list(
+        loc,
+        loc_section,
+        readers.dwarf_index_loclists,
+        20,
+        1,
+        8,
+        4,
+        mut work,
+    ) else { assert(false); return }
+    assert(target.start == 39 && target.length == 1)
+    var zero = dwarf_index_test_bytes(13)
+    dwarf_index_test_put(mut zero, 0, 9, 4)
+    dwarf_index_test_put(mut zero, 4, 5, 2)
+    dwarf_index_test_put(mut zero, 6, 8, 1)
+    var c = readers.cursor(0, 13, 1500000000)
+    let empty = readers.dwarf_index_header(zero, mut c, readers.dwarf_index_loclists) else {
+        assert(false)
+        return
+    }
+    assert(empty.count == 0 && empty.payload_start == 12 && empty.end == 13)
+    let absent = readers.dwarf_index_list_at(zero, empty, 0, mut work)
+    assert("{absent}" == "invalid_index")
+    print("PASS indexes-list-offset-array-domain")
+}
+
+fn dwarf_index_test_bad_headers() {
+    var data = dwarf_index_test_str32()
+    dwarf_index_test_put(mut data, 10, 1, 2)
+    var c = readers.cursor(4, 20, 1500000000)
+    let pad = readers.dwarf_index_header(data, mut c, readers.dwarf_index_str_offsets)
+    assert("{pad}" == "invalid_index_padding")
+    dwarf_index_test_put(mut data, 10, 0, 2)
+    dwarf_index_test_put(mut data, 8, 4, 2)
+    c = readers.cursor(4, 20, 1500000000)
+    let version = readers.dwarf_index_header(data, mut c, readers.dwarf_index_str_offsets)
+    assert("{version}" == "unsupported_dwarf_version")
+    dwarf_index_test_put(mut data, 8, 5, 2)
+    dwarf_index_test_put(mut data, 4, 11, 4)
+    c = readers.cursor(4, 20, 1500000000)
+    let partial = readers.dwarf_index_header(data, mut c, readers.dwarf_index_str_offsets)
+    assert("{partial}" == "invalid_index_length")
+    dwarf_index_test_put(mut data, 4, 100, 4)
+    c = readers.cursor(4, 20, 1500000000)
+    let length = readers.dwarf_index_header(data, mut c, readers.dwarf_index_str_offsets)
+    assert("{length}" == "truncated")
+    dwarf_index_test_put(mut data, 4, 0xfffffff0, 4)
+    c = readers.cursor(4, 20, 1500000000)
+    let reserved = readers.dwarf_index_header(data, mut c, readers.dwarf_index_str_offsets)
+    assert("{reserved}" == "reserved_dwarf_length")
+    var addr = dwarf_index_test_addr32()
+    addr[10] = 3 as byte
+    c = readers.cursor(4, 28, 1500000000)
+    let width = readers.dwarf_index_header(addr, mut c, readers.dwarf_index_addr)
+    assert("{width}" == "unsupported_address_size")
+    addr[10] = 8 as byte
+    addr[11] = 1 as byte
+    c = readers.cursor(4, 28, 1500000000)
+    let segment = readers.dwarf_index_header(addr, mut c, readers.dwarf_index_addr)
+    assert("{segment}" == "unsupported_segment_selector")
+    var lists = dwarf_index_test_list32()
+    dwarf_index_test_put(mut lists, 11, 0xffffffff, 4)
+    c = readers.cursor(3, 25, 1500000000)
+    let count = readers.dwarf_index_header(lists, mut c, readers.dwarf_index_rnglists)
+    assert("{count}" == "invalid_index_count")
+    var wide = dwarf_index_test_addr64()
+    dwarf_index_test_put(mut wide, 7, 18446744073709551615, 8)
+    c = readers.cursor(3, 27, 1500000000)
+    let wide_overflow = readers.dwarf_index_header(wide, mut c, readers.dwarf_index_addr)
+    assert("{wide_overflow}" == "truncated")
+    print("PASS indexes-hostile-contribution-headers")
+}
+
+fn dwarf_index_test_bases() {
+    let data = dwarf_index_test_str32()
+    let section = readers.ByteSpan { start: 4, length: 16 }
+    var work = readers.cursor(1, 2, 1500000000)
+    let header = readers.dwarf_index_find(
+        data,
+        section,
+        0,
+        readers.dwarf_index_str_offsets,
+        4,
+        0,
+        mut work,
+    )
+    let interior = readers.dwarf_index_find(
+        data,
+        section,
+        12,
+        readers.dwarf_index_str_offsets,
+        4,
+        0,
+        mut work,
+    )
+    let huge = readers.dwarf_index_find(
+        data,
+        section,
+        18446744073709551615,
+        readers.dwarf_index_str_offsets,
+        4,
+        0,
+        mut work,
+    )
+    let width = readers.dwarf_index_find(
+        data,
+        section,
+        8,
+        readers.dwarf_index_str_offsets,
+        8,
+        0,
+        mut work,
+    )
+    assert("{header}" == "invalid_index_base")
+    assert("{interior}" == "invalid_index_base")
+    assert("{huge}" == "invalid_index_base")
+    assert("{width}" == "incompatible_index_width")
+    let addr = dwarf_index_test_addr32()
+    let addr_section = readers.ByteSpan { start: 4, length: 24 }
+    let addr_width = readers.dwarf_index_address(addr, addr_section, 8, 0, 4, 4, mut work)
+    assert("{addr_width}" == "incompatible_index_width")
+    var joined = dwarf_index_test_bytes(44)
+    var i: int = 4
+    while i < 20 { joined[i] = data[i]; i += 1 }
+    dwarf_index_test_put(mut joined, 20, 0xffffffff, 4)
+    dwarf_index_test_put(mut joined, 24, 12, 8)
+    dwarf_index_test_put(mut joined, 32, 5, 2)
+    let both = readers.ByteSpan { start: 4, length: 40 }
+    let second = readers.dwarf_index_find(
+        joined,
+        both,
+        32,
+        readers.dwarf_index_str_offsets,
+        8,
+        0,
+        mut work,
+    ) else { assert(false); return }
+    assert(second.start == 20 && second.base == 36 && second.offset_size == 8)
+    var padded = dwarf_index_test_bytes(28)
+    dwarf_index_test_put(mut padded, 0, 8, 4)
+    dwarf_index_test_put(mut padded, 4, 5, 2)
+    dwarf_index_test_put(mut padded, 16, 8, 4)
+    dwarf_index_test_put(mut padded, 20, 5, 2)
+    let padded_section = readers.ByteSpan { start: 0, length: 28 }
+    let padding = readers.dwarf_index_find(
+        padded,
+        padded_section,
+        24,
+        readers.dwarf_index_str_offsets,
+        4,
+        0,
+        mut work,
+    )
+    assert("{padding}" == "truncated")
+    print("PASS indexes-exact-bases-and-contiguous-contributions")
+}
+
+fn dwarf_index_test_forged_and_targets() {
+    let data = dwarf_index_test_str32()
+    var c = readers.cursor(4, 20, 1500000000)
+    var table = readers.dwarf_index_header(data, mut c, readers.dwarf_index_str_offsets) else {
+        assert(false)
+        return
+    }
+    var work = readers.cursor(1, 2, 1500000000)
+    let index = readers.dwarf_index_raw(data, table, 18446744073709551615, mut work)
+    assert("{index}" == "invalid_index")
+    table.count = 9223372036854775807
+    let forged = readers.dwarf_index_raw(data, table, 0, mut work)
+    assert("{forged}" == "invalid_index_table")
+    table.count = 2
+    table.base = -1
+    let negative = readers.dwarf_index_raw(data, table, 0, mut work)
+    assert("{negative}" == "invalid_index_table")
+    table.base = 12
+    table.end = 9223372036854775807
+    let ending = readers.dwarf_index_raw(data, table, 0, mut work)
+    assert("{ending}" == "invalid_index_table")
+    var lists = dwarf_index_test_list32()
+    c = readers.cursor(3, 25, 1500000000)
+    let lt = readers.dwarf_index_header(lists, mut c, readers.dwarf_index_rnglists) else {
+        assert(false)
+        return
+    }
+    dwarf_index_test_put(mut lists, 15, 0, 4)
+    let array = readers.dwarf_index_list_at(lists, lt, 0, mut work)
+    assert("{array}" == "invalid_index_target")
+    dwarf_index_test_put(mut lists, 15, 10, 4)
+    let outside = readers.dwarf_index_list_at(lists, lt, 0, mut work)
+    assert("{outside}" == "invalid_index_target")
+    let offsets = readers.ByteSpan { start: 4, length: 16 }
+    let short_string = readers.ByteSpan { start: 28, length: 4 }
+    let unterminated = readers.dwarf_index_string(data, offsets, short_string, 8, 0, 4, mut work)
+    assert("{unterminated}" == "unterminated_string")
+    let bad_span = readers.ByteSpan { start: 28, length: 9223372036854775807 }
+    let span_error = readers.dwarf_index_string(data, offsets, bad_span, 8, 0, 4, mut work)
+    assert("{span_error}" == "invalid_bounds")
+    print("PASS indexes-forged-metadata-and-target-bounds")
+}
+
+fn dwarf_index_test_budget() {
+    let data = dwarf_index_test_str32()
+    var c = readers.cursor(4, 20, 0)
+    let empty = readers.dwarf_index_header(data, mut c, readers.dwarf_index_str_offsets)
+    assert("{empty}" == "resource_limit")
+    c = readers.cursor(4, 20, 7)
+    let partial = readers.dwarf_index_header(data, mut c, readers.dwarf_index_str_offsets)
+    assert("{partial}" == "resource_limit" && c.fuel == 0 && c.pos > 4)
+    let section = readers.ByteSpan { start: 4, length: 16 }
+    let strings = readers.ByteSpan { start: 28, length: 7 }
+    var work = readers.cursor(1, 2, 1500000000)
+    let a = readers.dwarf_index_string(data, section, strings, 8, 0, 4, mut work) else {
+        assert(false)
+        return
+    }
+    assert(a.start == 29)
+    let after_first = work.fuel
+    let b = readers.dwarf_index_string(data, section, strings, 8, 1, 4, mut work) else {
+        assert(false)
+        return
+    }
+    assert(b.start == 33)
+    assert(work.fuel < after_first && after_first < 1500000000)
+    assert(work.pos == 1 && work.end == 2)
+    let before_error = work.fuel
+    let invalid = readers.dwarf_index_find(
+        data,
+        section,
+        9,
+        readers.dwarf_index_str_offsets,
+        4,
+        0,
+        mut work,
+    )
+    assert("{invalid}" == "invalid_index_base" && work.fuel < before_error)
+    work.fuel = 1
+    let limited = readers.dwarf_index_find(
+        data,
+        section,
+        8,
+        readers.dwarf_index_str_offsets,
+        4,
+        0,
+        mut work,
+    )
+    assert("{limited}" == "resource_limit" && work.fuel == 0)
+    print("PASS indexes-shared-budget-and-error-accounting")
+}
+
+fn main() {
+    dwarf_index_test_headers()
+    dwarf_index_test_strings_addresses()
+    dwarf_index_test_lists()
+    dwarf_index_test_bad_headers()
+    dwarf_index_test_bases()
+    dwarf_index_test_forged_and_targets()
+    dwarf_index_test_budget()
+}
