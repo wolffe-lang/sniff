@@ -5,7 +5,7 @@
     {
       "name": "args", "line": 2,
       "locals": {"a": "3", "b": "4"},
-      "frame_prefix": ["helper", "main"],
+      "source_frame_prefix": [{"function": "helper", "file": "main.lu", "line": 2}, {"function": "main", "file": "main.lu", "line": 9}],
       "commands": {
         "lldb": ["breakpoint set --name helper", "run", "frame variable a b", "bt"],
         "gdb": ["break helper", "run", "printf \"SNIFF_VALUE a=%ld\\n\", a", "printf \"SNIFF_VALUE b=%ld\\n\", b", "bt"]
@@ -14,7 +14,7 @@
     {
       "name": "local", "line": 3,
       "locals": {"a": "3", "b": "4", "s": "7"},
-      "frame_prefix": ["helper", "main"],
+      "source_frame_prefix": [{"function": "helper", "file": "main.lu", "line": 3}, {"function": "main", "file": "main.lu", "line": 9}],
       "commands": {
         "lldb": ["next", "frame variable a b s", "bt"],
         "gdb": ["next", "printf \"SNIFF_VALUE a=%ld\\n\", a", "printf \"SNIFF_VALUE b=%ld\\n\", b", "printf \"SNIFF_VALUE s=%ld\\n\", s", "bt"]

@@ -41,6 +41,9 @@ def compare(expected, actual):
         return 1
     failures = []
     for w, g in zip(want, got):
+        unknown = set(w) - {'name', 'line', 'locals', 'frame_prefix', 'source_frame_prefix', 'contains'}
+        if unknown:
+            raise ValueError('unknown expected event fields: ' + repr(sorted(unknown)))
         if 'line' in w and w['line'] != g.get('line'):
             failures.append(f"FAIL wrong-line-order event={w['name']} expected={w['line']} actual={g.get('line')}")
         for name, value in w.get('locals', {}).items():
@@ -49,6 +52,9 @@ def compare(expected, actual):
         prefix = w.get('frame_prefix', [])
         if g.get('frames', [])[:len(prefix)] != prefix:
             failures.append(f"FAIL missing-frame event={w['name']} expected_prefix={prefix!r} actual={g.get('frames', [])!r}")
+        source_prefix = w.get('source_frame_prefix', [])
+        if g.get('source_frames', [])[:len(source_prefix)] != source_prefix:
+            failures.append(f"FAIL missing-frame event={w['name']} expected_source_prefix={source_prefix!r} actual={g.get('source_frames', [])!r}")
         for snippet in w.get('contains', []):
             if snippet not in g.get('text', ''):
                 failures.append(f"FAIL transcript-text event={w['name']} missing={snippet!r}")
@@ -80,6 +86,16 @@ def parse_event(name, text, source):
                 m = re.match(r'^#\d+\s+(?:0x[0-9a-fA-F]+ in )?([^\s(]+)', line)
             if m:
                 frames.append(m[1])
+    source_frames = []
+    selected_trace = traces[-1] if len(traces) > 1 else text
+    for line in selected_trace.splitlines():
+        function = re.search(r'frame #\d+:.*?`([^\s(+:]+)', line)
+        if not function:
+            function = re.match(r'^#\d+\s+(?:0x[0-9a-fA-F]+ in )?([^\s(]+)', line)
+        location = re.search(r'\bat ([^\s]+?):(\d+)(?::\d+)?', line)
+        if function and location:
+            source_frames.append({'function': function[1], 'file': Path(location[1]).name,
+                                  'line': int(location[2])})
     values = {}
     for line in text.splitlines():
         m = re.match(r'^\([^\n]+?\)\s+([A-Za-z_][A-Za-z_0-9]*) = (.+)$', line)
@@ -91,7 +107,7 @@ def parse_event(name, text, source):
     if not location:
         location = re.search(r'^\s*(?:->\s*)?(\d+)\s+\S', text, re.M)
     return {'name': name, 'line': int(location[1]) if location else None,
-            'locals': values, 'frames': frames, 'text': text}
+            'locals': values, 'frames': frames, 'source_frames': source_frames, 'text': text}
 
 
 def capture(args):
@@ -161,6 +177,8 @@ def mutate(args):
         else:
             event = next(e for e in bad['events'] if len(e.get('frames', [])) >= 2)
             event['frames'].pop(1)
+            if len(event.get('source_frames', [])) >= 2:
+                event['source_frames'].pop(1)
         if compare(expected, bad) != 1:
             print('FAIL mutation-not-detected row=' + row)
             return 1
