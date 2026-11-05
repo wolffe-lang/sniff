@@ -63,7 +63,18 @@ class Harness(unittest.TestCase):
         self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
         self.assertIn('FAIL missing-frame', p.stdout)
 
+    def test_missing_source_frame_not_hidden_by_main_shim(self):
+        expected = {'schema': 1, 'events': [{'name': 'bt', 'source_frame_prefix': [
+            {'function': 'helper', 'file': 'main.lu', 'line': 2},
+            {'function': 'main', 'file': 'main.lu', 'line': 9}]}]}
+        actual = {'schema': 1, 'events': [{'name': 'bt', 'frames': ['helper', 'main'],
+            'source_frames': [{'function': 'helper', 'file': 'main.lu', 'line': 2}]}]}
+        p = self.compare(actual, expected)
+        self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+        self.assertIn('FAIL missing-frame', p.stdout)
+
     def test_missing_event(self):
+
         a = self.copy()
         a['events'].pop()
         p = self.compare(a)
