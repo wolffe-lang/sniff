@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "status": "Prediction before expression decoder implementation and vendor probing",
+  "authority": "DWARF 5 sections 2.5, 2.6 and 7.7/Table 7.9; named SDK Mach-O declarations for synthetic oracle inputs",
+  "gnu_probe_prediction": {
+    "oracle": "SDK llvm-dwarfdump, Apple LLVM version 21.0.0",
+    "discovery": "Enumerate vendor opcode bytes 0xe0 through 0xff in independently bounded expression attributes. Record complete oracle output, including errors; do not infer semantics from a vendor mnemonic.",
+    "layout_controls": "After the oracle identifies the two observed GNU operation names, probe known following opcodes, a one-byte nested expression, a multi-byte ULEB nested length and a truncated nested block. No numeric alias or operand layout enters the decoder before these observations.",
+    "never_read": "No unwinder, debugger, object-library or DWARF-library implementation source"
+  },
+  "census_text_measurement": {
+    "expression_text_rows": 30744,
+    "observed_operation_names": 117,
+    "largest_operation_token_count": 60,
+    "largest_entry_value_nesting": 1,
+    "largest_fixture": "linux/wolf/loops/wolf-debug",
+    "producer": "clang LLVM (rustc version 1.97.1 (8bab26f4f 2026-07-14))",
+    "qualification": "Counts derive from the saved per-producer expression text; not a completed byte-decoder corpus census. Count nested operation tokens and entry_value/GNU_entry_value parentheses, not execution steps."
+  },
+  "planned_caps": {
+    "operations_per_expression": 4096,
+    "nested_operation_depth": 64,
+    "work_units": 1500000000,
+    "operation_headroom": "68.26 times the largest saved expression-token count",
+    "depth_headroom": "64 times the largest saved entry nesting",
+    "qualification": "Operation and depth caps apply to one expression; caller supplies a remaining global work budget and receives the remainder. Full byte-corpus maxima remain to be checked before final lane acceptance."
+  },
+  "representation": "Flat pre-order records with absolute byte offsets, depth, parent index, subtree end, raw operand spans, signed and unsigned values, bounded branch targets and bounded DIE references. No expression execution or stack/process value inference.",
+  "deferred_validation": "Actual DIE-start/type validation belongs to the DIE graph. addrx/constx operands remain indexes for the indexed-table reader to validate and resolve.",
+  "red_first": ["missing decoder API", "signed constant boundaries", "all observed opcode identities", "nested block bounds and parent markers", "branch target bounds and instruction boundaries", "DIE reference domains", "unknown opcode", "operation/depth/work limits"]
+}
