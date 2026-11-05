@@ -162,7 +162,22 @@ fn mach_test_uuid_and_compact() {
     print("PASS macho-uuid-and-compact-boundary")
 }
 
+fn mach_test_real(image_path: str, dsym_path: str) {
+    let image_data = fs_read_bytes(image_path) else { assert(false); return }
+    let dsym_data = fs_read_bytes(dsym_path) else { assert(false); return }
+    let image_result = readers.macho_read(image_data, 10000000)
+    let dsym_result = readers.macho_read(dsym_data, 10000000)
+    let image = image_result else |err| { print("FAIL macho-real-image {err}"); assert(false); return }
+    let dsym = dsym_result else |err| { print("FAIL macho-real-dsym {err}"); assert(false); return }
+    let matched = readers.macho_match_uuid(image_data, image, dsym_data, dsym)
+    assert("{matched}" == "()")
+    assert(image.sections.len > 0 && image.symbols.len > 0 && dsym.sections.len > 0)
+    print("PASS macho-real-image-dsym")
+}
+
 fn main() {
+    let args = env_args()
+    if args.len == 3 { mach_test_real(args[1], args[2]); return }
     mach_test_valid()
     mach_test_refusals()
     mach_test_commands()
