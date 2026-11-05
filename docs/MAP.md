@@ -100,6 +100,14 @@ rows before implementing those paths. Optional macro/name indexes, split and
 supplementary files, unsupported compression and other architectures get
 named refusals until separately covered.
 
+The twelfth mode, `--symbols`, mirrors `readelf --symbols --wide` on ELF and
+SDK `llvm-nm --format=darwin --no-sort --debug-syms --no-demangle --no-dyldinfo`
+on Mach-O. Both run only as binaries. `sniff-oracle.toml` fixes their argument
+vectors, versions and SHA-256 digests. The gate checks the selected binary's
+`--version` and bytes before fixture work; a different PATH binary is refused
+by name, not silently replaced. These are output contracts, not implemented
+reader coverage.
+
 ## S2 command/fixture prediction
 
 These are planned command rows, not implemented sniff commands. The current
