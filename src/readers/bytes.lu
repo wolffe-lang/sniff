@@ -1,0 +1,127 @@
+// DWARF 5 section 7.6 and Appendix C: bounded LEB128 decoding.
+// Offsets stay signed host indexes; decoded scalar/address values stay u64.
+// No operation in this module allocates a copy of the input or a string.
+
+pub error ReadError = {invalid_bounds, truncated, unsupported_width,
+    unterminated_leb128, leb128_overflow, unterminated_string,
+    offset_overflow, resource_limit}
+
+pub struct Cursor {
+    pub pos: int,
+    pub end: int,
+    pub fuel: int,
+}
+
+pub struct ByteSpan {
+    pub start: int,
+    pub length: int,
+}
+
+pub fn cursor(start: int, end: int, fuel: int) -> Cursor {
+    Cursor {pos: start, end: end, fuel: fuel}
+}
+
+pub fn checked_offset(base: int, size: int, limit: int) -> int ! ReadError {
+    if base < 0 || size < 0 || limit < 0 || base > limit {
+        return offset_overflow
+    }
+    // Subtract only after establishing a nonnegative, ordered domain.
+    if size > limit - base { return offset_overflow }
+    base + size
+}
+
+fn valid_cursor(data: List[byte], c: Cursor) -> () ! ReadError {
+    if c.pos < 0 || c.end < c.pos || c.end > data.len {
+        return invalid_bounds
+    }
+}
+
+pub fn take_span(data: List[byte], mut c: Cursor, size: int) -> ByteSpan ! ReadError {
+    valid_cursor(data, c)?
+    if size < 0 { return invalid_bounds }
+    if size > c.end - c.pos { return truncated }
+    // A zero-byte operation still consumes work, so it cannot evade the cap.
+    let cost = if size == 0 { 1 } else { size }
+    if c.fuel < cost { return resource_limit }
+    let start = c.pos
+    c.pos += size
+    c.fuel -= cost
+    ByteSpan {start: start, length: size}
+}
+
+pub fn uint_le(data: List[byte], mut c: Cursor, width: int) -> u64 ! ReadError {
+    if width != 1 && width != 2 && width != 4 && width != 8 {
+        return unsupported_width
+    }
+    let span = take_span(data, mut c, width)?
+    var value: u64 = 0
+    var i: int = 0
+    while i < width {
+        let octet = data[span.start + i] as int as u64
+        value |= octet << (i * 8) as u64
+        i += 1
+    }
+    value
+}
+
+pub fn uleb64(data: List[byte], mut c: Cursor) -> u64 ! ReadError {
+    var value: u64 = 0
+    var i: int = 0
+    while i < 10 {
+        valid_cursor(data, c)?
+        if c.pos == c.end { return unterminated_leb128 }
+        let octet = uint_le(data, mut c, 1)?
+        let payload = octet & 127
+        // The tenth group contributes only bit 63. Reject before shifting.
+        if i == 9 && (payload > 1 || (octet & 128) != 0) {
+            return leb128_overflow
+        }
+        value |= payload << (i * 7) as u64
+        if (octet & 128) == 0 { return value }
+        i += 1
+    }
+    leb128_overflow
+}
+
+pub fn sleb64(data: List[byte], mut c: Cursor) -> i64 ! ReadError {
+    var value: u64 = 0
+    var i: int = 0
+    while i < 10 {
+        valid_cursor(data, c)?
+        if c.pos == c.end { return unterminated_leb128 }
+        let octet = uint_le(data, mut c, 1)?
+        let payload = octet & 127
+        if i == 9 {
+            // Bits above bit 63 must be a valid sign extension.
+            if (octet & 128) != 0 || (payload != 0 && payload != 127) {
+                return leb128_overflow
+            }
+            value |= (payload & 1) << 63
+        } else {
+            value |= payload << (i * 7) as u64
+        }
+        if (octet & 128) == 0 {
+            if i < 9 && (octet & 64) != 0 {
+                let bits = ((i + 1) * 7) as u64
+                let mask: u64 = (1 << bits) - 1
+                value |= !mask
+            }
+            // Explicit bit reinterpretation, not a checked narrowing cast.
+            return value as wrapping[i64] as i64
+        }
+        i += 1
+    }
+    leb128_overflow
+}
+
+pub fn cstring(data: List[byte], mut c: Cursor) -> ByteSpan ! ReadError {
+    valid_cursor(data, c)?
+    let start = c.pos
+    while c.pos < c.end {
+        let octet = uint_le(data, mut c, 1)?
+        if octet == 0 {
+            return ByteSpan {start: start, length: c.pos - start - 1}
+        }
+    }
+    unterminated_string
+}
