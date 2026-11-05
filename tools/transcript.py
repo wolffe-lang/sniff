@@ -35,6 +35,9 @@ def normalize(text, root):
 def compare(expected, actual):
     if expected.get('schema') != 1 or actual.get('schema') != 1:
         raise ValueError('unsupported session schema')
+    if type(actual.get('exit')) is not int or actual['exit'] != 0:
+        print('FAIL oracle-exit code=' + repr(actual.get('exit')))
+        return 1
     want, got = expected.get('events'), actual.get('events')
     if not isinstance(want, list) or not want or not isinstance(got, list):
         raise ValueError('a session must have nonempty expected events and actual event list')
