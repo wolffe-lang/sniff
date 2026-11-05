@@ -177,7 +177,8 @@ fn mach_test_real(image_path: str, dsym_path: str) {
 
 fn main() {
     let args = env_args()
-    if args.len == 3 { mach_test_real(args[1], args[2]); return }
+    if args.len == 2 { mach_test_real(args[0], args[1]); return }
+    assert(args.len == 0)
     mach_test_valid()
     mach_test_refusals()
     mach_test_commands()
