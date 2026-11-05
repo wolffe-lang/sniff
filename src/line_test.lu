@@ -191,7 +191,84 @@ fn dwarf_line_expected(f: DwarfLineFixture, expected: str) {
     assert("{result}" == expected)
 }
 
+fn dwarf_line_bundle_word(data: List[byte], mut c: readers.Cursor) -> int {
+    let value = readers.uint_le(data, mut c, 8) else { assert(false); return 0 }
+    assert(value <= data.len as u64)
+    value as int
+}
+
+fn dwarf_line_real(args: List[str]) {
+    assert(args.len == 3)
+    let size = fs_size(args[2]) else { assert(false); return }
+    assert(size >= 64 && size <= 67108864)
+    let data = fs_read_bytes(args[2]) else { assert(false); return }
+    assert(data.len == size)
+    var header = readers.cursor(0, 64, 1000)
+    let magic = readers.uint_le(data, mut header, 8) else { assert(false); return }
+    assert(magic == 0x3153454e494c4e53)
+    let line_start = dwarf_line_bundle_word(data, mut header)
+    let line_length = dwarf_line_bundle_word(data, mut header)
+    let string_start = dwarf_line_bundle_word(data, mut header)
+    let string_length = dwarf_line_bundle_word(data, mut header)
+    let line_string_start = dwarf_line_bundle_word(data, mut header)
+    let line_string_length = dwarf_line_bundle_word(data, mut header)
+    let address_size = dwarf_line_bundle_word(data, mut header)
+    let end = readers.checked_offset(line_start, line_length, data.len) else {
+        assert(false)
+        return
+    }
+    var at = line_start
+    var fuel: int = 100000000
+    var remaining_rows: int = 1048576
+    var units: int = 0
+    var total: int = 0
+    while at < end {
+        assert(units < 65536)
+        let table = readers.dwarf_line_read(
+            data,
+            readers.ByteSpan { start: at, length: end - at },
+            address_size,
+            readers.ByteSpan { start: string_start, length: string_length },
+            readers.ByteSpan { start: line_string_start, length: line_string_length },
+            fuel,
+            remaining_rows,
+        ) else |failure| {
+            print("FAIL dwarf-line-real-decoding offset={at-line_start} error={failure}")
+            assert(false)
+            return
+        }
+        assert(table.end > at)
+        var i: int = 0
+        while i < table.rows.len {
+            let row = copy table.rows[i]
+            print(
+                "ROW {at-line_start} {row.address:x} {row.op_index} {row.line} {row.column} {row.file} {row.isa} {row.discriminator} {row.is_stmt} {row.basic_block} {row.prologue_end} {row.epilogue_begin} {row.end_sequence}",
+            )
+            i += 1
+        }
+        total += table.rows.len
+        remaining_rows -= table.rows.len
+        fuel = table.fuel_remaining
+        at = table.end
+        units += 1
+    }
+    print("PASS dwarf-line-real tables={units} rows={total}")
+}
+
+fn dwarf_line_probe_discriminator() {
+    let fixture = dwarf_line_fixture(4, false, false, false)
+    let table = dwarf_line_decode(fixture, 10000, 100) else { assert(false); return }
+    print("PROBE discriminator={table.rows[1].discriminator}")
+}
+
 fn main() {
+    let args = env_args()
+    if args.len > 1 && args[1] == "--real" { dwarf_line_real(args); return }
+    if args.len > 1 && args[1] == "--probe-discriminator" {
+        dwarf_line_probe_discriminator()
+        return
+    }
+
     let four = dwarf_line_fixture(4, false, false, false)
     let line4 = dwarf_line_decode(four, 10000, 100) else { assert(false); return }
     assert(line4.version == 4 && line4.offset_size == 4 && line4.address_size == 8)
