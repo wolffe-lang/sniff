@@ -1,0 +1,283 @@
+// ELF gABI chapters 2–5: ELF64 header, section and symbol-table layouts.
+// This profile reads linked little-endian EM_X86_64 images, never relocates.
+
+/// Malformed ELF layouts and explicit unsupported container profiles.
+pub error ElfError = {elf_bad_magic, elf_truncated, elf_offset_overflow,
+    elf_invalid_header, elf_invalid_section, elf_invalid_link, elf_invalid_string,
+    elf_invalid_symbol, elf_invalid_index, elf_resource_limit,
+    elf_unsupported_class, elf_unsupported_endian, elf_unsupported_machine,
+    elf_unsupported_relocatable, elf_unsupported_type, elf_unsupported_compression}
+
+/// One ELF section, retaining raw unsigned fields and an input-buffer name span.
+pub struct ElfSection {
+    pub name: ByteSpan,
+    pub name_index: u64,
+    pub kind: u64,
+    pub flags: u64,
+    pub address: u64,
+    pub offset: u64,
+    pub size: u64,
+    pub link: u64,
+    pub info: u64,
+    pub alignment: u64,
+    pub entry_size: u64,
+}
+
+/// One symbol, including its owning symbol-table section and original index.
+/// Values remain producer values: TLS/ABS/COMMON are not converted to addresses.
+pub struct ElfSymbol {
+    pub table_section: int,
+    pub table_index: int,
+    pub name: ByteSpan,
+    pub value: u64,
+    pub size: u64,
+    pub info: u64,
+    pub other: u64,
+    pub section_index: u64,
+}
+
+/// Parsed metadata; byte spans continue to refer to the supplied input buffer.
+pub struct ElfFile {
+    pub file_type: u64,
+    pub entry: u64,
+    pub sections: List[ElfSection],
+    pub symbols: List[ElfSymbol],
+}
+
+fn elf_uint(data: List[byte], mut c: Cursor, at: int, width: int) -> u64 ! ElfError {
+    c.pos = at
+    let result = uint_le(data, mut c, width) else |failure| {
+        if "{failure}" == "resource_limit" { return elf_resource_limit }
+        return elf_truncated
+    }
+    result
+}
+
+fn elf_range(data: List[byte], offset: u64, size: u64) -> int ! ElfError {
+    let bound = data.len as u64
+    if offset > bound || size > bound - offset { return elf_offset_overflow }
+    offset as int
+}
+
+fn elf_charge(mut c: Cursor) -> () ! ElfError {
+    if c.fuel < 1 { return elf_resource_limit }
+    c.fuel -= 1
+}
+
+fn elf_string(data: List[byte], mut c: Cursor, table: ElfSection, index: u64) -> ByteSpan ! ElfError {
+    let start = elf_range(data, table.offset, table.size)?
+    if table.size == 0 && index == 0 {
+        return ByteSpan {start: start, length: 0}
+    }
+    if index >= table.size { return elf_invalid_string }
+    let at = start + index as int
+    let end = start + table.size as int
+    var scan = cursor(at, end, c.fuel)
+    let span = cstring(data, mut scan) else |failure| {
+        if "{failure}" == "resource_limit" { return elf_resource_limit }
+        return elf_invalid_string
+    }
+    c.fuel = scan.fuel
+    span
+}
+
+fn elf_section_at(data: List[byte], mut c: Cursor, at: int) -> ElfSection ! ElfError {
+    let name_index = elf_uint(data, mut c, at, 4)?
+    let kind = elf_uint(data, mut c, at + 4, 4)?
+    let flags = elf_uint(data, mut c, at + 8, 8)?
+    let address = elf_uint(data, mut c, at + 16, 8)?
+    let offset = elf_uint(data, mut c, at + 24, 8)?
+    let size = elf_uint(data, mut c, at + 32, 8)?
+    let link = elf_uint(data, mut c, at + 40, 4)?
+    let info = elf_uint(data, mut c, at + 44, 4)?
+    let alignment = elf_uint(data, mut c, at + 48, 8)?
+    let entry_size = elf_uint(data, mut c, at + 56, 8)?
+    ElfSection {name: ByteSpan {start: 0, length: 0}, name_index: name_index,
+        kind: kind, flags: flags, address: address, offset: offset, size: size,
+        link: link, info: info, alignment: alignment, entry_size: entry_size}
+}
+
+fn elf_legacy_compressed(data: List[byte], mut c: Cursor, name: ByteSpan) -> bool ! ElfError {
+    if name.length < 8 { return false }
+    let prefix = elf_uint(data, mut c, name.start, 8)?
+    prefix == 0x5f67756265647a2e
+}
+
+/// Read ELF64 little-endian x86-64 ET_EXEC/ET_DYN metadata and all symbol tables.
+/// Caps are caller-supplied and also bounded by 4096 sections/1048576 symbols.
+/// Work includes fixed reads, name scans and traversals; no input bytes are copied.
+/// ET_REL is refused rather than pretending unrelocated DWARF is linked data.
+pub fn elf_read(data: List[byte], max_sections: int, max_symbols: int, work: int) -> ElfFile ! ElfError {
+    if max_sections < 0 || max_symbols < 0 || work < 0 || work > 100000000 { return elf_resource_limit }
+    if data.len < 16 { return elf_truncated }
+    var c = cursor(0, data.len, work)
+    let magic = elf_uint(data, mut c, 0, 4)?
+    if magic != 1179403647 { return elf_bad_magic }
+    let class = elf_uint(data, mut c, 4, 1)?
+    if class != 2 { return elf_unsupported_class }
+    let endian = elf_uint(data, mut c, 5, 1)?
+    if endian != 1 { return elf_unsupported_endian }
+    let ident_version = elf_uint(data, mut c, 6, 1)?
+    if ident_version != 1 { return elf_invalid_header }
+    if data.len < 64 { return elf_truncated }
+    let file_type = elf_uint(data, mut c, 16, 2)?
+    if file_type == 1 { return elf_unsupported_relocatable }
+    if file_type != 2 && file_type != 3 { return elf_unsupported_type }
+    let machine = elf_uint(data, mut c, 18, 2)?
+    if machine != 62 { return elf_unsupported_machine }
+    let version = elf_uint(data, mut c, 20, 4)?
+    if version != 1 { return elf_invalid_header }
+    let entry = elf_uint(data, mut c, 24, 8)?
+    let phoff = elf_uint(data, mut c, 32, 8)?
+    let shoff = elf_uint(data, mut c, 40, 8)?
+    let ehsize = elf_uint(data, mut c, 52, 2)?
+    let phentsize = elf_uint(data, mut c, 54, 2)?
+    var phnum = elf_uint(data, mut c, 56, 2)?
+    let shentsize = elf_uint(data, mut c, 58, 2)?
+    var shnum = elf_uint(data, mut c, 60, 2)?
+    var shstr = elf_uint(data, mut c, 62, 2)?
+    if ehsize != 64 { return elf_invalid_header }
+    if shoff == 0 {
+        if shnum != 0 || shstr != 0 || phnum == 65535 { return elf_invalid_header }
+    } else {
+        if shentsize != 64 { return elf_invalid_header }
+        let first = elf_range(data, shoff, 64)?
+        let zero = elf_section_at(data, mut c, first)?
+        if zero.kind != 0 { return elf_invalid_section }
+        if shnum == 0 { shnum = zero.size }
+        if shstr == 65535 { shstr = zero.link }
+        if phnum == 65535 { phnum = zero.info }
+        if shnum == 0 { return elf_invalid_header }
+    }
+    if shnum > max_sections as u64 || shnum > 4096 { return elf_resource_limit }
+    if shnum != 0 && shstr >= shnum { return elf_invalid_index }
+    if phnum > 65536 { return elf_resource_limit }
+    if phnum != 0 {
+        if phentsize != 56 || phoff == 0 { return elf_invalid_header }
+        let base = elf_range(data, phoff, phnum * 56)?
+        var pi: int = 0
+        while pi < phnum as int {
+            elf_charge(mut c)?
+            let at = base + pi * 56
+            let kind = elf_uint(data, mut c, at, 4)?
+            if kind != 0 {
+                let offset = elf_uint(data, mut c, at + 8, 8)?
+                let filesz = elf_uint(data, mut c, at + 32, 8)?
+                let memsz = elf_uint(data, mut c, at + 40, 8)?
+                let _ = elf_range(data, offset, filesz)?
+                if kind == 1 && filesz > memsz { return elf_invalid_header }
+            }
+            pi += 1
+        }
+    }
+    var sections: List[ElfSection] = []
+    var symbols: List[ElfSymbol] = []
+    if shnum == 0 { return ElfFile {file_type: file_type, entry: entry, sections: sections, symbols: symbols} }
+    let base = elf_range(data, shoff, shnum * 64)?
+    var i: int = 0
+    while i < shnum as int {
+        elf_charge(mut c)?
+        let section = elf_section_at(data, mut c, base + i * 64)?
+        if i != 0 && section.kind != 0 {
+            if section.flags & 2048 != 0 { return elf_unsupported_compression }
+            if section.alignment != 0 && section.alignment & (section.alignment - 1) != 0 {
+                return elf_invalid_section
+            }
+            if section.kind != 8 {
+                let _ = elf_range(data, section.offset, section.size)?
+            }
+            if section.kind == 3 && section.size != 0 {
+                let begin = section.offset as int
+                let first_byte = elf_uint(data, mut c, begin, 1)?
+                let last_byte = elf_uint(data, mut c, begin + section.size as int - 1, 1)?
+                if first_byte != 0 || last_byte != 0 { return elf_invalid_string }
+            }
+        }
+        (mut sections).push(section)
+        i += 1
+    }
+    if shstr != 0 {
+        let names = sections[shstr as int]
+        if names.kind != 3 { return elf_invalid_link }
+        i = 0
+        while i < sections.len {
+            let span = elf_string(data, mut c, names, sections[i].name_index)?
+            sections[i].name = span
+            let compressed = elf_legacy_compressed(data, mut c, span)?
+            if compressed { return elf_unsupported_compression }
+            i += 1
+        }
+    }
+    var indexes: List[int] = []
+    i = 0
+    while i < sections.len { elf_charge(mut c)?; (mut indexes).push(-1); i += 1 }
+    i = 1
+    while i < sections.len {
+        elf_charge(mut c)?
+        let section = sections[i]
+        if section.kind == 18 {
+            if section.link >= shnum { return elf_invalid_link }
+            let linked = section.link as int
+            if sections[linked].kind != 2 && sections[linked].kind != 11 { return elf_invalid_link }
+            if indexes[linked] != -1 { return elf_invalid_link }
+            if section.entry_size != 4 || section.size % 4 != 0 { return elf_invalid_section }
+            indexes[linked] = i
+        }
+        i += 1
+    }
+    i = 1
+    while i < sections.len {
+        elf_charge(mut c)?
+        let table = sections[i]
+        if table.kind == 2 || table.kind == 11 {
+            if table.link >= shnum { return elf_invalid_link }
+            let strings = sections[table.link as int]
+            if strings.kind != 3 { return elf_invalid_link }
+            if table.entry_size != 24 || table.size % 24 != 0 { return elf_invalid_section }
+            let count = table.size / 24
+            if table.info > count { return elf_invalid_section }
+            if count > max_symbols as u64 || count > 1048576 { return elf_resource_limit }
+            if symbols.len > max_symbols - count as int || symbols.len > 1048576 - count as int {
+                return elf_resource_limit
+            }
+            let index_section = indexes[i]
+            if index_section >= 0 {
+                if sections[index_section].size / 4 != count { return elf_invalid_index }
+            }
+            var j: int = 0
+            while j < count as int {
+                elf_charge(mut c)?
+                let at = table.offset as int + j * 24
+                let name_index = elf_uint(data, mut c, at, 4)?
+                let info = elf_uint(data, mut c, at + 4, 1)?
+                let other = elf_uint(data, mut c, at + 5, 1)?
+                let raw_section = elf_uint(data, mut c, at + 6, 2)?
+                let value = elf_uint(data, mut c, at + 8, 8)?
+                let size = elf_uint(data, mut c, at + 16, 8)?
+                var section_index = raw_section
+                if raw_section == 65535 {
+                    if index_section < 0 { return elf_invalid_index }
+                    let extended = sections[index_section]
+                    section_index = elf_uint(data, mut c, extended.offset as int + j * 4, 4)?
+                    if section_index >= shnum { return elf_invalid_index }
+                } else {
+                    if raw_section < 65280 && raw_section >= shnum { return elf_invalid_index }
+                    if index_section >= 0 {
+                        let extra = elf_uint(data, mut c, sections[index_section].offset as int + j * 4, 4)?
+                        if extra != 0 { return elf_invalid_index }
+                    }
+                }
+                if j == 0 && (name_index != 0 || info != 0 || other != 0 || raw_section != 0 || value != 0 || size != 0) {
+                    return elf_invalid_symbol
+                }
+                let name = elf_string(data, mut c, strings, name_index)?
+                (mut symbols).push(ElfSymbol {table_section: i, table_index: j,
+                    name: name, value: value, size: size, info: info,
+                    other: other, section_index: section_index})
+                j += 1
+            }
+        }
+        i += 1
+    }
+    ElfFile {file_type: file_type, entry: entry, sections: sections, symbols: symbols}
+}
