@@ -1,32 +1,46 @@
 //! member: false
+
 use readers
 
 struct DwarfLineFixture {
-    data: List[byte], end: int, program: int, file_path: int,
-    strings: readers.ByteSpan, line_strings: readers.ByteSpan,
+    data: List[byte],
+    end: int,
+    program: int,
+    file_path: int,
+    strings: readers.ByteSpan,
+    line_strings: readers.ByteSpan,
 }
 
 fn dwarf_line_put(mut b: List[byte], at: int, value: u64, width: int) {
     var i: int = 0
-    while i < width { b[at+i] = ((value >> (i*8) as u64) & 255) as int as byte; i += 1 }
+    while i < width { b[at + i] = (value >> (i * 8) as u64 & 255) as int as byte; i += 1 }
 }
+
 fn dwarf_line_append(mut b: List[byte], value: u64, width: int) {
     var i: int = 0
-    while i < width { (mut b).push(((value >> (i*8) as u64) & 255) as int as byte); i += 1 }
+    while i < width { (mut b).push((value >> (i * 8) as u64 & 255) as int as byte); i += 1 }
 }
+
 fn dwarf_line_text(mut b: List[byte], text: str) {
     let raw = text.bytes()
     var i: int = 0
     while i < raw.len { (mut b).push(raw[i]); i += 1 }
     (mut b).push(0 as byte)
 }
+
 fn dwarf_line_address(mut b: List[byte], address: u64, width: int) {
     dwarf_line_append(mut b, 0, 1)
     dwarf_line_append(mut b, (width + 1) as u64, 1)
     dwarf_line_append(mut b, 2, 1)
     dwarf_line_append(mut b, address, width)
 }
-fn dwarf_line_fixture(version: int, wide: bool, define_file: bool, unknown_standard: bool) -> DwarfLineFixture {
+
+fn dwarf_line_fixture(
+    version: int,
+    wide: bool,
+    define_file: bool,
+    unknown_standard: bool,
+) -> DwarfLineFixture {
     var b: List[byte] = []
     let os = if wide { 8 } else { 4 }
     let initial = if wide { 12 } else { 4 }
@@ -43,7 +57,7 @@ fn dwarf_line_fixture(version: int, wide: bool, define_file: bool, unknown_stand
     dwarf_line_append(mut b, 251, 1)
     dwarf_line_append(mut b, 14, 1)
     dwarf_line_append(mut b, if unknown_standard { 14 } else { 13 }, 1)
-    let lengths: List[int] = [0,1,1,1,1,0,0,0,1,0,0,1]
+    let lengths: List[int] = [0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 1]
     var i: int = 0
     while i < lengths.len { dwarf_line_append(mut b, lengths[i] as u64, 1); i += 1 }
     if unknown_standard { dwarf_line_append(mut b, 0, 1) }
@@ -65,7 +79,7 @@ fn dwarf_line_fixture(version: int, wide: bool, define_file: bool, unknown_stand
         dwarf_line_append(mut b, 0, os)
         // Two files; path, directory, timestamp, size and MD5.
         dwarf_line_append(mut b, 5, 1)
-        let formats: List[int] = [1,14,2,11,3,15,4,15,5,30]
+        let formats: List[int] = [1, 14, 2, 11, 3, 15, 4, 15, 5, 30]
         i = 0
         while i < formats.len { dwarf_line_append(mut b, formats[i] as u64, 1); i += 1 }
         dwarf_line_append(mut b, 2, 1)
@@ -74,18 +88,45 @@ fn dwarf_line_fixture(version: int, wide: bool, define_file: bool, unknown_stand
         while f < 2 {
             dwarf_line_append(mut b, if f == 0 { 0 } else { 7 }, os)
             dwarf_line_append(mut b, 0, 1)
-            dwarf_line_append(mut b, (7+f) as u64, 1)
-            dwarf_line_append(mut b, (9+f) as u64, 1)
+            dwarf_line_append(mut b, (7 + f) as u64, 1)
+            dwarf_line_append(mut b, (9 + f) as u64, 1)
             i = 0
             while i < 16 { dwarf_line_append(mut b, i as u64, 1); i += 1 }
             f += 1
         }
     }
     let program = b.len
-    dwarf_line_put(mut b, header_length_at, (program-header_start) as u64, os)
+    dwarf_line_put(mut b, header_length_at, (program - header_start) as u64, os)
     let address_width = if version == 5 { 4 } else { 8 }
     dwarf_line_address(mut b, 4096, address_width)
-    let first: List[int] = [5,3,7,10,12,2,0,2,4,7,1,2,3,3,2,6,11,32,9,3,0,8,1,0,1,1]
+    let first: List[int] = [
+        5,
+        3,
+        7,
+        10,
+        12,
+        2,
+        0,
+        2,
+        4,
+        7,
+        1,
+        2,
+        3,
+        3,
+        2,
+        6,
+        11,
+        32,
+        9,
+        3,
+        0,
+        8,
+        1,
+        0,
+        1,
+        1,
+    ]
     i = 0
     while i < first.len {
         dwarf_line_append(mut b, first[i] as u64, 1)
@@ -112,38 +153,70 @@ fn dwarf_line_fixture(version: int, wide: bool, define_file: bool, unknown_stand
     dwarf_line_append(mut b, 1, 1)
     dwarf_line_append(mut b, 1, 1)
     let end = b.len
-    dwarf_line_put(mut b, if wide { 4 } else { 0 }, (end-initial) as u64, os)
+    dwarf_line_put(mut b, if wide { 4 } else { 0 }, (end - initial) as u64, os)
     let string_start = b.len
     dwarf_line_text(mut b, "main.c")
     dwarf_line_text(mut b, "other.c")
-    let string_size = b.len-string_start
+    let string_size = b.len - string_start
     let line_start = b.len
     dwarf_line_text(mut b, ".")
-    DwarfLineFixture {data: b, end: end, program: program, file_path: file_path,
-        strings: readers.ByteSpan {start: string_start, length: string_size},
-        line_strings: readers.ByteSpan {start: line_start, length: 2}}
+    DwarfLineFixture {
+        data: b,
+        end: end,
+        program: program,
+        file_path: file_path,
+        strings: readers.ByteSpan { start: string_start, length: string_size },
+        line_strings: readers.ByteSpan { start: line_start, length: 2 },
+    }
 }
-fn dwarf_line_decode(f: DwarfLineFixture, fuel: int, cap: int) -> readers.DwarfLineTable ! readers.DwarfLineError {
-    readers.dwarf_line_read(f.data, readers.ByteSpan {start: 0, length: f.end}, 8,
-        f.strings, f.line_strings, fuel, cap)?
+
+fn dwarf_line_decode(
+    f: DwarfLineFixture,
+    fuel: int,
+    cap: int,
+) -> readers.DwarfLineTable ! readers.DwarfLineError {
+    readers.dwarf_line_read(
+        f.data,
+        readers.ByteSpan { start: 0, length: f.end },
+        8,
+        f.strings,
+        f.line_strings,
+        fuel,
+        cap,
+    )?
 }
+
 fn dwarf_line_expected(f: DwarfLineFixture, expected: str) {
     let result = dwarf_line_decode(f, 10000, 100)
     assert("{result}" == expected)
 }
+
 fn main() {
     let four = dwarf_line_fixture(4, false, false, false)
     let line4 = dwarf_line_decode(four, 10000, 100) else { assert(false); return }
     assert(line4.version == 4 && line4.offset_size == 4 && line4.address_size == 8)
     assert(line4.directories.len == 1 && line4.files.len == 1 && line4.rows.len == 6)
-    assert(line4.files[0].directory_index == 1 && line4.files[0].timestamp == 7 && line4.files[0].size == 9)
+    assert(
+        line4.files[0].directory_index == 1 &&
+            line4.files[0].timestamp == 7 &&
+            line4.files[0].size == 9,
+    )
     assert(line4.rows[0].address == 4096 && line4.rows[0].op_index == 0 && line4.rows[0].line == 1)
     assert(line4.rows[0].basic_block && line4.rows[0].prologue_end && line4.rows[0].is_stmt)
     assert(line4.rows[0].column == 3 && line4.rows[0].isa == 2 && line4.rows[0].discriminator == 7)
     assert(line4.rows[1].address == 4104 && line4.rows[1].op_index == 0 && line4.rows[1].line == 3)
-    assert(!line4.rows[1].basic_block && !line4.rows[1].prologue_end && line4.rows[1].epilogue_begin && !line4.rows[1].is_stmt)
+    assert(
+        !line4.rows[1].basic_block &&
+            !line4.rows[1].prologue_end &&
+            line4.rows[1].epilogue_begin &&
+            !line4.rows[1].is_stmt,
+    )
     assert(line4.rows[1].discriminator == 0)
-    assert(line4.rows[2].address == 4139 && line4.rows[2].op_index == 1 && !line4.rows[2].epilogue_begin)
+    assert(
+        line4.rows[2].address == 4139 &&
+            line4.rows[2].op_index == 1 &&
+            !line4.rows[2].epilogue_begin,
+    )
     assert(line4.rows[3].end_sequence)
     assert(line4.rows[4].address == 8192 && line4.rows[4].line == 1 && line4.rows[4].column == 0)
     assert(line4.rows[4].file == 1 && line4.rows[4].isa == 0 && line4.rows[4].is_stmt)
@@ -154,7 +227,7 @@ fn main() {
     assert(line5.offset_size == 8 && line5.address_size == 4 && line5.version == 5)
     assert(line5.directories.len == 1 && line5.files.len == 2)
     assert(line5.files[0].name.start == five.strings.start && line5.files[0].name.length == 6)
-    assert(line5.files[1].name.start == five.strings.start+7)
+    assert(line5.files[1].name.start == five.strings.start + 7)
     assert(line5.files[0].has_md5 && line5.files[0].md5.length == 16)
     assert(line5.rows[0].file == 1 && line5.rows[0].address == 4096)
     assert(line5.rows[1].file == 0 && line5.rows[4].file == 1)
@@ -176,7 +249,7 @@ fn main() {
     bad = dwarf_line_fixture(4, false, false, true)
     dwarf_line_expected(bad, "dwarf_line_unsupported_opcode")
     bad = dwarf_line_fixture(4, false, false, false)
-    dwarf_line_put(mut bad.data, bad.program+2, 127, 1)
+    dwarf_line_put(mut bad.data, bad.program + 2, 127, 1)
     dwarf_line_expected(bad, "dwarf_line_unsupported_opcode")
     bad = dwarf_line_fixture(5, false, true, false)
     dwarf_line_expected(bad, "dwarf_line_unsupported_opcode")
@@ -188,11 +261,11 @@ fn main() {
     dwarf_line_put(mut bad.data, bad.file_path, 999999, 8)
     dwarf_line_expected(bad, "dwarf_line_invalid_string")
     bad = dwarf_line_fixture(5, false, false, false)
-    dwarf_line_put(mut bad.data, bad.program+3, 4294967294, 4)
+    dwarf_line_put(mut bad.data, bad.program + 3, 4294967294, 4)
     dwarf_line_expected(bad, "dwarf_line_arithmetic_overflow")
     bad = dwarf_line_fixture(4, false, false, false)
     bad.end -= 3
-    dwarf_line_put(mut bad.data, 0, (bad.end-4) as u64, 4)
+    dwarf_line_put(mut bad.data, 0, (bad.end - 4) as u64, 4)
     dwarf_line_expected(bad, "dwarf_line_unterminated_sequence")
     print("PASS dwarf-line-hostile-boundaries")
 }
