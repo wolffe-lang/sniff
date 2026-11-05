@@ -221,10 +221,11 @@ pub fn macho_read(data: List[byte], fuel: int) -> MachObject ! MachError {
                 if alignment > 63 { return invalid_section }
                 let section_type = section_flags & 255
                 let zero = section_type == 1 || section_type == 12 || section_type == 18
-                // Labelled binary observation: SDK dsymutil's MH_DSYM preserves
-                // __TEXT addresses/sizes while omitting that segment's bytes.
-                // Offset zero in this shape is NOT a pointer into the header.
-                let address_only = filetype == 10 && fileoff == 0 && filesize == 0 && offset == 0
+                // Labelled binary observations: SDK dsymutil preserves image
+                // addresses/sizes in MH_DSYM sections whose file offset is zero.
+                // A sibling such as __eh_frame can still have bytes in the SAME
+                // segment. Offset zero is not a pointer into the Mach header.
+                let address_only = filetype == 10 && offset == 0
                 let has_file_data = !zero && !address_only
                 if has_file_data {
                     let _payload = macho_range(offset, section_size, data.len)?
