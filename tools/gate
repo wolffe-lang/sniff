@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Every END is a real child exit, including pipeline-independent failures.
+set -euo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd)
+cd "$root"
+mode=${1:-unit}
+mkdir -p target/gate target/home target/tmp
+export HOME="$root/target/home"
+export XDG_CACHE_HOME="$HOME/cache"
+export XDG_CONFIG_HOME="$HOME/config"
+export TMPDIR="$root/target/tmp"
+export LC_ALL=C TZ=UTC TERM=dumb
+step() {
+  local name=$1 start=$SECONDS rc=0
+  shift
+  printf 'START %s\n' "$name"
+  "$@" > "target/gate/$name.log" 2>&1 || rc=$?
+  if [ "$rc" -eq 0 ]; then
+    sed 's/^/  /' "target/gate/$name.log"
+  else
+    awk '/^FAIL / {print; next} {print "  " $0}' "target/gate/$name.log"
+  fi
+  printf 'END %s exit=%s secs=%s\n' "$name" "$rc" "$((SECONDS-start))"
+  return "$rc"
+}
+step harness-unit python3 -I tests/test_harness.py
+step census-unit python3 -I tests/test_census.py
+step tier-planner python3 -I ci/tiers-test.py
+if [ -f tests/evidence/macos-session/record.json ]; then
+  step transcript-replay python3 -I tools/transcript.py compare tests/evidence/macos-session/expected.json tests/evidence/macos-session/record.json
+  step transcript-mutations python3 -I tools/transcript.py selftest tests/evidence/macos-session/expected.json tests/evidence/macos-session/record.json
+fi
+[ "$mode" != unit ] || exit 0
+case "$mode" in macos|linux) ;; *) echo 'FAIL gate-mode'; exit 2 ;; esac
+stage=${SNIFF_TOOLCHAIN_DIR:-$root/.wolf-bin}
+fetch=(python3 -I tools/fetch-toolchain.py --out "$stage")
+if [ -n "${SNIFF_ARCHIVES:-}" ]; then fetch+=(--archive-dir "$SNIFF_ARCHIVES"); fi
+step toolchain "${fetch[@]}"
+wolf=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["tools"]["wolf"]["root"]+"/wolf")' "$stage/manifest.json")
+lupin=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["tools"]["lupin"]["root"]+"/lupin")' "$stage/manifest.json")
+compilers=(clang)
+[ "$mode" != linux ] || compilers+=(gcc)
+step fixture-builds python3 -I tools/build-fixtures.py --wolf "$wolf" --out "$root/target/fixtures" --compilers "${compilers[@]}"
+if [ "$mode" = macos ]; then
+  dwarfdump=$(xcrun --find llvm-dwarfdump)
+  debugger=$(xcrun --find lldb)
+  oracle=lldb
+  mkdir -p target/session
+  cp target/fixtures/wolf/scalars/wolf-debug/prog target/session/prog
+  cp -R target/fixtures/wolf/scalars/wolf-debug/prog.dSYM target/session/prog.dSYM
+  step target-sign codesign --force --sign - --entitlements tests/get-task-allow.plist target/session/prog
+  binary="$root/target/session/prog"
+else
+  dwarfdump=$(command -v llvm-dwarfdump-18)
+  debugger=$(command -v gdb)
+  oracle=gdb
+  binary="$root/target/fixtures/wolf/scalars/wolf-debug/prog"
+fi
+step dwarf-census python3 -I tools/census.py capture --builds target/fixtures/builds.json --dwarfdump "$dwarfdump" --out target/census
+step live-transcript python3 -I tools/transcript.py capture --spec tests/scalars-session.json --oracle "$oracle" --debugger "$debugger" --binary "$binary" --out target/session --root "$root"
+step live-mutations python3 -I tools/transcript.py selftest target/session/expected.json target/session/record.json
+step lupin-values python3 -I tools/lupin-values.py --lupin "$lupin" --out target/values
+step true-value-join python3 -I tools/value-join.py --session target/session/record.json --values target/values/values.json

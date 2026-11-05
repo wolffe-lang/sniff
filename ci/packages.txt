@@ -1,0 +1,11 @@
+# Bootstrap list. Replace with the measured package=version closure before a green Linux claim.
+ca-certificates
+curl
+binutils
+clang
+gcc
+gdb
+llvm-18
+python3
+util-linux
+libc6-dev

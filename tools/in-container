@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd)
+engine=${SNIFF_ENGINE:-docker}
+cpus=${SNIFF_CPUS:-0}
+key=$(python3 -I - "$root" <<'PY'
+import hashlib, pathlib, sys
+r=pathlib.Path(sys.argv[1]); h=hashlib.sha256()
+for name in ('ci/oracle.Containerfile', 'ci/packages.txt'):
+    h.update((r/name).read_bytes())
+print(h.hexdigest()[:20])
+PY
+)
+image="sn00-oracle:$key"
+"$engine" build --build-arg "BUILD_CPUS=$cpus" -f "$root/ci/oracle.Containerfile" -t "$image" "$root"
+"$engine" image inspect "$image" --format '{{.Id}}'
+"$engine" run --rm --memory 12g --pids-limit 4096 --cap-add SYS_PTRACE --security-opt seccomp=unconfined \
+  -v "$root:/work" -w /work "$image" taskset -c "$cpus" bash tools/gate linux
