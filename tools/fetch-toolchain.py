@@ -58,6 +58,10 @@ def main():
         version = subprocess.check_output([str(exe), '--version'], text=True).strip()
         if not version.startswith(f'{name} {pin["version"]} '):
             raise ValueError('unexpected binary version: ' + version)
+        if name == 'wolf':
+            std_rev = (staged / 'std/STD-REV').read_text().strip()
+            if std_rev != pins['std']['rev'] or (staged / 'std/STD-REV').read_text().strip() != std_rev:
+                raise ValueError('bundled std revision mismatch')
         files = {str(p.relative_to(staged)): digest(p) for p in sorted(staged.rglob('*')) if p.is_file()}
         result['tools'][name] = {'archive_sha256_read_1': first, 'archive_sha256_read_2': second,
             'root': str(staged.resolve()), 'version': version, 'files': files}
