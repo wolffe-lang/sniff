@@ -1,0 +1,9 @@
+{
+  "bytes_test.lu": [
+    "bytes-fixed-widths",
+    "bytes-bounds-and-work",
+    "bytes-uleb64",
+    "bytes-sleb64",
+    "bytes-strings-and-offsets"
+  ]
+}
