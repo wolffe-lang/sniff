@@ -197,13 +197,13 @@ pub fn elf_read(data: List[byte], max_sections: int, max_symbols: int, work: int
         i += 1
     }
     if shstr != 0 {
-        let names = sections[shstr as int]
+        let names = copy sections[shstr as int]
         if names.kind != 3 { return elf_invalid_link }
         i = 0
         while i < sections.len {
             let span = elf_string(data, mut c, names, sections[i].name_index)?
-            sections[i].name = span
             let compressed = elf_legacy_compressed(data, mut c, span)?
+            sections[i].name = span
             if compressed { return elf_unsupported_compression }
             i += 1
         }
@@ -214,7 +214,7 @@ pub fn elf_read(data: List[byte], max_sections: int, max_symbols: int, work: int
     i = 1
     while i < sections.len {
         elf_charge(mut c)?
-        let section = sections[i]
+        let section = copy sections[i]
         if section.kind == 18 {
             if section.link >= shnum { return elf_invalid_link }
             let linked = section.link as int
@@ -228,10 +228,10 @@ pub fn elf_read(data: List[byte], max_sections: int, max_symbols: int, work: int
     i = 1
     while i < sections.len {
         elf_charge(mut c)?
-        let table = sections[i]
+        let table = copy sections[i]
         if table.kind == 2 || table.kind == 11 {
             if table.link >= shnum { return elf_invalid_link }
-            let strings = sections[table.link as int]
+            let strings = copy sections[table.link as int]
             if strings.kind != 3 { return elf_invalid_link }
             if table.entry_size != 24 || table.size % 24 != 0 { return elf_invalid_section }
             let count = table.size / 24
@@ -257,7 +257,7 @@ pub fn elf_read(data: List[byte], max_sections: int, max_symbols: int, work: int
                 var section_index = raw_section
                 if raw_section == 65535 {
                     if index_section < 0 { return elf_invalid_index }
-                    let extended = sections[index_section]
+                    let extended = copy sections[index_section]
                     section_index = elf_uint(data, mut c, extended.offset as int + j * 4, 4)?
                     if section_index >= shnum { return elf_invalid_index }
                 } else {
