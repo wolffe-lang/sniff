@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "events": [
+    {
+      "name": "args",
+      "line": 2,
+      "locals": {
+        "a": "3",
+        "b": "4"
+      },
+      "source_frame_prefix": [
+        {
+          "function": "helper",
+          "file": "main.lu",
+          "line": 2
+        },
+        {
+          "function": "main",
+          "file": "main.lu",
+          "line": 9
+        }
+      ]
+    },
+    {
+      "name": "local",
+      "line": 3,
+      "locals": {
+        "a": "3",
+        "b": "4",
+        "s": "7"
+      },
+      "source_frame_prefix": [
+        {
+          "function": "helper",
+          "file": "main.lu",
+          "line": 3
+        },
+        {
+          "function": "main",
+          "file": "main.lu",
+          "line": 9
+        }
+      ]
+    },
+    {
+      "name": "exit",
+      "contains": [
+        "exited normally"
+      ]
+    }
+  ]
+}

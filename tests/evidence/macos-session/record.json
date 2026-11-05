@@ -1,0 +1,79 @@
+{
+  "schema": 1,
+  "oracle": "lldb",
+  "version": "lldb-2100.0.16.4\nApple Swift version 6.3 (swiftlang-6.3.0.123.5 clang-2100.0.123.102)",
+  "exit": 0,
+  "normalizations": {
+    "addresses": "Debugger frame PCs and breakpoint insertion addresses only; scalar hex values are preserved.",
+    "pids": "Process N, process N and pid=N debugger fields only; scalar integers are preserved.",
+    "timestamps": "Explicit timestamp=ISO-8601 fields only; normally no timestamps are emitted.",
+    "paths": "Exact configured root prefix followed by / only; filenames and source coordinates are preserved."
+  },
+  "events": [
+    {
+      "name": "args",
+      "line": 2,
+      "locals": {
+        "a": "3",
+        "b": "4"
+      },
+      "frames": [
+        "helper",
+        "main",
+        "main",
+        "start"
+      ],
+      "source_frames": [
+        {
+          "function": "helper",
+          "file": "main.lu",
+          "line": 2
+        },
+        {
+          "function": "main",
+          "file": "main.lu",
+          "line": 9
+        }
+      ],
+      "text": "(lldb) breakpoint set --name helper\nBreakpoint 1: where = prog`helper + 20 at main.lu:2:5, address = <ADDRESS>\n(lldb) run\nProcess <PID> launched: '<ROOT>/build-98a8450/target/session/prog' (arm64)\nProcess <PID> stopped\n* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 1.1\n    frame #0: <ADDRESS> prog`helper(a=3, b=4) at main.lu:2:5\n   1   \tfn helper(a: int, b: int) -> int {\n-> 2   \t    let s = a + b\n    \t    ^\n   3   \t    s * 2\n   4   \t}\n   5   \t\n   6   \tfn main() -> int {\n   7   \t    let x = 3\nTarget 0: (prog) stopped.\n(lldb) frame variable a b\n(long) a = 3\n(long) b = 4\n(lldb) bt\n* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 1.1\n  * frame #0: <ADDRESS> prog`helper(a=3, b=4) at main.lu:2:5\n    frame #1: <ADDRESS> prog`main at main.lu:9:5\n    frame #2: <ADDRESS> prog`main + 24\n    frame #3: <ADDRESS> dyld`start + 6992\n(lldb) script print(\"SNIFF_END args\")\n"
+    },
+    {
+      "name": "local",
+      "line": 3,
+      "locals": {
+        "a": "3",
+        "b": "4",
+        "s": "7"
+      },
+      "frames": [
+        "helper",
+        "main",
+        "main",
+        "start"
+      ],
+      "source_frames": [
+        {
+          "function": "helper",
+          "file": "main.lu",
+          "line": 3
+        },
+        {
+          "function": "main",
+          "file": "main.lu",
+          "line": 9
+        }
+      ],
+      "text": "(lldb) next\nProcess <PID> stopped\n* thread #1, queue = 'com.apple.main-thread', stop reason = step over\n    frame #0: <ADDRESS> prog`helper(a=3, b=4) at main.lu:3:5\n   1   \tfn helper(a: int, b: int) -> int {\n   2   \t    let s = a + b\n-> 3   \t    s * 2\n    \t    ^\n   4   \t}\n   5   \t\n   6   \tfn main() -> int {\n   7   \t    let x = 3\nTarget 0: (prog) stopped.\n(lldb) frame variable a b s\n(long) a = 3\n(long) b = 4\n(long) s = 7\n(lldb) bt\n* thread #1, queue = 'com.apple.main-thread', stop reason = step over\n  * frame #0: <ADDRESS> prog`helper(a=3, b=4) at main.lu:3:5\n    frame #1: <ADDRESS> prog`main at main.lu:9:5\n    frame #2: <ADDRESS> prog`main + 24\n    frame #3: <ADDRESS> dyld`start + 6992\n(lldb) script print(\"SNIFF_END local\")\n"
+    },
+    {
+      "name": "exit",
+      "line": null,
+      "locals": {},
+      "frames": [],
+      "source_frames": [],
+      "text": "(lldb) continue\nProcess <PID> resuming\nProcess <PID> exited with status = 0 (0x00000000)\n(lldb) script print(\"SNIFF_END exit\")\n"
+    }
+  ],
+  "normalized_stdout": "(lldb) target create \"<ROOT>/target/session/prog\"\nCurrent executable set to '<ROOT>/target/session/prog' (arm64).\n(lldb) command source -s 0 'target/session/session.lldb'\nExecuting commands in '<ROOT>/target/session/session.lldb'.\n(lldb) script print(\"SNIFF_ROW args\")\nSNIFF_ROW args\n(lldb) breakpoint set --name helper\nBreakpoint 1: where = prog`helper + 20 at main.lu:2:5, address = <ADDRESS>\n(lldb) run\nProcess <PID> launched: '<ROOT>/target/session/prog' (arm64)\nProcess <PID> stopped\n* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 1.1\n    frame #0: <ADDRESS> prog`helper(a=3, b=4) at main.lu:2:5\n   1   \tfn helper(a: int, b: int) -> int {\n-> 2   \t    let s = a + b\n    \t    ^\n   3   \t    s * 2\n   4   \t}\n   5   \t\n   6   \tfn main() -> int {\n   7   \t    let x = 3\nTarget 0: (prog) stopped.\n(lldb) frame variable a b\n(long) a = 3\n(long) b = 4\n(lldb) bt\n* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 1.1\n  * frame #0: <ADDRESS> prog`helper(a=3, b=4) at main.lu:2:5\n    frame #1: <ADDRESS> prog`main at main.lu:9:5\n    frame #2: <ADDRESS> prog`main + 24\n    frame #3: <ADDRESS> dyld`start + 6992\n(lldb) script print(\"SNIFF_END args\")\nSNIFF_END args\n(lldb) script print(\"SNIFF_ROW local\")\nSNIFF_ROW local\n(lldb) next\nProcess <PID> stopped\n* thread #1, queue = 'com.apple.main-thread', stop reason = step over\n    frame #0: <ADDRESS> prog`helper(a=3, b=4) at main.lu:3:5\n   1   \tfn helper(a: int, b: int) -> int {\n   2   \t    let s = a + b\n-> 3   \t    s * 2\n    \t    ^\n   4   \t}\n   5   \t\n   6   \tfn main() -> int {\n   7   \t    let x = 3\nTarget 0: (prog) stopped.\n(lldb) frame variable a b s\n(long) a = 3\n(long) b = 4\n(long) s = 7\n(lldb) bt\n* thread #1, queue = 'com.apple.main-thread', stop reason = step over\n  * frame #0: <ADDRESS> prog`helper(a=3, b=4) at main.lu:3:5\n    frame #1: <ADDRESS> prog`main at main.lu:9:5\n    frame #2: <ADDRESS> prog`main + 24\n    frame #3: <ADDRESS> dyld`start + 6992\n(lldb) script print(\"SNIFF_END local\")\nSNIFF_END local\n(lldb) script print(\"SNIFF_ROW exit\")\nSNIFF_ROW exit\n(lldb) continue\nProcess <PID> resuming\nProcess <PID> exited with status = 0 (0x00000000)\n(lldb) script print(\"SNIFF_END exit\")\nSNIFF_END exit\n(lldb) quit\n",
+  "normalized_stderr": ""
+}

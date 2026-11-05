@@ -27,10 +27,13 @@ step pin-metadata python3 -I tools/check-pins.py
 step harness-unit python3 -I tests/test_harness.py
 step census-unit python3 -I tests/test_census.py
 step tier-planner python3 -I ci/tiers-test.py
-if [ -f tests/evidence/macos-session/record.json ]; then
-  step transcript-replay python3 -I tools/transcript.py compare tests/evidence/macos-session/expected.json tests/evidence/macos-session/record.json
-  step transcript-mutations python3 -I tools/transcript.py selftest tests/evidence/macos-session/expected.json tests/evidence/macos-session/record.json
-fi
+for platform in macos linux; do
+  if [ -f "tests/evidence/$platform-session/record.json" ]; then
+    step "$platform-replay" python3 -I tools/transcript.py compare "tests/evidence/$platform-session/expected.json" "tests/evidence/$platform-session/record.json"
+    step "$platform-mutations" python3 -I tools/transcript.py selftest "tests/evidence/$platform-session/expected.json" "tests/evidence/$platform-session/record.json"
+    step "$platform-values" python3 -I tools/value-join.py --session "tests/evidence/$platform-session/record.json" --values "tests/evidence/$platform/values.json"
+  fi
+done
 [ "$mode" != unit ] || exit 0
 case "$mode" in macos|linux) ;; *) echo 'FAIL gate-mode'; exit 2 ;; esac
 stage=${SNIFF_TOOLCHAIN_DIR:-$root/.wolf-bin}

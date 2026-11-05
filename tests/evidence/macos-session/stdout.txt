@@ -1,0 +1,68 @@
+(lldb) target create "<ROOT>/build-98a8450/target/session/prog"
+Current executable set to '<ROOT>/build-98a8450/target/session/prog' (arm64).
+(lldb) command source -s 0 'target/session/session.lldb'
+Executing commands in '<ROOT>/build-98a8450/target/session/session.lldb'.
+(lldb) script print("SNIFF_ROW args")
+SNIFF_ROW args
+(lldb) breakpoint set --name helper
+Breakpoint 1: where = prog`helper + 20 at main.lu:2:5, address = <ADDRESS>
+(lldb) run
+Process <PID> launched: '<ROOT>/build-98a8450/target/session/prog' (arm64)
+Process <PID> stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 1.1
+    frame #0: <ADDRESS> prog`helper(a=3, b=4) at main.lu:2:5
+   1   	fn helper(a: int, b: int) -> int {
+-> 2   	    let s = a + b
+    	    ^
+   3   	    s * 2
+   4   	}
+   5   	
+   6   	fn main() -> int {
+   7   	    let x = 3
+Target 0: (prog) stopped.
+(lldb) frame variable a b
+(long) a = 3
+(long) b = 4
+(lldb) bt
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 1.1
+  * frame #0: <ADDRESS> prog`helper(a=3, b=4) at main.lu:2:5
+    frame #1: <ADDRESS> prog`main at main.lu:9:5
+    frame #2: <ADDRESS> prog`main + 24
+    frame #3: <ADDRESS> dyld`start + 6992
+(lldb) script print("SNIFF_END args")
+SNIFF_END args
+(lldb) script print("SNIFF_ROW local")
+SNIFF_ROW local
+(lldb) next
+Process <PID> stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = step over
+    frame #0: <ADDRESS> prog`helper(a=3, b=4) at main.lu:3:5
+   1   	fn helper(a: int, b: int) -> int {
+   2   	    let s = a + b
+-> 3   	    s * 2
+    	    ^
+   4   	}
+   5   	
+   6   	fn main() -> int {
+   7   	    let x = 3
+Target 0: (prog) stopped.
+(lldb) frame variable a b s
+(long) a = 3
+(long) b = 4
+(long) s = 7
+(lldb) bt
+* thread #1, queue = 'com.apple.main-thread', stop reason = step over
+  * frame #0: <ADDRESS> prog`helper(a=3, b=4) at main.lu:3:5
+    frame #1: <ADDRESS> prog`main at main.lu:9:5
+    frame #2: <ADDRESS> prog`main + 24
+    frame #3: <ADDRESS> dyld`start + 6992
+(lldb) script print("SNIFF_END local")
+SNIFF_END local
+(lldb) script print("SNIFF_ROW exit")
+SNIFF_ROW exit
+(lldb) continue
+Process <PID> resuming
+Process <PID> exited with status = 0 (0x00000000)
+(lldb) script print("SNIFF_END exit")
+SNIFF_END exit
+(lldb) quit

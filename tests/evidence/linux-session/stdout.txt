@@ -1,0 +1,25 @@
+SNIFF_ROW args
+Breakpoint 1 at <ADDRESS>: file <ROOT>/fixtures/wolf/scalars/main.lu, line 2.
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+
+Breakpoint 1, helper (a=3, b=4) at <ROOT>/fixtures/wolf/scalars/main.lu:2
+2	    let s = a + b
+SNIFF_VALUE a=3
+SNIFF_VALUE b=4
+#0  helper (a=3, b=4) at <ROOT>/fixtures/wolf/scalars/main.lu:2
+#1  <ADDRESS> in main () at <ROOT>/fixtures/wolf/scalars/main.lu:9
+#2  <ADDRESS> in main ()
+SNIFF_END args
+SNIFF_ROW local
+3	    s * 2
+SNIFF_VALUE a=3
+SNIFF_VALUE b=4
+SNIFF_VALUE s=7
+#0  helper (a=3, b=4) at <ROOT>/fixtures/wolf/scalars/main.lu:3
+#1  <ADDRESS> in main () at <ROOT>/fixtures/wolf/scalars/main.lu:9
+#2  <ADDRESS> in main ()
+SNIFF_END local
+SNIFF_ROW exit
+[Inferior 1 (process <PID>) exited normally]
+SNIFF_END exit

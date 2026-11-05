@@ -1,0 +1,77 @@
+{
+  "schema": 1,
+  "oracle": "gdb",
+  "version": "GNU gdb (Ubuntu 15.1-1ubuntu1~24.04.1) 15.1\nCopyright (C) 2024 Free Software Foundation, Inc.\nLicense GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>\nThis is free software: you are free to change and redistribute it.\nThere is NO WARRANTY, to the extent permitted by law.",
+  "exit": 0,
+  "normalizations": {
+    "addresses": "Debugger frame PCs and breakpoint insertion addresses only; scalar hex values are preserved.",
+    "pids": "Process N, process N and pid=N debugger fields only; scalar integers are preserved.",
+    "timestamps": "Explicit timestamp=ISO-8601 fields only; normally no timestamps are emitted.",
+    "paths": "Exact configured root prefix followed by / only; filenames and source coordinates are preserved."
+  },
+  "events": [
+    {
+      "name": "args",
+      "line": 2,
+      "locals": {
+        "a": "3",
+        "b": "4"
+      },
+      "frames": [
+        "helper",
+        "main",
+        "main"
+      ],
+      "source_frames": [
+        {
+          "function": "helper",
+          "file": "main.lu",
+          "line": 2
+        },
+        {
+          "function": "main",
+          "file": "main.lu",
+          "line": 9
+        }
+      ],
+      "text": "Breakpoint 1 at <ADDRESS>: file <ROOT>/fixtures/wolf/scalars/main.lu, line 2.\n[Thread debugging using libthread_db enabled]\nUsing host libthread_db library \"/lib/x86_64-linux-gnu/libthread_db.so.1\".\n\nBreakpoint 1, helper (a=3, b=4) at <ROOT>/fixtures/wolf/scalars/main.lu:2\n2\t    let s = a + b\nSNIFF_VALUE a=3\nSNIFF_VALUE b=4\n#0  helper (a=3, b=4) at <ROOT>/fixtures/wolf/scalars/main.lu:2\n#1  <ADDRESS> in main () at <ROOT>/fixtures/wolf/scalars/main.lu:9\n#2  <ADDRESS> in main ()\n"
+    },
+    {
+      "name": "local",
+      "line": 3,
+      "locals": {
+        "a": "3",
+        "b": "4",
+        "s": "7"
+      },
+      "frames": [
+        "helper",
+        "main",
+        "main"
+      ],
+      "source_frames": [
+        {
+          "function": "helper",
+          "file": "main.lu",
+          "line": 3
+        },
+        {
+          "function": "main",
+          "file": "main.lu",
+          "line": 9
+        }
+      ],
+      "text": "3\t    s * 2\nSNIFF_VALUE a=3\nSNIFF_VALUE b=4\nSNIFF_VALUE s=7\n#0  helper (a=3, b=4) at <ROOT>/fixtures/wolf/scalars/main.lu:3\n#1  <ADDRESS> in main () at <ROOT>/fixtures/wolf/scalars/main.lu:9\n#2  <ADDRESS> in main ()\n"
+    },
+    {
+      "name": "exit",
+      "line": null,
+      "locals": {},
+      "frames": [],
+      "source_frames": [],
+      "text": "[Inferior 1 (process <PID>) exited normally]\n"
+    }
+  ],
+  "normalized_stdout": "SNIFF_ROW args\nBreakpoint 1 at <ADDRESS>: file <ROOT>/fixtures/wolf/scalars/main.lu, line 2.\n[Thread debugging using libthread_db enabled]\nUsing host libthread_db library \"/lib/x86_64-linux-gnu/libthread_db.so.1\".\n\nBreakpoint 1, helper (a=3, b=4) at <ROOT>/fixtures/wolf/scalars/main.lu:2\n2\t    let s = a + b\nSNIFF_VALUE a=3\nSNIFF_VALUE b=4\n#0  helper (a=3, b=4) at <ROOT>/fixtures/wolf/scalars/main.lu:2\n#1  <ADDRESS> in main () at <ROOT>/fixtures/wolf/scalars/main.lu:9\n#2  <ADDRESS> in main ()\nSNIFF_END args\nSNIFF_ROW local\n3\t    s * 2\nSNIFF_VALUE a=3\nSNIFF_VALUE b=4\nSNIFF_VALUE s=7\n#0  helper (a=3, b=4) at <ROOT>/fixtures/wolf/scalars/main.lu:3\n#1  <ADDRESS> in main () at <ROOT>/fixtures/wolf/scalars/main.lu:9\n#2  <ADDRESS> in main ()\nSNIFF_END local\nSNIFF_ROW exit\n[Inferior 1 (process <PID>) exited normally]\nSNIFF_END exit\n",
+  "normalized_stderr": "warning: Source file is more recent than executable.\n"
+}

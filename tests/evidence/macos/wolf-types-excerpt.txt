@@ -1,0 +1,83 @@
+0x0000001d:   DW_TAG_base_type
+                DW_AT_name [DW_FORM_strp]	("i32")
+                DW_AT_encoding [DW_FORM_udata]	(DW_ATE_signed)
+                DW_AT_byte_size [DW_FORM_udata]	(4)
+
+
+0x00000024:   DW_TAG_base_type
+                DW_AT_name [DW_FORM_strp]	("int")
+                DW_AT_encoding [DW_FORM_udata]	(DW_ATE_signed)
+                DW_AT_byte_size [DW_FORM_udata]	(8)
+
+
+0x0000002b:   DW_TAG_base_type
+                DW_AT_name [DW_FORM_strp]	("i8")
+                DW_AT_encoding [DW_FORM_udata]	(DW_ATE_signed)
+                DW_AT_byte_size [DW_FORM_udata]	(1)
+
+
+0x00000032:   DW_TAG_base_type
+                DW_AT_name [DW_FORM_strp]	("f32")
+                DW_AT_encoding [DW_FORM_udata]	(DW_ATE_float)
+                DW_AT_byte_size [DW_FORM_udata]	(4)
+
+
+0x00000039:   DW_TAG_base_type
+                DW_AT_name [DW_FORM_strp]	("f64")
+                DW_AT_encoding [DW_FORM_udata]	(DW_ATE_float)
+                DW_AT_byte_size [DW_FORM_udata]	(8)
+
+
+0x00000040:   DW_TAG_base_type
+                DW_AT_name [DW_FORM_strp]	("bool")
+                DW_AT_encoding [DW_FORM_udata]	(DW_ATE_boolean)
+                DW_AT_byte_size [DW_FORM_udata]	(1)
+
+
+0x00000059:     DW_TAG_formal_parameter
+                  DW_AT_name [DW_FORM_strp]	("a")
+                  DW_AT_type [DW_FORM_ref4]	(0x0000001d "i32")
+                  DW_AT_location [DW_FORM_exprloc]	(DW_OP_fbreg -112)
+
+
+0x00000066:     DW_TAG_formal_parameter
+                  DW_AT_name [DW_FORM_strp]	("b")
+                  DW_AT_type [DW_FORM_ref4]	(0x00000024 "int")
+                  DW_AT_location [DW_FORM_exprloc]	(DW_OP_fbreg -104)
+
+
+0x00000073:     DW_TAG_formal_parameter
+                  DW_AT_name [DW_FORM_strp]	("c")
+                  DW_AT_type [DW_FORM_ref4]	(0x0000002b "i8")
+                  DW_AT_location [DW_FORM_exprloc]	(DW_OP_fbreg -96)
+
+
+0x00000080:     DW_TAG_formal_parameter
+                  DW_AT_name [DW_FORM_strp]	("d")
+                  DW_AT_type [DW_FORM_ref4]	(0x00000024 "int")
+                  DW_AT_location [DW_FORM_exprloc]	(DW_OP_fbreg -88)
+
+
+0x0000008d:     DW_TAG_formal_parameter
+                  DW_AT_name [DW_FORM_strp]	("e")
+                  DW_AT_type [DW_FORM_ref4]	(0x00000024 "int")
+                  DW_AT_location [DW_FORM_exprloc]	(DW_OP_fbreg -80)
+
+
+0x0000009a:     DW_TAG_formal_parameter
+                  DW_AT_name [DW_FORM_strp]	("f")
+                  DW_AT_type [DW_FORM_ref4]	(0x00000032 "f32")
+                  DW_AT_location [DW_FORM_exprloc]	(DW_OP_fbreg -72)
+
+
+0x000000a7:     DW_TAG_formal_parameter
+                  DW_AT_name [DW_FORM_strp]	("g")
+                  DW_AT_type [DW_FORM_ref4]	(0x00000039 "f64")
+                  DW_AT_location [DW_FORM_exprloc]	(DW_OP_fbreg -64)
+
+
+0x000000b3:     DW_TAG_formal_parameter
+                  DW_AT_name [DW_FORM_strp]	("flag")
+                  DW_AT_type [DW_FORM_ref4]	(0x00000040 "bool")
+                  DW_AT_location [DW_FORM_exprloc]	(DW_OP_fbreg -56)
+
