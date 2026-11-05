@@ -1,0 +1,172 @@
+//! member: false
+use readers
+
+fn mach_test_put(mut data: List[byte], at: int, value: u64, width: int) {
+    var i: int = 0
+    while i < width {
+        data[at + i] = ((value >> (i * 8) as u64) & 255) as int as byte
+        i += 1
+    }
+}
+
+fn mach_test_text(mut data: List[byte], at: int, text: str) {
+    let bytes = text.bytes()
+    var i: int = 0
+    while i < bytes.len { data[at + i] = bytes[i]; i += 1 }
+}
+
+fn mach_test_fixture() -> List[byte] {
+    var data: List[byte] = []
+    var i: int = 0
+    while i < 320 { (mut data).push(0 as byte); i += 1 }
+    mach_test_put(mut data, 0, 0xfeedfacf, 4)
+    mach_test_put(mut data, 4, 0x0100000c, 4)
+    mach_test_put(mut data, 12, 2, 4)
+    mach_test_put(mut data, 16, 3, 4)
+    mach_test_put(mut data, 20, 200, 4)
+    mach_test_put(mut data, 32, 0x19, 4)
+    mach_test_put(mut data, 36, 152, 4)
+    mach_test_text(mut data, 40, "__TEXT")
+    mach_test_put(mut data, 56, 4096, 8)
+    mach_test_put(mut data, 64, 16, 8)
+    mach_test_put(mut data, 72, 256, 8)
+    mach_test_put(mut data, 80, 16, 8)
+    mach_test_put(mut data, 96, 1, 4)
+    mach_test_text(mut data, 104, "__text")
+    mach_test_text(mut data, 120, "__TEXT")
+    mach_test_put(mut data, 136, 4096, 8)
+    mach_test_put(mut data, 144, 16, 8)
+    mach_test_put(mut data, 152, 256, 4)
+    mach_test_put(mut data, 156, 2, 4)
+    mach_test_put(mut data, 184, 0x1b, 4)
+    mach_test_put(mut data, 188, 24, 4)
+    i = 0
+    while i < 16 { data[192 + i] = (i + 1) as byte; i += 1 }
+    mach_test_put(mut data, 208, 2, 4)
+    mach_test_put(mut data, 212, 24, 4)
+    mach_test_put(mut data, 216, 272, 4)
+    mach_test_put(mut data, 220, 1, 4)
+    mach_test_put(mut data, 224, 288, 4)
+    mach_test_put(mut data, 228, 32, 4)
+    mach_test_put(mut data, 272, 1, 4)
+    mach_test_put(mut data, 276, 15, 1)
+    mach_test_put(mut data, 277, 1, 1)
+    mach_test_put(mut data, 280, 4096, 8)
+    mach_test_text(mut data, 289, "_main")
+    data
+}
+
+fn mach_test_valid() {
+    let data = mach_test_fixture()
+    let object = readers.macho_read(data, 10000) else { assert(false); return }
+    assert(object.filetype == 2 && object.cpu_subtype == 0)
+    assert(object.sections.len == 1 && object.symbols.len == 1)
+    assert(object.sections[0].address == 4096 && object.sections[0].size == 16)
+    assert(object.sections[0].file_offset == 256 && !object.sections[0].zero_fill)
+    assert(object.sections[0].name.start == 104 && object.sections[0].name.length == 6)
+    assert(object.symbols[0].name.start == 289 && object.symbols[0].name.length == 5)
+    assert(object.symbols[0].value == 4096 && object.symbols[0].section == 1)
+    assert(object.has_uuid && !object.has_compact_unwind)
+    let matched = readers.macho_match_uuid(data, object, data, object)
+    assert("{matched}" == "()")
+    print("PASS macho-valid-sections-symbols-uuid")
+}
+
+fn mach_test_refusals() {
+    var data = mach_test_fixture()
+    let short = readers.macho_read(data[0..31], 10000)
+    assert("{short}" == "truncated")
+    mach_test_put(mut data, 4, 0x01000007, 4)
+    let architecture = readers.macho_read(data, 10000)
+    assert("{architecture}" == "unsupported_architecture")
+    mach_test_put(mut data, 4, 0x0100000c, 4)
+    mach_test_put(mut data, 0, 0xcffaedfe, 4)
+    let endian = readers.macho_read(data, 10000)
+    assert("{endian}" == "unsupported_endianness")
+    mach_test_put(mut data, 0, 0xbebafeca, 4)
+    let fat = readers.macho_read(data, 10000)
+    assert("{fat}" == "unsupported_fat_macho")
+    mach_test_put(mut data, 0, 0xfeedfacf, 4)
+    let work = readers.macho_read(data, 1)
+    assert("{work}" == "resource_limit")
+    print("PASS macho-format-refusals")
+}
+
+fn mach_test_commands() {
+    var data = mach_test_fixture()
+    mach_test_put(mut data, 36, 148, 4)
+    let alignment = readers.macho_read(data, 10000)
+    assert("{alignment}" == "invalid_load_commands")
+    mach_test_put(mut data, 36, 152, 4)
+    mach_test_put(mut data, 16, 2, 4)
+    let count = readers.macho_read(data, 10000)
+    assert("{count}" == "invalid_load_commands")
+    mach_test_put(mut data, 16, 3, 4)
+    mach_test_put(mut data, 20, 4294967295, 4)
+    let overflow = readers.macho_read(data, 10000)
+    assert("{overflow}" == "offset_overflow")
+    print("PASS macho-command-bounds")
+}
+
+fn mach_test_sections() {
+    var data = mach_test_fixture()
+    mach_test_put(mut data, 152, 0xffffffff, 4)
+    let outside = readers.macho_read(data, 10000)
+    assert("{outside}" == "offset_overflow")
+    mach_test_put(mut data, 168, 1, 4)
+    let zero = readers.macho_read(data, 10000) else { assert(false); return }
+    assert(zero.sections[0].zero_fill && zero.sections[0].file_offset == 0xffffffff)
+    mach_test_put(mut data, 168, 0, 4)
+    mach_test_put(mut data, 152, 256, 4)
+    mach_test_text(mut data, 104, "abcdefghijklmnop")
+    let fixed = readers.macho_read(data, 10000) else { assert(false); return }
+    assert(fixed.sections[0].name.length == 16)
+    var compressed = mach_test_fixture()
+    mach_test_text(mut compressed, 104, "__zdebug_info")
+    let z = readers.macho_read(compressed, 10000)
+    assert("{z}" == "unsupported_compressed_section")
+    print("PASS macho-section-bounds-zerofill-names")
+}
+
+fn mach_test_symbols() {
+    var data = mach_test_fixture()
+    mach_test_put(mut data, 272, 32, 4)
+    let index = readers.macho_read(data, 10000)
+    assert("{index}" == "invalid_symbol_string")
+    mach_test_put(mut data, 272, 31, 4)
+    data[319] = 65 as byte
+    let terminator = readers.macho_read(data, 10000)
+    assert("{terminator}" == "unterminated_string")
+    mach_test_put(mut data, 272, 0, 4)
+    let null_name = readers.macho_read(data, 10000) else { assert(false); return }
+    assert(null_name.symbols[0].name.length == 0)
+    mach_test_put(mut data, 277, 2, 1)
+    let ordinal = readers.macho_read(data, 10000)
+    assert("{ordinal}" == "invalid_symbol_section")
+    print("PASS macho-symbol-bounds")
+}
+
+fn mach_test_uuid_and_compact() {
+    let left = mach_test_fixture()
+    let a = readers.macho_read(left, 10000) else { assert(false); return }
+    var right = mach_test_fixture()
+    right[192] = 99 as byte
+    let b = readers.macho_read(right, 10000) else { assert(false); return }
+    let mismatch = readers.macho_match_uuid(left, a, right, b)
+    assert("{mismatch}" == "dsym_uuid_mismatch")
+    mach_test_text(mut right, 104, "__unwind_info")
+    let compact = readers.macho_read(right, 10000) else { assert(false); return }
+    assert(compact.has_compact_unwind)
+    let refusal = readers.macho_require_dwarf_unwind(compact)
+    assert("{refusal}" == "unsupported_compact_unwind")
+    print("PASS macho-uuid-and-compact-boundary")
+}
+
+fn main() {
+    mach_test_valid()
+    mach_test_refusals()
+    mach_test_commands()
+    mach_test_sections()
+    mach_test_symbols()
+    mach_test_uuid_and_compact()
+}
