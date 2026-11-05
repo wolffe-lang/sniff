@@ -17,7 +17,7 @@ EXPECTED = {'schema': 1, 'events': [
      'frame_prefix': ['helper', 'main']},
     {'name': 'local', 'line': 3, 'locals': {'a': '3', 'b': '4', 's': '7'},
      'frame_prefix': ['helper', 'main']}]}
-ACTUAL = {'schema': 1, 'events': [
+ACTUAL = {'schema': 1, 'exit': 0, 'events': [
     {'name': 'args', 'line': 2, 'locals': {'a': '3', 'b': '4'},
      'frames': ['helper', 'main', 'start']},
     {'name': 'local', 'line': 3, 'locals': {'a': '3', 'b': '4', 's': '7'},
@@ -41,6 +41,15 @@ class Harness(unittest.TestCase):
         p = self.compare(ACTUAL)
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
         self.assertIn('PASS session', p.stdout)
+
+    def test_failed_or_missing_oracle_exit_is_not_replay_parity(self):
+        for code in (17, None):
+            a = self.copy()
+            if code is None: a.pop('exit')
+            else: a['exit'] = code
+            p = self.compare(a)
+            self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+            self.assertIn('FAIL oracle-exit', p.stdout)
 
     def test_wrong_value(self):
         a = self.copy()
@@ -67,7 +76,7 @@ class Harness(unittest.TestCase):
         expected = {'schema': 1, 'events': [{'name': 'bt', 'source_frame_prefix': [
             {'function': 'helper', 'file': 'main.lu', 'line': 2},
             {'function': 'main', 'file': 'main.lu', 'line': 9}]}]}
-        actual = {'schema': 1, 'events': [{'name': 'bt', 'frames': ['helper', 'main'],
+        actual = {'schema': 1, 'exit': 0, 'events': [{'name': 'bt', 'frames': ['helper', 'main'],
             'source_frames': [{'function': 'helper', 'file': 'main.lu', 'line': 2}]}]}
         p = self.compare(actual, expected)
         self.assertEqual(p.returncode, 1, p.stdout + p.stderr)

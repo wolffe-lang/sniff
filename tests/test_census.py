@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Synthetic producer boundaries exercise the census parser, not DWARF itself."""
+import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -69,6 +70,49 @@ class Census(unittest.TestCase):
             self.assertIn('DW_LNS_advance_pc', clang['line_opcodes'])
             self.assertEqual(r['wolf_functions'], [{'name': 'helper', 'low_pc': 0x2000,
                 'high_pc': 0x2020, 'cfi_fully_covers_range': False}])
+
+    def test_dwarf_spelling_inside_source_names_is_not_a_feature(self):
+        info = INFO.replace('("helper")', '("DW_TAG_inlined_subroutine DW_FORM_indirect DW_OP_deref DW_AT_ranges")')
+        with tempfile.TemporaryDirectory() as directory:
+            d = Path(directory)
+            for name, text in [('info', info), ('line', LINE), ('frames', FRAMES)]:
+                (d / name).write_text(text)
+            p = subprocess.run([sys.executable, '-I', str(ROOT / 'tools/census.py'),
+                'summarize', '--info', str(d / 'info'), '--line', str(d / 'line'),
+                '--frames', str(d / 'frames'), '--out', str(d / 'summary.json')],
+                capture_output=True, text=True)
+            self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+            wolf = next(v for v in json.loads((d / 'summary.json').read_text())['producers']
+                        if v['producer'].startswith('wolf'))
+            self.assertNotIn('DW_TAG_inlined_subroutine', wolf['tags'])
+            self.assertNotIn('DW_FORM_indirect', wolf['forms'])
+            self.assertNotIn('DW_AT_ranges', wolf['attributes'])
+            self.assertNotIn('DW_OP_deref', wolf['location_ops'])
+
+    def test_capture_rejects_replaced_binary_or_dsym(self):
+        for changed in ('prog', 'prog.dSYM/Contents/Resources/DWARF/prog'):
+            with self.subTest(changed=changed), tempfile.TemporaryDirectory() as directory:
+                d = Path(directory)
+                case = d / 'wolf/case/wolf-debug'
+                files = {}
+                for name in ('prog', 'prog.dSYM/Contents/Resources/DWARF/prog'):
+                    path = case / name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(b'original artifact')
+                    files[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+                (case / changed).write_bytes(b'replaced artifact')
+                manifest = {'schema': 1, 'platform': 'Darwin-arm64', 'fixtures': [
+                    {'id': 'wolf/case/wolf-debug', 'sha256_read_2': files}]}
+                (d / 'builds.json').write_text(json.dumps(manifest))
+                tool = d / 'fake-dwarfdump'
+                tool.write_text('#!/usr/bin/env python3\nprint("synthetic oracle version")\n')
+                tool.chmod(0o755)
+                p = subprocess.run([sys.executable, '-I', str(ROOT / 'tools/census.py'),
+                    'capture', '--builds', str(d / 'builds.json'), '--dwarfdump', str(tool),
+                    '--out', str(d / 'out')], capture_output=True, text=True)
+                self.assertNotEqual(p.returncode, 0)
+                self.assertIn('fixture-digest-mismatch', p.stderr)
+                self.assertFalse((d / 'out/census.json').exists())
 
     def test_empty_dump_is_not_a_measurement(self):
         with tempfile.TemporaryDirectory() as directory:
