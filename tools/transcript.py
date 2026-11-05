@@ -25,8 +25,11 @@ def normalize(text, root):
     text = re.sub(r'(frame #\d+: )0x[0-9a-fA-F]+', r'\1<ADDRESS>', text)
     text = re.sub(r'(^#\d+\s+)0x[0-9a-fA-F]+', r'\1<ADDRESS>', text, flags=re.M)
     text = re.sub(r'(Breakpoint \d+(?:\.\d+)? at )0x[0-9a-fA-F]+', r'\1<ADDRESS>', text)
-    text = re.sub(r'\b(Process |process |pid=)\d+', r'\1<PID>', text)
-    return re.sub(r'timestamp=\d{4}-\d\d-\d\dT[0-9:.]+Z', 'timestamp=<TIMESTAMP>', text)
+    text = re.sub(r'^(Breakpoint \d+: [^\n]*address = )0x[0-9a-fA-F]+', r'\1<ADDRESS>', text, flags=re.M)
+    text = re.sub(r'^(Process )\d+(?= (?:launched|stopped|resuming|exited|detached)\b)', r'\1<PID>', text, flags=re.M)
+    text = re.sub(r'^(\[Inferior \d+ \(process )\d+(?=\))', r'\1<PID>', text, flags=re.M)
+    text = re.sub(r'^pid=\d+\b', 'pid=<PID>', text, flags=re.M)
+    return re.sub(r'^timestamp=\d{4}-\d\d-\d\dT[0-9:.]+Z', 'timestamp=<TIMESTAMP>', text, flags=re.M)
 
 
 def compare(expected, actual):

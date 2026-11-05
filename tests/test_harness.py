@@ -91,6 +91,7 @@ class Harness(unittest.TestCase):
             text = ('Process 123 stopped\n'
                     'frame #0: 0x0000000100001234 prog`helper at /lane/main.lu:2:5\n'
                     '(long) s = 0x1234\n(long) pid = 123\n'
+                    '(str) label = "Process 123 stopped timestamp=2026-11-05T00:00:00Z"\n'
                     'timestamp=2026-11-05T00:00:00Z\n')
             p = subprocess.run([sys.executable, '-I', str(TOOL), 'normalize',
                 '--root', '/lane'], input=text, capture_output=True, text=True)
@@ -99,6 +100,7 @@ class Harness(unittest.TestCase):
             self.assertIn('<ROOT>/main.lu:2:5', p.stdout)
             self.assertIn('(long) s = 0x1234', p.stdout)
             self.assertIn('(long) pid = 123', p.stdout)
+            self.assertIn('(str) label = "Process 123 stopped timestamp=2026-11-05T00:00:00Z"', p.stdout)
             self.assertIn('Process <PID> stopped', p.stdout)
             self.assertIn('timestamp=<TIMESTAMP>', p.stdout)
 
