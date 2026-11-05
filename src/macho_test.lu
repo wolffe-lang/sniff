@@ -186,6 +186,45 @@ fn macho_test_dsym_address_only() {
     print("PASS macho-dsym-address-only")
 }
 
+fn macho_test_dsym_mixed_sections() {
+    // Observed in the pinned wolf dSYM: __eh_frame has bytes while __text
+    // retains only its address, within the same nonempty __TEXT segment.
+    let base = macho_test_fixture()
+    var data: List[byte] = []
+    var i: int = 0
+    while i < 184 { (mut data).push(base[i]); i += 1 }
+    i = 0
+    while i < 80 { (mut data).push(0 as byte); i += 1 }
+    i = 184
+    while i < base.len { (mut data).push(base[i]); i += 1 }
+    macho_test_put(mut data, 12, 10, 4)
+    macho_test_put(mut data, 20, 280, 4)
+    macho_test_put(mut data, 36, 232, 4)
+    macho_test_put(mut data, 64, 32, 8)
+    macho_test_put(mut data, 72, 336, 8)
+    macho_test_put(mut data, 96, 2, 4)
+    macho_test_put(mut data, 152, 0, 4)
+    macho_test_text(mut data, 184, "__eh_frame")
+    macho_test_text(mut data, 200, "__TEXT")
+    macho_test_put(mut data, 216, 4112, 8)
+    macho_test_put(mut data, 224, 16, 8)
+    macho_test_put(mut data, 232, 336, 4)
+    macho_test_put(mut data, 296, 352, 4)
+    macho_test_put(mut data, 304, 368, 4)
+    let result = readers.macho_read(data, 10000)
+    let object = result else |err| {
+        print("FAIL macho-dsym-mixed-sections {err}")
+        assert(false)
+        return
+    }
+    assert(object.sections.len == 2)
+    assert(!object.sections[0].has_file_data && !object.sections[0].zero_fill)
+    assert(object.sections[0].address == 4096 && object.sections[0].size == 16)
+    assert(object.sections[1].has_file_data && object.sections[1].file_offset == 336)
+    assert(object.sections[1].address == 4112 && object.sections[1].size == 16)
+    print("PASS macho-dsym-mixed-sections")
+}
+
 fn macho_test_real(image_path: str, dsym_path: str) {
     let image_data = fs_read_bytes(image_path) else { assert(false); return }
     let dsym_data = fs_read_bytes(dsym_path) else { assert(false); return }
@@ -218,4 +257,5 @@ fn main() {
     macho_test_symbols()
     macho_test_uuid_and_compact()
     macho_test_dsym_address_only()
+    macho_test_dsym_mixed_sections()
 }
