@@ -128,8 +128,30 @@ fn dwarf_abbreviation_rows() {
     print("PASS dwarf-abbreviations")
 }
 
+fn dwarf_type_reference() {
+    for offset in [0 as u64, 24 as u64, 25 as u64] {
+        var data: List[byte] = []
+        dwarf_put(mut data, 21, 4)
+        dwarf_put(mut data, 5, 2)
+        dwarf_put(mut data, 2, 1)
+        dwarf_put(mut data, 8, 1)
+        dwarf_put(mut data, 0, 4)
+        dwarf_put(mut data, 123, 8)
+        dwarf_put(mut data, offset, 4)
+        dwarf_put(mut data, 0, 1)
+        var c = readers.cursor(0, data.len, 100)
+        let result = readers.dwarf_unit_header(data, mut c)
+        if offset == 24 {
+            let unit = result else { assert(false); return }
+            assert(unit.type_offset == 24 && unit.signature == 123)
+        } else { assert("{result}" == "invalid_dwarf_reference") }
+    }
+    print("PASS dwarf-type-reference-domain")
+}
+
 fn main() {
     dwarf_headers()
+    dwarf_type_reference()
     dwarf_header_refusals()
     dwarf_abbreviation_rows()
 }

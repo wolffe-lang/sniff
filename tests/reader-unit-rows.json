@@ -9,7 +9,8 @@
   "dwarf_test.lu": [
     "dwarf-unit-widths",
     "dwarf-unit-refusals",
-    "dwarf-abbreviations"
+    "dwarf-abbreviations",
+    "dwarf-type-reference-domain"
   ],
   "forms_test.lu": [
     "dwarf-form-widths",
