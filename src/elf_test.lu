@@ -1,10 +1,11 @@
 //! member: false
+
 use readers
 
 fn put(mut data: List[byte], at: int, value: u64, width: int) {
     var i: int = 0
     while i < width {
-        data[at + i] = ((value >> (i * 8) as u64) & 255) as int as byte
+        data[at + i] = (value >> (i * 8) as u64 & 255) as int as byte
         i += 1
     }
 }
