@@ -1,0 +1,10 @@
+fn bounded(value: int) -> int ! {outside} {
+    if value > 3 { return outside }
+    value
+}
+
+fn main() {
+    let bound = bounded(4)
+    print("{bound}")
+    print("{bounded(4)}")
+}
