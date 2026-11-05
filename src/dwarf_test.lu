@@ -1,10 +1,11 @@
 //! member: false
+
 use readers
 
 fn dwarf_put(mut data: List[byte], value: u64, width: int) {
     var i: int = 0
     while i < width {
-        let octet = ((value >> (i * 8) as u64) & 255) as int as byte
+        let octet = (value >> (i * 8) as u64 & 255) as int as byte
         (mut data).push(octet)
         i += 1
     }
@@ -17,7 +18,9 @@ fn dwarf_fixture(version: int, wide: bool, address_size: int, kind: int) -> List
     if wide {
         dwarf_put(mut data, 4294967295, 4)
         dwarf_put(mut data, body_length as u64, 8)
-    } else { dwarf_put(mut data, body_length as u64, 4) }
+    } else {
+        dwarf_put(mut data, body_length as u64, 4)
+    }
     dwarf_put(mut data, version as u64, 2)
     if version == 4 {
         dwarf_put(mut data, 12, offset_size)
@@ -80,9 +83,19 @@ fn dwarf_header_refusals() {
 }
 
 fn dwarf_abbreviation_rows() {
-    let data: List[byte] = [1 as byte, 17 as byte, 1 as byte,
-        3 as byte, 8 as byte, 19 as byte, 33 as byte, 127 as byte,
-        0 as byte, 0 as byte, 0 as byte]
+    let data: List[byte] = [
+        1 as byte,
+        17 as byte,
+        1 as byte,
+        3 as byte,
+        8 as byte,
+        19 as byte,
+        33 as byte,
+        127 as byte,
+        0 as byte,
+        0 as byte,
+        0 as byte,
+    ]
     var c = readers.cursor(0, data.len, 100)
     let table = readers.dwarf_abbrevs(data, mut c, 10, 10) else { assert(false); return }
     assert(table.len == 1 && c.pos == data.len)
@@ -92,13 +105,23 @@ fn dwarf_abbreviation_rows() {
     var limited = readers.cursor(0, data.len, 100)
     let limit_result = readers.dwarf_abbrevs(data, mut limited, 0, 10)
     assert("{limit_result}" == "resource_limit")
-    let duplicate: List[byte] = [1 as byte, 17 as byte, 0 as byte, 0 as byte,
-        0 as byte, 1 as byte, 17 as byte, 0 as byte, 0 as byte, 0 as byte, 0 as byte]
+    let duplicate: List[byte] = [
+        1 as byte,
+        17 as byte,
+        0 as byte,
+        0 as byte,
+        0 as byte,
+        1 as byte,
+        17 as byte,
+        0 as byte,
+        0 as byte,
+        0 as byte,
+        0 as byte,
+    ]
     var d = readers.cursor(0, duplicate.len, 100)
     let d_result = readers.dwarf_abbrevs(duplicate, mut d, 10, 10)
     assert("{d_result}" == "duplicate_abbreviation")
-    let invalid: List[byte] = [1 as byte, 17 as byte, 2 as byte, 0 as byte,
-        0 as byte, 0 as byte]
+    let invalid: List[byte] = [1 as byte, 17 as byte, 2 as byte, 0 as byte, 0 as byte, 0 as byte]
     var i = readers.cursor(0, invalid.len, 100)
     let i_result = readers.dwarf_abbrevs(invalid, mut i, 10, 10)
     assert("{i_result}" == "invalid_abbreviation")

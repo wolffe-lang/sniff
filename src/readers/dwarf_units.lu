@@ -1,0 +1,96 @@
+// DWARF 4/5 sections 7.4 and 7.5.1: format width is not address width.
+
+/// Structural DWARF input failures, unsupported encodings and resource caps.
+/// Byte-reader failures propagate without being converted into guessed values.
+pub error DwarfError = {
+    invalid_bounds,
+    truncated,
+    unsupported_width,
+    unterminated_leb128,
+    leb128_overflow,
+    unterminated_string,
+    offset_overflow,
+    resource_limit,
+    reserved_dwarf_length,
+    unsupported_dwarf_version,
+    unsupported_address_size,
+    unsupported_split_dwarf,
+    unsupported_unit_type,
+    invalid_dwarf_reference,
+    invalid_abbreviation,
+    duplicate_abbreviation,
+    unsupported_dwarf_form,
+}
+
+/// A compilation/type-unit header; byte indexes address the original buffer.
+/// Abbreviation and type offsets retain their encoded relative domains.
+pub struct DwarfUnit {
+    pub start: int,
+    pub body: int,
+    pub end: int,
+    pub version: int,
+    pub offset_size: int,
+    pub address_size: int,
+    pub kind: int,
+    pub abbrev: u64,
+    pub signature: u64,
+    pub type_offset: u64,
+}
+
+/// Decode one bounded DWARF 4/5 info-unit header, leaving c at the first DIE.
+/// Split units and unsupported widths/versions are refused explicitly.
+pub fn dwarf_unit_header(data: List[byte], mut c: Cursor) -> DwarfUnit ! DwarfError {
+    let start = c.pos
+    let initial = uint_le(data, mut c, 4)?
+    var offset_size: int = 4
+    var length: u64 = initial
+    if initial == 4294967295 {
+        offset_size = 8
+        length = uint_le(data, mut c, 8)?
+    } else if initial >= 4294967280 {
+        return reserved_dwarf_length
+    }
+    // Both operands are validated host indexes after the initial-length read.
+    if length > (c.end - c.pos) as u64 { return truncated }
+    let end = c.pos + length as int
+    var header = cursor(c.pos, end, c.fuel)
+    let version = uint_le(data, mut header, 2)? as int
+    if version != 4 && version != 5 { return unsupported_dwarf_version }
+    var kind: int = 1
+    var address_size: int = 0
+    var abbrev: u64 = 0
+    var signature: u64 = 0
+    var type_offset: u64 = 0
+    if version == 4 {
+        abbrev = uint_le(data, mut header, offset_size)?
+        address_size = uint_le(data, mut header, 1)? as int
+    } else {
+        kind = uint_le(data, mut header, 1)? as int
+        address_size = uint_le(data, mut header, 1)? as int
+        abbrev = uint_le(data, mut header, offset_size)?
+        if kind == 4 || kind == 5 || kind == 6 { return unsupported_split_dwarf }
+        if kind != 1 && kind != 2 && kind != 3 { return unsupported_unit_type }
+        if kind == 2 {
+            signature = uint_le(data, mut header, 8)?
+            type_offset = uint_le(data, mut header, offset_size)?
+            if type_offset >= (end - start) as u64 { return invalid_dwarf_reference }
+        }
+    }
+    if address_size != 1 && address_size != 2 && address_size != 4 && address_size != 8 {
+        return unsupported_address_size
+    }
+    c.pos = header.pos
+    c.fuel = header.fuel
+    DwarfUnit {
+        start: start,
+        body: header.pos,
+        end: end,
+        version: version,
+        offset_size: offset_size,
+        address_size: address_size,
+        kind: kind,
+        abbrev: abbrev,
+        signature: signature,
+        type_offset: type_offset,
+    }
+}

@@ -1,0 +1,69 @@
+// DWARF 5 section 7.5.3: abbreviation codes and attribute/form pairs.
+
+/// One attribute declaration; implicit is meaningful only for form 0x21.
+pub struct DwarfAttrSpec {
+    pub attribute: u64,
+    pub form: u64,
+    pub implicit: i64,
+}
+
+/// A declaration in its original table order, with the encoded abbreviation ID.
+pub struct DwarfAbbrev {
+    pub code: u64,
+    pub tag: u64,
+    pub children: bool,
+    pub attrs: List[DwarfAttrSpec],
+}
+
+/// Parse one zero-terminated abbreviation table within c's bounds and budget.
+/// Limits cap total declarations and total attribute specifications, not each
+/// declaration separately. Duplicate codes and invalid terminators are errors.
+pub fn dwarf_abbrevs(
+    data: List[byte],
+    mut c: Cursor,
+    max_entries: int,
+    max_attributes: int,
+) -> List[DwarfAbbrev] ! DwarfError {
+    if max_entries < 0 || max_attributes < 0 { return resource_limit }
+    let entries_cap = min(max_entries, 65536)
+    let attributes_cap = min(max_attributes, 65536)
+    var table: List[DwarfAbbrev] = []
+    var attribute_count: int = 0
+    loop {
+        let code = uleb64(data, mut c)?
+        if code == 0 { return table }
+        if table.len >= entries_cap { return resource_limit }
+        var previous: int = 0
+        while previous < table.len {
+            if c.fuel <= 0 { return resource_limit }
+            c.fuel -= 1
+            if table[previous].code == code { return duplicate_abbreviation }
+            previous += 1
+        }
+        let tag = uleb64(data, mut c)?
+        let children = uint_le(data, mut c, 1)?
+        if tag == 0 || children > 1 { return invalid_abbreviation }
+        var attrs: List[DwarfAttrSpec] = []
+        loop {
+            let attribute = uleb64(data, mut c)?
+            let form = uleb64(data, mut c)?
+            if attribute == 0 && form == 0 { break }
+            if attribute == 0 || form == 0 { return invalid_abbreviation }
+            if attribute_count >= attributes_cap { return resource_limit }
+            var implicit: i64 = 0
+            if form == 33 { implicit = sleb64(data, mut c)? }
+            (mut attrs).push(DwarfAttrSpec {
+                attribute: attribute,
+                form: form,
+                implicit: implicit,
+            })
+            attribute_count += 1
+        }
+        (mut table).push(DwarfAbbrev {
+            code: code,
+            tag: tag,
+            children: children == 1,
+            attrs: attrs,
+        })
+    }
+}
