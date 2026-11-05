@@ -74,7 +74,9 @@ pub fn dwarf_unit_header(data: List[byte], mut c: Cursor) -> DwarfUnit ! DwarfEr
         if kind == 2 {
             signature = uint_le(data, mut header, 8)?
             type_offset = uint_le(data, mut header, offset_size)?
-            if type_offset >= (end - start) as u64 { return invalid_dwarf_reference }
+            if type_offset < (header.pos - start) as u64 || type_offset >= (end - start) as u64 {
+                return invalid_dwarf_reference
+            }
         }
     }
     if address_size != 1 && address_size != 2 && address_size != 4 && address_size != 8 {
