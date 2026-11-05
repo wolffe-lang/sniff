@@ -47,6 +47,7 @@ if [ "$mode" = macos ]; then
   oracle=lldb
   mkdir -p target/session
   cp target/fixtures/wolf/scalars/wolf-debug/prog target/session/prog
+  rm -rf target/session/prog.dSYM
   cp -R target/fixtures/wolf/scalars/wolf-debug/prog.dSYM target/session/prog.dSYM
   step target-sign codesign --force --sign - --entitlements tests/get-task-allow.plist target/session/prog
   binary="$root/target/session/prog"
