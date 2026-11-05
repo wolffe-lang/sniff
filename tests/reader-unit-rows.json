@@ -36,6 +36,7 @@
     "macho-section-bounds-zerofill-names",
     "macho-symbol-bounds",
     "macho-uuid-and-compact-boundary",
-    "macho-dsym-address-only"
+    "macho-dsym-address-only",
+    "macho-dsym-mixed-sections"
   ]
 }
