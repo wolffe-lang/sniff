@@ -15,6 +15,37 @@ def numbers(text, prefix):
     return dict(sorted(Counter(re.findall(r'\b' + prefix + r'\w+', text)).items()))
 
 
+def unit_fields(text):
+    tags = Counter(re.findall(r'^0x[0-9a-fA-F]+:\s+(DW_TAG_\w+)\b', text, re.M))
+    attributes, forms, operations, expressions = Counter(), Counter(), Counter(), set()
+    fields = list(re.finditer(r'^\s+(DW_AT_\w+)\s+\[(DW_FORM_\w+)\]', text, re.M))
+    location_attributes = {'DW_AT_location', 'DW_AT_frame_base', 'DW_AT_data_member_location',
+        'DW_AT_data_location', 'DW_AT_string_length', 'DW_AT_return_addr',
+        'DW_AT_use_location', 'DW_AT_vtable_elem_location'}
+    for i, field in enumerate(fields):
+        attribute, form = field[1], field[2]
+        attributes[attribute] += 1
+        forms[form] += 1
+        if form != 'DW_FORM_exprloc' and attribute not in location_attributes:
+            continue
+        body = text[field.end():fields[i + 1].start() if i + 1 < len(fields) else len(text)]
+        # Names in quoted operands are not operation encodings.
+        body = re.sub(r'"(?:\\.|[^"\\])*"', '""', body)
+        operations.update(numbers(body, 'DW_OP_'))
+        expressions.update(line[line.index('DW_OP_'):].strip()
+                           for line in body.splitlines() if 'DW_OP_' in line)
+    return {'tags': tags, 'attributes': attributes, 'forms': forms,
+            'location_ops': operations, 'expressions': expressions}
+
+
+def file_digest(path):
+    h = hashlib.sha256()
+    with path.open('rb') as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b''):
+            h.update(block)
+    return h.hexdigest()
+
+
 def summarize(info, line, frames):
     chunks = re.split(r'(?=^0x[0-9a-fA-F]+: (?:Compile|Type) Unit:)', info, flags=re.M)[1:]
     if not chunks:
@@ -40,11 +71,10 @@ def summarize(info, line, frames):
         if line_offset:
             entry['line_offsets'].add(int(line_offset[1], 16))
         entry['versions'].add(int(version[1], 0))
-        for key, prefix in [('forms', 'DW_FORM_'), ('attributes', 'DW_AT_'),
-                            ('tags', 'DW_TAG_'), ('location_ops', 'DW_OP_')]:
-            entry[key].update(numbers(chunk, prefix))
-        for value in re.findall(r'DW_AT_(?:location|frame_base)[^\n]*?\((DW_OP_[^\n]*)\)', chunk):
-            entry['expressions'].add(value)
+        fields = unit_fields(chunk)
+        for key in ('forms', 'attributes', 'tags', 'location_ops'):
+            entry[key].update(fields[key])
+        entry['expressions'].update(fields['expressions'])
         if name.startswith('wolf '):
             for block in re.split(r'(?=^0x[0-9a-fA-F]+:\s+DW_TAG_)', chunk, flags=re.M):
                 if not re.match(r'^0x[0-9a-fA-F]+:\s+DW_TAG_subprogram\b', block):
@@ -90,7 +120,7 @@ def summarize(info, line, frames):
             'line_special_opcodes': len(re.findall(r'^0x[^\n]*address \+=.*line \+=', executed, re.M)),
             'line_versions': sorted({int(v) for v in re.findall(r'^\s*version:\s*(\d+)', line, re.M)}),
             'cfi_kinds': sorted(set(cfi_kinds)), 'cfi_fde_count': len(fdes),
-            'cfi_ops': numbers(frames, 'DW_CFA_'), 'wolf_functions': wolf_functions}
+            'cfi_ops': dict(sorted(Counter(re.findall(r'^\s+(DW_CFA_\w+):', frames, re.M)).items())), 'wolf_functions': wolf_functions}
 
 
 def capture(args):
@@ -103,11 +133,22 @@ def capture(args):
     result = {'schema': 1, 'dwarfdump_version': version, 'platform': builds['platform'], 'fixtures': []}
     for fixture in builds['fixtures']:
         ident = fixture['id']
+        if Path(ident).is_absolute() or '..' in Path(ident).parts:
+            raise ValueError('invalid fixture id: ' + ident)
         directory = root / ident
         exe = directory / 'prog'
         artifacts = list((directory / 'prog.dSYM/Contents/Resources/DWARF').glob('*'))
         artifact = artifacts[0] if artifacts else exe
         if len(artifacts) > 1: raise ValueError('ambiguous dSYM for ' + ident)
+        if builds['platform'].startswith('Darwin') and not artifacts:
+            raise ValueError('missing dSYM for ' + ident)
+        measured_files = set((exe, artifact))
+        def verify_artifacts():
+            for path in measured_files:
+                key = path.relative_to(directory).as_posix()
+                if file_digest(path) != fixture['sha256_read_2'].get(key):
+                    raise ValueError('fixture-digest-mismatch: ' + ident + '/' + key)
+        verify_artifacts()
         raw = {}
         sha = {}
         for part, flags, target in [('info', ['--debug-info', '--show-form'], artifact),
@@ -126,6 +167,7 @@ def capture(args):
             with path.open('wb') as stream:
                 with gzip.GzipFile(filename='', mode='wb', fileobj=stream, mtime=0) as compressed:
                     compressed.write(p.stdout)
+        verify_artifacts()
         summary = summarize(raw['info'], raw['line'], raw['frames'])
         summary['id'] = ident
         summary['oracle_stdout_sha256'] = sha
