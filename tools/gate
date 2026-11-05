@@ -23,6 +23,7 @@ step() {
   printf 'END %s exit=%s secs=%s\n' "$name" "$rc" "$((SECONDS-start))"
   return "$rc"
 }
+step pin-metadata python3 -I tools/check-pins.py
 step harness-unit python3 -I tests/test_harness.py
 step census-unit python3 -I tests/test_census.py
 step tier-planner python3 -I ci/tiers-test.py
