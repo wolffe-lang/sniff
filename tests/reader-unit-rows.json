@@ -10,5 +10,11 @@
     "dwarf-unit-widths",
     "dwarf-unit-refusals",
     "dwarf-abbreviations"
+  ],
+  "forms_test.lu": [
+    "dwarf-form-widths",
+    "dwarf-form-zero-and-indirect",
+    "dwarf-form-spans",
+    "dwarf-form-refusals"
   ]
 }
