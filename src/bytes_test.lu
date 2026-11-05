@@ -1,10 +1,22 @@
 //! member: false
+
 use readers
 
 fn fixed_widths() {
-    let data: List[byte] = [1 as byte, 2 as byte, 3 as byte, 4 as byte,
-        255 as byte, 255 as byte, 255 as byte, 255 as byte,
-        255 as byte, 255 as byte, 255 as byte, 255 as byte]
+    let data: List[byte] = [
+        1 as byte,
+        2 as byte,
+        3 as byte,
+        4 as byte,
+        255 as byte,
+        255 as byte,
+        255 as byte,
+        255 as byte,
+        255 as byte,
+        255 as byte,
+        255 as byte,
+        255 as byte,
+    ]
     var c = readers.cursor(0, data.len, 100)
     let result1 = readers.uint_le(data, mut c, 1)
     assert("{result1}" == "1")
@@ -51,15 +63,33 @@ fn unsigned_leb() {
     var c = readers.cursor(0, example.len, 100)
     let result11 = readers.uleb64(example, mut c)
     assert("{result11}" == "624485")
-    let maximum: List[byte] = [255 as byte, 255 as byte, 255 as byte,
-        255 as byte, 255 as byte, 255 as byte, 255 as byte, 255 as byte,
-        255 as byte, 1 as byte]
+    let maximum: List[byte] = [
+        255 as byte,
+        255 as byte,
+        255 as byte,
+        255 as byte,
+        255 as byte,
+        255 as byte,
+        255 as byte,
+        255 as byte,
+        255 as byte,
+        1 as byte,
+    ]
     var m = readers.cursor(0, maximum.len, 100)
     let result12 = readers.uleb64(maximum, mut m)
     assert("{result12}" == "18446744073709551615")
-    let over: List[byte] = [128 as byte, 128 as byte, 128 as byte,
-        128 as byte, 128 as byte, 128 as byte, 128 as byte, 128 as byte,
-        128 as byte, 2 as byte]
+    let over: List[byte] = [
+        128 as byte,
+        128 as byte,
+        128 as byte,
+        128 as byte,
+        128 as byte,
+        128 as byte,
+        128 as byte,
+        128 as byte,
+        128 as byte,
+        2 as byte,
+    ]
     var o = readers.cursor(0, over.len, 100)
     let result13 = readers.uleb64(over, mut o)
     assert("{result13}" == "leb128_overflow")
@@ -67,9 +97,18 @@ fn unsigned_leb() {
     var u = readers.cursor(0, unfinished.len, 100)
     let result14 = readers.uleb64(unfinished, mut u)
     assert("{result14}" == "unterminated_leb128")
-    let continued: List[byte] = [128 as byte, 128 as byte, 128 as byte,
-        128 as byte, 128 as byte, 128 as byte, 128 as byte, 128 as byte,
-        128 as byte, 128 as byte]
+    let continued: List[byte] = [
+        128 as byte,
+        128 as byte,
+        128 as byte,
+        128 as byte,
+        128 as byte,
+        128 as byte,
+        128 as byte,
+        128 as byte,
+        128 as byte,
+        128 as byte,
+    ]
     var v = readers.cursor(0, continued.len, 100)
     let rejected = readers.uleb64(continued, mut v)
     assert("{rejected}" == "leb128_overflow")
@@ -84,15 +123,33 @@ fn signed_leb() {
     var c = readers.cursor(0, example.len, 100)
     let result15 = readers.sleb64(example, mut c)
     assert("{result15}" == "-624485")
-    let minimum: List[byte] = [128 as byte, 128 as byte, 128 as byte,
-        128 as byte, 128 as byte, 128 as byte, 128 as byte, 128 as byte,
-        128 as byte, 127 as byte]
+    let minimum: List[byte] = [
+        128 as byte,
+        128 as byte,
+        128 as byte,
+        128 as byte,
+        128 as byte,
+        128 as byte,
+        128 as byte,
+        128 as byte,
+        128 as byte,
+        127 as byte,
+    ]
     var m = readers.cursor(0, minimum.len, 100)
     let result16 = readers.sleb64(minimum, mut m)
     assert("{result16}" == "-9223372036854775808")
-    let over: List[byte] = [128 as byte, 128 as byte, 128 as byte,
-        128 as byte, 128 as byte, 128 as byte, 128 as byte, 128 as byte,
-        128 as byte, 1 as byte]
+    let over: List[byte] = [
+        128 as byte,
+        128 as byte,
+        128 as byte,
+        128 as byte,
+        128 as byte,
+        128 as byte,
+        128 as byte,
+        128 as byte,
+        128 as byte,
+        1 as byte,
+    ]
     var o = readers.cursor(0, over.len, 100)
     let result17 = readers.sleb64(over, mut o)
     assert("{result17}" == "leb128_overflow")
@@ -100,9 +157,18 @@ fn signed_leb() {
     var u = readers.cursor(0, unfinished.len, 100)
     let result18 = readers.sleb64(unfinished, mut u)
     assert("{result18}" == "unterminated_leb128")
-    let maximum: List[byte] = [255 as byte, 255 as byte, 255 as byte,
-        255 as byte, 255 as byte, 255 as byte, 255 as byte, 255 as byte,
-        255 as byte, 0 as byte]
+    let maximum: List[byte] = [
+        255 as byte,
+        255 as byte,
+        255 as byte,
+        255 as byte,
+        255 as byte,
+        255 as byte,
+        255 as byte,
+        255 as byte,
+        255 as byte,
+        0 as byte,
+    ]
     var p = readers.cursor(0, maximum.len, 100)
     let positive = readers.sleb64(maximum, mut p)
     assert("{positive}" == "9223372036854775807")
@@ -122,7 +188,10 @@ fn strings_and_offsets() {
     assert("{result19}" == "unterminated_string")
     assert("{readers.checked_offset(10, 20, 30)}" == "30")
     assert("{readers.checked_offset(10, 21, 30)}" == "offset_overflow")
-    assert("{readers.checked_offset(9223372036854775807, 1, 9223372036854775807)}" == "offset_overflow")
+    assert(
+        "{readers.checked_offset(9223372036854775807, 1, 9223372036854775807)}" ==
+            "offset_overflow",
+    )
     assert("{readers.checked_offset(-1, 1, 4)}" == "offset_overflow")
     print("PASS bytes-strings-and-offsets\n")
 }

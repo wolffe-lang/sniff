@@ -2,25 +2,41 @@
 // Offsets stay signed host indexes; decoded scalar/address values stay u64.
 // No operation in this module allocates a copy of the input or a string.
 
-pub error ReadError = {invalid_bounds, truncated, unsupported_width,
-    unterminated_leb128, leb128_overflow, unterminated_string,
-    offset_overflow, resource_limit}
+/// Malformed bounds/offsets, truncated values, unsupported widths, missing
+/// terminators, excessive LEB128 widths, or exhausted caller work budgets.
+/// These are recoverable input failures, never arithmetic or bounds traps.
+pub error ReadError = {
+    invalid_bounds,
+    truncated,
+    unsupported_width,
+    unterminated_leb128,
+    leb128_overflow,
+    unterminated_string,
+    offset_overflow,
+    resource_limit,
+}
 
+/// A half-open byte cursor with remaining work measured in consumed bytes.
+/// Readers revalidate its bounds against the supplied buffer on every call.
 pub struct Cursor {
     pub pos: int,
     pub end: int,
     pub fuel: int,
 }
 
+/// An allocation-free range into the caller's original byte buffer.
 pub struct ByteSpan {
     pub start: int,
     pub length: int,
 }
 
+/// Construct a cursor; buffer-dependent validation happens at each read.
 pub fn cursor(start: int, end: int, fuel: int) -> Cursor {
-    Cursor {pos: start, end: end, fuel: fuel}
+    Cursor { pos: start, end: end, fuel: fuel }
 }
 
+/// Add nonnegative indexes within limit, returning offset_overflow on any
+/// negative operand or out-of-domain result without overflowing arithmetic.
 pub fn checked_offset(base: int, size: int, limit: int) -> int ! ReadError {
     if base < 0 || size < 0 || limit < 0 || base > limit {
         return offset_overflow
@@ -36,6 +52,8 @@ fn valid_cursor(data: List[byte], c: Cursor) -> () ! ReadError {
     }
 }
 
+/// Advance over size bytes without copying. Invalid domains, truncation,
+/// and exhausted fuel leave the cursor unchanged and return named rows.
 pub fn take_span(data: List[byte], mut c: Cursor, size: int) -> ByteSpan ! ReadError {
     valid_cursor(data, c)?
     if size < 0 { return invalid_bounds }
@@ -46,9 +64,11 @@ pub fn take_span(data: List[byte], mut c: Cursor, size: int) -> ByteSpan ! ReadE
     let start = c.pos
     c.pos += size
     c.fuel -= cost
-    ByteSpan {start: start, length: size}
+    ByteSpan { start: start, length: size }
 }
 
+/// Decode one unsigned little-endian scalar of width 1, 2, 4 or 8.
+/// Other widths return unsupported_width; bounded-read failures propagate.
 pub fn uint_le(data: List[byte], mut c: Cursor, width: int) -> u64 ! ReadError {
     if width != 1 && width != 2 && width != 4 && width != 8 {
         return unsupported_width
@@ -64,6 +84,8 @@ pub fn uint_le(data: List[byte], mut c: Cursor, width: int) -> u64 ! ReadError {
     value
 }
 
+/// Decode up to ten unsigned LEB128 octets. Missing terminators and bits
+/// outside u64 return named rows; consumed bytes remain consumed on failure.
 pub fn uleb64(data: List[byte], mut c: Cursor) -> u64 ! ReadError {
     var value: u64 = 0
     var i: int = 0
@@ -73,16 +95,18 @@ pub fn uleb64(data: List[byte], mut c: Cursor) -> u64 ! ReadError {
         let octet = uint_le(data, mut c, 1)?
         let payload = octet & 127
         // The tenth group contributes only bit 63. Reject before shifting.
-        if i == 9 && (payload > 1 || (octet & 128) != 0) {
+        if i == 9 && (payload > 1 || octet & 128 != 0) {
             return leb128_overflow
         }
         value |= payload << (i * 7) as u64
-        if (octet & 128) == 0 { return value }
+        if octet & 128 == 0 { return value }
         i += 1
     }
     leb128_overflow
 }
 
+/// Decode up to ten signed LEB128 octets with checked sign extension.
+/// Overflow and missing terminators are rows, not casts that trap or wrap.
 pub fn sleb64(data: List[byte], mut c: Cursor) -> i64 ! ReadError {
     var value: u64 = 0
     var i: int = 0
@@ -93,15 +117,15 @@ pub fn sleb64(data: List[byte], mut c: Cursor) -> i64 ! ReadError {
         let payload = octet & 127
         if i == 9 {
             // Bits above bit 63 must be a valid sign extension.
-            if (octet & 128) != 0 || (payload != 0 && payload != 127) {
+            if octet & 128 != 0 || payload != 0 && payload != 127 {
                 return leb128_overflow
             }
             value |= (payload & 1) << 63
         } else {
             value |= payload << (i * 7) as u64
         }
-        if (octet & 128) == 0 {
-            if i < 9 && (octet & 64) != 0 {
+        if octet & 128 == 0 {
+            if i < 9 && octet & 64 != 0 {
                 let bits = ((i + 1) * 7) as u64
                 let mask: u64 = (1 << bits) - 1
                 value |= !mask
@@ -114,13 +138,16 @@ pub fn sleb64(data: List[byte], mut c: Cursor) -> i64 ! ReadError {
     leb128_overflow
 }
 
+/// Find the next zero byte within the bound and work budget, retaining raw
+/// bytes without assuming UTF-8. The returned span excludes the terminator.
+/// Exhausting the bound returns unterminated_string; no string is allocated.
 pub fn cstring(data: List[byte], mut c: Cursor) -> ByteSpan ! ReadError {
     valid_cursor(data, c)?
     let start = c.pos
     while c.pos < c.end {
         let octet = uint_le(data, mut c, 1)?
         if octet == 0 {
-            return ByteSpan {start: start, length: c.pos - start - 1}
+            return ByteSpan { start: start, length: c.pos - start - 1 }
         }
     }
     unterminated_string
