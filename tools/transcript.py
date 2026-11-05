@@ -134,6 +134,9 @@ def capture(args):
               'normalized_stderr': normalize(p.stderr.decode('utf-8', 'replace'), args.root)}
     (out / 'record.json').write_text(json.dumps(record, indent=2) + '\n')
     expected = {'schema': 1, 'events': [{k: v for k, v in e.items() if k != 'commands'} for e in spec['events']]}
+    for event in expected['events']:
+        if isinstance(event.get('contains'), dict):
+            event['contains'] = event['contains'][args.oracle]
     (out / 'expected.json').write_text(json.dumps(expected, indent=2) + '\n')
     if p.returncode:
         print('FAIL oracle-exit code=' + str(p.returncode))
