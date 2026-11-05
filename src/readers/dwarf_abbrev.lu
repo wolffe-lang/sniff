@@ -25,8 +25,8 @@ pub fn dwarf_abbrevs(
     max_attributes: int,
 ) -> List[DwarfAbbrev] ! DwarfError {
     if max_entries < 0 || max_attributes < 0 { return resource_limit }
-    let entries_cap = min(max_entries, 65536)
-    let attributes_cap = min(max_attributes, 65536)
+    let entries_cap = if max_entries < 65536 { max_entries } else { 65536 }
+    let attributes_cap = if max_attributes < 65536 { max_attributes } else { 65536 }
     var table: List[DwarfAbbrev] = []
     var attribute_count: int = 0
     loop {
