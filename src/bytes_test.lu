@@ -1,0 +1,95 @@
+//! member: false
+use readers
+
+fn fixed_widths() {
+    let data: List[byte] = [1 as byte, 2 as byte, 3 as byte, 4 as byte,
+        255 as byte, 255 as byte, 255 as byte, 255 as byte,
+        255 as byte, 255 as byte, 255 as byte, 255 as byte]
+    var c = readers.cursor(0, data.len, 100)
+    assert("{readers.uint_le(data, mut c, 1)}" == "1")
+    assert("{readers.uint_le(data, mut c, 1)}" == "2")
+    assert("{readers.uint_le(data, mut c, 2)}" == "1027")
+    assert("{readers.uint_le(data, mut c, 8)}" == "18446744073709551615")
+    assert(c.pos == data.len)
+    print("PASS bytes-fixed-widths\n")
+}
+
+fn bounded_reads() {
+    let data: List[byte] = [1 as byte, 2 as byte]
+    var c = readers.cursor(0, 1, 100)
+    assert("{readers.uint_le(data, mut c, 2)}" == "truncated")
+    assert(c.pos == 0)
+    var bad = readers.cursor(0, 3, 100)
+    assert("{readers.uint_le(data, mut bad, 1)}" == "invalid_bounds")
+    var negative = readers.cursor(-1, 2, 100)
+    assert("{readers.uint_le(data, mut negative, 1)}" == "invalid_bounds")
+    var huge = readers.cursor(9223372036854775807, 9223372036854775807, 100)
+    assert("{readers.uint_le(data, mut huge, 8)}" == "invalid_bounds")
+    var short = readers.cursor(0, 2, 1)
+    assert("{readers.uint_le(data, mut short, 2)}" == "resource_limit")
+    assert(short.pos == 0)
+    var wrong = readers.cursor(0, 2, 100)
+    assert("{readers.uint_le(data, mut wrong, 3)}" == "unsupported_width")
+    print("PASS bytes-bounds-and-work\n")
+}
+
+fn unsigned_leb() {
+    let example: List[byte] = [229 as byte, 142 as byte, 38 as byte]
+    var c = readers.cursor(0, example.len, 100)
+    assert("{readers.uleb64(example, mut c)}" == "624485")
+    let maximum: List[byte] = [255 as byte, 255 as byte, 255 as byte,
+        255 as byte, 255 as byte, 255 as byte, 255 as byte, 255 as byte,
+        255 as byte, 1 as byte]
+    var m = readers.cursor(0, maximum.len, 100)
+    assert("{readers.uleb64(maximum, mut m)}" == "18446744073709551615")
+    let over: List[byte] = [128 as byte, 128 as byte, 128 as byte,
+        128 as byte, 128 as byte, 128 as byte, 128 as byte, 128 as byte,
+        128 as byte, 2 as byte]
+    var o = readers.cursor(0, over.len, 100)
+    assert("{readers.uleb64(over, mut o)}" == "leb128_overflow")
+    let unfinished: List[byte] = [128 as byte]
+    var u = readers.cursor(0, unfinished.len, 100)
+    assert("{readers.uleb64(unfinished, mut u)}" == "unterminated_leb128")
+    print("PASS bytes-uleb64\n")
+}
+
+fn signed_leb() {
+    let example: List[byte] = [155 as byte, 241 as byte, 89 as byte]
+    var c = readers.cursor(0, example.len, 100)
+    assert("{readers.sleb64(example, mut c)}" == "-624485")
+    let minimum: List[byte] = [128 as byte, 128 as byte, 128 as byte,
+        128 as byte, 128 as byte, 128 as byte, 128 as byte, 128 as byte,
+        128 as byte, 127 as byte]
+    var m = readers.cursor(0, minimum.len, 100)
+    assert("{readers.sleb64(minimum, mut m)}" == "-9223372036854775808")
+    let over: List[byte] = [128 as byte, 128 as byte, 128 as byte,
+        128 as byte, 128 as byte, 128 as byte, 128 as byte, 128 as byte,
+        128 as byte, 1 as byte]
+    var o = readers.cursor(0, over.len, 100)
+    assert("{readers.sleb64(over, mut o)}" == "leb128_overflow")
+    let unfinished: List[byte] = [128 as byte]
+    var u = readers.cursor(0, unfinished.len, 100)
+    assert("{readers.sleb64(unfinished, mut u)}" == "unterminated_leb128")
+    print("PASS bytes-sleb64\n")
+}
+
+fn strings_and_offsets() {
+    let data: List[byte] = [97 as byte, 255 as byte, 0 as byte, 98 as byte]
+    var c = readers.cursor(0, data.len, 100)
+    let span = readers.cstring(data, mut c) else { assert(false); return }
+    assert(span.start == 0 && span.length == 2 && c.pos == 3)
+    assert("{readers.cstring(data, mut c)}" == "unterminated_string")
+    assert("{readers.checked_offset(10, 20, 30)}" == "30")
+    assert("{readers.checked_offset(10, 21, 30)}" == "offset_overflow")
+    assert("{readers.checked_offset(9223372036854775807, 1, 9223372036854775807)}" == "offset_overflow")
+    assert("{readers.checked_offset(-1, 1, 4)}" == "offset_overflow")
+    print("PASS bytes-strings-and-offsets\n")
+}
+
+fn main() {
+    fixed_widths()
+    bounded_reads()
+    unsigned_leb()
+    signed_leb()
+    strings_and_offsets()
+}
