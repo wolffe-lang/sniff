@@ -67,6 +67,31 @@ class SymbolOracle(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('FAIL symbol-oracle-execution', result.stdout)
 
+    def test_gate_rejects_path_version_before_toolchain_work(self):
+        with tempfile.TemporaryDirectory() as directory:
+            d = Path(directory)
+            nm = d / 'llvm-nm'
+            nm.write_text('#!/bin/sh\nprintf "Apple LLVM version 22.0.0\\n"\n')
+            nm.chmod(0o755)
+            marker = d / 'toolchain-started'
+            # Avoid recursively invoking this unit suite from the gate. Every
+            # unrelated Python step is a stub; the production guard is real.
+            python = d / 'python3'
+            python.write_text('#!' + sys.executable + '\nimport os,sys\n'
+                + 'if "tools/check-symbol-oracle.py" in sys.argv:\n'
+                + ' os.execv(sys.executable, [sys.executable, *sys.argv[1:]])\n'
+                + 'if "tools/fetch-toolchain.py" in sys.argv:\n'
+                + ' open(' + repr(str(marker)) + ', "w").write("started")\n'
+                + ' sys.exit(98)\n')
+            python.chmod(0o755)
+            result = subprocess.run(['/bin/bash', str(ROOT / 'tools/gate'), 'macos'],
+                env=dict(os.environ, PATH=str(d) + os.pathsep + os.environ['PATH']),
+                capture_output=True, text=True, timeout=15)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('FAIL symbol-oracle-version-mismatch', result.stdout)
+            self.assertIn('END symbol-oracle-pin exit=1', result.stdout)
+            self.assertFalse(marker.exists(), 'toolchain ran before oracle verification')
+
     def test_missing_binary_is_named(self):
         result = self.run_guard(absent=True)
         self.assertNotEqual(result.returncode, 0)
