@@ -1,0 +1,125 @@
+//! member: false
+use readers
+
+fn info_bytes(values: List[int]) -> List[byte] {
+    var result: List[byte] = []
+    for value in values { (mut result).push(value as byte) }
+    result
+}
+
+fn info_sample() -> List[byte] {
+    // DWARF4 CU length29, address-size8; root/pointer/variable/base/null.
+    // References are unit-relative offsets27 and17, not file-relative indexes.
+    info_bytes([
+        29, 0, 0, 0, 4, 0, 0, 0, 0, 0, 8,
+        1, 117, 110, 105, 116, 0,
+        2, 27, 0, 0, 0,
+        3, 17, 0, 0, 0,
+        4, 105, 110, 116, 0,
+        0,
+        1, 17, 1, 3, 8, 0, 0,
+        2, 15, 0, 73, 19, 0, 0,
+        3, 52, 0, 73, 19, 0, 0,
+        4, 36, 0, 3, 8, 0, 0,
+        0,
+    ])
+}
+
+fn info_parse(data: List[byte]) -> readers.DwarfInfo ! readers.DwarfInfoError {
+    readers.dwarf_info_read(data,
+        readers.ByteSpan {start: 0, length: 33},
+        readers.ByteSpan {start: 33, length: 29}, readers.dwarf_info_limits())?
+}
+
+fn info_basic() {
+    let data = info_sample()
+    let info = info_parse(data) else |err| { print("FAIL dwarf-info-tree {err}"); assert(false); return }
+    assert(info.units.len == 1 && info.entries.len == 5 && info.attributes.len == 4)
+    assert(info.die_count == 4 && info.abbreviation_tables_read == 1)
+    assert(info.entries[0].offset == 11 && info.entries[0].parent == -1)
+    assert(info.entries[1].offset == 17 && info.entries[1].parent == 0)
+    assert(info.entries[2].offset == 22 && info.entries[2].depth == 1)
+    assert(info.entries[3].offset == 27 && info.entries[3].tag == 36)
+    assert(info.entries[4].is_null && info.entries[4].offset == 32)
+    assert(info.attributes[0].value.bytes.start == 12 && info.attributes[0].value.bytes.length == 4)
+    var fuel: int = 1000
+    let target = readers.dwarf_info_target(info, 1, info.attributes[1].value, mut fuel)
+    assert("{target}" == "3")
+    let terminal = readers.dwarf_info_follow(info, 2, 73, 10, mut fuel)
+    assert("{terminal}" == "3")
+    print("PASS dwarf-info-tree")
+}
+
+fn info_reference_failures() {
+    var middle = info_sample()
+    middle[18] = 24 as byte
+    let result = info_parse(middle)
+    assert("{result}" == "dwarf_info_invalid_reference")
+    middle[18] = 32 as byte
+    let null_target = info_parse(middle)
+    assert("{null_target}" == "dwarf_info_invalid_reference")
+    var unknown = info_sample()
+    unknown[17] = 99 as byte
+    let missing = info_parse(unknown)
+    assert("{missing}" == "dwarf_info_unknown_abbreviation")
+    var unfinished = info_sample()
+    unfinished[0] = 28 as byte
+    let tree = info_parse(unfinished)
+    assert("{tree}" == "dwarf_info_invalid_tree")
+    print("PASS dwarf-info-invalid-references")
+}
+
+fn info_cycles_and_caps() {
+    var bytes = info_sample()
+    bytes[18] = 22 as byte
+    let info = info_parse(bytes) else { assert(false); return }
+    // Structural reading does not recursively traverse every reference.
+    var fuel: int = 1000
+    let cycle = readers.dwarf_info_follow(info, 1, 73, 10, mut fuel)
+    assert("{cycle}" == "dwarf_info_reference_cycle")
+    var limits = readers.dwarf_info_limits()
+    limits.dies = 3
+    let limited = readers.dwarf_info_read(bytes, readers.ByteSpan {start: 0, length: 33},
+        readers.ByteSpan {start: 33, length: 29}, limits)
+    assert("{limited}" == "resource_limit")
+    limits.dies = 10
+    limits.attributes = 3
+    let attrs = readers.dwarf_info_read(bytes, readers.ByteSpan {start: 0, length: 33},
+        readers.ByteSpan {start: 33, length: 29}, limits)
+    assert("{attrs}" == "resource_limit")
+    limits.attributes = 10
+    limits.input_bytes = 10
+    let input = readers.dwarf_info_read(bytes, readers.ByteSpan {start: 0, length: 33},
+        readers.ByteSpan {start: 33, length: 29}, limits)
+    assert("{input}" == "resource_limit")
+    print("PASS dwarf-info-cycles-and-limits")
+}
+
+fn info_multiple_units() {
+    let original = info_sample()
+    var bytes: List[byte] = []
+    var i: int = 0
+    while i < 33 { (mut bytes).push(original[i]); i += 1 }
+    i = 0
+    while i < original.len { (mut bytes).push(original[i]); i += 1 }
+    // Variable type references now use ref_addr; the second CU refers back
+    // to the first CU's pointer. The two units share one abbreviation table.
+    bytes[84] = 16 as byte
+    let info = readers.dwarf_info_read(bytes, readers.ByteSpan {start: 0, length: 66},
+        readers.ByteSpan {start: 66, length: 29}, readers.dwarf_info_limits()) else {
+        assert(false); return
+    }
+    assert(info.units.len == 2 && info.entries.len == 10 && info.die_count == 8)
+    assert(info.abbreviation_tables_read == 1)
+    var fuel: int = 1000
+    let target = readers.dwarf_info_target(info, 7, info.attributes[6].value, mut fuel)
+    assert("{target}" == "1")
+    print("PASS dwarf-info-cross-unit-references")
+}
+
+fn main() {
+    info_basic()
+    info_reference_failures()
+    info_cycles_and_caps()
+    info_multiple_units()
+}

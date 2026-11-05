@@ -46,5 +46,11 @@
     "dwarf-line-resource-limits",
     "dwarf-line-named-refusals",
     "dwarf-line-hostile-boundaries"
+  ],
+  "info_test.lu": [
+    "dwarf-info-tree",
+    "dwarf-info-invalid-references",
+    "dwarf-info-cycles-and-limits",
+    "dwarf-info-cross-unit-references"
   ]
 }
