@@ -16,7 +16,17 @@ sha256 = "07cf5eb367dcf51a8f462e046b08409fbe4a6fe60506fb0d4e5604db024873a1"
 
 [readelf]
 version = "2.42 (Ubuntu binutils 2.42-4ubuntu2.10)"
+command = "readelf"
+version_line = "GNU readelf (GNU Binutils for Ubuntu) 2.42"
+arguments = ["--symbols", "--wide"]
 sha256 = "64c58e15274bbbb5153f31078e455e9e77ee5f51489e709bba5bb788ce9df2b0"
+
+[llvm_nm_macos]
+version = "Apple LLVM 21.0.0"
+command = "llvm-nm"
+version_line = "Apple LLVM version 21.0.0"
+arguments = ["--format=darwin", "--no-sort", "--debug-syms", "--no-demangle", "--no-dyldinfo"]
+sha256 = "80c19dcc416d14618209506c83bbe1561a8305a5039936ca0a9ed66041f7a176"
 
 [gcc]
 version = "13.3.0 (Ubuntu 13.3.0-6ubuntu2~24.04.1)"

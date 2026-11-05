@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -84,7 +85,11 @@ class SymbolOracle(unittest.TestCase):
                 + ' open(' + repr(str(marker)) + ', "w").write("started")\n'
                 + ' sys.exit(98)\n')
             python.chmod(0o755)
-            result = subprocess.run(['/bin/bash', str(ROOT / 'tools/gate'), 'macos'],
+            workspace = d / 'project'
+            (workspace / 'tools').mkdir(parents=True)
+            for name in ('tools/gate', 'tools/check-symbol-oracle.py', 'sniff-oracle.toml'):
+                shutil.copyfile(ROOT / name, workspace / name)
+            result = subprocess.run(['/bin/bash', str(workspace / 'tools/gate'), 'macos'],
                 env=dict(os.environ, PATH=str(d) + os.pathsep + os.environ['PATH']),
                 capture_output=True, text=True, timeout=15)
             self.assertNotEqual(result.returncode, 0)

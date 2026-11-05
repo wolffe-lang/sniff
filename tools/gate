@@ -26,6 +26,7 @@ step() {
 step pin-metadata python3 -I tools/check-pins.py
 step harness-unit python3 -I tests/test_harness.py
 step census-unit python3 -I tests/test_census.py
+step symbol-oracle-unit python3 -I tests/test_symbol_oracle.py
 step tier-planner python3 -I ci/tiers-test.py
 for platform in macos linux; do
   if [ -f "tests/evidence/$platform-session/record.json" ]; then
@@ -36,6 +37,7 @@ for platform in macos linux; do
 done
 [ "$mode" != unit ] || exit 0
 case "$mode" in macos|linux) ;; *) echo 'FAIL gate-mode'; exit 2 ;; esac
+step symbol-oracle-pin python3 -I tools/check-symbol-oracle.py --platform "$mode"
 stage=${SNIFF_TOOLCHAIN_DIR:-$root/.wolf-bin}
 fetch=(python3 -I tools/fetch-toolchain.py --out "$stage")
 if [ -n "${SNIFF_ARCHIVES:-}" ]; then fetch+=(--archive-dir "$SNIFF_ARCHIVES"); fi
