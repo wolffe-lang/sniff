@@ -16,3 +16,8 @@ rev = "668fb752c690f33cf124c052cc9bae2e9696eeef"
 aarch64-apple-darwin = "9f091af873768677593659bf2fda97243db01c489e6836b15c17ed50aabbf5f5"
 x86_64-unknown-linux-gnu = "12121909c289ac8ff4a138de8faabdb86b72df97988832b39047d5f312ec3a18"
 aarch64-unknown-linux-gnu = "73bdf749f5c9699c724776d00995e16c6432c66d0e69c497ca6ccdf83f766a3f"
+
+[std]
+# Included in, and bound by, every pinned wolf archive above.
+repo = "wolffe-lang/wolf-std"
+rev = "5b3a59942b2ee69b99682544341ce8a12c984e9e"

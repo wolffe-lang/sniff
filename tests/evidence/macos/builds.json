@@ -1,0 +1,682 @@
+{
+  "schema": 1,
+  "platform": "Darwin-arm64",
+  "versions": {
+    "wolf": "wolf 0.2.37 (wolfgang, pin e2757a7)\npaired with lupin 0.1.59 (reference interpreter), pin b16353e8ae616ff3a35bd27adc56b727c50df345",
+    "clang": "Apple clang version 21.0.0 (clang-2100.0.123.102)\nTarget: arm64-apple-darwin25.4.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin"
+  },
+  "source_date_epoch": 1700000000,
+  "c_object_mtime": 1700000000,
+  "macho_link_control": "-Wl,-reproducible",
+  "wolf_debug_mode": "default emits DWARF; -g is not a supported flag",
+  "fixtures": [
+    {
+      "id": "wolf/loops/wolf-debug",
+      "producer": "wolf",
+      "optimization": "debug",
+      "sha256_read_1": {
+        "prog": "9d21fa1a9ee96236c6111fabfd472a8af0f8412812dab02dc177a62394654389",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "f977495df44a99573cc83560cac88878c96a1a9a96ca6940ab702d95b12236e8",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "10a37947f5d672e78312207e75a56f2334944e6393243a5e9828b867c5dcbb18"
+      },
+      "sha256_read_2": {
+        "prog": "9d21fa1a9ee96236c6111fabfd472a8af0f8412812dab02dc177a62394654389",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "f977495df44a99573cc83560cac88878c96a1a9a96ca6940ab702d95b12236e8",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "10a37947f5d672e78312207e75a56f2334944e6393243a5e9828b867c5dcbb18"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "<WOLF>",
+          "build",
+          "<ROOT>/fixtures/wolf/loops/main.lu",
+          "--no-cache",
+          "-o",
+          "<ROOT>/target/fixtures/wolf/loops/wolf-debug/prog"
+        ]
+      ]
+    },
+    {
+      "id": "wolf/nested/wolf-debug",
+      "producer": "wolf",
+      "optimization": "debug",
+      "sha256_read_1": {
+        "prog": "7016363937fa7ad432c81153658f5e0827fee544b8183f8612259f4be3836e46",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "01c4078b97990a770e509cf4277f60f64bdbb0e82db014862cc9bb67073aab9d",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "ec546c8cea9759125161721c49430f2513f9b1b2e11e7a8fe830fa8010afa748"
+      },
+      "sha256_read_2": {
+        "prog": "7016363937fa7ad432c81153658f5e0827fee544b8183f8612259f4be3836e46",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "01c4078b97990a770e509cf4277f60f64bdbb0e82db014862cc9bb67073aab9d",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "ec546c8cea9759125161721c49430f2513f9b1b2e11e7a8fe830fa8010afa748"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "<WOLF>",
+          "build",
+          "<ROOT>/fixtures/wolf/nested/main.lu",
+          "--no-cache",
+          "-o",
+          "<ROOT>/target/fixtures/wolf/nested/wolf-debug/prog"
+        ]
+      ]
+    },
+    {
+      "id": "wolf/scalars/wolf-debug",
+      "producer": "wolf",
+      "optimization": "debug",
+      "sha256_read_1": {
+        "prog": "ec60201e112ff9635b8b0a43dbd4066c97e9b778e05944abf4797afe0dbe908e",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "f75a8d78e4b3e9f3f0ee11605c4035115c07c188babdebf904ed0fb89c15af64",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "1c589156a3c850697ac13fe8b1f1e3885c13ad0d3b805ea26919ec4f47dd8f42"
+      },
+      "sha256_read_2": {
+        "prog": "ec60201e112ff9635b8b0a43dbd4066c97e9b778e05944abf4797afe0dbe908e",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "f75a8d78e4b3e9f3f0ee11605c4035115c07c188babdebf904ed0fb89c15af64",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "1c589156a3c850697ac13fe8b1f1e3885c13ad0d3b805ea26919ec4f47dd8f42"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "<WOLF>",
+          "build",
+          "<ROOT>/fixtures/wolf/scalars/main.lu",
+          "--no-cache",
+          "-o",
+          "<ROOT>/target/fixtures/wolf/scalars/wolf-debug/prog"
+        ]
+      ]
+    },
+    {
+      "id": "wolf/shared-name/wolf-debug",
+      "producer": "wolf",
+      "optimization": "debug",
+      "sha256_read_1": {
+        "prog": "65588960c5614d066afd96cdb826c669d09f7e793904955a5239de087597d1db",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "cb5ec611b0f6dd0ff595291efca463b25d0f6b7f940fd31e90dbccea9b0e59da",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "f8d9c8682f06da606e5f2328b3a39fc65db9e9ed8d68409fb9fa273b8f39c522"
+      },
+      "sha256_read_2": {
+        "prog": "65588960c5614d066afd96cdb826c669d09f7e793904955a5239de087597d1db",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "cb5ec611b0f6dd0ff595291efca463b25d0f6b7f940fd31e90dbccea9b0e59da",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "f8d9c8682f06da606e5f2328b3a39fc65db9e9ed8d68409fb9fa273b8f39c522"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "<WOLF>",
+          "build",
+          "<ROOT>/fixtures/wolf/shared-name/main.lu",
+          "--no-cache",
+          "-o",
+          "<ROOT>/target/fixtures/wolf/shared-name/wolf-debug/prog"
+        ]
+      ]
+    },
+    {
+      "id": "wolf/types/wolf-debug",
+      "producer": "wolf",
+      "optimization": "debug",
+      "sha256_read_1": {
+        "prog": "273ca769895943e1755374b4eaa65894a7944c6c3b321d5ec5f347c2101a68d2",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "d78229faee4e913f70c1cc3fa1fdbebe7808b8a4d2e56c5f778aabb2228405da",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "578a111fce035de40e9c5370473b47be799ca85fa9788caa9e771946300383cf"
+      },
+      "sha256_read_2": {
+        "prog": "273ca769895943e1755374b4eaa65894a7944c6c3b321d5ec5f347c2101a68d2",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "d78229faee4e913f70c1cc3fa1fdbebe7808b8a4d2e56c5f778aabb2228405da",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "578a111fce035de40e9c5370473b47be799ca85fa9788caa9e771946300383cf"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "<WOLF>",
+          "build",
+          "<ROOT>/fixtures/wolf/types/main.lu",
+          "--no-cache",
+          "-o",
+          "<ROOT>/target/fixtures/wolf/types/wolf-debug/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/aggregates/clang-O0",
+      "producer": "clang",
+      "optimization": "O0",
+      "sha256_read_1": {
+        "main.o": "27b4d9fe46944e725819f33bda19662fae03d446de3a67cc4435de6f5af774b2",
+        "prog": "f9b0e2d520f1db212e7447b79247c4d56d6941a3972cc36417879178df29ee02",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "efb21b76a2d7e4e15169f76a7d74f79ea555bd9f9e6da05b4de68102682f7e69",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "bb25b039336f6238e8fff6314f2fc49920b47e5f0f44d71f203325822bfc8442"
+      },
+      "sha256_read_2": {
+        "main.o": "27b4d9fe46944e725819f33bda19662fae03d446de3a67cc4435de6f5af774b2",
+        "prog": "f9b0e2d520f1db212e7447b79247c4d56d6941a3972cc36417879178df29ee02",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "efb21b76a2d7e4e15169f76a7d74f79ea555bd9f9e6da05b4de68102682f7e69",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "bb25b039336f6238e8fff6314f2fc49920b47e5f0f44d71f203325822bfc8442"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "clang",
+          "-g",
+          "-gdwarf-5",
+          "-O0",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/aggregates/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/aggregates/clang-O0/main.o"
+        ],
+        [
+          "clang",
+          "-g",
+          "-pthread",
+          "-Wl,-reproducible",
+          "<ROOT>/target/fixtures/c/aggregates/clang-O0/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/aggregates/clang-O0/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/aggregates/clang-O2",
+      "producer": "clang",
+      "optimization": "O2",
+      "sha256_read_1": {
+        "main.o": "9e182635eec19ff0118a596052b0ee1e9cdb34e85f6ed461a99bec3a598bba2c",
+        "prog": "40e452fe94922ce72ee8dabe01805b7e2f4da35a317d8f7812dedc8b28c19bb4",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "aa966b2d9e389cf8ea6a078239dd9b9863f02e2b297dd345f2177c17eb87acf5",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "775250da2adef92bb9a9a228cc68bbe09da496062cc4b1a44618636eefcfa9cf"
+      },
+      "sha256_read_2": {
+        "main.o": "9e182635eec19ff0118a596052b0ee1e9cdb34e85f6ed461a99bec3a598bba2c",
+        "prog": "40e452fe94922ce72ee8dabe01805b7e2f4da35a317d8f7812dedc8b28c19bb4",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "aa966b2d9e389cf8ea6a078239dd9b9863f02e2b297dd345f2177c17eb87acf5",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "775250da2adef92bb9a9a228cc68bbe09da496062cc4b1a44618636eefcfa9cf"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "clang",
+          "-g",
+          "-gdwarf-5",
+          "-O2",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/aggregates/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/aggregates/clang-O2/main.o"
+        ],
+        [
+          "clang",
+          "-g",
+          "-pthread",
+          "-Wl,-reproducible",
+          "<ROOT>/target/fixtures/c/aggregates/clang-O2/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/aggregates/clang-O2/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/arrays/clang-O0",
+      "producer": "clang",
+      "optimization": "O0",
+      "sha256_read_1": {
+        "main.o": "5f3e0bf25a8c4c1362ab974e1aaa93e97ca4a66b16ae2e944504a820c0090e7b",
+        "prog": "2512efcb94890dd129496ec3c0c25fbc91fe795ae377162bfdf0e2af23143f62",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "0fc19a75b4262d863ce24bc54fea6302e496f6308ec9f2011ab37f0ceab9cd9d",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "1d8035c25eaec79091140e4c75199cc6c8d93b82bd812bae62c4336340e2f4fc"
+      },
+      "sha256_read_2": {
+        "main.o": "5f3e0bf25a8c4c1362ab974e1aaa93e97ca4a66b16ae2e944504a820c0090e7b",
+        "prog": "2512efcb94890dd129496ec3c0c25fbc91fe795ae377162bfdf0e2af23143f62",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "0fc19a75b4262d863ce24bc54fea6302e496f6308ec9f2011ab37f0ceab9cd9d",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "1d8035c25eaec79091140e4c75199cc6c8d93b82bd812bae62c4336340e2f4fc"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "clang",
+          "-g",
+          "-gdwarf-5",
+          "-O0",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/arrays/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/arrays/clang-O0/main.o"
+        ],
+        [
+          "clang",
+          "-g",
+          "-pthread",
+          "-Wl,-reproducible",
+          "<ROOT>/target/fixtures/c/arrays/clang-O0/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/arrays/clang-O0/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/arrays/clang-O2",
+      "producer": "clang",
+      "optimization": "O2",
+      "sha256_read_1": {
+        "main.o": "e84456bdc0f4a18d5fdf240cd4f98ec37a69e1e92f6721f03d5e6b0ab2fd408d",
+        "prog": "1a0b2822eda18d3d608e2ad90c882d49a5a711300189f0e4ce807fd716ac8157",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "dfc614c691aae5c5d55052d3503ad12188992306fe38c5191a4b5872a6d5e6d7",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "03ad9856a50515f758f9b37c19f7424bef1218fe4110cb506470c53f8fa19146"
+      },
+      "sha256_read_2": {
+        "main.o": "e84456bdc0f4a18d5fdf240cd4f98ec37a69e1e92f6721f03d5e6b0ab2fd408d",
+        "prog": "1a0b2822eda18d3d608e2ad90c882d49a5a711300189f0e4ce807fd716ac8157",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "dfc614c691aae5c5d55052d3503ad12188992306fe38c5191a4b5872a6d5e6d7",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "03ad9856a50515f758f9b37c19f7424bef1218fe4110cb506470c53f8fa19146"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "clang",
+          "-g",
+          "-gdwarf-5",
+          "-O2",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/arrays/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/arrays/clang-O2/main.o"
+        ],
+        [
+          "clang",
+          "-g",
+          "-pthread",
+          "-Wl,-reproducible",
+          "<ROOT>/target/fixtures/c/arrays/clang-O2/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/arrays/clang-O2/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/inlining/clang-O0",
+      "producer": "clang",
+      "optimization": "O0",
+      "sha256_read_1": {
+        "main.o": "c3ba4fddf32e00d86a14852d17aafc8d0b06b00600c4dfa7e06794c2fb3d6878",
+        "prog": "8de2028fda9724be3ced566bea17e39a0650ce17c3ae7ba6292d10abab906d35",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "ba150bf103ee17f99f8a367d9d194135ccca7d0cc3fab99f2d897af7b6ef47d1",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "bbad77e07f7fce292683ef69fe3559490f4a4205773de9a7289d4c1472b66784"
+      },
+      "sha256_read_2": {
+        "main.o": "c3ba4fddf32e00d86a14852d17aafc8d0b06b00600c4dfa7e06794c2fb3d6878",
+        "prog": "8de2028fda9724be3ced566bea17e39a0650ce17c3ae7ba6292d10abab906d35",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "ba150bf103ee17f99f8a367d9d194135ccca7d0cc3fab99f2d897af7b6ef47d1",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "bbad77e07f7fce292683ef69fe3559490f4a4205773de9a7289d4c1472b66784"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "clang",
+          "-g",
+          "-gdwarf-5",
+          "-O0",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/inlining/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/inlining/clang-O0/main.o"
+        ],
+        [
+          "clang",
+          "-g",
+          "-pthread",
+          "-Wl,-reproducible",
+          "<ROOT>/target/fixtures/c/inlining/clang-O0/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/inlining/clang-O0/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/inlining/clang-O2",
+      "producer": "clang",
+      "optimization": "O2",
+      "sha256_read_1": {
+        "main.o": "b30cf2fb6f920c0b2288344cf8997ee10ffff598479b4348f2eae67a777026a8",
+        "prog": "ff9cb79e40966857e57a7eed2f9b4d3e75c07a73961ee18b9b6cec75823ab492",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "97c12fd2d80d1dd1e2ba44d4b486c31a15da3aa7222ecbadee3f0ebffcd93ae6",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "c15587a9abb680dea7ef5d3a7dbd771e0777e0ba486b3607e4332a45dedfc65f"
+      },
+      "sha256_read_2": {
+        "main.o": "b30cf2fb6f920c0b2288344cf8997ee10ffff598479b4348f2eae67a777026a8",
+        "prog": "ff9cb79e40966857e57a7eed2f9b4d3e75c07a73961ee18b9b6cec75823ab492",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "97c12fd2d80d1dd1e2ba44d4b486c31a15da3aa7222ecbadee3f0ebffcd93ae6",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "c15587a9abb680dea7ef5d3a7dbd771e0777e0ba486b3607e4332a45dedfc65f"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "clang",
+          "-g",
+          "-gdwarf-5",
+          "-O2",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/inlining/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/inlining/clang-O2/main.o"
+        ],
+        [
+          "clang",
+          "-g",
+          "-pthread",
+          "-Wl,-reproducible",
+          "<ROOT>/target/fixtures/c/inlining/clang-O2/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/inlining/clang-O2/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/pointers/clang-O0",
+      "producer": "clang",
+      "optimization": "O0",
+      "sha256_read_1": {
+        "main.o": "c30a2ef0194d081438e252db4828c6b912bd1420f9b589cb5635dbc07ed3426f",
+        "prog": "cf78d5ebf3fef69592222631eb4a4014c4422b092480b1e42b1881d63e2c48a1",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "d7a212129cd92c0c49f73235298f175c1183d6ad142b13675fcb36388163c480",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "a29d74cb98d0b6df0fd508a0739376b792d3e7cc6871f30e03e5ba1cbe5586ed"
+      },
+      "sha256_read_2": {
+        "main.o": "c30a2ef0194d081438e252db4828c6b912bd1420f9b589cb5635dbc07ed3426f",
+        "prog": "cf78d5ebf3fef69592222631eb4a4014c4422b092480b1e42b1881d63e2c48a1",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "d7a212129cd92c0c49f73235298f175c1183d6ad142b13675fcb36388163c480",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "a29d74cb98d0b6df0fd508a0739376b792d3e7cc6871f30e03e5ba1cbe5586ed"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "clang",
+          "-g",
+          "-gdwarf-5",
+          "-O0",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/pointers/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/pointers/clang-O0/main.o"
+        ],
+        [
+          "clang",
+          "-g",
+          "-pthread",
+          "-Wl,-reproducible",
+          "<ROOT>/target/fixtures/c/pointers/clang-O0/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/pointers/clang-O0/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/pointers/clang-O2",
+      "producer": "clang",
+      "optimization": "O2",
+      "sha256_read_1": {
+        "main.o": "5f0d73dd9cbefa0c6c9c5da6398fd3af6bd1a0c754199910c458e42563a6500e",
+        "prog": "6802773f4066d45b4b4b788a20492425f571da2a945f2c14ad905257ab45a057",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "54b1fe1020ad2115bf9ab68bffc8464e1915afb2e06bb2068ec0f91469d4c8b1",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "1b44282f5055ffcda2f4420462a4e70603817c7017691cc1c8ef4ac8bb0f7c15"
+      },
+      "sha256_read_2": {
+        "main.o": "5f0d73dd9cbefa0c6c9c5da6398fd3af6bd1a0c754199910c458e42563a6500e",
+        "prog": "6802773f4066d45b4b4b788a20492425f571da2a945f2c14ad905257ab45a057",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "54b1fe1020ad2115bf9ab68bffc8464e1915afb2e06bb2068ec0f91469d4c8b1",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "1b44282f5055ffcda2f4420462a4e70603817c7017691cc1c8ef4ac8bb0f7c15"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "clang",
+          "-g",
+          "-gdwarf-5",
+          "-O2",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/pointers/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/pointers/clang-O2/main.o"
+        ],
+        [
+          "clang",
+          "-g",
+          "-pthread",
+          "-Wl,-reproducible",
+          "<ROOT>/target/fixtures/c/pointers/clang-O2/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/pointers/clang-O2/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/recursion/clang-O0",
+      "producer": "clang",
+      "optimization": "O0",
+      "sha256_read_1": {
+        "main.o": "d90cb6b1672f74b0c2b2c99ef2656efbd58b6e0deafdb698d899d8e8ed422ff6",
+        "prog": "029b1b297b916638214497cea450f67369badbeafd1d6c54da935c09de9828c7",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "436fbb736d1ab6164ac1c1371d81712aa36c8a6da116dfb856fddc838f99aa45",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "c9b425715f3e6b31b0e7809d50b4f25bec1096bed6c4e92e8799512b7ed3dd88"
+      },
+      "sha256_read_2": {
+        "main.o": "d90cb6b1672f74b0c2b2c99ef2656efbd58b6e0deafdb698d899d8e8ed422ff6",
+        "prog": "029b1b297b916638214497cea450f67369badbeafd1d6c54da935c09de9828c7",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "436fbb736d1ab6164ac1c1371d81712aa36c8a6da116dfb856fddc838f99aa45",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "c9b425715f3e6b31b0e7809d50b4f25bec1096bed6c4e92e8799512b7ed3dd88"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "clang",
+          "-g",
+          "-gdwarf-5",
+          "-O0",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/recursion/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/recursion/clang-O0/main.o"
+        ],
+        [
+          "clang",
+          "-g",
+          "-pthread",
+          "-Wl,-reproducible",
+          "<ROOT>/target/fixtures/c/recursion/clang-O0/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/recursion/clang-O0/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/recursion/clang-O2",
+      "producer": "clang",
+      "optimization": "O2",
+      "sha256_read_1": {
+        "main.o": "653e232276f8614d8f03d312e6ec45e07756c189fd366a45a94bd475e8c83158",
+        "prog": "ede7b0d425227cbb4f9fd4351728f5a1fb92a36646306d57211a2ca0fca2a577",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "c1b4edfaf7731e1b6721b1cf1422574cd483cb8d423ed2ec0425941f98d51d90",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "97226d9f7d32e1efa88ab68e418d18191d239baf079ea6dd949afc827ebf0045"
+      },
+      "sha256_read_2": {
+        "main.o": "653e232276f8614d8f03d312e6ec45e07756c189fd366a45a94bd475e8c83158",
+        "prog": "ede7b0d425227cbb4f9fd4351728f5a1fb92a36646306d57211a2ca0fca2a577",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "c1b4edfaf7731e1b6721b1cf1422574cd483cb8d423ed2ec0425941f98d51d90",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "97226d9f7d32e1efa88ab68e418d18191d239baf079ea6dd949afc827ebf0045"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "clang",
+          "-g",
+          "-gdwarf-5",
+          "-O2",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/recursion/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/recursion/clang-O2/main.o"
+        ],
+        [
+          "clang",
+          "-g",
+          "-pthread",
+          "-Wl,-reproducible",
+          "<ROOT>/target/fixtures/c/recursion/clang-O2/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/recursion/clang-O2/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/threads/clang-O0",
+      "producer": "clang",
+      "optimization": "O0",
+      "sha256_read_1": {
+        "main.o": "ea3d76752718cdb5c58a3812e1c63eade1d456353de04d6a2c596137981c6b5d",
+        "prog": "e7eb19e92eb2b6e3ab7e414a65e869f1a994aef3829b8a6e6e77646a2390e217",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "2cc7595f1d639568468f75363e6dfe5787f78efbd8dc291eafdec1b7d2cbaa64",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "df6c40eaf95df4737bdfcb3641dbdb88ea349660a251e6855307a962a600cd30"
+      },
+      "sha256_read_2": {
+        "main.o": "ea3d76752718cdb5c58a3812e1c63eade1d456353de04d6a2c596137981c6b5d",
+        "prog": "e7eb19e92eb2b6e3ab7e414a65e869f1a994aef3829b8a6e6e77646a2390e217",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "2cc7595f1d639568468f75363e6dfe5787f78efbd8dc291eafdec1b7d2cbaa64",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "df6c40eaf95df4737bdfcb3641dbdb88ea349660a251e6855307a962a600cd30"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "clang",
+          "-g",
+          "-gdwarf-5",
+          "-O0",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/threads/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/threads/clang-O0/main.o"
+        ],
+        [
+          "clang",
+          "-g",
+          "-pthread",
+          "-Wl,-reproducible",
+          "<ROOT>/target/fixtures/c/threads/clang-O0/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/threads/clang-O0/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/threads/clang-O2",
+      "producer": "clang",
+      "optimization": "O2",
+      "sha256_read_1": {
+        "main.o": "e354a3698bd35c81b1cca0433f41bbf25f5e390d45ef5b0d5cd53eae2badafbf",
+        "prog": "fa1b4549afa135c6e92ec9c4370f979bf4304455c10e153f647ad1a9e23cbd3f",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "8af5347482ad6fd64364bf397cb98642206e32bfb77182b439306620eae77ee6",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "e49804ab2a1bf4ba08f5f75be658d5f639dc35bc7dbcf62f99f86f1913170749"
+      },
+      "sha256_read_2": {
+        "main.o": "e354a3698bd35c81b1cca0433f41bbf25f5e390d45ef5b0d5cd53eae2badafbf",
+        "prog": "fa1b4549afa135c6e92ec9c4370f979bf4304455c10e153f647ad1a9e23cbd3f",
+        "prog.dSYM/Contents/Info.plist": "d8b2ae8263dd1187b3ed59c1fa2636310363cea25012bbb24681e67ea62019e4",
+        "prog.dSYM/Contents/Resources/DWARF/prog": "8af5347482ad6fd64364bf397cb98642206e32bfb77182b439306620eae77ee6",
+        "prog.dSYM/Contents/Resources/Relocations/aarch64/prog.yml": "e49804ab2a1bf4ba08f5f75be658d5f639dc35bc7dbcf62f99f86f1913170749"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "clang",
+          "-g",
+          "-gdwarf-5",
+          "-O2",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/threads/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/threads/clang-O2/main.o"
+        ],
+        [
+          "clang",
+          "-g",
+          "-pthread",
+          "-Wl,-reproducible",
+          "<ROOT>/target/fixtures/c/threads/clang-O2/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/threads/clang-O2/prog"
+        ]
+      ]
+    }
+  ]
+}

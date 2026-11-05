@@ -1,0 +1,1473 @@
+{
+  "schema": 1,
+  "version": "lupin 0.1.59 (wolf-interp, reference interpreter at pin b16353e)",
+  "boundary": "Trace entries describe state AFTER the named statement/tail. A debugger stops BEFORE the next statement; join points must be specified, never globally shifted by one line.",
+  "fixtures": [
+    {
+      "id": "wolf/loops",
+      "rows": [
+        {
+          "function": "sum",
+          "task": 0,
+          "depth": 2,
+          "at": "2:5",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "n": "4",
+            "i": "0"
+          },
+          "places": [
+            {
+              "path": "n",
+              "state": "live",
+              "type": "i64",
+              "value": "4"
+            },
+            {
+              "path": "i",
+              "state": "live",
+              "type": "i32",
+              "value": "0"
+            }
+          ],
+          "tail": false
+        },
+        {
+          "function": "sum",
+          "task": 0,
+          "depth": 2,
+          "at": "3:5",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "n": "4",
+            "i": "0",
+            "total": "0"
+          },
+          "places": [
+            {
+              "path": "n",
+              "state": "live",
+              "type": "i64",
+              "value": "4"
+            },
+            {
+              "path": "i",
+              "state": "live",
+              "type": "i32",
+              "value": "0"
+            },
+            {
+              "path": "total",
+              "state": "live",
+              "type": "i32",
+              "value": "0"
+            }
+          ],
+          "tail": false
+        },
+        {
+          "function": "sum",
+          "task": 0,
+          "depth": 2,
+          "at": "5:9",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "n": "4",
+            "i": "0",
+            "total": "0"
+          },
+          "places": [
+            {
+              "path": "n",
+              "state": "live",
+              "type": "i64",
+              "value": "4"
+            },
+            {
+              "path": "i",
+              "state": "live",
+              "type": "i32",
+              "value": "0"
+            },
+            {
+              "path": "total",
+              "state": "live",
+              "type": "i32",
+              "value": "0"
+            }
+          ],
+          "tail": false
+        },
+        {
+          "function": "sum",
+          "task": 0,
+          "depth": 2,
+          "at": "6:9",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "n": "4",
+            "i": "1",
+            "total": "0"
+          },
+          "places": [
+            {
+              "path": "n",
+              "state": "live",
+              "type": "i64",
+              "value": "4"
+            },
+            {
+              "path": "i",
+              "state": "live",
+              "type": "i32",
+              "value": "1"
+            },
+            {
+              "path": "total",
+              "state": "live",
+              "type": "i32",
+              "value": "0"
+            }
+          ],
+          "tail": false
+        },
+        {
+          "function": "sum",
+          "task": 0,
+          "depth": 2,
+          "at": "5:9",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "n": "4",
+            "i": "1",
+            "total": "1"
+          },
+          "places": [
+            {
+              "path": "n",
+              "state": "live",
+              "type": "i64",
+              "value": "4"
+            },
+            {
+              "path": "i",
+              "state": "live",
+              "type": "i32",
+              "value": "1"
+            },
+            {
+              "path": "total",
+              "state": "live",
+              "type": "i32",
+              "value": "1"
+            }
+          ],
+          "tail": false
+        },
+        {
+          "function": "sum",
+          "task": 0,
+          "depth": 2,
+          "at": "6:9",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "n": "4",
+            "i": "2",
+            "total": "1"
+          },
+          "places": [
+            {
+              "path": "n",
+              "state": "live",
+              "type": "i64",
+              "value": "4"
+            },
+            {
+              "path": "i",
+              "state": "live",
+              "type": "i32",
+              "value": "2"
+            },
+            {
+              "path": "total",
+              "state": "live",
+              "type": "i32",
+              "value": "1"
+            }
+          ],
+          "tail": false
+        },
+        {
+          "function": "sum",
+          "task": 0,
+          "depth": 2,
+          "at": "5:9",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "n": "4",
+            "i": "2",
+            "total": "3"
+          },
+          "places": [
+            {
+              "path": "n",
+              "state": "live",
+              "type": "i64",
+              "value": "4"
+            },
+            {
+              "path": "i",
+              "state": "live",
+              "type": "i32",
+              "value": "2"
+            },
+            {
+              "path": "total",
+              "state": "live",
+              "type": "i32",
+              "value": "3"
+            }
+          ],
+          "tail": false
+        },
+        {
+          "function": "sum",
+          "task": 0,
+          "depth": 2,
+          "at": "6:9",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "n": "4",
+            "i": "3",
+            "total": "3"
+          },
+          "places": [
+            {
+              "path": "n",
+              "state": "live",
+              "type": "i64",
+              "value": "4"
+            },
+            {
+              "path": "i",
+              "state": "live",
+              "type": "i32",
+              "value": "3"
+            },
+            {
+              "path": "total",
+              "state": "live",
+              "type": "i32",
+              "value": "3"
+            }
+          ],
+          "tail": false
+        },
+        {
+          "function": "sum",
+          "task": 0,
+          "depth": 2,
+          "at": "5:9",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "n": "4",
+            "i": "3",
+            "total": "6"
+          },
+          "places": [
+            {
+              "path": "n",
+              "state": "live",
+              "type": "i64",
+              "value": "4"
+            },
+            {
+              "path": "i",
+              "state": "live",
+              "type": "i32",
+              "value": "3"
+            },
+            {
+              "path": "total",
+              "state": "live",
+              "type": "i32",
+              "value": "6"
+            }
+          ],
+          "tail": false
+        },
+        {
+          "function": "sum",
+          "task": 0,
+          "depth": 2,
+          "at": "6:9",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "n": "4",
+            "i": "4",
+            "total": "6"
+          },
+          "places": [
+            {
+              "path": "n",
+              "state": "live",
+              "type": "i64",
+              "value": "4"
+            },
+            {
+              "path": "i",
+              "state": "live",
+              "type": "i32",
+              "value": "4"
+            },
+            {
+              "path": "total",
+              "state": "live",
+              "type": "i32",
+              "value": "6"
+            }
+          ],
+          "tail": false
+        },
+        {
+          "function": "sum",
+          "task": 0,
+          "depth": 2,
+          "at": "4:5",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "n": "4",
+            "i": "4",
+            "total": "6"
+          },
+          "places": [
+            {
+              "path": "n",
+              "state": "live",
+              "type": "i64",
+              "value": "4"
+            },
+            {
+              "path": "i",
+              "state": "live",
+              "type": "i32",
+              "value": "4"
+            },
+            {
+              "path": "total",
+              "state": "live",
+              "type": "i32",
+              "value": "6"
+            }
+          ],
+          "tail": false
+        },
+        {
+          "function": "sum",
+          "task": 0,
+          "depth": 2,
+          "at": "8:5",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "n": "4",
+            "i": "4",
+            "total": "6"
+          },
+          "places": [
+            {
+              "path": "n",
+              "state": "live",
+              "type": "i64",
+              "value": "4"
+            },
+            {
+              "path": "i",
+              "state": "live",
+              "type": "i32",
+              "value": "4"
+            },
+            {
+              "path": "total",
+              "state": "live",
+              "type": "i32",
+              "value": "6"
+            }
+          ],
+          "tail": true
+        },
+        {
+          "function": "main",
+          "task": 0,
+          "depth": 1,
+          "at": "11:5",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "answer": "6"
+          },
+          "places": [
+            {
+              "path": "answer",
+              "state": "live",
+              "type": "i64",
+              "value": "6"
+            }
+          ],
+          "tail": false
+        },
+        {
+          "function": "main",
+          "task": 0,
+          "depth": 1,
+          "at": "12:5",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "answer": "6"
+          },
+          "places": [
+            {
+              "path": "answer",
+              "state": "live",
+              "type": "i64",
+              "value": "6"
+            }
+          ],
+          "tail": true
+        }
+      ]
+    },
+    {
+      "id": "wolf/nested",
+      "rows": [
+        {
+          "function": "inner",
+          "task": 0,
+          "depth": 3,
+          "at": "2:5",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "n": "7",
+            "doubled": "14"
+          },
+          "places": [
+            {
+              "path": "n",
+              "state": "live",
+              "type": "i64",
+              "value": "7"
+            },
+            {
+              "path": "doubled",
+              "state": "live",
+              "type": "i64",
+              "value": "14"
+            }
+          ],
+          "tail": false
+        },
+        {
+          "function": "inner",
+          "task": 0,
+          "depth": 3,
+          "at": "3:5",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "n": "7",
+            "doubled": "14"
+          },
+          "places": [
+            {
+              "path": "n",
+              "state": "live",
+              "type": "i64",
+              "value": "7"
+            },
+            {
+              "path": "doubled",
+              "state": "live",
+              "type": "i64",
+              "value": "14"
+            }
+          ],
+          "tail": true
+        },
+        {
+          "function": "outer",
+          "task": 0,
+          "depth": 2,
+          "at": "6:5",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "a": "7",
+            "result": "15"
+          },
+          "places": [
+            {
+              "path": "a",
+              "state": "live",
+              "type": "i64",
+              "value": "7"
+            },
+            {
+              "path": "result",
+              "state": "live",
+              "type": "i64",
+              "value": "15"
+            }
+          ],
+          "tail": false
+        },
+        {
+          "function": "outer",
+          "task": 0,
+          "depth": 2,
+          "at": "7:5",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "a": "7",
+            "result": "15"
+          },
+          "places": [
+            {
+              "path": "a",
+              "state": "live",
+              "type": "i64",
+              "value": "7"
+            },
+            {
+              "path": "result",
+              "state": "live",
+              "type": "i64",
+              "value": "15"
+            }
+          ],
+          "tail": true
+        },
+        {
+          "function": "main",
+          "task": 0,
+          "depth": 1,
+          "at": "10:5",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "answer": "14"
+          },
+          "places": [
+            {
+              "path": "answer",
+              "state": "live",
+              "type": "i64",
+              "value": "14"
+            }
+          ],
+          "tail": false
+        },
+        {
+          "function": "main",
+          "task": 0,
+          "depth": 1,
+          "at": "11:5",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "answer": "14"
+          },
+          "places": [
+            {
+              "path": "answer",
+              "state": "live",
+              "type": "i64",
+              "value": "14"
+            }
+          ],
+          "tail": true
+        }
+      ]
+    },
+    {
+      "id": "wolf/scalars",
+      "rows": [
+        {
+          "function": "main",
+          "task": 0,
+          "depth": 1,
+          "at": "7:5",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "x": "3"
+          },
+          "places": [
+            {
+              "path": "x",
+              "state": "live",
+              "type": "i32",
+              "value": "3"
+            }
+          ],
+          "tail": false
+        },
+        {
+          "function": "main",
+          "task": 0,
+          "depth": 1,
+          "at": "8:5",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "x": "3",
+            "y": "4"
+          },
+          "places": [
+            {
+              "path": "x",
+              "state": "live",
+              "type": "i32",
+              "value": "3"
+            },
+            {
+              "path": "y",
+              "state": "live",
+              "type": "i32",
+              "value": "4"
+            }
+          ],
+          "tail": false
+        },
+        {
+          "function": "helper",
+          "task": 0,
+          "depth": 2,
+          "at": "2:5",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "a": "3",
+            "b": "4",
+            "s": "7"
+          },
+          "places": [
+            {
+              "path": "a",
+              "state": "live",
+              "type": "i64",
+              "value": "3"
+            },
+            {
+              "path": "b",
+              "state": "live",
+              "type": "i64",
+              "value": "4"
+            },
+            {
+              "path": "s",
+              "state": "live",
+              "type": "i64",
+              "value": "7"
+            }
+          ],
+          "tail": false
+        },
+        {
+          "function": "helper",
+          "task": 0,
+          "depth": 2,
+          "at": "3:5",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "a": "3",
+            "b": "4",
+            "s": "7"
+          },
+          "places": [
+            {
+              "path": "a",
+              "state": "live",
+              "type": "i64",
+              "value": "3"
+            },
+            {
+              "path": "b",
+              "state": "live",
+              "type": "i64",
+              "value": "4"
+            },
+            {
+              "path": "s",
+              "state": "live",
+              "type": "i64",
+              "value": "7"
+            }
+          ],
+          "tail": true
+        },
+        {
+          "function": "main",
+          "task": 0,
+          "depth": 1,
+          "at": "9:5",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "x": "3",
+            "y": "4",
+            "z": "14"
+          },
+          "places": [
+            {
+              "path": "x",
+              "state": "live",
+              "type": "i32",
+              "value": "3"
+            },
+            {
+              "path": "y",
+              "state": "live",
+              "type": "i32",
+              "value": "4"
+            },
+            {
+              "path": "z",
+              "state": "live",
+              "type": "i64",
+              "value": "14"
+            }
+          ],
+          "tail": false
+        },
+        {
+          "function": "main",
+          "task": 0,
+          "depth": 1,
+          "at": "10:5",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "x": "3",
+            "y": "4",
+            "z": "14"
+          },
+          "places": [
+            {
+              "path": "x",
+              "state": "live",
+              "type": "i32",
+              "value": "3"
+            },
+            {
+              "path": "y",
+              "state": "live",
+              "type": "i32",
+              "value": "4"
+            },
+            {
+              "path": "z",
+              "state": "live",
+              "type": "i64",
+              "value": "14"
+            }
+          ],
+          "tail": true
+        }
+      ]
+    },
+    {
+      "id": "wolf/shared-name",
+      "rows": [
+        {
+          "function": "value",
+          "task": 0,
+          "depth": 2,
+          "at": "2:5",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "n": "4"
+          },
+          "places": [
+            {
+              "path": "n",
+              "state": "live",
+              "type": "i64",
+              "value": "4"
+            }
+          ],
+          "tail": true
+        },
+        {
+          "function": "main",
+          "task": 0,
+          "depth": 1,
+          "at": "4:5",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "a": "8"
+          },
+          "places": [
+            {
+              "path": "a",
+              "state": "live",
+              "type": "i64",
+              "value": "8"
+            }
+          ],
+          "tail": false
+        },
+        {
+          "function": "value",
+          "task": 0,
+          "depth": 2,
+          "at": "2:5",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "n": "4"
+          },
+          "places": [
+            {
+              "path": "n",
+              "state": "live",
+              "type": "i64",
+              "value": "4"
+            }
+          ],
+          "tail": true
+        },
+        {
+          "function": "main",
+          "task": 0,
+          "depth": 1,
+          "at": "5:5",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "a": "8",
+            "b": "5"
+          },
+          "places": [
+            {
+              "path": "a",
+              "state": "live",
+              "type": "i64",
+              "value": "8"
+            },
+            {
+              "path": "b",
+              "state": "live",
+              "type": "i64",
+              "value": "5"
+            }
+          ],
+          "tail": false
+        },
+        {
+          "function": "main",
+          "task": 0,
+          "depth": 1,
+          "at": "6:5",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "a": "8",
+            "b": "5"
+          },
+          "places": [
+            {
+              "path": "a",
+              "state": "live",
+              "type": "i64",
+              "value": "8"
+            },
+            {
+              "path": "b",
+              "state": "live",
+              "type": "i64",
+              "value": "5"
+            }
+          ],
+          "tail": true
+        }
+      ]
+    },
+    {
+      "id": "wolf/types",
+      "rows": [
+        {
+          "function": "scalars",
+          "task": 0,
+          "depth": 2,
+          "at": "2:5",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "a": "3",
+            "b": "4",
+            "c": "255",
+            "d": "18446744073709551615",
+            "e": "6",
+            "f": "1.25",
+            "g": "2.5",
+            "flag": "true",
+            "narrow": "255"
+          },
+          "places": [
+            {
+              "path": "a",
+              "state": "live",
+              "type": "i32",
+              "value": "3"
+            },
+            {
+              "path": "b",
+              "state": "live",
+              "type": "i64",
+              "value": "4"
+            },
+            {
+              "path": "c",
+              "state": "live",
+              "type": "u8",
+              "value": "255"
+            },
+            {
+              "path": "d",
+              "state": "live",
+              "type": "u64",
+              "value": "18446744073709551615"
+            },
+            {
+              "path": "e",
+              "state": "live",
+              "type": "u64",
+              "value": "6"
+            },
+            {
+              "path": "f",
+              "state": "live",
+              "type": "f64",
+              "value": "1.25"
+            },
+            {
+              "path": "g",
+              "state": "live",
+              "type": "f64",
+              "value": "2.5"
+            },
+            {
+              "path": "flag",
+              "state": "live",
+              "type": "bool",
+              "value": "true"
+            },
+            {
+              "path": "narrow",
+              "state": "live",
+              "type": "u8",
+              "value": "255"
+            }
+          ],
+          "tail": false
+        },
+        {
+          "function": "scalars",
+          "task": 0,
+          "depth": 2,
+          "at": "3:5",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "a": "3",
+            "b": "4",
+            "c": "255",
+            "d": "18446744073709551615",
+            "e": "6",
+            "f": "1.25",
+            "g": "2.5",
+            "flag": "true",
+            "narrow": "255",
+            "wide": "18446744073709551615"
+          },
+          "places": [
+            {
+              "path": "a",
+              "state": "live",
+              "type": "i32",
+              "value": "3"
+            },
+            {
+              "path": "b",
+              "state": "live",
+              "type": "i64",
+              "value": "4"
+            },
+            {
+              "path": "c",
+              "state": "live",
+              "type": "u8",
+              "value": "255"
+            },
+            {
+              "path": "d",
+              "state": "live",
+              "type": "u64",
+              "value": "18446744073709551615"
+            },
+            {
+              "path": "e",
+              "state": "live",
+              "type": "u64",
+              "value": "6"
+            },
+            {
+              "path": "f",
+              "state": "live",
+              "type": "f64",
+              "value": "1.25"
+            },
+            {
+              "path": "g",
+              "state": "live",
+              "type": "f64",
+              "value": "2.5"
+            },
+            {
+              "path": "flag",
+              "state": "live",
+              "type": "bool",
+              "value": "true"
+            },
+            {
+              "path": "narrow",
+              "state": "live",
+              "type": "u8",
+              "value": "255"
+            },
+            {
+              "path": "wide",
+              "state": "live",
+              "type": "u64",
+              "value": "18446744073709551615"
+            }
+          ],
+          "tail": false
+        },
+        {
+          "function": "scalars",
+          "task": 0,
+          "depth": 2,
+          "at": "4:5",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "a": "3",
+            "b": "4",
+            "c": "255",
+            "d": "18446744073709551615",
+            "e": "6",
+            "f": "1.25",
+            "g": "2.5",
+            "flag": "true",
+            "narrow": "255",
+            "wide": "18446744073709551615",
+            "single": "1.25"
+          },
+          "places": [
+            {
+              "path": "a",
+              "state": "live",
+              "type": "i32",
+              "value": "3"
+            },
+            {
+              "path": "b",
+              "state": "live",
+              "type": "i64",
+              "value": "4"
+            },
+            {
+              "path": "c",
+              "state": "live",
+              "type": "u8",
+              "value": "255"
+            },
+            {
+              "path": "d",
+              "state": "live",
+              "type": "u64",
+              "value": "18446744073709551615"
+            },
+            {
+              "path": "e",
+              "state": "live",
+              "type": "u64",
+              "value": "6"
+            },
+            {
+              "path": "f",
+              "state": "live",
+              "type": "f64",
+              "value": "1.25"
+            },
+            {
+              "path": "g",
+              "state": "live",
+              "type": "f64",
+              "value": "2.5"
+            },
+            {
+              "path": "flag",
+              "state": "live",
+              "type": "bool",
+              "value": "true"
+            },
+            {
+              "path": "narrow",
+              "state": "live",
+              "type": "u8",
+              "value": "255"
+            },
+            {
+              "path": "wide",
+              "state": "live",
+              "type": "u64",
+              "value": "18446744073709551615"
+            },
+            {
+              "path": "single",
+              "state": "live",
+              "type": "f64",
+              "value": "1.25"
+            }
+          ],
+          "tail": false
+        },
+        {
+          "function": "scalars",
+          "task": 0,
+          "depth": 2,
+          "at": "5:5",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "a": "3",
+            "b": "4",
+            "c": "255",
+            "d": "18446744073709551615",
+            "e": "6",
+            "f": "1.25",
+            "g": "2.5",
+            "flag": "true",
+            "narrow": "255",
+            "wide": "18446744073709551615",
+            "single": "1.25",
+            "double": "2.5"
+          },
+          "places": [
+            {
+              "path": "a",
+              "state": "live",
+              "type": "i32",
+              "value": "3"
+            },
+            {
+              "path": "b",
+              "state": "live",
+              "type": "i64",
+              "value": "4"
+            },
+            {
+              "path": "c",
+              "state": "live",
+              "type": "u8",
+              "value": "255"
+            },
+            {
+              "path": "d",
+              "state": "live",
+              "type": "u64",
+              "value": "18446744073709551615"
+            },
+            {
+              "path": "e",
+              "state": "live",
+              "type": "u64",
+              "value": "6"
+            },
+            {
+              "path": "f",
+              "state": "live",
+              "type": "f64",
+              "value": "1.25"
+            },
+            {
+              "path": "g",
+              "state": "live",
+              "type": "f64",
+              "value": "2.5"
+            },
+            {
+              "path": "flag",
+              "state": "live",
+              "type": "bool",
+              "value": "true"
+            },
+            {
+              "path": "narrow",
+              "state": "live",
+              "type": "u8",
+              "value": "255"
+            },
+            {
+              "path": "wide",
+              "state": "live",
+              "type": "u64",
+              "value": "18446744073709551615"
+            },
+            {
+              "path": "single",
+              "state": "live",
+              "type": "f64",
+              "value": "1.25"
+            },
+            {
+              "path": "double",
+              "state": "live",
+              "type": "f64",
+              "value": "2.5"
+            }
+          ],
+          "tail": false
+        },
+        {
+          "function": "scalars",
+          "task": 0,
+          "depth": 2,
+          "at": "6:5",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "a": "3",
+            "b": "4",
+            "c": "255",
+            "d": "18446744073709551615",
+            "e": "6",
+            "f": "1.25",
+            "g": "2.5",
+            "flag": "true",
+            "narrow": "255",
+            "wide": "18446744073709551615",
+            "single": "1.25",
+            "double": "2.5",
+            "enabled": "true"
+          },
+          "places": [
+            {
+              "path": "a",
+              "state": "live",
+              "type": "i32",
+              "value": "3"
+            },
+            {
+              "path": "b",
+              "state": "live",
+              "type": "i64",
+              "value": "4"
+            },
+            {
+              "path": "c",
+              "state": "live",
+              "type": "u8",
+              "value": "255"
+            },
+            {
+              "path": "d",
+              "state": "live",
+              "type": "u64",
+              "value": "18446744073709551615"
+            },
+            {
+              "path": "e",
+              "state": "live",
+              "type": "u64",
+              "value": "6"
+            },
+            {
+              "path": "f",
+              "state": "live",
+              "type": "f64",
+              "value": "1.25"
+            },
+            {
+              "path": "g",
+              "state": "live",
+              "type": "f64",
+              "value": "2.5"
+            },
+            {
+              "path": "flag",
+              "state": "live",
+              "type": "bool",
+              "value": "true"
+            },
+            {
+              "path": "narrow",
+              "state": "live",
+              "type": "u8",
+              "value": "255"
+            },
+            {
+              "path": "wide",
+              "state": "live",
+              "type": "u64",
+              "value": "18446744073709551615"
+            },
+            {
+              "path": "single",
+              "state": "live",
+              "type": "f64",
+              "value": "1.25"
+            },
+            {
+              "path": "double",
+              "state": "live",
+              "type": "f64",
+              "value": "2.5"
+            },
+            {
+              "path": "enabled",
+              "state": "live",
+              "type": "bool",
+              "value": "true"
+            }
+          ],
+          "tail": false
+        },
+        {
+          "function": "scalars",
+          "task": 0,
+          "depth": 2,
+          "at": "7:5",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "a": "3",
+            "b": "4",
+            "c": "255",
+            "d": "18446744073709551615",
+            "e": "6",
+            "f": "1.25",
+            "g": "2.5",
+            "flag": "true",
+            "narrow": "255",
+            "wide": "18446744073709551615",
+            "single": "1.25",
+            "double": "2.5",
+            "enabled": "true"
+          },
+          "places": [
+            {
+              "path": "a",
+              "state": "live",
+              "type": "i32",
+              "value": "3"
+            },
+            {
+              "path": "b",
+              "state": "live",
+              "type": "i64",
+              "value": "4"
+            },
+            {
+              "path": "c",
+              "state": "live",
+              "type": "u8",
+              "value": "255"
+            },
+            {
+              "path": "d",
+              "state": "live",
+              "type": "u64",
+              "value": "18446744073709551615"
+            },
+            {
+              "path": "e",
+              "state": "live",
+              "type": "u64",
+              "value": "6"
+            },
+            {
+              "path": "f",
+              "state": "live",
+              "type": "f64",
+              "value": "1.25"
+            },
+            {
+              "path": "g",
+              "state": "live",
+              "type": "f64",
+              "value": "2.5"
+            },
+            {
+              "path": "flag",
+              "state": "live",
+              "type": "bool",
+              "value": "true"
+            },
+            {
+              "path": "narrow",
+              "state": "live",
+              "type": "u8",
+              "value": "255"
+            },
+            {
+              "path": "wide",
+              "state": "live",
+              "type": "u64",
+              "value": "18446744073709551615"
+            },
+            {
+              "path": "single",
+              "state": "live",
+              "type": "f64",
+              "value": "1.25"
+            },
+            {
+              "path": "double",
+              "state": "live",
+              "type": "f64",
+              "value": "2.5"
+            },
+            {
+              "path": "enabled",
+              "state": "live",
+              "type": "bool",
+              "value": "true"
+            }
+          ],
+          "tail": true
+        },
+        {
+          "function": "main",
+          "task": 0,
+          "depth": 1,
+          "at": "10:5",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "result": "0"
+          },
+          "places": [
+            {
+              "path": "result",
+              "state": "live",
+              "type": "i64",
+              "value": "0"
+            }
+          ],
+          "tail": false
+        },
+        {
+          "function": "main",
+          "task": 0,
+          "depth": 1,
+          "at": "11:5",
+          "phase": "after-statement-or-tail",
+          "locals": {
+            "result": "0"
+          },
+          "places": [
+            {
+              "path": "result",
+              "state": "live",
+              "type": "i64",
+              "value": "0"
+            }
+          ],
+          "tail": true
+        }
+      ]
+    }
+  ]
+}

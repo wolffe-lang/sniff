@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "macos_capture_tool_commit": "98a8450",
+  "linux_capture_tool_commit": "98a8450",
+  "linux_fixtures_commit": "c5ac911",
+  "linux_image_id": "765eacc396f313e26230dd9f701f7c8a82ba7095f93ce30cf9894fce33a0167f",
+  "linux_collection": "short sequential light-slot steps; affinity witness CPUs 4-5, hard memory cap 6 GiB; not a final heavy-block gauntlet or timing measurement",
+  "macos_collection": "directory build lock, 8 GiB available-memory gate and 15 GiB disk floor; launched own ad-hoc-signed get-task-allow target, no attach or system security changes",
+  "raw_dump_policy": "Full compressed oracle dumps remain build outputs. Census records bind their exact stdout SHA-256; built binaries are never committed.",
+  "normalizations": [
+    "named transcript display normalizations as recorded in each session",
+    "exact lane-root prefixes replaced in published path metadata; all binary digests remain unnormalized"
+  ]
+}

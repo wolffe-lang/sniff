@@ -1,0 +1,12 @@
+fn inner(n: int) -> int {
+    let doubled = n * 2
+    doubled + 1
+}
+fn outer(a: int) -> int {
+    let result = inner(a)
+    result - 1
+}
+fn main() -> int {
+    let answer = outer(7)
+    answer - 14
+}

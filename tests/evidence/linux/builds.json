@@ -1,0 +1,1013 @@
+{
+  "schema": 1,
+  "platform": "Linux-x86_64",
+  "versions": {
+    "wolf": "wolf 0.2.37 (wolfgang, pin e2757a7)\npaired with lupin 0.1.59 (reference interpreter), pin b16353e8ae616ff3a35bd27adc56b727c50df345",
+    "gcc": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0\nCopyright (C) 2023 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
+    "clang": "Ubuntu clang version 18.1.3 (1ubuntu1)\nTarget: x86_64-pc-linux-gnu\nThread model: posix\nInstalledDir: /usr/bin"
+  },
+  "source_date_epoch": 1700000000,
+  "c_object_mtime": 1700000000,
+  "macho_link_control": null,
+  "wolf_debug_mode": "default emits DWARF; -g is not a supported flag",
+  "fixtures": [
+    {
+      "id": "wolf/loops/wolf-debug",
+      "producer": "wolf",
+      "optimization": "debug",
+      "sha256_read_1": {
+        "prog": "a2a441114b19dd05ce87218cebbb149e4099baa84273d3820b25b13cce922d02"
+      },
+      "sha256_read_2": {
+        "prog": "a2a441114b19dd05ce87218cebbb149e4099baa84273d3820b25b13cce922d02"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "<WOLF>",
+          "build",
+          "<ROOT>/fixtures/wolf/loops/main.lu",
+          "--no-cache",
+          "-o",
+          "<ROOT>/target/fixtures/wolf/loops/wolf-debug/prog"
+        ]
+      ]
+    },
+    {
+      "id": "wolf/nested/wolf-debug",
+      "producer": "wolf",
+      "optimization": "debug",
+      "sha256_read_1": {
+        "prog": "68c9d50a859016d6026501a3e645218e56269cf38c86c862f6d34a663c41fac7"
+      },
+      "sha256_read_2": {
+        "prog": "68c9d50a859016d6026501a3e645218e56269cf38c86c862f6d34a663c41fac7"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "<WOLF>",
+          "build",
+          "<ROOT>/fixtures/wolf/nested/main.lu",
+          "--no-cache",
+          "-o",
+          "<ROOT>/target/fixtures/wolf/nested/wolf-debug/prog"
+        ]
+      ]
+    },
+    {
+      "id": "wolf/scalars/wolf-debug",
+      "producer": "wolf",
+      "optimization": "debug",
+      "sha256_read_1": {
+        "prog": "47a6b8d1cce4c480c891c61d37189a23df135123307c843a04f402226a94e8df"
+      },
+      "sha256_read_2": {
+        "prog": "47a6b8d1cce4c480c891c61d37189a23df135123307c843a04f402226a94e8df"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "<WOLF>",
+          "build",
+          "<ROOT>/fixtures/wolf/scalars/main.lu",
+          "--no-cache",
+          "-o",
+          "<ROOT>/target/fixtures/wolf/scalars/wolf-debug/prog"
+        ]
+      ]
+    },
+    {
+      "id": "wolf/shared-name/wolf-debug",
+      "producer": "wolf",
+      "optimization": "debug",
+      "sha256_read_1": {
+        "prog": "c8d0707011181617b0a1333f8e31a1cdf6d131419b11cc395e2721354dc11aee"
+      },
+      "sha256_read_2": {
+        "prog": "c8d0707011181617b0a1333f8e31a1cdf6d131419b11cc395e2721354dc11aee"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "<WOLF>",
+          "build",
+          "<ROOT>/fixtures/wolf/shared-name/main.lu",
+          "--no-cache",
+          "-o",
+          "<ROOT>/target/fixtures/wolf/shared-name/wolf-debug/prog"
+        ]
+      ]
+    },
+    {
+      "id": "wolf/types/wolf-debug",
+      "producer": "wolf",
+      "optimization": "debug",
+      "sha256_read_1": {
+        "prog": "25283817d1232bf946b37b65d93107abe241e0a9fdadd7e6c1eb4f3c8922611b"
+      },
+      "sha256_read_2": {
+        "prog": "25283817d1232bf946b37b65d93107abe241e0a9fdadd7e6c1eb4f3c8922611b"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "<WOLF>",
+          "build",
+          "<ROOT>/fixtures/wolf/types/main.lu",
+          "--no-cache",
+          "-o",
+          "<ROOT>/target/fixtures/wolf/types/wolf-debug/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/aggregates/gcc-O0",
+      "producer": "gcc",
+      "optimization": "O0",
+      "sha256_read_1": {
+        "main.o": "cbf5a060e7c07ab426efc7b2c80abf0345fe9ab782e2ba3fd8ae195e0c643d20",
+        "prog": "827bbc6ea2763a3288fe9639e9bc71d0c8b49097d8f6878bf59249fa535392b9"
+      },
+      "sha256_read_2": {
+        "main.o": "cbf5a060e7c07ab426efc7b2c80abf0345fe9ab782e2ba3fd8ae195e0c643d20",
+        "prog": "827bbc6ea2763a3288fe9639e9bc71d0c8b49097d8f6878bf59249fa535392b9"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "gcc",
+          "-g",
+          "-gdwarf-5",
+          "-O0",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/aggregates/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/aggregates/gcc-O0/main.o"
+        ],
+        [
+          "gcc",
+          "-g",
+          "-pthread",
+          "<ROOT>/target/fixtures/c/aggregates/gcc-O0/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/aggregates/gcc-O0/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/aggregates/gcc-O2",
+      "producer": "gcc",
+      "optimization": "O2",
+      "sha256_read_1": {
+        "main.o": "a817ff264681158b4b82d2d01873887d71207834d6ffbfbeb2e7291b19536538",
+        "prog": "83e14f82e7a1fcb9359714479852393138edd10b53f700f973314ea99b50b137"
+      },
+      "sha256_read_2": {
+        "main.o": "a817ff264681158b4b82d2d01873887d71207834d6ffbfbeb2e7291b19536538",
+        "prog": "83e14f82e7a1fcb9359714479852393138edd10b53f700f973314ea99b50b137"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "gcc",
+          "-g",
+          "-gdwarf-5",
+          "-O2",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/aggregates/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/aggregates/gcc-O2/main.o"
+        ],
+        [
+          "gcc",
+          "-g",
+          "-pthread",
+          "<ROOT>/target/fixtures/c/aggregates/gcc-O2/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/aggregates/gcc-O2/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/aggregates/clang-O0",
+      "producer": "clang",
+      "optimization": "O0",
+      "sha256_read_1": {
+        "main.o": "a5b8ea4a530a5538b0fe8237716716de682db86f9dafe43aad1ab6168527cc20",
+        "prog": "e81fc304a7b381118aa4bff0f68fa35f78d42b4f3c08c95103f8f078487f0c55"
+      },
+      "sha256_read_2": {
+        "main.o": "a5b8ea4a530a5538b0fe8237716716de682db86f9dafe43aad1ab6168527cc20",
+        "prog": "e81fc304a7b381118aa4bff0f68fa35f78d42b4f3c08c95103f8f078487f0c55"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "clang",
+          "-g",
+          "-gdwarf-5",
+          "-O0",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/aggregates/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/aggregates/clang-O0/main.o"
+        ],
+        [
+          "clang",
+          "-g",
+          "-pthread",
+          "<ROOT>/target/fixtures/c/aggregates/clang-O0/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/aggregates/clang-O0/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/aggregates/clang-O2",
+      "producer": "clang",
+      "optimization": "O2",
+      "sha256_read_1": {
+        "main.o": "58e66cce9a1d861b4140625c58663e66605126bec75853f7d1e09357ab44907e",
+        "prog": "25b384514accda278e4c03c99cf57699aa80b0b7849644e2c05255c73a9d66a2"
+      },
+      "sha256_read_2": {
+        "main.o": "58e66cce9a1d861b4140625c58663e66605126bec75853f7d1e09357ab44907e",
+        "prog": "25b384514accda278e4c03c99cf57699aa80b0b7849644e2c05255c73a9d66a2"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "clang",
+          "-g",
+          "-gdwarf-5",
+          "-O2",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/aggregates/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/aggregates/clang-O2/main.o"
+        ],
+        [
+          "clang",
+          "-g",
+          "-pthread",
+          "<ROOT>/target/fixtures/c/aggregates/clang-O2/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/aggregates/clang-O2/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/arrays/gcc-O0",
+      "producer": "gcc",
+      "optimization": "O0",
+      "sha256_read_1": {
+        "main.o": "ca2728b53ab66d98c5719d98b15a355a53f70e00db846b14f808dc0dfab1784c",
+        "prog": "5d548ae6ccaa3d2d0921584a610e0e9da4a92705d2ed7a1acbdd023262b16d6e"
+      },
+      "sha256_read_2": {
+        "main.o": "ca2728b53ab66d98c5719d98b15a355a53f70e00db846b14f808dc0dfab1784c",
+        "prog": "5d548ae6ccaa3d2d0921584a610e0e9da4a92705d2ed7a1acbdd023262b16d6e"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "gcc",
+          "-g",
+          "-gdwarf-5",
+          "-O0",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/arrays/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/arrays/gcc-O0/main.o"
+        ],
+        [
+          "gcc",
+          "-g",
+          "-pthread",
+          "<ROOT>/target/fixtures/c/arrays/gcc-O0/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/arrays/gcc-O0/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/arrays/gcc-O2",
+      "producer": "gcc",
+      "optimization": "O2",
+      "sha256_read_1": {
+        "main.o": "33f2c4a115ad71f161309c7056b4fb5f58b8a307142f7ea86d69bcd7171e35d4",
+        "prog": "69dfd8a90b913fe9df3b04175b53501a0bc466330c7e6abd60dfd28aad2ee080"
+      },
+      "sha256_read_2": {
+        "main.o": "33f2c4a115ad71f161309c7056b4fb5f58b8a307142f7ea86d69bcd7171e35d4",
+        "prog": "69dfd8a90b913fe9df3b04175b53501a0bc466330c7e6abd60dfd28aad2ee080"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "gcc",
+          "-g",
+          "-gdwarf-5",
+          "-O2",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/arrays/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/arrays/gcc-O2/main.o"
+        ],
+        [
+          "gcc",
+          "-g",
+          "-pthread",
+          "<ROOT>/target/fixtures/c/arrays/gcc-O2/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/arrays/gcc-O2/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/arrays/clang-O0",
+      "producer": "clang",
+      "optimization": "O0",
+      "sha256_read_1": {
+        "main.o": "8397eec089361c2930d3d9efd34ab6c45bc343b3f5913c7f7ed0eb922b04cdda",
+        "prog": "230e29d2b7b73eac01832c7cad42b783197736b388f84630ed0c1dcc28a108a0"
+      },
+      "sha256_read_2": {
+        "main.o": "8397eec089361c2930d3d9efd34ab6c45bc343b3f5913c7f7ed0eb922b04cdda",
+        "prog": "230e29d2b7b73eac01832c7cad42b783197736b388f84630ed0c1dcc28a108a0"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "clang",
+          "-g",
+          "-gdwarf-5",
+          "-O0",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/arrays/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/arrays/clang-O0/main.o"
+        ],
+        [
+          "clang",
+          "-g",
+          "-pthread",
+          "<ROOT>/target/fixtures/c/arrays/clang-O0/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/arrays/clang-O0/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/arrays/clang-O2",
+      "producer": "clang",
+      "optimization": "O2",
+      "sha256_read_1": {
+        "main.o": "af4dcfc957723df413cce6e4e86278af5e81683dbe6cd4dc897d15caed1392a7",
+        "prog": "7a761b9fa4e3707cc248e2ba161af80b6cb9e12ede31142aa9752866577eee01"
+      },
+      "sha256_read_2": {
+        "main.o": "af4dcfc957723df413cce6e4e86278af5e81683dbe6cd4dc897d15caed1392a7",
+        "prog": "7a761b9fa4e3707cc248e2ba161af80b6cb9e12ede31142aa9752866577eee01"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "clang",
+          "-g",
+          "-gdwarf-5",
+          "-O2",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/arrays/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/arrays/clang-O2/main.o"
+        ],
+        [
+          "clang",
+          "-g",
+          "-pthread",
+          "<ROOT>/target/fixtures/c/arrays/clang-O2/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/arrays/clang-O2/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/inlining/gcc-O0",
+      "producer": "gcc",
+      "optimization": "O0",
+      "sha256_read_1": {
+        "main.o": "ca9c05fda9bd2cf1310c4216603fe9bff4f755c92c459cef3fee31ecb6aeeef8",
+        "prog": "937e0bad5d45a2a8ad9605ab98c4ff435f99f8d11f74923fa4a0ae99ea07e5d8"
+      },
+      "sha256_read_2": {
+        "main.o": "ca9c05fda9bd2cf1310c4216603fe9bff4f755c92c459cef3fee31ecb6aeeef8",
+        "prog": "937e0bad5d45a2a8ad9605ab98c4ff435f99f8d11f74923fa4a0ae99ea07e5d8"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "gcc",
+          "-g",
+          "-gdwarf-5",
+          "-O0",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/inlining/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/inlining/gcc-O0/main.o"
+        ],
+        [
+          "gcc",
+          "-g",
+          "-pthread",
+          "<ROOT>/target/fixtures/c/inlining/gcc-O0/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/inlining/gcc-O0/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/inlining/gcc-O2",
+      "producer": "gcc",
+      "optimization": "O2",
+      "sha256_read_1": {
+        "main.o": "307dabc0ac1a5ed2619e4816fb17f953185531736ae141dafbd0a617059ee0f4",
+        "prog": "afa88db74695dff3f3c033a0387c1f2b60070727883415dcbf94a77a8bc49cd7"
+      },
+      "sha256_read_2": {
+        "main.o": "307dabc0ac1a5ed2619e4816fb17f953185531736ae141dafbd0a617059ee0f4",
+        "prog": "afa88db74695dff3f3c033a0387c1f2b60070727883415dcbf94a77a8bc49cd7"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "gcc",
+          "-g",
+          "-gdwarf-5",
+          "-O2",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/inlining/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/inlining/gcc-O2/main.o"
+        ],
+        [
+          "gcc",
+          "-g",
+          "-pthread",
+          "<ROOT>/target/fixtures/c/inlining/gcc-O2/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/inlining/gcc-O2/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/inlining/clang-O0",
+      "producer": "clang",
+      "optimization": "O0",
+      "sha256_read_1": {
+        "main.o": "01e13e21af349dc9dca2dcb7b1964a3de494625afd3720bbcf6e702307f92dd3",
+        "prog": "54e075aa476a329ee445eacd53a173feafdd6c8a50e3caa61cb2e2d04da03fb4"
+      },
+      "sha256_read_2": {
+        "main.o": "01e13e21af349dc9dca2dcb7b1964a3de494625afd3720bbcf6e702307f92dd3",
+        "prog": "54e075aa476a329ee445eacd53a173feafdd6c8a50e3caa61cb2e2d04da03fb4"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "clang",
+          "-g",
+          "-gdwarf-5",
+          "-O0",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/inlining/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/inlining/clang-O0/main.o"
+        ],
+        [
+          "clang",
+          "-g",
+          "-pthread",
+          "<ROOT>/target/fixtures/c/inlining/clang-O0/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/inlining/clang-O0/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/inlining/clang-O2",
+      "producer": "clang",
+      "optimization": "O2",
+      "sha256_read_1": {
+        "main.o": "880cd18b5542f949347e77ade6519e638e2f0f1e90c9b4f8eaf807ba8c101285",
+        "prog": "61e2ad8bd93ab723f1ae80403414fc1433a6b6e17461771b0f393e79af3a08f7"
+      },
+      "sha256_read_2": {
+        "main.o": "880cd18b5542f949347e77ade6519e638e2f0f1e90c9b4f8eaf807ba8c101285",
+        "prog": "61e2ad8bd93ab723f1ae80403414fc1433a6b6e17461771b0f393e79af3a08f7"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "clang",
+          "-g",
+          "-gdwarf-5",
+          "-O2",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/inlining/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/inlining/clang-O2/main.o"
+        ],
+        [
+          "clang",
+          "-g",
+          "-pthread",
+          "<ROOT>/target/fixtures/c/inlining/clang-O2/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/inlining/clang-O2/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/pointers/gcc-O0",
+      "producer": "gcc",
+      "optimization": "O0",
+      "sha256_read_1": {
+        "main.o": "3a875ca28e5f176ac90430da4514966168b4784a4ba9228ed8cbd0322868de0a",
+        "prog": "fa44a6e13d699aa904d78e39488d91a19860c2a5d6a75df96aed4fa4feaa017b"
+      },
+      "sha256_read_2": {
+        "main.o": "3a875ca28e5f176ac90430da4514966168b4784a4ba9228ed8cbd0322868de0a",
+        "prog": "fa44a6e13d699aa904d78e39488d91a19860c2a5d6a75df96aed4fa4feaa017b"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "gcc",
+          "-g",
+          "-gdwarf-5",
+          "-O0",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/pointers/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/pointers/gcc-O0/main.o"
+        ],
+        [
+          "gcc",
+          "-g",
+          "-pthread",
+          "<ROOT>/target/fixtures/c/pointers/gcc-O0/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/pointers/gcc-O0/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/pointers/gcc-O2",
+      "producer": "gcc",
+      "optimization": "O2",
+      "sha256_read_1": {
+        "main.o": "eaf78ad0e4d1dd09eed1f2e4311c21f6cbb0aaa37da7443c6aaba5ea61b475f1",
+        "prog": "c97128b4fd816e0b533339e49fe49c0267b60a0ee65040c5b1b783811502cf3e"
+      },
+      "sha256_read_2": {
+        "main.o": "eaf78ad0e4d1dd09eed1f2e4311c21f6cbb0aaa37da7443c6aaba5ea61b475f1",
+        "prog": "c97128b4fd816e0b533339e49fe49c0267b60a0ee65040c5b1b783811502cf3e"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "gcc",
+          "-g",
+          "-gdwarf-5",
+          "-O2",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/pointers/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/pointers/gcc-O2/main.o"
+        ],
+        [
+          "gcc",
+          "-g",
+          "-pthread",
+          "<ROOT>/target/fixtures/c/pointers/gcc-O2/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/pointers/gcc-O2/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/pointers/clang-O0",
+      "producer": "clang",
+      "optimization": "O0",
+      "sha256_read_1": {
+        "main.o": "a00af8944eef8215475173cc6ebb2b6f951d82e5d5fc385f9a1211b06cf4fe4b",
+        "prog": "6718f94c64e01be402ff59a5a648e2cb30b7e285043960124e68b9e61563b4c6"
+      },
+      "sha256_read_2": {
+        "main.o": "a00af8944eef8215475173cc6ebb2b6f951d82e5d5fc385f9a1211b06cf4fe4b",
+        "prog": "6718f94c64e01be402ff59a5a648e2cb30b7e285043960124e68b9e61563b4c6"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "clang",
+          "-g",
+          "-gdwarf-5",
+          "-O0",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/pointers/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/pointers/clang-O0/main.o"
+        ],
+        [
+          "clang",
+          "-g",
+          "-pthread",
+          "<ROOT>/target/fixtures/c/pointers/clang-O0/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/pointers/clang-O0/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/pointers/clang-O2",
+      "producer": "clang",
+      "optimization": "O2",
+      "sha256_read_1": {
+        "main.o": "c0e8841daf1ba78e4b304a9de6834fe70466e664fae90dde2ad9f0aae193fb47",
+        "prog": "f58a1881eaa5f39c9b198b8f92a1700ee887eb1cb124adda6a6829380b7c84f3"
+      },
+      "sha256_read_2": {
+        "main.o": "c0e8841daf1ba78e4b304a9de6834fe70466e664fae90dde2ad9f0aae193fb47",
+        "prog": "f58a1881eaa5f39c9b198b8f92a1700ee887eb1cb124adda6a6829380b7c84f3"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "clang",
+          "-g",
+          "-gdwarf-5",
+          "-O2",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/pointers/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/pointers/clang-O2/main.o"
+        ],
+        [
+          "clang",
+          "-g",
+          "-pthread",
+          "<ROOT>/target/fixtures/c/pointers/clang-O2/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/pointers/clang-O2/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/recursion/gcc-O0",
+      "producer": "gcc",
+      "optimization": "O0",
+      "sha256_read_1": {
+        "main.o": "bea31ac9056c9100e3c6a56b7a6bfbd5cb8703042fd10fa0c71535cc09495f82",
+        "prog": "32234a0bc4fa74c1075eb9ba888b8cefa4e137fc2002552481588f6ede725d8d"
+      },
+      "sha256_read_2": {
+        "main.o": "bea31ac9056c9100e3c6a56b7a6bfbd5cb8703042fd10fa0c71535cc09495f82",
+        "prog": "32234a0bc4fa74c1075eb9ba888b8cefa4e137fc2002552481588f6ede725d8d"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "gcc",
+          "-g",
+          "-gdwarf-5",
+          "-O0",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/recursion/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/recursion/gcc-O0/main.o"
+        ],
+        [
+          "gcc",
+          "-g",
+          "-pthread",
+          "<ROOT>/target/fixtures/c/recursion/gcc-O0/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/recursion/gcc-O0/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/recursion/gcc-O2",
+      "producer": "gcc",
+      "optimization": "O2",
+      "sha256_read_1": {
+        "main.o": "7f956ea2d9d126b29ebce7e97f0f485c8a799fc080e7f42633d84463fe935f52",
+        "prog": "d074b5279d378921f4a824d3dd093cdd47342568896fec79318c9c98dd2d7818"
+      },
+      "sha256_read_2": {
+        "main.o": "7f956ea2d9d126b29ebce7e97f0f485c8a799fc080e7f42633d84463fe935f52",
+        "prog": "d074b5279d378921f4a824d3dd093cdd47342568896fec79318c9c98dd2d7818"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "gcc",
+          "-g",
+          "-gdwarf-5",
+          "-O2",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/recursion/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/recursion/gcc-O2/main.o"
+        ],
+        [
+          "gcc",
+          "-g",
+          "-pthread",
+          "<ROOT>/target/fixtures/c/recursion/gcc-O2/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/recursion/gcc-O2/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/recursion/clang-O0",
+      "producer": "clang",
+      "optimization": "O0",
+      "sha256_read_1": {
+        "main.o": "b4f1f6ea95f4e313633ad2d2a2b5bd49ef83a67e1cafae0cf80f1c7c23a575e0",
+        "prog": "0ac986b65541d00edfb447c156ef7f3c0aa886bfd511ae8c129f9ba13f7f5f8e"
+      },
+      "sha256_read_2": {
+        "main.o": "b4f1f6ea95f4e313633ad2d2a2b5bd49ef83a67e1cafae0cf80f1c7c23a575e0",
+        "prog": "0ac986b65541d00edfb447c156ef7f3c0aa886bfd511ae8c129f9ba13f7f5f8e"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "clang",
+          "-g",
+          "-gdwarf-5",
+          "-O0",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/recursion/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/recursion/clang-O0/main.o"
+        ],
+        [
+          "clang",
+          "-g",
+          "-pthread",
+          "<ROOT>/target/fixtures/c/recursion/clang-O0/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/recursion/clang-O0/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/recursion/clang-O2",
+      "producer": "clang",
+      "optimization": "O2",
+      "sha256_read_1": {
+        "main.o": "3ca5229399d069ff04cfe707a63853d50c318eed7481c7a3a4fe8b20a347a7e2",
+        "prog": "0c4a64276cc24aa59a572a65a827e500321cc6dd20a8707f741fe153bec132e8"
+      },
+      "sha256_read_2": {
+        "main.o": "3ca5229399d069ff04cfe707a63853d50c318eed7481c7a3a4fe8b20a347a7e2",
+        "prog": "0c4a64276cc24aa59a572a65a827e500321cc6dd20a8707f741fe153bec132e8"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "clang",
+          "-g",
+          "-gdwarf-5",
+          "-O2",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/recursion/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/recursion/clang-O2/main.o"
+        ],
+        [
+          "clang",
+          "-g",
+          "-pthread",
+          "<ROOT>/target/fixtures/c/recursion/clang-O2/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/recursion/clang-O2/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/threads/gcc-O0",
+      "producer": "gcc",
+      "optimization": "O0",
+      "sha256_read_1": {
+        "main.o": "cfcdf2c308d8c6d71505fe12b97ac63fd1a57f26c5a5a2f3a1a0f196388aa00c",
+        "prog": "324beea1dbde8ac478ff357dcc29f26c6c700407e188c5185a0224766b8e9764"
+      },
+      "sha256_read_2": {
+        "main.o": "cfcdf2c308d8c6d71505fe12b97ac63fd1a57f26c5a5a2f3a1a0f196388aa00c",
+        "prog": "324beea1dbde8ac478ff357dcc29f26c6c700407e188c5185a0224766b8e9764"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "gcc",
+          "-g",
+          "-gdwarf-5",
+          "-O0",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/threads/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/threads/gcc-O0/main.o"
+        ],
+        [
+          "gcc",
+          "-g",
+          "-pthread",
+          "<ROOT>/target/fixtures/c/threads/gcc-O0/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/threads/gcc-O0/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/threads/gcc-O2",
+      "producer": "gcc",
+      "optimization": "O2",
+      "sha256_read_1": {
+        "main.o": "6db3bb91d0f572b95ed3348b16d601d54649d1971712a0941cc23a421e5fdc44",
+        "prog": "7b0226d512dd5e5dacfd48b12449dbb8d9e4be163fa81c6f63f6ec33671342b4"
+      },
+      "sha256_read_2": {
+        "main.o": "6db3bb91d0f572b95ed3348b16d601d54649d1971712a0941cc23a421e5fdc44",
+        "prog": "7b0226d512dd5e5dacfd48b12449dbb8d9e4be163fa81c6f63f6ec33671342b4"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "gcc",
+          "-g",
+          "-gdwarf-5",
+          "-O2",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/threads/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/threads/gcc-O2/main.o"
+        ],
+        [
+          "gcc",
+          "-g",
+          "-pthread",
+          "<ROOT>/target/fixtures/c/threads/gcc-O2/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/threads/gcc-O2/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/threads/clang-O0",
+      "producer": "clang",
+      "optimization": "O0",
+      "sha256_read_1": {
+        "main.o": "cdf64d8816b1e76157ef41b901ab046aa4a69fa36331c6e3de086b54f43ded4d",
+        "prog": "5858d5c848295ccffc422646fba5b74a1c27656e5b5b9cea66026d6e8d62a0c6"
+      },
+      "sha256_read_2": {
+        "main.o": "cdf64d8816b1e76157ef41b901ab046aa4a69fa36331c6e3de086b54f43ded4d",
+        "prog": "5858d5c848295ccffc422646fba5b74a1c27656e5b5b9cea66026d6e8d62a0c6"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "clang",
+          "-g",
+          "-gdwarf-5",
+          "-O0",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/threads/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/threads/clang-O0/main.o"
+        ],
+        [
+          "clang",
+          "-g",
+          "-pthread",
+          "<ROOT>/target/fixtures/c/threads/clang-O0/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/threads/clang-O0/prog"
+        ]
+      ]
+    },
+    {
+      "id": "c/threads/clang-O2",
+      "producer": "clang",
+      "optimization": "O2",
+      "sha256_read_1": {
+        "main.o": "f84cd60131e20d0f49f2028c24152b606ba2d69d927cb115c394b9ab7310c9f6",
+        "prog": "4b4df11b166b4ae39643569e336cf1bc71ae592e57000f187870a924079fe34d"
+      },
+      "sha256_read_2": {
+        "main.o": "f84cd60131e20d0f49f2028c24152b606ba2d69d927cb115c394b9ab7310c9f6",
+        "prog": "4b4df11b166b4ae39643569e336cf1bc71ae592e57000f187870a924079fe34d"
+      },
+      "reproducible": true,
+      "commands": [
+        [
+          "clang",
+          "-g",
+          "-gdwarf-5",
+          "-O2",
+          "-pthread",
+          "-fdebug-prefix-map=<ROOT>=/source",
+          "-ffile-prefix-map=<ROOT>=/source",
+          "-c",
+          "<ROOT>/fixtures/c/threads/main.c",
+          "-o",
+          "<ROOT>/target/fixtures/c/threads/clang-O2/main.o"
+        ],
+        [
+          "clang",
+          "-g",
+          "-pthread",
+          "<ROOT>/target/fixtures/c/threads/clang-O2/main.o",
+          "-o",
+          "<ROOT>/target/fixtures/c/threads/clang-O2/prog"
+        ]
+      ]
+    }
+  ]
+}

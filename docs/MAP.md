@@ -1,8 +1,8 @@
 # Architecture map
 
-This is the intended module boundary, not an implementation claim. The
-pre-code prediction is `tests/prediction.json`. S1's final reader scope must
-be revised from the measured producer census, not from these hypotheses.
+The table below is the intended module boundary, not an implementation claim.
+The immutable pre-code prediction is `tests/prediction.json`; the measured
+frontier and reader scope below refine it without rewriting that prediction.
 
 | Stage | Modules / responsibility | Acceptance |
 |---|---|---|
@@ -43,9 +43,101 @@ core has no indexing, dereference, casts, floating-point literals, methods,
 generics, enum or list expressions. Reusing that core is not permission to
 silently accept those constructs: named refusals remain visible.
 
-## Still to measure in S0
+## Measured fixture frontier
 
-Container identities and package versions; all wolf and C fixture binaries;
-two-build digests; full DWARF census; GDB/LLDB session captures; lupin source
-stops and locals; red-first transcript rows; the final green record and plant.
-None of those is claimed by the initial scaffold.
+The corpus has five wolf programs (scalars, nested calls, loops, shared module
+names and scalar types) and six C programs (aggregates, arrays, pointers,
+recursion, inlining and threads). The build matrix is 17 Mach-O binaries and
+29 ELF binaries. Each recorded build has two identical SHA-256 maps covering
+its executable, object and dSYM files where applicable. The complete per-file
+forms, attributes, type tags, expressions and line opcodes are in
+`tests/evidence/{macos,linux}/census.json`; build digests and producer versions
+are beside them. Binary files are not committed.
+
+| Producer / artifact | Units and versions | Important observed encodings |
+|---|---|---|
+| wolf-owned ELF units | DWARF 4; one CU, or three for shared-name | addr, exprloc, ref4, sec_offset, string, udata; base_type/subprogram/formal_parameter/variable; fbreg and reg6 |
+| wolf-owned dSYM units | DWARF 4; same source CU counts | dsymutil rewrites inline strings to strp; fbreg and reg29; linked line sequences can be coalesced |
+| Bundled runtime | separate Rust/LLVM DWARF 4 units; counts vary with linking | many more tags, forms and location operations than wolf emits; never counted as wolf coverage |
+| GCC and clang C, Linux | DWARF 5, O0 and O2 | strp/string/line_strp, addrx, strx1, loclistx, rnglistx, implicit_const, register/piece/entry_value/stack_value locations |
+| Apple clang C, dSYM | DWARF 5, O0 and O2 | addrx, strx, implicit_const, exprloc and register/composite locations |
+
+Wolf's own line programs use statement flags, prologue markers, standard and
+special opcodes and explicit sequence termination. The census attributes
+executed opcodes through each CU's stmt_list offset: merely declaring an
+opcode's length in a line header does not count as using it.
+
+Linux C binaries have `.eh_frame`; the measured macOS C binaries have neither
+`.eh_frame` nor `.debug_frame` FDEs. This is not a claim that Mach-O lacks
+compact unwind metadata. Wolf binaries have runtime `.eh_frame`, but no
+measured FDE fully covers any wolf-owned function range. The successful
+source backtraces must not be presented as proof of compiler CFI.
+
+## S1 reader scope from the census
+
+Start with bounded ELF64 little-endian x86-64 and Mach-O64 little-endian arm64
+containers, symbols and UUID-matched dSYM companions. Decode DWARF 4 and 5,
+keeping DWARF32/64 contribution widths separate from address size. Implement
+abbreviations and DIEs, including zero-byte flag_present and implicit_const;
+inline and referenced strings, including line_strp and indexed strings;
+address tables; versioned line programs; DWARF 4 ranges/locations and DWARF 5
+rnglists/loclists. The indexed forms are measured requirements, not speculative
+future work.
+
+Decode CIE/FDE tables in `.eh_frame` and `.debug_frame` from their respective
+published formats. Dump decoding must cover the observed register, CFA,
+frame-base, piece, stack-value and entry-value operations without pretending
+that S1 evaluates an inferior's values. Runtime units are part of dump coverage
+even though they do not establish wolf language coverage.
+
+The first dump modes are `--debug-info`, `--debug-abbrev`, `--debug-line`,
+`--debug-addr`, `--debug-str-offsets`, `--debug-ranges`, `--debug-rnglists`,
+`--debug-loc`, `--debug-loclists`, `--eh-frame` and `--debug-frame`. Each output
+is compared byte-for-byte with its platform's pinned binary oracle on the
+same artifact, not with a cross-platform normalized approximation. Add
+synthetic DWARF64, truncation, overflow, cyclic-reference and unknown-form
+rows before implementing those paths. Optional macro/name indexes, split and
+supplementary files, unsupported compression and other architectures get
+named refusals until separately covered.
+
+## S2 command/fixture prediction
+
+These are planned command rows, not implemented sniff commands. The current
+oracle seed records only the scalar helper stop, arguments, next-line local,
+source backtrace and normal continuation under GDB and LLDB.
+
+| Commands | Planned fixture rows |
+|---|---|
+| run, kill, continue | wolf/scalars, normal exit and a separately owned running inferior |
+| break function, file:line, *address; info breakpoints; delete | wolf/scalars and wolf/shared-name, with both module-qualified names and the C main shim accounted for |
+| step, next, finish, until | wolf/nested and wolf/loops; exact source-line order |
+| bt, frame, up, down | wolf/nested and C/recursion; CFI versus named frame-pointer fallback |
+| print, info locals, info args | initialized scalar rows and explicit lupin statement-boundary joins; unsigned boundaries remain a compiler gap |
+| x, info registers | C/aggregates and C/pointers; target-width formatting, not host-width inference |
+
+Optimized C inlining and the thread fixture seed later milestones; their
+presence in the reader corpus is not S2 command coverage.
+
+## Compiler boundaries
+
+The scalar-types unit has signed `i8` and `int` DIEs for source `u8`, `u64`
+and `uint`: the fixture's values 255 and 18446744073709551615 cannot be printed
+truthfully using those signed encodings. Correct unsigned type identity and
+encoding are needed alongside aggregate types and wolf-owned CFI. The scalar
+base-type excerpt and lupin values retain this evidence.
+
+Aggregates, strings, lists, enums and error unions are not described by wolf's
+own units. Whole-function fbreg spill locations do not establish declaration
+liveness, lexical scopes or live ranges; a variable seen before initialization
+is not a verified value. Inline frames and optimized location fidelity remain
+separate compiler work. These gaps are recorded, not silently reconstructed
+from the source language.
+
+## Evidence boundaries
+
+GDB/LLDB sessions and lupin values are independent binary observations. The
+three injected harness failures are wrong-value, wrong-line-order and
+missing-frame; source coordinates prevent the C shim from masking frame loss.
+A light-slot setup/census observation is not a final heavy-block gauntlet or a
+timing measurement. Final-head records and the one-hunk plant are supplied
+separately with the PR.

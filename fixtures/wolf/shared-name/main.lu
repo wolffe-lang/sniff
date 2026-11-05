@@ -1,0 +1,7 @@
+use left
+use right
+fn main() -> int {
+    let a = left.value(4)
+    let b = right.value(4)
+    a + b - 13
+}

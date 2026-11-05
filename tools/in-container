@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd)
+engine=${SNIFF_ENGINE:-docker}
+cpus=${SNIFF_CPUS:-0}
+bootstrap=0
+if grep -vE '^#|^$|^[^=]+=[^=]+$' "$root/ci/packages.txt" | grep -q .; then
+  if [ "${SNIFF_BOOTSTRAP_ORACLE:-0}" != 1 ]; then
+    echo 'FAIL oracle-pin-unmeasured: resolve and commit exact binary package versions first'
+    exit 1
+  fi
+  bootstrap=1
+fi
+key=$(python3 -I - "$root" <<'PY'
+import hashlib, pathlib, sys
+r=pathlib.Path(sys.argv[1]); h=hashlib.sha256()
+for name in ('ci/oracle.Containerfile', 'ci/packages.txt'):
+    h.update((r/name).read_bytes())
+print(h.hexdigest()[:20])
+PY
+)
+image="sn00-oracle:$key"
+build_args=(--build-arg "BUILD_CPUS=$cpus")
+if [ -n "${SNIFF_BUILD_MEMORY:-}" ]; then build_args+=(--memory "$SNIFF_BUILD_MEMORY"); fi
+"$engine" build "${build_args[@]}" -f "$root/ci/oracle.Containerfile" -t "$image" "$root"
+mkdir -p "$root/target/oracle"
+"$engine" image inspect "$image" --format '{{.Id}}' | tee "$root/target/oracle/image-id.txt"
+for file in oracle-packages.txt oracle-binaries.txt; do
+  "$engine" run --rm --memory "${SNIFF_MEMORY:-12g}" "$image" taskset -c "$cpus" cat "/opt/$file" > "$root/target/oracle/$file"
+done
+if [ "$bootstrap" -eq 1 ]; then
+  echo 'PASS oracle-package-resolution; no Linux gauntlet has run'
+  exit 0
+fi
+diff -u "$root/ci/packages.txt" "$root/target/oracle/oracle-packages.txt"
+diff -u "$root/ci/oracle-binaries.lock" "$root/target/oracle/oracle-binaries.txt"
+echo 'PASS oracle-binary-and-package-pins'
+if [ "${SNIFF_PREPARE_ONLY:-0}" = 1 ]; then exit 0; fi
+if [ "$#" -eq 0 ]; then set -- bash tools/gate linux; fi
+"$engine" run --rm --memory "${SNIFF_MEMORY:-12g}" --pids-limit 4096 --cap-add SYS_PTRACE --security-opt seccomp=unconfined \
+  -v "$root:/work" -w /work "$image" taskset -c "$cpus" "$@"

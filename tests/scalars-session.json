@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "source": "main.lu",
+  "events": [
+    {
+      "name": "args", "line": 2,
+      "locals": {"a": "3", "b": "4"},
+      "source_frame_prefix": [{"function": "helper", "file": "main.lu", "line": 2}, {"function": "main", "file": "main.lu", "line": 9}],
+      "commands": {
+        "lldb": ["breakpoint set --name helper", "run", "frame variable a b", "bt"],
+        "gdb": ["break helper", "run", "printf \"SNIFF_VALUE a=%ld\\n\", a", "printf \"SNIFF_VALUE b=%ld\\n\", b", "bt"]
+      }
+    },
+    {
+      "name": "local", "line": 3,
+      "locals": {"a": "3", "b": "4", "s": "7"},
+      "source_frame_prefix": [{"function": "helper", "file": "main.lu", "line": 3}, {"function": "main", "file": "main.lu", "line": 9}],
+      "commands": {
+        "lldb": ["next", "frame variable a b s", "bt"],
+        "gdb": ["next", "printf \"SNIFF_VALUE a=%ld\\n\", a", "printf \"SNIFF_VALUE b=%ld\\n\", b", "printf \"SNIFF_VALUE s=%ld\\n\", s", "bt"]
+      }
+    },
+    {
+      "name": "exit",
+      "contains": {"lldb": ["exited with status = 0"], "gdb": ["exited normally"]},
+      "commands": {"lldb": ["continue"], "gdb": ["continue"]}
+    }
+  ]
+}

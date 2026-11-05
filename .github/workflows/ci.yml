@@ -1,0 +1,96 @@
+name: ci
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  push:
+    branches: [trunk]
+    paths: ['.github/**', 'ci/**', 'tools/**', 'wolf-toolchain.toml', 'sniff-oracle.toml']
+  schedule:
+    - cron: '37 4 * * *'
+  workflow_dispatch:
+    inputs:
+      jobs:
+        description: 'Optional job IDs, space-separated; empty runs the full release gate'
+        type: string
+        default: ''
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('sniff-{0}-{1}', github.head_ref, contains(github.event.pull_request.labels.*.name, 'full-matrix') && 'full' || 'pr') || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      tier: ${{ steps.plan.outputs.tier }}
+      jobs: ${{ steps.plan.outputs.jobs }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          IN_JOBS: ${{ inputs.jobs }}
+        run: python3 -I ci/tiers.py plan --github-output "$GITHUB_OUTPUT"
+  plan-test:
+    needs: plan
+    if: ${{ contains(fromJSON(needs.plan.outputs.jobs), 'plan-test') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash tools/gate unit
+  linux:
+    needs: plan
+    if: ${{ contains(fromJSON(needs.plan.outputs.jobs), 'linux') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash tools/in-container
+        env:
+          SNIFF_ENGINE: docker
+          SNIFF_CPUS: '0'
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: linux-evidence
+          path: |
+            target/gate
+            target/census/census.json
+            target/fixtures/builds.json
+            target/session
+            target/values
+  macos:
+    needs: plan
+    if: ${{ contains(fromJSON(needs.plan.outputs.jobs), 'macos') }}
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash tools/gate macos
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: macos-evidence
+          path: |
+            target/gate
+            target/census/census.json
+            target/fixtures/builds.json
+            target/session/record.json
+            target/session/expected.json
+            target/session/stdout.txt
+            target/session/stderr.txt
+            target/values
+  tier:
+    name: tier ${{ needs.plan.outputs.tier }}
+    needs: [plan, plan-test, linux, macos]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: python3 -I ci/tiers.py verdict
