@@ -1,0 +1,141 @@
+#!/usr/bin/env python3
+"""Census binary-oracle text, without importing any DWARF implementation."""
+import argparse
+from collections import Counter
+import gzip
+import hashlib
+import json
+from pathlib import Path
+import re
+import subprocess
+import sys
+
+
+def numbers(text, prefix):
+    return dict(sorted(Counter(re.findall(r'\b' + prefix + r'\w+', text)).items()))
+
+
+def summarize(info, line, frames):
+    chunks = re.split(r'(?=^0x[0-9a-fA-F]+: (?:Compile|Type) Unit:)', info, flags=re.M)[1:]
+    if not chunks:
+        raise ValueError('no measured compilation/type units')
+    producers = {}
+    wolf_functions = []
+    for chunk in chunks:
+        version = re.search(r'\bversion\s*=\s*(0x[0-9a-fA-F]+|\d+)', chunk)
+        producer = re.search(r'DW_AT_producer[^\n]*?"([^"\n]*)"', chunk)
+        if not version:
+            raise ValueError('unit with no version')
+        name = producer[1] if producer else '<no DW_AT_producer>'
+        entry = producers.setdefault(name, {'producer': name, 'units': 0, 'versions': set(),
+            'forms': Counter(), 'attributes': Counter(), 'tags': Counter(), 'location_ops': Counter(),
+            'expressions': set()})
+        entry['units'] += 1
+        entry['versions'].add(int(version[1], 0))
+        for key, prefix in [('forms', 'DW_FORM_'), ('attributes', 'DW_AT_'),
+                            ('tags', 'DW_TAG_'), ('location_ops', 'DW_OP_')]:
+            entry[key].update(numbers(chunk, prefix))
+        for value in re.findall(r'DW_AT_(?:location|frame_base)[^\n]*?\((DW_OP_[^\n]*)\)', chunk):
+            entry['expressions'].add(value)
+        if name.startswith('wolf '):
+            for block in re.split(r'(?=^0x[0-9a-fA-F]+:\s+DW_TAG_)', chunk, flags=re.M):
+                if not re.match(r'^0x[0-9a-fA-F]+:\s+DW_TAG_subprogram\b', block):
+                    continue
+                fn = re.search(r'DW_AT_name[^\n]*?"([^"\n]+)"', block)
+                low = re.search(r'DW_AT_low_pc[^\n]*?\((0x[0-9a-fA-F]+)\)', block)
+                high = re.search(r'DW_AT_high_pc\s+\[(DW_FORM_\w+)\]\s+\((0x[0-9a-fA-F]+|\d+)\)', block)
+                if fn and low and high:
+                    start, end = int(low[1], 16), int(high[2], 0)
+                    if high[1] != 'DW_FORM_addr': end += start
+                    wolf_functions.append({'name': fn[1], 'low_pc': start, 'high_pc': end})
+    cfi_kinds = []
+    fdes = []
+    for section in re.split(r'(?=\.(?:eh_frame|debug_frame) contents:)', frames):
+        kind = re.match(r'\.(eh_frame|debug_frame) contents:', section)
+        if not kind: continue
+        ranges = re.findall(r'\bFDE[^\n]*\bpc=(?:0x)?([0-9a-fA-F]+)\.{2,3}(?:0x)?([0-9a-fA-F]+)', section)
+        if ranges: cfi_kinds.append('.' + kind[1])
+        fdes += [{'kind': '.' + kind[1], 'low_pc': int(a, 16), 'high_pc': int(b, 16)} for a, b in ranges]
+    for function in wolf_functions:
+        function['cfi_fully_covers_range'] = any(f['low_pc'] <= function['low_pc'] and
+            f['high_pc'] >= function['high_pc'] for f in fdes)
+    rows = []
+    for producer in sorted(producers):
+        e = producers[producer]
+        for key in ('versions', 'expressions'): e[key] = sorted(e[key])
+        for key in ('forms', 'attributes', 'tags', 'location_ops'): e[key] = dict(sorted(e[key].items()))
+        rows.append(e)
+    # Header standard_opcode_lengths declarations are NOT executed opcodes.
+    executed = '\n'.join(v for v in line.splitlines() if re.match(r'^0x[0-9a-fA-F]+:', v))
+    return {'schema': 1, 'units': len(chunks), 'producers': rows,
+            'line_opcodes': numbers(executed, r'DW_LN[SE]_'),
+            'line_special_opcodes': len(re.findall(r'^0x[^\n]*address \+=.*line \+=', executed, re.M)),
+            'line_versions': sorted({int(v) for v in re.findall(r'^\s*version:\s*(\d+)', line, re.M)}),
+            'cfi_kinds': sorted(set(cfi_kinds)), 'cfi_fde_count': len(fdes),
+            'cfi_ops': numbers(frames, 'DW_CFA_'), 'wolf_functions': wolf_functions}
+
+
+def capture(args):
+    builds_path = Path(args.builds)
+    builds = json.loads(builds_path.read_text())
+    root = builds_path.parent
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    version = subprocess.check_output([args.dwarfdump, '--version'], text=True).strip()
+    result = {'schema': 1, 'dwarfdump_version': version, 'platform': builds['platform'], 'fixtures': []}
+    for fixture in builds['fixtures']:
+        ident = fixture['id']
+        directory = root / ident
+        exe = directory / 'prog'
+        artifacts = list((directory / 'prog.dSYM/Contents/Resources/DWARF').glob('*'))
+        artifact = artifacts[0] if artifacts else exe
+        if len(artifacts) > 1: raise ValueError('ambiguous dSYM for ' + ident)
+        raw = {}
+        sha = {}
+        for part, flags, target in [('info', ['--debug-info', '--show-form'], artifact),
+                ('line', ['--debug-line', '--verbose'], artifact),
+                ('frames', ['--eh-frame', '--debug-frame'], exe)]:
+            print('CENSUS ' + ident + ' ' + part, flush=True)
+            p = subprocess.run([args.dwarfdump, *flags, str(target)],
+                               capture_output=True, check=True, timeout=120)
+            text = p.stdout.decode('utf-8', 'strict')
+            if p.stderr:
+                raise ValueError('oracle diagnostic: ' + p.stderr.decode('utf-8', 'replace'))
+            raw[part] = text
+            sha[part] = hashlib.sha256(p.stdout).hexdigest()
+            path = out / ident / (part + '.txt.gz')
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open('wb') as stream:
+                with gzip.GzipFile(filename='', mode='wb', fileobj=stream, mtime=0) as compressed:
+                    compressed.write(p.stdout)
+        summary = summarize(raw['info'], raw['line'], raw['frames'])
+        summary['id'] = ident
+        summary['oracle_stdout_sha256'] = sha
+        summary['binary_sha256'] = fixture['sha256_read_2']['prog']
+        result['fixtures'].append(summary)
+        print('PASS census ' + ident + ' units=' + str(summary['units']), flush=True)
+    (out / 'census.json').write_text(json.dumps(result, indent=2) + '\n')
+    print('PASS census-all fixtures=' + str(len(result['fixtures'])))
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    modes = p.add_subparsers(dest='mode', required=True)
+    s = modes.add_parser('summarize')
+    for key in ('info', 'line', 'frames', 'out'): s.add_argument('--' + key, required=True)
+    c = modes.add_parser('capture')
+    for key in ('builds', 'dwarfdump', 'out'): c.add_argument('--' + key, required=True)
+    args = p.parse_args()
+    try:
+        if args.mode == 'capture': capture(args)
+        else:
+            result = summarize(*(Path(getattr(args, k)).read_text() for k in ('info', 'line', 'frames')))
+            Path(args.out).write_text(json.dumps(result, indent=2) + '\n')
+            print('PASS census-summary units=' + str(result['units']))
+        return 0
+    except (ValueError, OSError, subprocess.SubprocessError) as error:
+        print('FAIL census ' + str(error), file=sys.stderr)
+        return 1
+
+
+if __name__ == '__main__': sys.exit(main())
