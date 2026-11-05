@@ -1,0 +1,12 @@
+fn scalars(a: i32, b: i64, c: u8, d: u64, e: uint, f: f32, g: f64, flag: bool) -> int {
+    let narrow = c
+    let wide = d
+    let single = f
+    let double = g
+    let enabled = flag
+    if enabled { 0 } else { 1 }
+}
+fn main() -> int {
+    let result = scalars(3, 4, 255, 18446744073709551615, 6, 1.25, 2.5, true)
+    result
+}

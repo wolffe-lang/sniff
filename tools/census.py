@@ -20,6 +20,11 @@ def summarize(info, line, frames):
     if not chunks:
         raise ValueError('no measured compilation/type units')
     producers = {}
+    line_tables = {}
+    for table in re.split(r'(?=^debug_line\[)', line, flags=re.M)[1:]:
+        offset = re.match(r'debug_line\[(0x[0-9a-fA-F]+|\d+)\]', table)
+        if offset:
+            line_tables[int(offset[1], 0)] = table
     wolf_functions = []
     for chunk in chunks:
         version = re.search(r'\bversion\s*=\s*(0x[0-9a-fA-F]+|\d+)', chunk)
@@ -29,8 +34,11 @@ def summarize(info, line, frames):
         name = producer[1] if producer else '<no DW_AT_producer>'
         entry = producers.setdefault(name, {'producer': name, 'units': 0, 'versions': set(),
             'forms': Counter(), 'attributes': Counter(), 'tags': Counter(), 'location_ops': Counter(),
-            'expressions': set()})
+            'expressions': set(), 'line_offsets': set()})
         entry['units'] += 1
+        line_offset = re.search(r'DW_AT_stmt_list[^\n]*?\((0x[0-9a-fA-F]+)\)', chunk)
+        if line_offset:
+            entry['line_offsets'].add(int(line_offset[1], 16))
         entry['versions'].add(int(version[1], 0))
         for key, prefix in [('forms', 'DW_FORM_'), ('attributes', 'DW_AT_'),
                             ('tags', 'DW_TAG_'), ('location_ops', 'DW_OP_')]:
@@ -64,6 +72,16 @@ def summarize(info, line, frames):
         e = producers[producer]
         for key in ('versions', 'expressions'): e[key] = sorted(e[key])
         for key in ('forms', 'attributes', 'tags', 'location_ops'): e[key] = dict(sorted(e[key].items()))
+        tables = []
+        for offset in sorted(e['line_offsets']):
+            if offset not in line_tables:
+                raise ValueError('missing line table at offset ' + hex(offset))
+            tables.append(line_tables[offset])
+        e['line_offsets'] = sorted(e['line_offsets'])
+        e['line_versions'] = sorted({int(v) for t in tables for v in re.findall(r'^\s*version:\s*(\d+)', t, re.M)})
+        executed_tables = '\n'.join(v for t in tables for v in t.splitlines() if re.match(r'^0x[0-9a-fA-F]+:', v))
+        e['line_opcodes'] = numbers(executed_tables, r'DW_LN[SE]_')
+        e['line_special_opcodes'] = len(re.findall(r'^0x[^\n]*address \+=.*line \+=', executed_tables, re.M))
         rows.append(e)
     # Header standard_opcode_lengths declarations are NOT executed opcodes.
     executed = '\n'.join(v for v in line.splitlines() if re.match(r'^0x[0-9a-fA-F]+:', v))
