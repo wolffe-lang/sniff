@@ -1,29 +1,55 @@
 //! member: false
+
 use readers
 
 fn form_unit(length: int, offset_size: int, address_size: int) -> readers.DwarfUnit {
-    readers.DwarfUnit {start: 0, body: 0, end: length, version: 5,
-        offset_size: offset_size, address_size: address_size, kind: 1,
-        abbrev: 0, signature: 0, type_offset: 0}
+    readers.DwarfUnit {
+        start: 0,
+        body: 0,
+        end: length,
+        version: 5,
+        offset_size: offset_size,
+        address_size: address_size,
+        kind: 1,
+        abbrev: 0,
+        signature: 0,
+        type_offset: 0,
+    }
 }
 
 fn form_spec(form: u64, implicit: i64) -> readers.DwarfAttrSpec {
-    readers.DwarfAttrSpec {attribute: 3, form: form, implicit: implicit}
+    readers.DwarfAttrSpec { attribute: 3, form: form, implicit: implicit }
 }
 
 fn fixed_forms() {
-    let bytes: List[byte] = [1 as byte, 2 as byte, 3 as byte, 4 as byte,
-        5 as byte, 6 as byte, 7 as byte, 8 as byte]
+    let bytes: List[byte] = [
+        1 as byte,
+        2 as byte,
+        3 as byte,
+        4 as byte,
+        5 as byte,
+        6 as byte,
+        7 as byte,
+        8 as byte,
+    ]
     let unit = form_unit(bytes.len, 8, 4)
     for code in [1 as u64, 6 as u64, 23 as u64, 14 as u64, 31 as u64] {
         var c = readers.cursor(0, bytes.len, 100)
-        let value = readers.dwarf_form(bytes, mut c, unit, form_spec(code, 0)) else { assert(false); return }
+        let value = readers.dwarf_form(bytes, mut c, unit, form_spec(code, 0)) else {
+            assert(false)
+            return
+        }
         if code == 1 || code == 6 {
             assert(value.raw == 67305985 && c.pos == 4)
-        } else { assert(value.raw == 578437695752307201 && c.pos == 8) }
+        } else {
+            assert(value.raw == 578437695752307201 && c.pos == 8)
+        }
     }
     var three = readers.cursor(0, bytes.len, 100)
-    let index = readers.dwarf_form(bytes, mut three, unit, form_spec(39, 0)) else { assert(false); return }
+    let index = readers.dwarf_form(bytes, mut three, unit, form_spec(39, 0)) else {
+        assert(false)
+        return
+    }
     assert(index.raw == 197121 && three.pos == 3)
     print("PASS dwarf-form-widths")
 }
@@ -32,14 +58,25 @@ fn zero_and_indirect_forms() {
     let empty: List[byte] = []
     let unit = form_unit(0, 4, 8)
     var flag_cursor = readers.cursor(0, 0, 100)
-    let flag = readers.dwarf_form(empty, mut flag_cursor, unit, form_spec(25, 0)) else { assert(false); return }
+    let flag = readers.dwarf_form(empty, mut flag_cursor, unit, form_spec(25, 0)) else {
+        assert(false)
+        return
+    }
     assert(flag.raw == 1 && flag_cursor.pos == 0)
     var const_cursor = readers.cursor(0, 0, 100)
-    let constant = readers.dwarf_form(empty, mut const_cursor, unit, form_spec(33, -12)) else { assert(false); return }
+    let constant = readers.dwarf_form(empty, mut const_cursor, unit, form_spec(33, -12)) else {
+        assert(false)
+        return
+    }
     assert(constant.signed_value == -12 && const_cursor.pos == 0)
     let bytes: List[byte] = [22 as byte, 33 as byte, 127 as byte]
     var indirect = readers.cursor(0, bytes.len, 100)
-    let actual = readers.dwarf_form(bytes, mut indirect, form_unit(bytes.len, 4, 8), form_spec(22, 99)) else { assert(false); return }
+    let actual = readers.dwarf_form(
+        bytes,
+        mut indirect,
+        form_unit(bytes.len, 4, 8),
+        form_spec(22, 99),
+    ) else { assert(false); return }
     assert(actual.form == 33 && actual.signed_value == -1 && indirect.pos == 3)
     print("PASS dwarf-form-zero-and-indirect")
 }
@@ -49,11 +86,17 @@ fn block_forms() {
     let unit = form_unit(bytes.len, 4, 8)
     for code in [9 as u64, 10 as u64, 24 as u64] {
         var c = readers.cursor(0, bytes.len, 100)
-        let value = readers.dwarf_form(bytes, mut c, unit, form_spec(code, 0)) else { assert(false); return }
+        let value = readers.dwarf_form(bytes, mut c, unit, form_spec(code, 0)) else {
+            assert(false)
+            return
+        }
         assert(value.bytes.start == 1 && value.bytes.length == 2 && c.pos == 3)
     }
     var string_cursor = readers.cursor(1, bytes.len, 100)
-    let text = readers.dwarf_form(bytes, mut string_cursor, unit, form_spec(8, 0)) else { assert(false); return }
+    let text = readers.dwarf_form(bytes, mut string_cursor, unit, form_spec(8, 0)) else {
+        assert(false)
+        return
+    }
     assert(text.bytes.start == 1 && text.bytes.length == 2 && string_cursor.pos == 4)
     print("PASS dwarf-form-spans")
 }

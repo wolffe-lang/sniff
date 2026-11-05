@@ -20,6 +20,7 @@ pub error DwarfError = {
     invalid_abbreviation,
     duplicate_abbreviation,
     unsupported_dwarf_form,
+    unsupported_supplementary_dwarf,
 }
 
 /// A compilation/type-unit header; byte indexes address the original buffer.

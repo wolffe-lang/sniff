@@ -1,0 +1,123 @@
+// DWARF 5 section 7.5.5 / Table 7.6, with official erratum 221114.1.
+
+/// A structurally decoded form retaining signed values and raw byte spans.
+/// Indexed and section-relative values remain unresolved until their CU bases
+/// and containing sections are known. No source-language type is inferred.
+pub struct DwarfValue {
+    pub declared_form: u64,
+    pub form: u64,
+    pub raw: u64,
+    pub signed_value: i64,
+    pub bytes: ByteSpan,
+}
+
+fn dwarf_fixed(data: List[byte], mut c: Cursor, width: int) -> u64 ! DwarfError {
+    if width != 3 { return uint_le(data, mut c, width)? }
+    let span = take_span(data, mut c, 3)?
+    let a = data[span.start] as int as u64
+    let b = data[span.start + 1] as int as u64
+    let d = data[span.start + 2] as int as u64
+    a | b << 8 | d << 16
+}
+
+fn dwarf_block(data: List[byte], mut c: Cursor, size: u64) -> ByteSpan ! DwarfError {
+    valid_cursor(data, c)?
+    if size > (c.end - c.pos) as u64 { return truncated }
+    take_span(data, mut c, size as int)?
+}
+
+/// Decode one attribute value without resolving string/address/list indexes.
+/// Unknown forms, supplementary files, invalid unit references and excessive
+/// indirect chains are named failures. Zero-byte forms still charge work.
+pub fn dwarf_form(
+    data: List[byte],
+    mut c: Cursor,
+    unit: DwarfUnit,
+    spec: DwarfAttrSpec,
+) -> DwarfValue ! DwarfError {
+    valid_cursor(data, c)?
+    if unit.offset_size != 4 && unit.offset_size != 8 { return unsupported_width }
+    let start = c.pos
+    var form = spec.form
+    var indirect: int = 0
+    while form == 22 {
+        if indirect >= 64 { return resource_limit }
+        form = uleb64(data, mut c)?
+        indirect += 1
+    }
+    var value = DwarfValue {
+        declared_form: spec.form,
+        form: form,
+        raw: 0,
+        signed_value: 0,
+        bytes: ByteSpan { start: c.pos, length: 0 },
+    }
+    var span_value: bool = false
+    if form == 1 {
+        value.raw = uint_le(data, mut c, unit.address_size)?
+    } else if form == 11 || form == 12 || form == 17 {
+        value.raw = uint_le(data, mut c, 1)?
+    } else if form == 5 || form == 18 {
+        value.raw = uint_le(data, mut c, 2)?
+    } else if form == 6 || form == 19 {
+        value.raw = uint_le(data, mut c, 4)?
+    } else if form == 7 || form == 20 || form == 32 {
+        value.raw = uint_le(data, mut c, 8)?
+    } else if form == 14 || form == 16 || form == 23 || form == 31 {
+        value.raw = uint_le(data, mut c, unit.offset_size)?
+    } else if form == 15 || form == 21 || form == 26 || form == 27 || form == 34 || form == 35 {
+        value.raw = uleb64(data, mut c)?
+    } else if form >= 37 && form <= 40 {
+        value.raw = dwarf_fixed(data, mut c, (form - 36) as int)?
+    } else if form >= 41 && form <= 44 {
+        value.raw = dwarf_fixed(data, mut c, (form - 40) as int)?
+    } else if form == 13 {
+        value.signed_value = sleb64(data, mut c)?
+        value.raw = value.signed_value as wrapping[u64] as u64
+    } else if form == 33 {
+        if indirect > 0 {
+            value.signed_value = sleb64(data, mut c)?
+        } else {
+            let _ = take_span(data, mut c, 0)?
+            value.signed_value = spec.implicit
+        }
+        value.raw = value.signed_value as wrapping[u64] as u64
+    } else if form == 25 {
+        let _ = take_span(data, mut c, 0)?
+        value.raw = 1
+    } else if form == 8 {
+        value.bytes = cstring(data, mut c)?
+        span_value = true
+    } else if form == 3 || form == 4 || form == 9 || form == 10 || form == 24 {
+        var length: u64 = 0
+        if form == 3 {
+            length = uint_le(data, mut c, 2)?
+        } else if form == 4 {
+            length = uint_le(data, mut c, 4)?
+        } else if form == 10 {
+            length = uint_le(data, mut c, 1)?
+        } else {
+            length = uleb64(data, mut c)?
+        }
+        value.bytes = dwarf_block(data, mut c, length)?
+        span_value = true
+    } else if form == 30 {
+        value.bytes = take_span(data, mut c, 16)?
+        span_value = true
+    } else if form == 28 || form == 29 || form == 36 {
+        return unsupported_supplementary_dwarf
+    } else {
+        return unsupported_dwarf_form
+    }
+    if form >= 17 && form <= 21 {
+        if unit.start < 0 || unit.body < unit.start || unit.end < unit.body || unit.end > data.len {
+            return invalid_bounds
+        }
+        if value.raw < (unit.body - unit.start) as u64 ||
+            value.raw >= (unit.end - unit.start) as u64 {
+            return invalid_dwarf_reference
+        }
+    }
+    if !span_value { value.bytes = ByteSpan { start: start, length: c.pos - start } }
+    value
+}
