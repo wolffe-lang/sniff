@@ -27,6 +27,7 @@ step pin-metadata python3 -I tools/check-pins.py
 step harness-unit python3 -I tests/test_harness.py
 step census-unit python3 -I tests/test_census.py
 step symbol-oracle-unit python3 -I tests/test_symbol_oracle.py
+step reader-runner-unit python3 -I tests/test_reader_runner.py
 step tier-planner python3 -I ci/tiers-test.py
 for platform in macos linux; do
   if [ -f "tests/evidence/$platform-session/record.json" ]; then
@@ -44,6 +45,7 @@ if [ -n "${SNIFF_ARCHIVES:-}" ]; then fetch+=(--archive-dir "$SNIFF_ARCHIVES"); 
 step toolchain "${fetch[@]}"
 wolf=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["tools"]["wolf"]["root"]+"/wolf")' "$stage/manifest.json")
 lupin=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["tools"]["lupin"]["root"]+"/lupin")' "$stage/manifest.json")
+step reader-unit python3 -I tools/test-readers.py --wolf "$wolf"
 compilers=(clang)
 [ "$mode" != linux ] || compilers+=(gcc)
 step fixture-builds python3 -I tools/build-fixtures.py --wolf "$wolf" --out "$root/target/fixtures" --compilers "${compilers[@]}"
