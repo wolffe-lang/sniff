@@ -1,0 +1,11 @@
+fn helper(a: int, b: int) -> int {
+    let s = a + b
+    s * 2
+}
+
+fn main() -> int {
+    let x = 3
+    let y = 4
+    let z = helper(x, y)
+    z - 14
+}
