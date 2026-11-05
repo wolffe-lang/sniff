@@ -1,0 +1,4 @@
+*
+!ci/
+!ci/packages.txt
+!ci/oracle.Containerfile

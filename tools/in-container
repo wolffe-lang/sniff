@@ -32,5 +32,10 @@ if [ "$bootstrap" -eq 1 ]; then
   echo 'PASS oracle-package-resolution; no Linux gauntlet has run'
   exit 0
 fi
+diff -u "$root/ci/packages.txt" "$root/target/oracle/oracle-packages.txt"
+diff -u "$root/ci/oracle-binaries.lock" "$root/target/oracle/oracle-binaries.txt"
+echo 'PASS oracle-binary-and-package-pins'
+if [ "${SNIFF_PREPARE_ONLY:-0}" = 1 ]; then exit 0; fi
+if [ "$#" -eq 0 ]; then set -- bash tools/gate linux; fi
 "$engine" run --rm --memory "${SNIFF_MEMORY:-12g}" --pids-limit 4096 --cap-add SYS_PTRACE --security-opt seccomp=unconfined \
-  -v "$root:/work" -w /work "$image" taskset -c "$cpus" bash tools/gate linux
+  -v "$root:/work" -w /work "$image" taskset -c "$cpus" "$@"
