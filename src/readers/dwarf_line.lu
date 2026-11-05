@@ -1,0 +1,406 @@
+// DWARF 4/5 section 6.2 and DWARF 5 section 7.22: line-table structures
+// and the operation-pointer state machine. No address/file normalization.
+
+/// Byte/form failures, malformed line structures and explicitly unsupported
+/// encodings. Arithmetic is checked before applying unsigned register changes.
+pub error DwarfLineError = {
+    invalid_bounds, truncated, unsupported_width, unterminated_leb128,
+    leb128_overflow, unterminated_string, offset_overflow, resource_limit,
+    reserved_dwarf_length, unsupported_dwarf_version, unsupported_address_size,
+    unsupported_split_dwarf, unsupported_unit_type, invalid_dwarf_reference,
+    invalid_abbreviation, duplicate_abbreviation, unsupported_dwarf_form,
+    unsupported_supplementary_dwarf, dwarf_line_invalid_header,
+    dwarf_line_invalid_string, dwarf_line_invalid_index,
+    dwarf_line_unsupported_segment, dwarf_line_unsupported_opcode,
+    dwarf_line_unsupported_content, dwarf_line_invalid_opcode,
+    dwarf_line_arithmetic_overflow, dwarf_line_unterminated_sequence,
+}
+
+/// One v5 directory/file format pair, in producer order.
+pub struct DwarfLineFormat { pub content: u64, pub form: u64 }
+
+/// One decoded v5 entry field, retaining unknown vendor-defined content.
+pub struct DwarfLineField { pub content: u64, pub value: DwarfValue }
+
+/// A directory/file entry. Names, block timestamps and MD5 values are spans
+/// into the original buffer; presence flags distinguish omission from zero.
+pub struct DwarfLineEntry {
+    pub name: ByteSpan,
+    pub directory_index: u64,
+    pub timestamp: u64,
+    pub size: u64,
+    pub md5: ByteSpan,
+    pub timestamp_bytes: ByteSpan,
+    pub has_directory: bool,
+    pub has_timestamp: bool,
+    pub has_size: bool,
+    pub has_md5: bool,
+    pub timestamp_is_block: bool,
+    pub fields: List[DwarfLineField],
+}
+
+/// One row in original program order. End-sequence rows are terminal markers,
+/// not executable statements. Line, file and other unsigned registers stay u64.
+pub struct DwarfLineRow {
+    pub address: u64, pub op_index: u64, pub line: u64, pub column: u64,
+    pub file: u64, pub isa: u64, pub discriminator: u64,
+    pub is_stmt: bool, pub basic_block: bool, pub prologue_end: bool,
+    pub epilogue_begin: bool, pub end_sequence: bool,
+}
+
+/// One line contribution, with independent format/address widths and all
+/// prologue fields needed by a text renderer. end is the next contribution.
+pub struct DwarfLineTable {
+    pub start: int, pub end: int, pub program_start: int,
+    pub total_length: u64, pub header_length: u64,
+    pub version: int, pub offset_size: int, pub address_size: int,
+    pub segment_selector_size: int,
+    pub minimum_instruction_length: u64, pub maximum_operations_per_instruction: u64,
+    pub default_is_stmt: bool, pub line_base: i64, pub line_range: u64,
+    pub opcode_base: u64, pub standard_opcode_lengths: List[u64],
+    pub directory_formats: List[DwarfLineFormat], pub file_formats: List[DwarfLineFormat],
+    pub directories: List[DwarfLineEntry], pub files: List[DwarfLineEntry],
+    pub rows: List[DwarfLineRow], pub initial_file_count: int, pub fuel_remaining: int,
+}
+
+fn dwarf_line_empty_entry() -> DwarfLineEntry {
+    DwarfLineEntry {name: ByteSpan {start: 0, length: 0}, directory_index: 0,
+        timestamp: 0, size: 0, md5: ByteSpan {start: 0, length: 0},
+        timestamp_bytes: ByteSpan {start: 0, length: 0}, has_directory: false,
+        has_timestamp: false, has_size: false, has_md5: false,
+        timestamp_is_block: false, fields: []}
+}
+fn dwarf_line_initial(default_stmt: bool) -> DwarfLineRow {
+    // The published DWARF5 initial register remains 1, independently of its
+    // zero-based file table. Do not silently apply the DWARF6 file-zero ruling.
+    DwarfLineRow {address: 0, op_index: 0, line: 1, column: 0, file: 1,
+        isa: 0, discriminator: 0, is_stmt: default_stmt, basic_block: false,
+        prologue_end: false, epilogue_begin: false, end_sequence: false}
+}
+fn dwarf_line_span_end(data: List[byte], span: ByteSpan) -> int ! DwarfLineError {
+    checked_offset(span.start, span.length, data.len)?
+}
+fn dwarf_line_string(data: List[byte], mut c: Cursor, section: ByteSpan, offset: u64) -> ByteSpan ! DwarfLineError {
+    let end = dwarf_line_span_end(data, section)?
+    if offset >= section.length as u64 { return dwarf_line_invalid_string }
+    var text = cursor(section.start + offset as int, end, c.fuel)
+    let span = cstring(data, mut text) else |failure| {
+        if "{failure}" == "resource_limit" { return resource_limit }
+        return dwarf_line_invalid_string
+    }
+    c.fuel = text.fuel
+    span
+}
+fn dwarf_line_formats(data: List[byte], mut c: Cursor) -> List[DwarfLineFormat] ! DwarfLineError {
+    let count = uint_le(data, mut c, 1)?
+    if count > 16 { return resource_limit }
+    var formats: List[DwarfLineFormat] = []
+    var i: int = 0
+    while i < count as int {
+        let content = uleb64(data, mut c)?
+        let form = uleb64(data, mut c)?
+        if content == 0 || (content > 5 && (content < 8192 || content > 16383)) {
+            return dwarf_line_unsupported_content
+        }
+        var previous: int = 0
+        while previous < formats.len {
+            if c.fuel < 1 { return resource_limit }
+            c.fuel -= 1
+            if formats[previous].content == content { return dwarf_line_invalid_header }
+            previous += 1
+        }
+        (mut formats).push(DwarfLineFormat {content: content, form: form})
+        i += 1
+    }
+    formats
+}
+fn dwarf_line_form_allowed(content: u64, form: u64) -> bool {
+    if content == 1 { return form == 8 || form == 14 || form == 31 || form == 29 }
+    if content == 2 { return form == 11 || form == 5 || form == 15 }
+    if content == 3 { return form == 15 || form == 6 || form == 7 || form == 9 }
+    if content == 4 { return form == 15 || form == 11 || form == 5 || form == 6 || form == 7 }
+    if content == 5 { return form == 30 }
+    // DWARF5 6.2.4.2 permits these structurally skippable vendor forms.
+    form == 3 || form == 4 || form == 9 || form == 10 || form == 11 ||
+        form == 5 || form == 6 || form == 7 || form == 30 || form == 12 ||
+        form == 31 || form == 13 || form == 23 || form == 8 || form == 14 ||
+        form == 26 || form == 37 || form == 38 || form == 39 || form == 40 || form == 15
+}
+fn dwarf_line_entry5(data: List[byte], mut c: Cursor, formats: List[DwarfLineFormat],
+    offset_size: int, address_size: int, strings: ByteSpan, line_strings: ByteSpan) -> DwarfLineEntry ! DwarfLineError {
+    var entry = dwarf_line_empty_entry()
+    var has_path: bool = false
+    var i: int = 0
+    while i < formats.len {
+        let content = formats[i].content
+        let form = formats[i].form
+        if content == 1 && (form == 26 || (form >= 37 && form <= 40)) { return unsupported_split_dwarf }
+        if !dwarf_line_form_allowed(content, form) { return dwarf_line_invalid_header }
+        let unit = DwarfUnit {start: 0, body: 0, end: data.len, version: 5,
+            offset_size: offset_size, address_size: address_size, kind: 1,
+            abbrev: 0, signature: 0, type_offset: 0}
+        let spec = DwarfAttrSpec {attribute: content, form: form, implicit: 0}
+        let value = dwarf_form(data, mut c, unit, spec)?
+        if content == 1 {
+            has_path = true
+            if form == 8 { entry.name = copy value.bytes }
+            else if form == 14 { entry.name = dwarf_line_string(data, mut c, strings, value.raw)? }
+            else if form == 31 { entry.name = dwarf_line_string(data, mut c, line_strings, value.raw)? }
+        } else if content == 2 {
+            entry.directory_index = value.raw
+            entry.has_directory = true
+        } else if content == 3 {
+            entry.timestamp = value.raw
+            entry.has_timestamp = true
+            entry.timestamp_is_block = form == 9
+            if form == 9 { entry.timestamp_bytes = copy value.bytes }
+        } else if content == 4 {
+            entry.size = value.raw
+            entry.has_size = true
+        } else if content == 5 {
+            entry.md5 = copy value.bytes
+            entry.has_md5 = true
+        }
+        (mut entry.fields).push(DwarfLineField {content: content, value: value})
+        i += 1
+    }
+    if !has_path { return dwarf_line_invalid_header }
+    entry
+}
+fn dwarf_line_entry4(data: List[byte], mut c: Cursor, name: ByteSpan) -> DwarfLineEntry ! DwarfLineError {
+    var entry = dwarf_line_empty_entry()
+    entry.name = name
+    entry.directory_index = uleb64(data, mut c)?
+    entry.timestamp = uleb64(data, mut c)?
+    entry.size = uleb64(data, mut c)?
+    entry.has_directory = true
+    entry.has_timestamp = true
+    entry.has_size = true
+    entry
+}
+fn dwarf_line_directory_index(data: List[byte], entry: DwarfLineEntry, version: int, count: int) -> () ! DwarfLineError {
+    if !entry.has_directory { return }
+    if version == 4 {
+        // DWARF4 ignores the directory index for an absolute file path.
+        if entry.name.length > 0 && data[entry.name.start] as int == 47 { return }
+        if entry.directory_index > count as u64 { return dwarf_line_invalid_index }
+    } else if entry.directory_index >= count as u64 { return dwarf_line_invalid_index }
+}
+fn dwarf_line_emit(mut rows: List[DwarfLineRow], mut state: DwarfLineRow, version: int,
+    files: int, cap: int) -> () ! DwarfLineError {
+    if rows.len >= cap { return resource_limit }
+    if !state.end_sequence {
+        if version == 4 {
+            if state.file == 0 || state.file > files as u64 { return dwarf_line_invalid_index }
+        } else if state.file >= files as u64 { return dwarf_line_invalid_index }
+    }
+    (mut rows).push(copy state)
+    state.discriminator = 0
+    state.basic_block = false
+    state.prologue_end = false
+    state.epilogue_begin = false
+}
+fn dwarf_line_address_add(mut state: DwarfLineRow, amount: u64, limit: u64) -> () ! DwarfLineError {
+    if state.address > limit || amount > limit - state.address { return dwarf_line_arithmetic_overflow }
+    state.address += amount
+}
+fn dwarf_line_operation_advance(mut state: DwarfLineRow, amount: u64,
+    minimum: u64, maximum: u64, limit: u64) -> () ! DwarfLineError {
+    // Quotient/remainder decomposition avoids overflowing op_index + amount.
+    let partial = state.op_index + amount % maximum
+    let steps = amount / maximum + partial / maximum
+    if steps > (limit - state.address) / minimum { return dwarf_line_arithmetic_overflow }
+    state.address += steps * minimum
+    state.op_index = partial % maximum
+}
+fn dwarf_line_line_advance(mut state: DwarfLineRow, amount: i64) -> () ! DwarfLineError {
+    if amount >= 0 {
+        let positive = amount as u64
+        let maximum: u64 = 18446744073709551615
+        if positive > maximum - state.line { return dwarf_line_arithmetic_overflow }
+        state.line += positive
+    } else {
+        // Do not negate INT64_MIN in the signed domain.
+        let magnitude = (-(amount + 1)) as u64 + 1
+        if magnitude > state.line { return dwarf_line_arithmetic_overflow }
+        state.line -= magnitude
+    }
+}
+
+/// Decode one v4/v5 line contribution within span. The v4 address size comes
+/// from its CU; v5 carries its own. String section spans share the input buffer.
+/// Limits: <=100000000 fuel, <=1048576 emitted rows, <=65536 total entries and
+/// <=16 format fields per v5 entry. Unknown opcodes are refused, never skipped.
+pub fn dwarf_line_read(data: List[byte], span: ByteSpan, cu_address_size: int,
+    strings: ByteSpan, line_strings: ByteSpan, fuel: int, row_cap: int) -> DwarfLineTable ! DwarfLineError {
+    if fuel < 0 || fuel > 100000000 || row_cap < 0 { return resource_limit }
+    let cap = if row_cap < 1048576 { row_cap } else { 1048576 }
+    let outer_end = dwarf_line_span_end(data, span)?
+    let _ = dwarf_line_span_end(data, strings)?
+    let _ = dwarf_line_span_end(data, line_strings)?
+    var c = cursor(span.start, outer_end, fuel)
+    let initial = uint_le(data, mut c, 4)?
+    var length = initial
+    var offset_size: int = 4
+    if initial == 4294967295 { length = uint_le(data, mut c, 8)?; offset_size = 8 }
+    else if initial >= 4294967280 { return reserved_dwarf_length }
+    if length > (c.end-c.pos) as u64 { return truncated }
+    let end = c.pos + length as int
+    c.end = end
+    let version = uint_le(data, mut c, 2)? as int
+    if version != 4 && version != 5 { return unsupported_dwarf_version }
+    var address_size = cu_address_size
+    if version == 5 {
+        address_size = uint_le(data, mut c, 1)? as int
+        let segment = uint_le(data, mut c, 1)?
+        if segment != 0 { return dwarf_line_unsupported_segment }
+    }
+    if address_size != 1 && address_size != 2 && address_size != 4 && address_size != 8 { return unsupported_address_size }
+    let header_length = uint_le(data, mut c, offset_size)?
+    if header_length > (c.end-c.pos) as u64 { return truncated }
+    let program = c.pos + header_length as int
+    c.end = program
+    let minimum = uint_le(data, mut c, 1)?
+    let maximum = uint_le(data, mut c, 1)?
+    let default_stmt = uint_le(data, mut c, 1)?
+    let raw_base = uint_le(data, mut c, 1)? as i64
+    let line_base = if raw_base >= 128 { raw_base-256 } else { raw_base }
+    let line_range = uint_le(data, mut c, 1)?
+    let opcode_base = uint_le(data, mut c, 1)?
+    if minimum == 0 || maximum == 0 || default_stmt > 1 || line_range == 0 || opcode_base == 0 {
+        return dwarf_line_invalid_header
+    }
+    var lengths: List[u64] = []
+    let expected: List[u64] = [0,1,1,1,1,0,0,0,1,0,0,1]
+    var i: int = 1
+    while i < opcode_base as int {
+        let size = uint_le(data, mut c, 1)?
+        if i <= 12 && size != expected[i-1] { return dwarf_line_invalid_header }
+        (mut lengths).push(size)
+        i += 1
+    }
+    var directories: List[DwarfLineEntry] = []
+    var files: List[DwarfLineEntry] = []
+    var directory_formats: List[DwarfLineFormat] = []
+    var file_formats: List[DwarfLineFormat] = []
+    if version == 4 {
+        loop {
+            let name = cstring(data, mut c)?
+            if name.length == 0 { break }
+            if directories.len >= 65536 { return resource_limit }
+            var entry = dwarf_line_empty_entry()
+            entry.name = name
+            (mut directories).push(entry)
+        }
+        loop {
+            let name = cstring(data, mut c)?
+            if name.length == 0 { break }
+            if directories.len + files.len >= 65536 { return resource_limit }
+            let entry = dwarf_line_entry4(data, mut c, name)?
+            dwarf_line_directory_index(data, entry, version, directories.len)?
+            (mut files).push(entry)
+        }
+    } else {
+        directory_formats = dwarf_line_formats(data, mut c)?
+        let count = uleb64(data, mut c)?
+        if count > 65536 { return resource_limit }
+        if directory_formats.len == 0 && count != 0 { return dwarf_line_invalid_header }
+        i = 0
+        while i < count as int {
+            let entry = dwarf_line_entry5(data, mut c, directory_formats, offset_size, address_size, strings, line_strings)?
+            (mut directories).push(entry)
+            i += 1
+        }
+        file_formats = dwarf_line_formats(data, mut c)?
+        let file_count = uleb64(data, mut c)?
+        if file_count > (65536-directories.len) as u64 { return resource_limit }
+        if file_formats.len == 0 && file_count != 0 { return dwarf_line_invalid_header }
+        i = 0
+        while i < file_count as int {
+            let entry = dwarf_line_entry5(data, mut c, file_formats, offset_size, address_size, strings, line_strings)?
+            dwarf_line_directory_index(data, entry, version, directories.len)?
+            (mut files).push(entry)
+            i += 1
+        }
+    }
+    if c.pos != program { return dwarf_line_invalid_header }
+    c.end = end
+    let initial_file_count = files.len
+    var rows: List[DwarfLineRow] = []
+    var state = dwarf_line_initial(default_stmt == 1)
+    var active: bool = false
+    let address_limit: u64 = if address_size == 8 { 18446744073709551615 }
+        else { (1 as u64 << (address_size*8) as u64) - 1 }
+    while c.pos < c.end {
+        let opcode = uint_le(data, mut c, 1)?
+        if opcode == 0 {
+            let extended_length = uleb64(data, mut c)?
+            if extended_length == 0 { return dwarf_line_invalid_opcode }
+            if extended_length > (c.end-c.pos) as u64 { return truncated }
+            let extended_end = c.pos + extended_length as int
+            var extended = cursor(c.pos, extended_end, c.fuel)
+            let operation = uint_le(data, mut extended, 1)?
+            if operation == 1 {
+                state.end_sequence = true
+                dwarf_line_emit(mut rows, mut state, version, files.len, cap)?
+                state = dwarf_line_initial(default_stmt == 1)
+                active = false
+            } else if operation == 2 {
+                state.address = uint_le(data, mut extended, address_size)?
+                state.op_index = 0
+                active = true
+            } else if operation == 4 {
+                state.discriminator = uleb64(data, mut extended)?
+                active = true
+            } else if operation == 3 && version == 4 {
+                if directories.len + files.len >= 65536 { return resource_limit }
+                let name = cstring(data, mut extended)?
+                if name.length == 0 { return dwarf_line_invalid_opcode }
+                let entry = dwarf_line_entry4(data, mut extended, name)?
+                dwarf_line_directory_index(data, entry, version, directories.len)?
+                (mut files).push(entry)
+            } else { return dwarf_line_unsupported_opcode }
+            if extended.pos != extended_end { return dwarf_line_invalid_opcode }
+            c.pos = extended_end
+            c.fuel = extended.fuel
+        } else if opcode >= opcode_base {
+            let adjusted = opcode-opcode_base
+            dwarf_line_operation_advance(mut state, adjusted/line_range, minimum, maximum, address_limit)?
+            dwarf_line_line_advance(mut state, line_base + (adjusted%line_range) as i64)?
+            dwarf_line_emit(mut rows, mut state, version, files.len, cap)?
+            active = true
+        } else {
+            active = true
+            if opcode == 1 { dwarf_line_emit(mut rows, mut state, version, files.len, cap)? }
+            else if opcode == 2 {
+                let advance = uleb64(data, mut c)?
+                dwarf_line_operation_advance(mut state, advance, minimum, maximum, address_limit)?
+            } else if opcode == 3 {
+                let advance = sleb64(data, mut c)?
+                dwarf_line_line_advance(mut state, advance)?
+            } else if opcode == 4 { state.file = uleb64(data, mut c)? }
+            else if opcode == 5 { state.column = uleb64(data, mut c)? }
+            else if opcode == 6 { state.is_stmt = !state.is_stmt }
+            else if opcode == 7 { state.basic_block = true }
+            else if opcode == 8 {
+                dwarf_line_operation_advance(mut state, (255-opcode_base)/line_range, minimum, maximum, address_limit)?
+            } else if opcode == 9 {
+                let advance = uint_le(data, mut c, 2)?
+                dwarf_line_address_add(mut state, advance, address_limit)?
+                state.op_index = 0
+            } else if opcode == 10 { state.prologue_end = true }
+            else if opcode == 11 { state.epilogue_begin = true }
+            else if opcode == 12 { state.isa = uleb64(data, mut c)? }
+            else { return dwarf_line_unsupported_opcode }
+        }
+    }
+    if active { return dwarf_line_unterminated_sequence }
+    DwarfLineTable {start: span.start, end: end, program_start: program,
+        total_length: length, header_length: header_length, version: version,
+        offset_size: offset_size, address_size: address_size, segment_selector_size: 0,
+        minimum_instruction_length: minimum, maximum_operations_per_instruction: maximum,
+        default_is_stmt: default_stmt == 1, line_base: line_base, line_range: line_range,
+        opcode_base: opcode_base, standard_opcode_lengths: lengths,
+        directory_formats: directory_formats, file_formats: file_formats,
+        directories: directories, files: files, rows: rows, initial_file_count: initial_file_count, fuel_remaining: c.fuel}
+}
