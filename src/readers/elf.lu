@@ -38,6 +38,7 @@ pub struct ElfSection {
 
 /// One symbol, including its owning symbol-table section and original index.
 /// Values remain producer values: TLS/ABS/COMMON are not converted to addresses.
+/// raw_section_index preserves st_shndx; section_index resolves SHN_XINDEX only.
 pub struct ElfSymbol {
     pub table_section: int,
     pub table_index: int,
@@ -46,6 +47,7 @@ pub struct ElfSymbol {
     pub size: u64,
     pub info: u64,
     pub other: u64,
+    pub raw_section_index: u64,
     pub section_index: u64,
 }
 
@@ -337,6 +339,7 @@ pub fn elf_read(
                     size: size,
                     info: info,
                     other: other,
+                    raw_section_index: raw_section,
                     section_index: section_index,
                 })
                 j += 1
