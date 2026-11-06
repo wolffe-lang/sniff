@@ -29,6 +29,16 @@
     "evidence": "mac/c/aggregates/clang-O0 debug-abbrev line 10",
     "name": "DW_AT_APPLE_sdk"
    }
+  },
+  "OP": {
+   "0xe0": {
+    "evidence": "tests/evidence/expression-encoding/observations.json (synthetic probe)",
+    "name": "DW_OP_GNU_push_tls_address"
+   },
+   "0xf3": {
+    "evidence": "tests/evidence/expression-encoding/observations.json (synthetic probe)",
+    "name": "DW_OP_GNU_entry_value"
+   }
   }
  },
  "method": "Each code was read by sniff from the named fixture at the named output line; the name is the token the pinned oracle printed at the same position of the same line. No implementation source was consulted.",

@@ -47,3 +47,9 @@ pub fn form_name(n: Names, code: u64) -> str {
     if v.len > 0 { return v }
     "DW_FORM_unknown_{code:x}"
 }
+
+pub fn vendor_operation(code: u64) -> str {
+    if code == 0xe0 { return "DW_OP_GNU_push_tls_address" }
+    if code == 0xf3 { return "DW_OP_GNU_entry_value" }
+    ""
+}
