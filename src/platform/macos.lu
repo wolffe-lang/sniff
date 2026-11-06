@@ -49,6 +49,8 @@ extern "c" fn thread_get_state(thread: u32, flavor: i32, state: u64, count: u64)
 #[cfg(target = "aarch64-apple-darwin")]
 extern "c" fn thread_set_state(thread: u32, flavor: i32, state: u64, count: u32) -> i32
 #[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn pid_for_task(task: u32, pid: u64) -> i32
+#[cfg(target = "aarch64-apple-darwin")]
 extern "c" fn mach_vm_read_overwrite(task: u32, addr: u64, size: u64, data: u64, outsize: u64) -> i32
 #[cfg(target = "aarch64-apple-darwin")]
 extern "c" fn mach_vm_write(task: u32, addr: u64, data: u64, count: u32) -> i32
@@ -89,6 +91,15 @@ const st_msg2: int = 10
 /// The session signal a faulting thread was just resumed with: its Unix signal comes back as one more exception, passed on silently.
 #[cfg(target = "aarch64-apple-darwin")]
 const st_autopass: int = 11
+
+/// A forked child's first breakpoint trap, pending the session's detach: the child's task port, its pid, and
+/// whether the next resume of the parent is to be skipped (the parent never stopped).
+#[cfg(target = "aarch64-apple-darwin")]
+const st_fork_task: int = 12
+#[cfg(target = "aarch64-apple-darwin")]
+const st_fork_pid: int = 13
+#[cfg(target = "aarch64-apple-darwin")]
+const st_fork_skip: int = 14
 
 /// Bytes of the message buffers (an exception request is 88 bytes plus a trailer).
 #[cfg(target = "aarch64-apple-darwin")]
@@ -303,6 +314,7 @@ pub fn target_wait(t: Target) -> int {
                 let m = msg as *u32
                 if m[10] as u64 != t.memfd as u64 {
                     // another task's exception (a forked child inherited the port)
+                    if fork_event(t) { return stop_status(1, 5) }
                     handle_foreign(t)
                     continue
                 }
@@ -335,6 +347,32 @@ pub fn target_wait(t: Target) -> int {
     }
 }
 
+/// A forked child's breakpoint trap (the child inherited the exception port and the parent's inserted traps).
+/// The request is kept, unanswered, in the second buffer; the session reports a fork event, writes the original
+/// instructions into the child through target_with_pid, and target_detach then lets the child retry them.
+#[cfg(target = "aarch64-apple-darwin")]
+fn fork_event(t: Target) -> bool {
+    unsafe {
+        // # Safety: both buffers are layer-owned and msg_bytes long; pidbuf is calloc'd.
+        let st = t.word as *u64
+        let m = st[st_msg] as *u32
+        let c0 = (m[17] as u64) | ((m[18] as u64) << 32)
+        if (m[15] as int) != 6 || c0 != 1 { return false }
+        let keep = st[st_msg2] as *u32
+        var i = 0
+        while i < 32 {
+            keep[i] = m[i]
+            i += 1
+        }
+        let pidbuf = c.calloc(1, 8) as *i32
+        if pid_for_task(m[10], pidbuf as u64) != 0 { return false }
+        st[st_fork_task] = m[10] as u64
+        st[st_fork_pid] = pidbuf[0] as u64
+        st[st_fork_skip] = 1
+        true
+    }
+}
+
 /// An exception from a task that is not the traced one: restore nothing here
 /// (the session cannot know), refuse nothing; let the thread go on.
 #[cfg(target = "aarch64-apple-darwin")]
@@ -345,6 +383,7 @@ fn handle_foreign(t: Target) {
         let m = st[st_msg] as *u32
         let c0 = (m[17] as u64) | ((m[18] as u64) << 32)
         let exc = m[15] as int
+        eprint("DEBUG foreign exc={exc} c0={c0}\n")
         if exc == 6 && c0 == 1 {
             // a BRK of ours in the child's copy: step the child past it is not possible without its
             // original bytes; the session's detach path handles breakpoints, so just let it fail
@@ -361,6 +400,11 @@ fn resume(t: Target, sig: int, step: bool) -> int {
     unsafe {
         // # Safety: buffers are layer-owned; the pid is the traced child.
         let st = t.word as *u64
+        if st[st_fork_skip] != 0 {
+            // the stop was a forked child's: the parent never stopped
+            st[st_fork_skip] = 0
+            return 0
+        }
         if st[st_pending] == 0 { return -1 }
         let kind = st[st_kind] as int
         var ret = 0
@@ -413,7 +457,7 @@ pub fn target_spawn(path: str, args: List[str], env_lines: str, env_columns: str
         argv[args.len + 1] = 0
         let attr = c.calloc(1, 64) as u64
         let _ = posix_spawnattr_init(attr)
-        let _ = posix_spawnattr_setflags(attr, 128)
+        let _ = posix_spawnattr_setflags(attr, 384)
         let pidbuf = c.calloc(1, 8) as *i32
         let envp = (_NSGetEnviron() as *u64)[0]
         let rc = posix_spawn(pidbuf as u64, cpath, 0, attr, argv as u64, envp)
@@ -676,20 +720,44 @@ pub fn target_image_base(t: Target) -> u64 {
     }
 }
 
-/// A forked child is not observable until it traps; nothing to detach.
+/// Let the forked child go on: its original instructions are back, so the trap it stopped at is retried.
 #[cfg(target = "aarch64-apple-darwin")]
-pub fn target_detach(pid: int) -> int { -1 }
+pub fn target_detach(t: Target, pid: int) -> int {
+    unsafe {
+        // # Safety: the kept request belongs to the layer; replying to it releases the child's thread.
+        let st = t.word as *u64
+        if st[st_fork_task] == 0 || st[st_fork_pid] != pid as u64 { return -1 }
+        let r = reply_to(st[st_msg2], 0)
+        st[st_fork_task] = 0
+        st[st_fork_pid] = 0
+        r
+    }
+}
 
-/// No fork events on this platform.
+/// The pid of the forked child whose trap is pending, or -1.
 #[cfg(target = "aarch64-apple-darwin")]
-pub fn target_event_pid(t: Target) -> int { -1 }
+pub fn target_event_pid(t: Target) -> int {
+    unsafe {
+        // # Safety: the state block is calloc'd.
+        let st = t.word as *u64
+        if st[st_fork_task] == 0 { return -1 }
+        st[st_fork_pid] as int
+    }
+}
 
-/// No fork events on this platform.
+/// The child is already stopped (its thread waits for the reply).
 #[cfg(target = "aarch64-apple-darwin")]
-pub fn target_wait_pid(t: Target, pid: int) -> int { -1 }
+pub fn target_wait_pid(t: Target, pid: int) -> int { 0 }
 
 /// A handle for another pid sharing this one's scratch space.
 #[cfg(target = "aarch64-apple-darwin")]
 pub fn target_with_pid(t: Target, pid: int) -> Target {
+    unsafe {
+        // # Safety: the state block is calloc'd.
+        let st = t.word as *u64
+        if st[st_fork_task] != 0 && st[st_fork_pid] == pid as u64 {
+            return Target { pid: pid, memfd: st[st_fork_task] as int, status: t.status, regs: t.regs, word: t.word }
+        }
+    }
     Target { pid: pid, memfd: -1, status: t.status, regs: t.regs, word: t.word }
 }

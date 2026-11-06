@@ -309,7 +309,7 @@ pub fn target_xmm0(t: Target) -> List[byte] {
 
 /// Detach from a traced pid after restoring nothing: used for forked children.
 #[cfg(target = "x86_64-unknown-linux-gnu")]
-pub fn target_detach(pid: int) -> int {
+pub fn target_detach(t: Target, pid: int) -> int {
     unsafe {
         // # Safety: the pid is the traced child; every pointer argument is a calloc'd buffer sized for the request.
         ptrace(req_detach as i32, pid as i32, 0 as u64, 0 as u64) as int

@@ -198,7 +198,7 @@ fn handle_fork(mut s: Session, st: int) {
         }
         i += 1
     }
-    let _ = platform.target_detach(child)
+    let _ = platform.target_detach(ct, child)
     emit_line(mut s, "[Detaching after fork from child process {child}]")
 }
 
