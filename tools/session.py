@@ -31,7 +31,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ROWS = ROOT / 'tests/session-rows.json'
 GOLD = ROOT / 'tests/evidence/linux-s2'
 SCRIPTS = 'target/s2'
-ENV_BASE = {'PATH': '/usr/local/bin:/usr/bin:/bin', 'HOME': '/work/target/home', 'LC_ALL': 'C', 'TZ': 'UTC', 'TERM': 'dumb'}
+ENV_BASE = dict(os.environ)
 
 
 def load_rows(only=None):
