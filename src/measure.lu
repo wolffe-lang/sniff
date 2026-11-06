@@ -1,0 +1,50 @@
+//! member: false
+// Measure the implemented reader counters on one file, so the caps in
+// tests/reader-cap-prediction.json are checked against real maxima:
+//   wolf build src/measure.lu -o target/measure && target/measure FILE
+use readers
+
+fn main() {
+    let args = env_args()
+    if args.len != 1 {
+        eprint("usage: measure FILE")
+        os_exit(2)
+    }
+    let data = fs_read_bytes(args[0]) else |err| {
+        eprint("error: {err}")
+        os_exit(1)
+        return
+    }
+    let s = readers.object_sections(data) else |err| {
+        eprint("error: {err}")
+        os_exit(1)
+        return
+    }
+    let limits = readers.dwarf_info_limits()
+    let info = readers.dwarf_info_read(data, s.info.span, s.abbrev.span, limits) else |err| {
+        eprint("error: {err}")
+        os_exit(1)
+        return
+    }
+    let info_work = limits.work - info.fuel_remaining
+    print("MEASURE input_bytes={data.len} dies={info.die_count} entries={info.entries.len} attributes={info.attributes.len} info_work={info_work}")
+    var pos = s.line.span.start
+    let end = pos + s.line.span.length
+    var max_rows: int = 0
+    var max_line_work: int = 0
+    var tables: int = 0
+    while pos < end {
+        let t = readers.dwarf_line_read(data, readers.ByteSpan { start: pos, length: end - pos }, 8,
+            s.str.span, s.line_str.span, 100000000, 1048576) else |err| {
+            eprint("error: {err}")
+            os_exit(1)
+            return
+        }
+        if t.rows.len > max_rows { max_rows = t.rows.len }
+        let used = 100000000 - t.fuel_remaining
+        if used > max_line_work { max_line_work = used }
+        tables += 1
+        pos = t.end
+    }
+    print("MEASURE line_tables={tables} max_rows_per_table={max_rows} max_line_work={max_line_work}")
+}

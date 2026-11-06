@@ -1,0 +1,33 @@
+{
+ "schema": 1,
+ "measured": "src/measure.lu on every baseline Linux wolf fixture and c/threads/gcc-O2, built at 0520b7f in the pinned oracle image",
+ "maxima": {
+  "input_bytes": 14259616,
+  "dies": 392124,
+  "entries_with_nulls": 552655,
+  "attributes": 1428600,
+  "info_work": 12731754,
+  "line_tables": 192,
+  "line_rows_per_table": 41492,
+  "line_work_per_table": 300308
+ },
+ "caps": {
+  "input_bytes": 67108864,
+  "dies": 1048576,
+  "entries_with_nulls": 2097152,
+  "attributes": 4194304,
+  "info_work": 67108864,
+  "line_rows_per_table": 1048576,
+  "line_work_per_table": 100000000
+ },
+ "headroom": {
+  "input_bytes": "4.71x",
+  "dies": "2.67x",
+  "entries_with_nulls": "3.79x",
+  "attributes": "2.94x",
+  "info_work": "5.27x",
+  "line_rows_per_table": "25.3x",
+  "line_work_per_table": "333x (the line reader's own ceiling)"
+ },
+ "allocation": "No separate allocation counter: every list a reader grows is bounded by one of the caps above, so memory is bounded by the caps times record sizes. Dump output streams through a 64 KiB buffer and is never accumulated."
+}
