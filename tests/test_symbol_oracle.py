@@ -87,11 +87,15 @@ class SymbolOracle(unittest.TestCase):
             python.chmod(0o755)
             workspace = d / 'project'
             (workspace / 'tools').mkdir(parents=True)
-            for name in ('tools/gate', 'tools/check-symbol-oracle.py', 'sniff-oracle.toml'):
+            for name in ('tools/gate', 'tools/gate-steps.sh', 'tools/check-symbol-oracle.py',
+                         'sniff-oracle.toml'):
                 shutil.copyfile(ROOT / name, workspace / name)
+            # The real gate without the hosted-CI switch, even when this suite
+            # itself runs under it: the refusal must fire.
+            env = dict(os.environ, PATH=str(d) + os.pathsep + os.environ['PATH'])
+            env.pop('SNIFF_HOSTED_MACOS_CI', None)
             result = subprocess.run(['/bin/bash', str(workspace / 'tools/gate'), 'macos'],
-                env=dict(os.environ, PATH=str(d) + os.pathsep + os.environ['PATH']),
-                capture_output=True, text=True, timeout=15)
+                env=env, capture_output=True, text=True, timeout=15)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('FAIL symbol-oracle-version-mismatch', result.stdout)
             self.assertIn('END symbol-oracle-pin exit=1', result.stdout)
