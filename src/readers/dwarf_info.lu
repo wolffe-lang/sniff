@@ -1,0 +1,355 @@
+// DWARF 4/5 sections 2.3 and 7.5.2-7.5.4: debugging information entry trees.
+// Entries and attributes are flat lists in original section order. Offsets are
+// absolute indexes into the caller's buffer, like every other reader record.
+
+/// Byte, unit, abbreviation and form failures plus tree/reference failures.
+/// A resource limit is never reported as malformed input.
+pub error DwarfInfoError = {
+    invalid_bounds,
+    truncated,
+    unsupported_width,
+    unterminated_leb128,
+    leb128_overflow,
+    unterminated_string,
+    offset_overflow,
+    resource_limit,
+    reserved_dwarf_length,
+    unsupported_dwarf_version,
+    unsupported_address_size,
+    unsupported_split_dwarf,
+    unsupported_unit_type,
+    invalid_dwarf_reference,
+    invalid_abbreviation,
+    duplicate_abbreviation,
+    unsupported_dwarf_form,
+    unsupported_supplementary_dwarf,
+    dwarf_info_invalid_abbrev_offset,
+    dwarf_info_unknown_abbreviation,
+    dwarf_info_invalid_tree,
+    dwarf_info_invalid_reference,
+    dwarf_info_not_reference,
+    dwarf_info_reference_cycle,
+}
+
+/// Caller-adjustable caps. Defaults are fixed in tests/reader-cap-prediction.json
+/// above the recorded corpus maxima; none of them may exclude a recorded fixture.
+pub struct DwarfInfoLimits {
+    pub input_bytes: int,
+    pub dies: int,
+    pub attributes: int,
+    pub abbreviations: int,
+    pub work: int,
+}
+
+/// One entry, null entries included. parent is an entry index or -1; depth is
+/// the nesting level a dump indents by. A null entry closes its parent's list.
+pub struct DwarfEntry {
+    pub offset: int,
+    pub unit: int,
+    pub parent: int,
+    pub depth: int,
+    pub code: u64,
+    pub tag: u64,
+    pub has_children: bool,
+    pub is_null: bool,
+    pub first_attribute: int,
+    pub attribute_count: int,
+}
+
+/// One attribute value in declaration order, owned by entry.
+pub struct DwarfAttribute {
+    pub entry: int,
+    pub attribute: u64,
+    pub value: DwarfValue,
+}
+
+/// One unit: its header, its entry range and the abbreviation table it uses.
+pub struct DwarfInfoUnit {
+    pub header: DwarfUnit,
+    pub first_entry: int,
+    pub end_entry: int,
+    pub abbrev_table: int,
+}
+
+/// One parsed abbreviation table, shared by every unit naming its offset.
+pub struct DwarfAbbrevTable {
+    pub offset: u64,
+    pub abbrevs: List[DwarfAbbrev],
+}
+
+/// The whole section. die_count excludes null entries.
+pub struct DwarfInfo {
+    pub info: ByteSpan,
+    pub abbrev: ByteSpan,
+    pub units: List[DwarfInfoUnit],
+    pub entries: List[DwarfEntry],
+    pub attributes: List[DwarfAttribute],
+    pub tables: List[DwarfAbbrevTable],
+    pub die_count: int,
+    pub abbreviation_tables_read: int,
+    pub fuel_remaining: int,
+}
+
+/// Default caps: 2.67x the largest recorded DIE count (392124) and 2.94x the
+/// largest attribute count (1428600); 4.7x the largest Linux fixture's bytes.
+pub fn dwarf_info_limits() -> DwarfInfoLimits {
+    DwarfInfoLimits {
+        input_bytes: 67108864,
+        dies: 1048576,
+        attributes: 4194304,
+        abbreviations: 65536,
+        work: 1500000000,
+    }
+}
+
+fn dwarf_info_charge(mut fuel: int, amount: int) -> () ! DwarfInfoError {
+    if fuel < amount { return resource_limit }
+    fuel -= amount
+}
+
+fn dwarf_info_span_end(data: List[byte], span: ByteSpan) -> int ! DwarfInfoError {
+    if span.start < 0 || span.length < 0 || span.start > data.len { return invalid_bounds }
+    if span.length > data.len - span.start { return invalid_bounds }
+    span.start + span.length
+}
+
+fn dwarf_info_table(
+    data: List[byte],
+    mut info: DwarfInfo,
+    offset: u64,
+    limits: DwarfInfoLimits,
+) -> int ! DwarfInfoError {
+    var i: int = 0
+    while i < info.tables.len {
+        dwarf_info_charge(mut info.fuel_remaining, 1)?
+        if info.tables[i].offset == offset { return i }
+        i += 1
+    }
+    if offset >= info.abbrev.length as u64 { return dwarf_info_invalid_abbrev_offset }
+    var c = cursor(info.abbrev.start + offset as int, info.abbrev.start + info.abbrev.length,
+        info.fuel_remaining)
+    let parsed = dwarf_abbrevs(data, mut c, limits.abbreviations, limits.attributes)
+    info.fuel_remaining = c.fuel
+    let abbrevs = parsed?
+    (mut info.tables).push(DwarfAbbrevTable { offset: offset, abbrevs: abbrevs })
+    info.abbreviation_tables_read += 1
+    info.tables.len - 1
+}
+
+fn dwarf_info_find_abbrev(
+    info: DwarfInfo,
+    table: int,
+    code: u64,
+    mut fuel: int,
+) -> int ! DwarfInfoError {
+    let count = info.tables[table].abbrevs.len
+    // Producers number codes densely from 1; try that slot before scanning.
+    if code >= 1 && code <= count as u64 {
+        let slot = code as int - 1
+        if info.tables[table].abbrevs[slot].code == code { return slot }
+    }
+    var i: int = 0
+    while i < count {
+        dwarf_info_charge(mut fuel, 1)?
+        if info.tables[table].abbrevs[i].code == code { return i }
+        i += 1
+    }
+    dwarf_info_unknown_abbreviation
+}
+
+fn dwarf_info_unit(
+    data: List[byte],
+    mut info: DwarfInfo,
+    mut c: Cursor,
+    limits: DwarfInfoLimits,
+) -> () ! DwarfInfoError {
+    let header = dwarf_unit_header(data, mut c)?
+    info.fuel_remaining = c.fuel
+    let table = dwarf_info_table(data, mut info, header.abbrev, limits)?
+    let unit_index = info.units.len
+    let first = info.entries.len
+    var body = cursor(header.body, header.end, info.fuel_remaining)
+    var parents: List[int] = []
+    while body.pos < body.end {
+        if info.entries.len >= limits.dies * 2 { return resource_limit }
+        let offset = body.pos
+        let code = uleb64(data, mut body)?
+        let parent = if parents.len > 0 { parents[parents.len - 1] } else { -1 }
+        if code == 0 {
+            // A null entry closes the innermost open children list. At unit
+            // level it is padding and is kept, so dumps see every byte.
+            (mut info.entries).push(DwarfEntry {
+                offset: offset, unit: unit_index, parent: parent, depth: parents.len,
+                code: 0, tag: 0, has_children: false, is_null: true,
+                first_attribute: info.attributes.len, attribute_count: 0,
+            })
+            if parents.len > 0 { let _ = (mut parents).pop() else { return dwarf_info_invalid_tree } }
+            continue
+        }
+        if info.die_count >= limits.dies { return resource_limit }
+        let slot = dwarf_info_find_abbrev(info, table, code, mut body.fuel)?
+        let tag = info.tables[table].abbrevs[slot].tag
+        let children = info.tables[table].abbrevs[slot].children
+        let spec_count = info.tables[table].abbrevs[slot].attrs.len
+        let index = info.entries.len
+        let first_attribute = info.attributes.len
+        var k: int = 0
+        while k < spec_count {
+            if info.attributes.len >= limits.attributes { return resource_limit }
+            let spec = copy info.tables[table].abbrevs[slot].attrs[k]
+            let value = dwarf_form(data, mut body, header, spec)?
+            (mut info.attributes).push(DwarfAttribute {
+                entry: index, attribute: spec.attribute, value: value,
+            })
+            k += 1
+        }
+        (mut info.entries).push(DwarfEntry {
+            offset: offset, unit: unit_index, parent: parent, depth: parents.len,
+            code: code, tag: tag, has_children: children, is_null: false,
+            first_attribute: first_attribute, attribute_count: spec_count,
+        })
+        info.die_count += 1
+        if children { (mut parents).push(index) }
+    }
+    if parents.len > 0 { return dwarf_info_invalid_tree }
+    info.fuel_remaining = body.fuel
+    c.pos = header.end
+    c.fuel = body.fuel
+    (mut info.units).push(DwarfInfoUnit {
+        header: header, first_entry: first, end_entry: info.entries.len, abbrev_table: table,
+    })
+}
+
+/// Binary search for the non-null entry starting at an absolute offset.
+pub fn dwarf_info_entry_at(info: DwarfInfo, offset: int, mut fuel: int) -> int ! DwarfInfoError {
+    var low: int = 0
+    var high = info.entries.len
+    while low < high {
+        dwarf_info_charge(mut fuel, 1)?
+        let middle = low + (high - low) / 2
+        if info.entries[middle].offset < offset { low = middle + 1 } else { high = middle }
+    }
+    if low == info.entries.len || info.entries[low].offset != offset || info.entries[low].is_null {
+        return dwarf_info_invalid_reference
+    }
+    low
+}
+
+/// True for forms whose value names a DIE in this file's .debug_info.
+pub fn dwarf_info_is_reference(form: u64) -> bool {
+    form == 16 || form == 17 || form == 18 || form == 19 || form == 20 || form == 21
+}
+
+/// Resolve one reference value held by entry to the target entry's index.
+/// Unit-relative forms use the owning unit's start; ref_addr is section-relative.
+/// Signature and supplementary references are not resolved here.
+pub fn dwarf_info_target(
+    info: DwarfInfo,
+    entry: int,
+    value: DwarfValue,
+    mut fuel: int,
+) -> int ! DwarfInfoError {
+    if entry < 0 || entry >= info.entries.len { return dwarf_info_invalid_reference }
+    if !dwarf_info_is_reference(value.form) { return dwarf_info_not_reference }
+    var base: int = 0
+    var limit: int = 0
+    if value.form == 16 {
+        base = info.info.start
+        limit = info.info.length
+    } else {
+        let unit = info.entries[entry].unit
+        base = info.units[unit].header.start
+        limit = info.units[unit].header.end - base
+    }
+    if value.raw >= limit as u64 { return dwarf_info_invalid_reference }
+    dwarf_info_entry_at(info, base + value.raw as int, mut fuel)?
+}
+
+/// Index of attribute on entry, or -1 when the entry has none.
+pub fn dwarf_info_find(info: DwarfInfo, entry: int, attribute: u64) -> int {
+    let first = info.entries[entry].first_attribute
+    var i: int = 0
+    while i < info.entries[entry].attribute_count {
+        if info.attributes[first + i].attribute == attribute { return first + i }
+        i += 1
+    }
+    -1
+}
+
+/// Follow attribute from entry through at most max_hops references. Returns
+/// the first entry without it. Revisiting an entry is a named cycle; legal
+/// recursive types are walked by callers that bound their own traversal.
+pub fn dwarf_info_follow(
+    info: DwarfInfo,
+    entry: int,
+    attribute: u64,
+    max_hops: int,
+    mut fuel: int,
+) -> int ! DwarfInfoError {
+    if entry < 0 || entry >= info.entries.len { return dwarf_info_invalid_reference }
+    var visited: List[int] = [entry]
+    var current = entry
+    loop {
+        dwarf_info_charge(mut fuel, 1)?
+        let at = dwarf_info_find(info, current, attribute)
+        if at < 0 { return current }
+        if visited.len > max_hops { return resource_limit }
+        let next = dwarf_info_target(info, current, info.attributes[at].value, mut fuel)?
+        var i: int = 0
+        while i < visited.len {
+            dwarf_info_charge(mut fuel, 1)?
+            if visited[i] == next { return dwarf_info_reference_cycle }
+            i += 1
+        }
+        (mut visited).push(next)
+        current = next
+    }
+}
+
+/// Read every unit of a .debug_info span with its abbreviation tables, then
+/// check that every DIE reference lands on a non-null entry start. References
+/// are validated, never traversed, so legal reference cycles still read.
+pub fn dwarf_info_read(
+    data: List[byte],
+    info_span: ByteSpan,
+    abbrev_span: ByteSpan,
+    limits: DwarfInfoLimits,
+) -> DwarfInfo ! DwarfInfoError {
+    if limits.input_bytes < 0 || limits.dies < 0 || limits.attributes < 0 || limits.work < 0 {
+        return resource_limit
+    }
+    let info_end = dwarf_info_span_end(data, info_span)?
+    let _ = dwarf_info_span_end(data, abbrev_span)?
+    if info_span.length > limits.input_bytes || abbrev_span.length > limits.input_bytes {
+        return resource_limit
+    }
+    var info = DwarfInfo {
+        info: copy info_span,
+        abbrev: copy abbrev_span,
+        units: [],
+        entries: [],
+        attributes: [],
+        tables: [],
+        die_count: 0,
+        abbreviation_tables_read: 0,
+        fuel_remaining: limits.work,
+    }
+    var c = cursor(info_span.start, info_end, limits.work)
+    while c.pos < c.end {
+        c.fuel = info.fuel_remaining
+        dwarf_info_unit(data, mut info, mut c, limits)?
+        info.fuel_remaining = c.fuel
+    }
+    var i: int = 0
+    while i < info.attributes.len {
+        dwarf_info_charge(mut info.fuel_remaining, 1)?
+        if dwarf_info_is_reference(info.attributes[i].value.form) {
+            var fuel = info.fuel_remaining
+            let found = dwarf_info_target(info, info.attributes[i].entry, info.attributes[i].value, mut fuel)
+            info.fuel_remaining = fuel
+            let _ = found?
+        }
+        i += 1
+    }
+    info
+}
