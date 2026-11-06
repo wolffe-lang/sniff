@@ -16,7 +16,7 @@ pub fn dump_mode_known(mode: str) -> bool {
     mode == "--debug-line" || mode == "--debug-abbrev" || mode == "--debug-addr" ||
         mode == "--debug-str-offsets" || mode == "--debug-ranges" || mode == "--debug-loc" ||
         mode == "--debug-rnglists" || mode == "--debug-loclists" || mode == "--eh-frame" ||
-        mode == "--debug-frame" || mode == "--symbols"
+        mode == "--debug-frame" || mode == "--symbols" || mode == "--debug-info"
 }
 
 /// Render one mode for the file at path. The caller owns flushing and status.
@@ -29,6 +29,7 @@ pub fn dump_file(mut o: Out, path: str, data: List[byte], mode: str) -> () ! Dum
     line(mut o, "{path}:\tfile format {dump_format(s)}")
     line(mut o, "")
     let n = names_new()
+    if mode == "--debug-info" { dump_info(mut o, n, data, s)? }
     if mode == "--debug-line" { dump_line(mut o, data, s)? }
     if mode == "--debug-abbrev" { dump_abbrev(mut o, n, data, s)? }
     if mode == "--debug-addr" { dump_addr(mut o, data, s)? }

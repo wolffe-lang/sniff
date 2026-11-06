@@ -1,0 +1,606 @@
+// --debug-info: every unit and DIE of readers.dwarf_info_read, with each
+// attribute rendered from its form and class as the oracle prints it:
+// resolved indexes (str_offsets, addr), inline range and location lists,
+// decoded expressions, decl/call files through the unit's line table, and
+// DIE references named by the type printer or by linkage name.
+
+use readers
+
+struct InfoUnit {
+    low_pc: u64,
+    str_table: readers.DwarfIndexTable,
+    has_str_table: bool,
+    addr_base: u64,
+    has_addr_base: bool,
+    rnglists_base: u64,
+    has_rnglists_base: bool,
+    loclists_base: u64,
+    has_loclists_base: bool,
+    comp_dir: readers.ByteSpan,
+    has_comp_dir: bool,
+    line: int,
+}
+
+struct InfoCtx {
+    arch: int,
+    s: readers.DebugSections,
+    info: readers.DwarfInfo,
+    lines: List[readers.DwarfLineTable],
+    line_offsets: List[u64],
+}
+
+fn info_find(x: InfoCtx, entry: int, attribute: u64) -> int {
+    readers.dwarf_info_find(x.info, entry, attribute)
+}
+
+fn info_target(x: InfoCtx, entry: int, value: readers.DwarfValue) -> int {
+    var fuel: int = 1000
+    let t = readers.dwarf_info_target(x.info, entry, value, mut fuel) else { return -1 }
+    t
+}
+
+fn info_string_span(data: List[byte], x: InfoCtx, u: InfoUnit, value: readers.DwarfValue) -> readers.ByteSpan ! DumpError {
+    let form = value.form
+    if form == 8 { return copy value.bytes }
+    if form == 14 || form == 31 {
+        let section = if form == 14 { copy x.s.str.span } else { copy x.s.line_str.span }
+        if value.raw >= section.length as u64 { return invalid_index_target }
+        var c = readers.cursor(section.start + value.raw as int, section.start + section.length, 10000000)
+        return readers.cstring(data, mut c)?
+    }
+    if !u.has_str_table { return invalid_index_base }
+    var work = readers.cursor(0, 0, 100000)
+    let offset = readers.dwarf_index_raw(data, u.str_table, value.raw, mut work)?
+    let section = copy x.s.str.span
+    if offset >= section.length as u64 { return invalid_index_target }
+    var c = readers.cursor(section.start + offset as int, section.start + section.length, 10000000)
+    readers.cstring(data, mut c)?
+}
+
+fn info_is_string(form: u64) -> bool {
+    form == 8 || form == 14 || form == 31 || form == 26 || form >= 37 && form <= 40
+}
+
+fn info_address(data: List[byte], x: InfoCtx, u: InfoUnit, header: readers.DwarfUnit, index: u64) -> u64 ! DumpError {
+    if !u.has_addr_base { return invalid_index_base }
+    var work = readers.cursor(0, 0, 100000)
+    readers.dwarf_index_address(data, x.s.addr.span, u.addr_base, index, header.offset_size,
+        header.address_size, mut work)?
+}
+
+/// An attribute's address-class value: addr directly, addrx through .debug_addr.
+fn info_addr_value(data: List[byte], x: InfoCtx, u: InfoUnit, header: readers.DwarfUnit, value: readers.DwarfValue) -> u64 ! DumpError {
+    if value.form == 1 { return value.raw }
+    info_address(data, x, u, header, value.raw)?
+}
+
+fn info_name_span(data: List[byte], x: InfoCtx, u: InfoUnit, entry: int, attribute: u64) -> readers.ByteSpan {
+    let at = info_find(x, entry, attribute)
+    if at < 0 { return readers.ByteSpan { start: 0, length: -1 } }
+    if !info_is_string(x.info.attributes[at].value.form) { return readers.ByteSpan { start: 0, length: -1 } }
+    let span = info_string_span(data, x, u, x.info.attributes[at].value) else { return readers.ByteSpan { start: 0, length: -1 } }
+    span
+}
+
+fn info_text(data: List[byte], span: readers.ByteSpan) -> str {
+    var bytes: List[byte] = []
+    var i: int = 0
+    while i < span.length { (mut bytes).push(data[span.start + i]); i += 1 }
+    str_from_utf8(bytes) else { "" }
+}
+
+fn info_has_name(span: readers.ByteSpan) -> bool { span.length >= 0 }
+
+/// A DIE's plain name: DW_AT_name, else through specification/abstract_origin.
+fn info_short_name(data: List[byte], x: InfoCtx, u: InfoUnit, entry: int, guard: int) -> str {
+    if guard > 16 { return "" }
+    let name = info_name_span(data, x, u, entry, 3)
+    if info_has_name(name) { return info_text(data, name) }
+    var k: int = 0
+    let links: List[u64] = [71, 49]
+    while k < links.len {
+        let at = info_find(x, entry, links[k])
+        if at >= 0 {
+            let t = info_target(x, entry, x.info.attributes[at].value)
+            if t >= 0 { return info_short_name(data, x, u, t, guard + 1) }
+        }
+        k += 1
+    }
+    ""
+}
+
+/// The linkage name when present (also through specification and
+/// abstract_origin), else the plain name: how DIE references are labelled.
+fn info_linkage_name(data: List[byte], x: InfoCtx, u: InfoUnit, entry: int, guard: int) -> str {
+    if guard > 16 { return "" }
+    var k: int = 0
+    let direct: List[u64] = [110, 8199]
+    while k < direct.len {
+        let span = info_name_span(data, x, u, entry, direct[k])
+        if info_has_name(span) { return info_text(data, span) }
+        k += 1
+    }
+    let name = info_name_span(data, x, u, entry, 3)
+    if info_has_name(name) { return info_text(data, name) }
+    k = 0
+    let links: List[u64] = [71, 49]
+    while k < links.len {
+        let at = info_find(x, entry, links[k])
+        if at >= 0 {
+            let t = info_target(x, entry, x.info.attributes[at].value)
+            if t >= 0 { return info_linkage_name(data, x, u, t, guard + 1) }
+        }
+        k += 1
+    }
+    ""
+}
+
+fn info_type_of(x: InfoCtx, entry: int) -> int {
+    let at = info_find(x, entry, 73)
+    if at < 0 { return -1 }
+    info_target(x, entry, x.info.attributes[at].value)
+}
+
+fn info_is_scope(tag: u64) -> bool {
+    tag == 57 || tag == 19 || tag == 2 || tag == 23 || tag == 4
+}
+
+fn info_scope_prefix(data: List[byte], x: InfoCtx, u: InfoUnit, entry: int) -> str {
+    var prefix = ""
+    var p = x.info.entries[entry].parent
+    var guard: int = 0
+    while p >= 0 && guard < 64 {
+        guard += 1
+        let tag = x.info.entries[p].tag
+        if !info_is_scope(tag) { break }
+        let name = info_name_span(data, x, u, p, 3)
+        if info_has_name(name) {
+            prefix = info_text(data, name) + "::" + prefix
+        } else if tag == 57 {
+            prefix = "(anonymous namespace)::" + prefix
+        } else {
+            break
+        }
+        p = x.info.entries[p].parent
+    }
+    prefix
+}
+
+fn info_template_args(data: List[byte], x: InfoCtx, u: InfoUnit, entry: int, guard: int) -> str {
+    var args = ""
+    var count: int = 0
+    var i = entry + 1
+    while i < x.info.entries.len && x.info.entries[i].depth > x.info.entries[entry].depth {
+        if x.info.entries[i].parent == entry && !x.info.entries[i].is_null {
+            let tag = x.info.entries[i].tag
+            if tag == 47 {
+                let t = info_type_of(x, i)
+                let text = if t >= 0 { info_type_name(data, x, u, t, guard + 1) } else { "void" }
+                args = if count == 0 { text } else { args + ", " + text }
+                count += 1
+            }
+        }
+        i += 1
+    }
+    if count == 0 { return "" }
+    // Nested closers are kept apart, C++03 style: "<Weak<T> >".
+    if args.ends_with(">") { return "<" + args + " >" }
+    "<" + args + ">"
+}
+
+fn info_ends_with_pointer(text: str) -> bool {
+    let b = text.bytes()
+    if b.len == 0 { return false }
+    let last = b[b.len - 1] as int
+    last == 42 || last == 38
+}
+
+fn info_params(data: List[byte], x: InfoCtx, u: InfoUnit, entry: int, guard: int) -> str {
+    var params = ""
+    var count: int = 0
+    var i = entry + 1
+    while i < x.info.entries.len && x.info.entries[i].depth > x.info.entries[entry].depth {
+        if x.info.entries[i].parent == entry && !x.info.entries[i].is_null && x.info.entries[i].tag == 5 {
+            let t = info_type_of(x, i)
+            let text = if t >= 0 { info_type_name(data, x, u, t, guard + 1) } else { "void" }
+            params = if count == 0 { text } else { params + ", " + text }
+            count += 1
+        }
+        i += 1
+    }
+    params
+}
+
+fn info_dims(x: InfoCtx, entry: int) -> str {
+    var dims = ""
+    var i = entry + 1
+    while i < x.info.entries.len && x.info.entries[i].depth > x.info.entries[entry].depth {
+        if x.info.entries[i].parent == entry && !x.info.entries[i].is_null && x.info.entries[i].tag == 33 {
+            let count = info_find(x, i, 55)
+            let upper = info_find(x, i, 47)
+            if count >= 0 {
+                dims = dims + "[{x.info.attributes[count].value.raw}]"
+            } else if upper >= 0 {
+                let n = x.info.attributes[upper].value.raw + 1
+                dims = dims + "[{n}]"
+            } else {
+                dims = dims + "[]"
+            }
+        }
+        i += 1
+    }
+    dims
+}
+
+/// C declarator order: the text before and after a declared name. A pointer
+/// to an array or function parenthesises its star: T (*)[3], void (*)().
+fn info_type_parts(data: List[byte], x: InfoCtx, u: InfoUnit, entry: int, guard: int) -> (str, str) {
+    if guard > 32 { return ("", "") }
+    let tag = x.info.entries[entry].tag
+    if tag == 15 || tag == 16 || tag == 66 {
+        // Pointer names are never printed: the pointee is (Rust "*const ()" is "() *").
+        let star = if tag == 15 { "*" } else if tag == 16 { "&" } else { "&&" }
+        let inner = info_type_of(x, entry)
+        if inner < 0 { return ("void " + star, "") }
+        let (before, after) = info_type_parts(data, x, u, inner, guard + 1)
+        let itag = x.info.entries[inner].tag
+        if itag == 1 || itag == 21 {
+            let gap = if info_ends_with_pointer(before) || before.ends_with(" ") { "" } else { " " }
+            return (before + gap + "(" + star, ")" + after)
+        }
+        if info_ends_with_pointer(before) { return (before + star, after) }
+        return (before + " " + star, after)
+    }
+    if tag == 38 || tag == 53 || tag == 55 {
+        let q = if tag == 38 { "const" } else if tag == 53 { "volatile" } else { "restrict" }
+        let inner = info_type_of(x, entry)
+        if inner < 0 { return (q + " void", "") }
+        let itag = x.info.entries[inner].tag
+        // Observed in both oracles: a qualified pointer prints the qualifier alone.
+        if itag == 15 || itag == 16 || itag == 66 { return (q + " ", "") }
+        let (before, after) = info_type_parts(data, x, u, inner, guard + 1)
+        return (q + " " + before, after)
+    }
+    if tag == 1 {
+        let inner = info_type_of(x, entry)
+        if inner < 0 { return ("void", info_dims(x, entry)) }
+        let (before, after) = info_type_parts(data, x, u, inner, guard + 1)
+        return (before, info_dims(x, entry) + after)
+    }
+    if tag == 21 {
+        let r = info_type_of(x, entry)
+        var before = "void "
+        if r >= 0 {
+            let ret = info_type_name(data, x, u, r, guard + 1)
+            before = if info_ends_with_pointer(ret) { ret } else { ret + " " }
+        }
+        return (before, "(" + info_params(data, x, u, entry, guard) + ")")
+    }
+    let name = info_name_span(data, x, u, entry, 3)
+    if !info_has_name(name) { return ("", "") }
+    // Template arguments are appended only to a name that has none of its own.
+    let own = info_text(data, name)
+    var text = info_scope_prefix(data, x, u, entry) + own
+    if !own.contains("<") { text = text + info_template_args(data, x, u, entry, guard) }
+    (text, "")
+}
+
+fn info_type_name(data: List[byte], x: InfoCtx, u: InfoUnit, entry: int, guard: int) -> str {
+    let (before, after) = info_type_parts(data, x, u, entry, guard)
+    before + after
+}
+
+/// Attributes of the loclist class (DWARF 5 Table 7.5).
+fn info_is_location_attribute(attribute: u64) -> bool {
+    attribute == 2 || attribute == 25 || attribute == 42 || attribute == 56 || attribute == 64 ||
+        attribute == 70 || attribute == 72 || attribute == 74 || attribute == 77
+}
+
+fn info_decimal_attribute(attribute: u64) -> bool {
+    attribute == 59 || attribute == 57 || attribute == 89 || attribute == 87
+}
+
+fn info_enum_name(n: Names, attribute: u64, v: u64) -> str {
+    if attribute == 19 { return name_in(n.language, v) }
+    if attribute == 62 { return name_in(n.encoding, v) }
+    if attribute == 50 { return name_in(n.accessibility, v) }
+    if attribute == 32 { return name_in(n.inline, v) }
+    if attribute == 54 { return name_in(n.calling_convention, v) }
+    if attribute == 23 { return name_in(n.visibility, v) }
+    if attribute == 76 { return name_in(n.virtuality, v) }
+    if attribute == 66 { return name_in(n.identifier_case, v) }
+    if attribute == 94 { return name_in(n.decimal_sign, v) }
+    if attribute == 101 { return name_in(n.endianity, v) }
+    if attribute == 9 { return name_in(n.ordering, v) }
+    if attribute == 139 { return name_in(n.defaulted, v) }
+    ""
+}
+
+fn info_is_enum_attribute(attribute: u64) -> bool {
+    attribute == 19 || attribute == 62 || attribute == 50 || attribute == 32 || attribute == 54 ||
+        attribute == 23 || attribute == 76 || attribute == 66 || attribute == 94 ||
+        attribute == 101 || attribute == 9 || attribute == 139
+}
+
+fn info_file_path(data: List[byte], x: InfoCtx, u: InfoUnit, index: u64) -> str {
+    if u.line < 0 { return "" }
+    let t = x.lines[u.line].version
+    let first: u64 = if t >= 5 { 0 } else { 1 }
+    if index < first || index - first >= x.lines[u.line].files.len as u64 { return "" }
+    let f = (index - first) as int
+    let name = info_text(data, x.lines[u.line].files[f].name)
+    if name.starts_with("/") { return name }
+    let d = x.lines[u.line].files[f].directory_index
+    var dir = ""
+    if t >= 5 {
+        if d < x.lines[u.line].directories.len as u64 { dir = info_text(data, x.lines[u.line].directories[d as int].name) }
+    } else if d >= 1 && d - 1 < x.lines[u.line].directories.len as u64 {
+        dir = info_text(data, x.lines[u.line].directories[(d - 1) as int].name)
+    }
+    if dir.starts_with("/") { return dir + "/" + name }
+    let comp = if u.has_comp_dir { info_text(data, u.comp_dir) } else { "" }
+    if dir.len == 0 { return comp + "/" + name }
+    comp + "/" + dir + "/" + name
+}
+
+fn info_list_indent(depth: int) -> str {
+    " ".repeat(14 + depth * 2 + 3)
+}
+
+fn info_loclist(mut o: Out, n: Names, data: List[byte], x: InfoCtx, u: InfoUnit, header: readers.DwarfUnit,
+    at: int, depth: int) -> () ! DumpError {
+    let indent = info_list_indent(depth)
+    var e = readers.cursor(at, x.s.loclists.span.start + x.s.loclists.span.length, 100000000)
+    var c4 = readers.cursor(at, x.s.loc.span.start + x.s.loc.span.length, 100000000)
+    var base = u.low_pc
+    var first = true
+    loop {
+        var r = readers.DwarfListEntry { offset: 0, end: 0, kind: 0, value1: 0, value2: 0, has_expr: false,
+            expr: readers.ByteSpan { start: 0, length: 0 } }
+        if header.version >= 5 {
+            r = readers.dwarf_loclist_entry(data, mut e, header.address_size)?
+        } else {
+            r = readers.dwarf_loc4_entry(data, mut c4, header.address_size)?
+            if r.kind == readers.dwarf_list4_end { r.kind = 0 } else if r.kind == readers.dwarf_list4_base {
+                base = r.value2
+                continue
+            } else { r.kind = 4 }
+        }
+        if r.kind == 0 { break }
+        if r.kind == 1 { base = info_address(data, x, u, header, r.value1)?; continue }
+        if r.kind == 6 { base = r.value1; continue }
+        var low: u64 = 0
+        var high: u64 = 0
+        if r.kind == 4 { low = base + r.value1; high = base + r.value2 }
+        if r.kind == 7 { low = r.value1; high = r.value2 }
+        if r.kind == 8 { low = r.value1; high = r.value1 + r.value2 }
+        if r.kind == 2 { low = info_address(data, x, u, header, r.value1)?; high = info_address(data, x, u, header, r.value2)? }
+        if r.kind == 3 { low = info_address(data, x, u, header, r.value1)?; high = low + r.value2 }
+        line(mut o, "")
+        put(mut o, indent)
+        if r.kind == 5 {
+            put(mut o, "<default>: ")
+        } else {
+            put(mut o, "[{hex_address(low, header.address_size)}, {hex_address(high, header.address_size)}): ")
+        }
+        put_expr(mut o, n, data, r.expr, header, x.s.info.span, x.arch)
+        first = false
+    }
+    if first { put(mut o, "") }
+}
+
+fn info_rnglist(mut o: Out, data: List[byte], x: InfoCtx, u: InfoUnit, header: readers.DwarfUnit, at: int,
+    depth: int) -> () ! DumpError {
+    let indent = info_list_indent(depth)
+    var e = readers.cursor(at, x.s.rnglists.span.start + x.s.rnglists.span.length, 100000000)
+    var c4 = readers.cursor(at, x.s.ranges.span.start + x.s.ranges.span.length, 100000000)
+    var base = u.low_pc
+    loop {
+        var low: u64 = 0
+        var high: u64 = 0
+        if header.version >= 5 {
+            let r = readers.dwarf_rnglist_entry(data, mut e, header.address_size)?
+            if r.kind == 0 { break }
+            if r.kind == 1 { base = info_address(data, x, u, header, r.value1)?; continue }
+            if r.kind == 5 { base = r.value1; continue }
+            if r.kind == 4 { low = base + r.value1; high = base + r.value2 }
+            if r.kind == 6 { low = r.value1; high = r.value2 }
+            if r.kind == 7 { low = r.value1; high = r.value1 + r.value2 }
+            if r.kind == 2 { low = info_address(data, x, u, header, r.value1)?; high = info_address(data, x, u, header, r.value2)? }
+            if r.kind == 3 { low = info_address(data, x, u, header, r.value1)?; high = low + r.value2 }
+        } else {
+            let r = readers.dwarf_range4_entry(data, mut c4, header.address_size)?
+            if r.kind == readers.dwarf_list4_end { break }
+            if r.kind == readers.dwarf_list4_base { base = r.value2; continue }
+            low = base + r.value1
+            high = base + r.value2
+        }
+        line(mut o, "")
+        put(mut o, "{indent}[{hex_address(low, header.address_size)}, {hex_address(high, header.address_size)})")
+    }
+}
+
+fn info_value(mut o: Out, n: Names, data: List[byte], x: InfoCtx, u: InfoUnit, header: readers.DwarfUnit,
+    entry: int, a: int, depth: int) -> () ! DumpError {
+    let attribute = x.info.attributes[a].attribute
+    let value = copy x.info.attributes[a].value
+    let form = value.form
+    put(mut o, "(")
+    if attribute == 58 || attribute == 88 {
+        let path = info_file_path(data, x, u, value.raw)
+        put(mut o, "\"{path}\"")
+    } else if info_is_string(form) {
+        let span = info_string_span(data, x, u, value)?
+        put(mut o, "\"")
+        put_escaped(mut o, data, span)
+        put(mut o, "\"")
+    } else if form == 12 || form == 25 {
+        let flag = if value.raw != 0 { "true" } else { "false" }
+        put(mut o, flag)
+    } else if form == 1 || form >= 41 && form <= 44 || form == 27 {
+        let address = info_addr_value(data, x, u, header, value)?
+        put(mut o, hex_address(address, header.address_size))
+    } else if attribute == 18 && (form == 11 || form == 5 || form == 6 || form == 7 || form == 15) {
+        // A constant high_pc is an offset from the same DIE's low_pc.
+        let low = info_find(x, entry, 17)
+        var base: u64 = 0
+        if low >= 0 { base = info_addr_value(data, x, u, header, x.info.attributes[low].value)? }
+        put(mut o, hex_address(base + value.raw, header.address_size))
+    } else if readers.dwarf_info_is_reference(form) {
+        let t = info_target(x, entry, value)
+        let target_offset = if t >= 0 { (x.info.entries[t].offset - x.info.info.start) as u64 } else { value.raw }
+        // ref_addr is a section offset and prints at full width.
+        if form == 16 { put(mut o, "0x{hex16(target_offset)}") } else { put(mut o, "0x{hex8(target_offset)}") }
+        if t >= 0 && (attribute == 73 || attribute == 29) {
+            let text = info_type_name(data, x, u, t, 0)
+            put(mut o, " \"{text}\"")
+        } else if t >= 0 && (attribute == 49 || attribute == 71 || attribute == 127) {
+            let text = info_linkage_name(data, x, u, t, 0)
+            if text.len > 0 { put(mut o, " \"{text}\"") }
+        }
+    } else if form == 24 {
+        put_expr(mut o, n, data, value.bytes, header, x.s.info.span, x.arch)
+    } else if form == 23 && info_is_location_attribute(attribute) {
+        let section = if header.version >= 5 { copy x.s.loclists.span } else { copy x.s.loc.span }
+        put(mut o, "0x{hex8(value.raw)}: ")
+        info_loclist(mut o, n, data, x, u, header, section.start + value.raw as int, depth)?
+    } else if form == 34 {
+        if !u.has_loclists_base { return invalid_index_base }
+        var work = readers.cursor(0, 0, 100000)
+        let list = readers.dwarf_index_list(data, x.s.loclists.span, readers.dwarf_index_loclists, u.loclists_base,
+            value.raw, header.offset_size, header.address_size, mut work)?
+        let off = (list.start - x.s.loclists.span.start) as u64
+        put(mut o, "indexed (0x{value.raw:x}) loclist = 0x{hex8(off)}: ")
+        info_loclist(mut o, n, data, x, u, header, list.start, depth)?
+    } else if form == 23 && attribute == 85 {
+        let section = if header.version >= 5 { copy x.s.rnglists.span } else { copy x.s.ranges.span }
+        put(mut o, "0x{hex8(value.raw)}")
+        info_rnglist(mut o, data, x, u, header, section.start + value.raw as int, depth)?
+    } else if form == 35 {
+        if !u.has_rnglists_base { return invalid_index_base }
+        var work = readers.cursor(0, 0, 100000)
+        let list = readers.dwarf_index_list(data, x.s.rnglists.span, readers.dwarf_index_rnglists, u.rnglists_base,
+            value.raw, header.offset_size, header.address_size, mut work)?
+        let off = (list.start - x.s.rnglists.span.start) as u64
+        put(mut o, "indexed (0x{value.raw:x}) rangelist = 0x{hex8(off)}")
+        info_rnglist(mut o, data, x, u, header, list.start, depth)?
+    } else if form == 23 {
+        put(mut o, hex_offset(value.raw, header.offset_size))
+    } else if form == 3 || form == 4 || form == 9 || form == 10 {
+        put(mut o, "<0x{hex2(value.bytes.length as u64)}> ")
+        var i: int = 0
+        while i < value.bytes.length {
+            put(mut o, "{hex2(data[value.bytes.start + i] as int as u64)} ")
+            i += 1
+        }
+    } else if info_is_enum_attribute(attribute) {
+        let name = info_enum_name(n, attribute, value.raw)
+        if name.len > 0 { put(mut o, name) } else { put(mut o, "0x{value.raw:x}") }
+    } else if info_decimal_attribute(attribute) || form == 15 {
+        put(mut o, "{value.raw}")
+    } else if form == 13 || form == 33 {
+        put(mut o, "{value.signed_value}")
+    } else if form == 11 || form == 17 {
+        put(mut o, "0x{hex2(value.raw)}")
+    } else if form == 5 || form == 18 {
+        put(mut o, "0x{hex4(value.raw)}")
+    } else if form == 6 || form == 19 {
+        put(mut o, "0x{hex8(value.raw)}")
+    } else if form == 7 || form == 20 || form == 32 {
+        put(mut o, "0x{hex16(value.raw)}")
+    } else {
+        put(mut o, "0x{value.raw:x}")
+    }
+    line(mut o, ")")
+}
+
+fn info_unit_ctx(data: List[byte], mut x: InfoCtx, ui: int) -> InfoUnit ! DumpError {
+    let root = x.info.units[ui].first_entry
+    let header = copy x.info.units[ui].header
+    var u = InfoUnit {
+        low_pc: 0, str_table: readers.DwarfIndexTable { start: 0, end: 0, version: 0, offset_size: 0,
+            address_size: 0, entry_size: 0, base: 0, entries_end: 0, payload_start: 0, count: 0, kind: 0 },
+        has_str_table: false, addr_base: 0, has_addr_base: false, rnglists_base: 0,
+        has_rnglists_base: false, loclists_base: 0, has_loclists_base: false,
+        comp_dir: readers.ByteSpan { start: 0, length: 0 }, has_comp_dir: false, line: -1,
+    }
+    if root >= x.info.units[ui].end_entry || x.info.entries[root].is_null { return u }
+    let sb = info_find(x, root, 114)
+    if sb >= 0 {
+        var work = readers.cursor(0, 0, 10000000)
+        u.str_table = readers.dwarf_index_find(data, x.s.str_offsets.span, x.info.attributes[sb].value.raw,
+            readers.dwarf_index_str_offsets, header.offset_size, 0, mut work)?
+        u.has_str_table = true
+    }
+    let ab = info_find(x, root, 115)
+    if ab >= 0 { u.addr_base = x.info.attributes[ab].value.raw; u.has_addr_base = true }
+    let rb = info_find(x, root, 116)
+    if rb >= 0 { u.rnglists_base = x.info.attributes[rb].value.raw; u.has_rnglists_base = true }
+    let lb = info_find(x, root, 140)
+    if lb >= 0 { u.loclists_base = x.info.attributes[lb].value.raw; u.has_loclists_base = true }
+    let low = info_find(x, root, 17)
+    if low >= 0 { u.low_pc = info_addr_value(data, x, u, header, x.info.attributes[low].value)? }
+    let cd = info_name_span(data, x, u, root, 27)
+    if info_has_name(cd) { u.comp_dir = cd; u.has_comp_dir = true }
+    let sl = info_find(x, root, 16)
+    if sl >= 0 {
+        let offset = x.info.attributes[sl].value.raw
+        var k: int = 0
+        while k < x.line_offsets.len && x.line_offsets[k] != offset { k += 1 }
+        if k == x.line_offsets.len && offset < x.s.line.span.length as u64 {
+            let start = x.s.line.span.start + offset as int
+            let span = readers.ByteSpan { start: start, length: x.s.line.span.start + x.s.line.span.length - start }
+            let t = readers.dwarf_line_read(data, span, header.address_size, x.s.str.span, x.s.line_str.span,
+                100000000, 1048576)?
+            (mut x.lines).push(t)
+            (mut x.line_offsets).push(offset)
+        }
+        if k < x.line_offsets.len { u.line = k }
+    }
+    u
+}
+
+/// Render every unit and DIE of .debug_info with resolved attribute values.
+pub fn dump_info(mut o: Out, n: Names, data: List[byte], s: readers.DebugSections) -> () ! DumpError {
+    line(mut o, ".debug_info contents:")
+    let parsed = readers.dwarf_info_read(data, s.info.span, s.abbrev.span, readers.dwarf_info_limits())?
+    var x = InfoCtx { arch: arch_of(s), s: copy s, info: parsed, lines: [], line_offsets: [] }
+    var ui: int = 0
+    while ui < x.info.units.len {
+        let header = copy x.info.units[ui].header
+        let u = info_unit_ctx(data, mut x, ui)?
+        let at = (header.start - s.info.span.start) as u64
+        let next = (header.end - s.info.span.start) as u64
+        let length = (header.end - header.start - (if header.offset_size == 8 { 12 } else { 4 })) as u64
+        let format = if header.offset_size == 8 { "DWARF64" } else { "DWARF32" }
+        put(mut o, "0x{hex8(at)}: Compile Unit: length = {hex_offset(length, header.offset_size)}, format = {format}, ")
+        put(mut o, "version = 0x{hex4(header.version as u64)}, ")
+        if header.version >= 5 {
+            let kind = name_in(n.unit_type, header.kind as u64)
+            put(mut o, "unit_type = {kind}, ")
+        }
+        line(mut o, "abbr_offset = 0x{hex4(header.abbrev)}, addr_size = 0x{hex2(header.address_size as u64)} (next unit at 0x{hex8(next)})")
+        var e = x.info.units[ui].first_entry
+        while e < x.info.units[ui].end_entry {
+            line(mut o, "")
+            let depth = x.info.entries[e].depth
+            let at_entry = (x.info.entries[e].offset - s.info.span.start) as u64
+            let pad = " ".repeat(1 + depth * 2)
+            if x.info.entries[e].is_null {
+                line(mut o, "0x{hex8(at_entry)}:{pad}NULL")
+            } else {
+                line(mut o, "0x{hex8(at_entry)}:{pad}{tag_name(n, x.info.entries[e].tag)}")
+                let attr_pad = " ".repeat(14 + depth * 2)
+                var a = x.info.entries[e].first_attribute
+                let end = a + x.info.entries[e].attribute_count
+                while a < end {
+                    put(mut o, "{attr_pad}{attribute_name(n, x.info.attributes[a].attribute)}\t")
+                    info_value(mut o, n, data, x, u, header, e, a, depth)?
+                    a += 1
+                }
+            }
+            e += 1
+        }
+        ui += 1
+    }
+}
