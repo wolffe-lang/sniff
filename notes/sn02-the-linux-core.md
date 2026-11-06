@@ -142,6 +142,12 @@ the red zone and the return-value registers.
   per-unit DWARF loading becomes a follow-up lane.
 - R-sn02-6 (recommend, implemented): terminal and batch outputs both match gdb's
   text, but `/usr/lib/` library paths are shown as `/lib/`.
+- R-sn02-8 (recommend, implemented): the two `info registers` rows name the 26
+  general registers. gdb's bare `info registers` adds `k0`-`k7` on AVX-512
+  hosts, which differ by runner (trunk run 42183331207); sniff prints the
+  general registers only. The harness already fixes the program's environment
+  (`LINES`, `COLUMNS`, `PWD` as gdb adds them), so stack-derived registers are
+  stable across parent environments; `session.py oracle` now says what drifted.
 - R-sn02-7 (recommend, implemented): `maint frames` is a sniff command outside
   gdb's language, used only as evidence of the unwind basis.
 
