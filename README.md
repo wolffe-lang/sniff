@@ -81,6 +81,15 @@ shim cannot stand in for a missing wolf frame. Lupin traces describe state
 **after** a statement; the scalar join explicitly compares that state with the
 debugger stopped **before** the next statement.
 
+Hosted CI's macOS job runs the oracle-free rows only: units, the reader rows
+natively and checked, the sniff build, fixture builds, hostile inputs and lupin
+values. No hosted runner image carries the pinned Apple LLVM 21.0.0 `llvm-nm` and
+`llvm-dwarfdump` binaries (by SHA-256), so there the symbol pin, the dump
+matrix, the census, the live transcript and the steps that consume it print
+`SKIP <step> reason=...` by name. They run, pins and refusals unchanged, in the
+Mac's local gauntlet record. The skip keys on `SNIFF_HOSTED_MACOS_CI=1`, which
+only that job sets; Linux rows never skip.
+
 Unlabelled PRs run the cheap `tier local` unit/replay gate. `ci` requests
 Linux `tier pr`; `full-matrix` requests Linux plus macOS `tier full`. Nightly,
 relevant trunk pushes and a manual dispatch without a job filter run the full

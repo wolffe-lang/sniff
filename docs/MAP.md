@@ -118,6 +118,8 @@ Stated boundaries that remain:
 - Vendor names appear only when a recorded fixture or a synthetic probe shows them.
 - Compact unwind is refused by name (`--unwind-info`).
 - Macro and name indexes have no mode yet.
+- On hosted CI's macOS job the oracle rows skip by name. No hosted image
+  carries the pinned oracle binaries, so those rows are local-record only (README).
 - The dump reads one file. Pairing an image with its dSYM by UUID is a reader
   capability (`macho_match_uuid`) that `dump` does not use.
 
