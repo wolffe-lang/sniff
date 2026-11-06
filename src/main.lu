@@ -8,6 +8,7 @@ fn usage() {
     eprint("modes: --debug-info --debug-abbrev --debug-line --debug-addr --debug-str-offsets")
     eprint("       --debug-ranges --debug-rnglists --debug-loc --debug-loclists")
     eprint("       --eh-frame --debug-frame --symbols")
+    eprint("       --unwind-info (refused: compact unwind is not decoded)")
 }
 
 fn base_name(path: str) -> str {
