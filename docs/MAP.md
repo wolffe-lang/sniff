@@ -100,13 +100,33 @@ rows before implementing those paths. Optional macro/name indexes, split and
 supplementary files, unsupported compression and other architectures get
 named refusals until separately covered.
 
+### S1 as implemented
+
+`src/readers/` holds bounded bytes, ELF64, Mach-O 64 with dSYM resolution,
+DWARF units, abbreviations, forms, DIE trees, indexed tables, line programs,
+DWARF 4 and 5 range and location lists, expressions (decoded, never
+evaluated) and CFI. `.debug_frame` and `.eh_frame` are read as separate
+formats. `src/dump/` renders the twelve modes, and `src/main.lu` is the
+`sniff dump MODE FILE` command. `tools/dump-matrix.py` compares every mode
+with its pinned oracle on every built fixture, full bytes and exit status.
+`tools/test-hostile.py` runs truncated and corrupted fixtures through every
+mode. `tests/evidence/linux/reader-caps.json` records the measured counter
+maxima behind each cap.
+
+Stated boundaries that remain:
+- The DWARF 5 file-zero ambiguity stays as published; no DWARF 6 rewrite.
+- Vendor names appear only when a recorded fixture or a synthetic probe shows them.
+- Compact unwind is refused by name (`--unwind-info`).
+- Macro and name indexes have no mode yet.
+- The dump reads one file. Pairing an image with its dSYM by UUID is a reader
+  capability (`macho_match_uuid`) that `dump` does not use.
+
 The twelfth mode, `--symbols`, mirrors `readelf --symbols --wide` on ELF and
 SDK `llvm-nm --format=darwin --no-sort --debug-syms --no-demangle --no-dyldinfo`
 on Mach-O. Both run only as binaries. `sniff-oracle.toml` fixes their argument
 vectors, versions and SHA-256 digests. The gate checks the selected binary's
 `--version` and bytes before fixture work; a different PATH binary is refused
-by name, not silently replaced. These are output contracts, not implemented
-reader coverage.
+by name, not silently replaced.
 
 ## S2 command/fixture prediction
 
