@@ -1518,6 +1518,16 @@
    "script": [
     "delete 1"
    ]
+  },
+  {
+   "name": "wolf-break-main-two-locations",
+   "prog": "wolf/scalars/wolf-debug/prog",
+   "script": [
+    "break main",
+    "info breakpoints",
+    "run",
+    "info breakpoints"
+   ]
   }
  ]
 }

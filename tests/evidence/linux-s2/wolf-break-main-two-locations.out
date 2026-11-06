@@ -1,0 +1,12 @@
+Breakpoint 1 at 0xa5d0: main. (2 locations)
+Num     Type           Disp Enb Address            What
+1       breakpoint     keep y   <MULTIPLE>         
+1.1                         y   0x000000000000a5d0 in main at /work/fixtures/wolf/scalars/main.lu:7
+1.2                         y   0x000000000000a638 <main+4>
+
+Breakpoint 1.2, 0x000055555555e638 in main ()
+Num     Type           Disp Enb Address            What
+1       breakpoint     keep y   <MULTIPLE>         
+	breakpoint already hit 1 time
+1.1                         y   0x000055555555e5d0 in main at /work/fixtures/wolf/scalars/main.lu:7
+1.2                         y   0x000055555555e638 <main+4>
