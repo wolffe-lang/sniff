@@ -112,3 +112,10 @@ pub fn arch_ret_slot() -> int { 0 }
 pub fn arch_word_is_call(word: u64) -> bool {
     (word & 4227858432) == 2483027968 || (word & 4294966303) == 3594452992
 }
+
+/// Count of DWARF columns the CFI interpreter keeps rules for (x86-64: rax..r15 and the return address).
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn arch_cfi_cols() -> int { 17 }
+/// x0-x30 and sp (the pc is no CFI column; the return address is lr, column 30).
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn arch_cfi_cols() -> int { 32 }

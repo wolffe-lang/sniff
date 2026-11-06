@@ -86,6 +86,9 @@ const st_exit: int = 8
 const st_signal: int = 9
 #[cfg(target = "aarch64-apple-darwin")]
 const st_msg2: int = 10
+/// The session signal a faulting thread was just resumed with: its Unix signal comes back as one more exception, passed on silently.
+#[cfg(target = "aarch64-apple-darwin")]
+const st_autopass: int = 11
 
 /// Bytes of the message buffers (an exception request is 88 bytes plus a trailer).
 #[cfg(target = "aarch64-apple-darwin")]
@@ -304,6 +307,15 @@ pub fn target_wait(t: Target) -> int {
                     continue
                 }
                 let r = decode_exception(t, msg)
+                let sg = (r >> 8) & 255
+                if (r >> 16) == kind_signal && (st[st_autopass] == sg as u64 || sg == 9) {
+                    // the signal a fault turned into, or one nobody can intercept: let it through
+                    st[st_autopass] = 0
+                    let _ = ptrace(13, t.pid as i32, st[st_thread], session_to_darwin(sg) as i32)
+                    st[st_pending] = 0
+                    let _ = reply_to(msg, 0)
+                    continue
+                }
                 return r
             }
             let w = waitpid(t.pid as i32, t.status, 1)
@@ -372,7 +384,10 @@ fn resume(t: Target, sig: int, step: bool) -> int {
             // the signal the program was about to receive: pass it (darwin's number) or drop it
             let _ = ptrace(13, t.pid as i32, st[st_thread], session_to_darwin(sig) as i32)
         } else if kind == kind_fault {
-            if sig != 0 { ret = 5 }
+            if sig != 0 {
+                ret = 5
+                st[st_autopass] = sig as u64
+            }
         }
         st[st_pending] = 0
         reply_to(st[st_msg], ret)
@@ -610,6 +625,24 @@ pub fn target_xmm0(t: Target) -> List[byte] {
             (mut out).push(buf[i] as int as byte)
             i += 1
         }
+        out
+    }
+}
+
+/// The floating-point status and control registers (fpsr, fpcr) from ARM_NEON_STATE64, or none.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_fp_status(t: Target) -> List[u64] {
+    unsafe {
+        // # Safety: buf is calloc'd 544 bytes; the thread port is the stopped thread's.
+        var out: List[u64] = []
+        let st = t.word as *u64
+        let buf = c.calloc(1, 544) as *u32
+        let cnt = c.calloc(1, 8) as *u32
+        cnt[0] = 136
+        let kr = thread_get_state(st[st_thread] as u32, 17, buf as u64, cnt as u64)
+        if kr != 0 { return out }
+        (mut out).push(buf[128] as u64)
+        (mut out).push(buf[129] as u64)
         out
     }
 }

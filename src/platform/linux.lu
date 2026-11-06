@@ -345,3 +345,11 @@ pub fn target_wait_pid(t: Target, pid: int) -> int {
 pub fn target_with_pid(t: Target, pid: int) -> Target {
     Target { pid: pid, memfd: -1, status: t.status, regs: t.regs, word: t.word }
 }
+
+/// Why target_spawn gave no child; Linux needs no refusal text.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_refusal(t: Target) -> str { "" }
+
+/// fpsr and fpcr exist as registers on arm64 only.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_fp_status(t: Target) -> List[u64] { [] }
