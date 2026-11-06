@@ -1,9 +1,9 @@
-Breakpoint 1 at 0x11b4: file /work/fixtures/session/c/forks/main.c, line 7.
+Breakpoint 1 at 0x11d4: file /work/fixtures/session/c/forks/main.c, line 7.
 [Detaching after fork from child process <PID>]
 
 Breakpoint 1, child_work (n=1) at /work/fixtures/session/c/forks/main.c:7
 7	    int tripled = n * 3;
 #0  child_work (n=1) at /work/fixtures/session/c/forks/main.c:7
-#1  0x0000555555555226 in main () at /work/fixtures/session/c/forks/main.c:16
+#1  0x0000555555555257 in main () at /work/fixtures/session/c/forks/main.c:16
 n = 1
 [Inferior 1 (process <PID>) exited normally]
