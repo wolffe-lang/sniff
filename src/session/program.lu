@@ -320,10 +320,16 @@ pub fn prog_load(path: str) -> Prog {
                     var prev_file: u64 = 0
                     var seq_open = false
                     var has_nz = false
+                    var fmap: List[int] = []
                     while r < table.rows.len {
                         let row = copy table.rows[r]
-                        let fname = line_file_name(data, table, p.units[ui], row.file as int)
-                        let fi = intern_file(mut p.files, fname)
+                        // each file of the table is named and interned once
+                        while fmap.len <= row.file as int { (mut fmap).push(0 - 1) }
+                        if fmap[row.file as int] < 0 {
+                            let fname = line_file_name(data, table, p.units[ui], row.file as int)
+                            fmap[row.file as int] = intern_file(mut p.files, fname)
+                        }
+                        let fi = fmap[row.file as int]
                         // gdb records a row of the same line and file as the one before it
                         // only when that line has never carried a discriminator
                         var drop = false
