@@ -10,23 +10,12 @@ export XDG_CACHE_HOME="$HOME/cache"
 export XDG_CONFIG_HOME="$HOME/config"
 export TMPDIR="$root/target/tmp"
 export LC_ALL=C TZ=UTC TERM=dumb
-step() {
-  local name=$1 start=$SECONDS rc=0
-  shift
-  printf 'START %s\n' "$name"
-  "$@" > "target/gate/$name.log" 2>&1 || rc=$?
-  if [ "$rc" -eq 0 ]; then
-    sed 's/^/  /' "target/gate/$name.log"
-  else
-    awk '/^FAIL / {print; next} {print "  " $0}' "target/gate/$name.log"
-  fi
-  printf 'END %s exit=%s secs=%s\n' "$name" "$rc" "$((SECONDS-start))"
-  return "$rc"
-}
+source "$root/tools/gate-steps.sh"
 step pin-metadata python3 -I tools/check-pins.py
 step harness-unit python3 -I tests/test_harness.py
 step census-unit python3 -I tests/test_census.py
 step symbol-oracle-unit python3 -I tests/test_symbol_oracle.py
+step gate-switch-unit python3 -I tests/test_gate_switch.py
 step reader-runner-unit python3 -I tests/test_reader_runner.py
 step tier-planner python3 -I ci/tiers-test.py
 for platform in macos linux; do
@@ -38,7 +27,7 @@ for platform in macos linux; do
 done
 [ "$mode" != unit ] || exit 0
 case "$mode" in macos|linux) ;; *) echo 'FAIL gate-mode'; exit 2 ;; esac
-step symbol-oracle-pin python3 -I tools/check-symbol-oracle.py --platform "$mode"
+oracle_step symbol-oracle-pin python3 -I tools/check-symbol-oracle.py --platform "$mode"
 stage=${SNIFF_TOOLCHAIN_DIR:-$root/.wolf-bin}
 fetch=(python3 -I tools/fetch-toolchain.py --out "$stage")
 if [ -n "${SNIFF_ARCHIVES:-}" ]; then fetch+=(--archive-dir "$SNIFF_ARCHIVES"); fi
@@ -56,7 +45,7 @@ else
   seeds=(--seed target/fixtures/c/threads/clang-O2/prog.dSYM/Contents/Resources/DWARF/prog --seed target/fixtures/c/threads/clang-O2/prog)
 fi
 step hostile-inputs python3 -I tools/test-hostile.py --sniff "$root/target/sniff" "${seeds[@]}" --out "$root/target/hostile"
-step dump-matrix python3 -I tools/dump-matrix.py --sniff "$root/target/sniff" --platform "$mode" --fixtures "$root/target/fixtures"
+oracle_step dump-matrix python3 -I tools/dump-matrix.py --sniff "$root/target/sniff" --platform "$mode" --fixtures "$root/target/fixtures"
 if [ "$mode" = macos ]; then
   dwarfdump=$(xcrun --find llvm-dwarfdump)
   debugger=$(xcrun --find lldb)
@@ -65,7 +54,7 @@ if [ "$mode" = macos ]; then
   cp target/fixtures/wolf/scalars/wolf-debug/prog target/session/prog
   rm -rf target/session/prog.dSYM
   cp -R target/fixtures/wolf/scalars/wolf-debug/prog.dSYM target/session/prog.dSYM
-  step target-sign codesign --force --sign - --entitlements tests/get-task-allow.plist target/session/prog
+  oracle_dependent_step target-sign codesign --force --sign - --entitlements tests/get-task-allow.plist target/session/prog
   binary="$root/target/session/prog"
 else
   dwarfdump=$(command -v llvm-dwarfdump-18)
@@ -73,8 +62,8 @@ else
   oracle=gdb
   binary="$root/target/fixtures/wolf/scalars/wolf-debug/prog"
 fi
-step dwarf-census python3 -I tools/census.py capture --builds target/fixtures/builds.json --dwarfdump "$dwarfdump" --out target/census
-step live-transcript python3 -I tools/transcript.py capture --spec tests/scalars-session.json --oracle "$oracle" --debugger "$debugger" --binary "$binary" --out target/session --root "$root"
-step live-mutations python3 -I tools/transcript.py selftest target/session/expected.json target/session/record.json
+oracle_step dwarf-census python3 -I tools/census.py capture --builds target/fixtures/builds.json --dwarfdump "$dwarfdump" --out target/census
+oracle_step live-transcript python3 -I tools/transcript.py capture --spec tests/scalars-session.json --oracle "$oracle" --debugger "$debugger" --binary "$binary" --out target/session --root "$root"
+oracle_dependent_step live-mutations python3 -I tools/transcript.py selftest target/session/expected.json target/session/record.json
 step lupin-values python3 -I tools/lupin-values.py --lupin "$lupin" --out target/values
-step true-value-join python3 -I tools/value-join.py --session target/session/record.json --values target/values/values.json
+oracle_dependent_step true-value-join python3 -I tools/value-join.py --session target/session/record.json --values target/values/values.json
