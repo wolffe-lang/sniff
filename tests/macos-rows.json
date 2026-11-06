@@ -782,6 +782,18 @@
    ]
   },
   {
+   "name": "tty-clang-finish-continue",
+   "kind": "linux"
+  },
+  {
+   "name": "tty-clang-exit-and-errors",
+   "kind": "linux"
+  },
+  {
+   "name": "tty-wolf-recursion",
+   "kind": "linux"
+  },
+  {
    "name": "hostile-unentitled",
    "kind": "expect",
    "prog": "c/exits/clang-O0/prog",
