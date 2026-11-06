@@ -1,0 +1,396 @@
+// Call frame information. Two formats, read separately:
+//  - .debug_frame: DWARF 5 sections 6.4 and 7.24 (CIE id all ones, CIE
+//    pointers are section offsets, versions 1, 3 and 4).
+//  - .eh_frame: LSB Core 5.0 "Exception Frames" and the AMD64 psABI EH
+//    tables (CIE id 0, CIE pointers count back from their own field,
+//    augmentation-driven pointer encodings). Never treated as .debug_frame.
+// Instructions are decoded, not executed; the row machine lives with its renderer.
+
+/// Byte failures, malformed entries and named unsupported encodings.
+pub error DwarfFrameError = {
+    invalid_bounds,
+    truncated,
+    unsupported_width,
+    unterminated_leb128,
+    leb128_overflow,
+    unterminated_string,
+    offset_overflow,
+    resource_limit,
+    reserved_dwarf_length,
+    dwarf_frame_invalid_cie,
+    dwarf_frame_invalid_cie_pointer,
+    dwarf_frame_unsupported_version,
+    dwarf_frame_unsupported_augmentation,
+    dwarf_frame_unsupported_encoding,
+    dwarf_frame_unknown_instruction,
+    dwarf_frame_unsupported_address_size,
+}
+
+pub const frame_cie: int = 1
+pub const frame_fde: int = 2
+pub const frame_terminator: int = 3
+
+/// A CIE: absolute offsets, raw header fields and decoded augmentation.
+pub struct FrameCie {
+    pub offset: int,
+    pub end: int,
+    pub length: u64,
+    pub offset_size: int,
+    pub id: u64,
+    pub version: int,
+    pub augmentation: ByteSpan,
+    pub address_size: int,
+    pub segment_size: int,
+    pub code_align: u64,
+    pub data_align: i64,
+    pub return_register: u64,
+    pub has_aug_data: bool,
+    pub aug_data: ByteSpan,
+    pub fde_encoding: int,
+    pub lsda_encoding: int,
+    pub has_personality: bool,
+    pub personality_encoding: int,
+    pub personality: u64,
+    pub signal_frame: bool,
+    pub instructions: ByteSpan,
+}
+
+/// An FDE: begin is the decoded initial location, range its byte count.
+pub struct FrameFde {
+    pub offset: int,
+    pub end: int,
+    pub length: u64,
+    pub offset_size: int,
+    pub cie_pointer: u64,
+    pub cie_offset: int,
+    pub begin: u64,
+    pub range: u64,
+    pub has_lsda: bool,
+    pub lsda: u64,
+    pub instructions: ByteSpan,
+}
+
+/// One entry in section order; only the field kind names is meaningful.
+pub struct FrameEntry {
+    pub kind: int,
+    pub offset: int,
+    pub cie: FrameCie,
+    pub fde: FrameFde,
+}
+
+/// The section being read and where it is loaded (for pc-relative pointers).
+pub struct FrameSection {
+    pub span: ByteSpan,
+    pub address: u64,
+    pub eh: bool,
+    pub address_size: int,
+}
+
+fn frame_empty_cie(at: int) -> FrameCie {
+    FrameCie {
+        offset: at, end: at, length: 0, offset_size: 4, id: 0, version: 0,
+        augmentation: ByteSpan { start: at, length: 0 }, address_size: 8, segment_size: 0,
+        code_align: 0, data_align: 0, return_register: 0, has_aug_data: false,
+        aug_data: ByteSpan { start: at, length: 0 }, fde_encoding: 0, lsda_encoding: 255,
+        has_personality: false, personality_encoding: 255, personality: 0,
+        signal_frame: false, instructions: ByteSpan { start: at, length: 0 },
+    }
+}
+
+fn frame_empty_fde(at: int) -> FrameFde {
+    FrameFde {
+        offset: at, end: at, length: 0, offset_size: 4, cie_pointer: 0, cie_offset: -1,
+        begin: 0, range: 0, has_lsda: false, lsda: 0,
+        instructions: ByteSpan { start: at, length: 0 },
+    }
+}
+
+/// The address of absolute buffer index at within the section.
+fn frame_address_of(s: FrameSection, at: int) -> u64 {
+    s.address + (at - s.span.start) as u64
+}
+
+fn frame_sign_extend(raw: u64, width: int) -> u64 {
+    if width >= 8 { return raw }
+    let bits = (width * 8) as u64
+    let sign: u64 = (1 as u64) << (bits - 1)
+    if raw & sign == 0 { return raw }
+    raw | !(((1 as u64) << bits) - 1)
+}
+
+/// Decode one LSB "DW_EH_PE" encoded pointer. Only the absolute and
+/// pc-relative applications are specified with operands we can compute
+/// without a loaded image; others are refused by name. The indirect bit
+/// (0x80) is kept as the slot address, never dereferenced.
+pub fn frame_eh_pointer(
+    data: List[byte],
+    mut c: Cursor,
+    s: FrameSection,
+    encoding: int,
+    apply: bool,
+) -> u64 ! DwarfFrameError {
+    let field = frame_address_of(s, c.pos)
+    let format = encoding & 15
+    var value: u64 = 0
+    if format == 0 {
+        value = uint_le(data, mut c, s.address_size)?
+    } else if format == 1 {
+        value = uleb64(data, mut c)?
+    } else if format == 2 {
+        value = uint_le(data, mut c, 2)?
+    } else if format == 3 {
+        value = uint_le(data, mut c, 4)?
+    } else if format == 4 {
+        value = uint_le(data, mut c, 8)?
+    } else if format == 9 {
+        value = sleb64(data, mut c)? as wrapping[u64] as u64
+    } else if format == 10 {
+        value = frame_sign_extend(uint_le(data, mut c, 2)?, 2)
+    } else if format == 11 {
+        value = frame_sign_extend(uint_le(data, mut c, 4)?, 4)
+    } else if format == 12 {
+        value = uint_le(data, mut c, 8)?
+    } else {
+        return dwarf_frame_unsupported_encoding
+    }
+    if !apply { return value }
+    let application = encoding & 112
+    if application == 0 { return value }
+    if application == 16 { return ((value as wrapping[u64]) + (field as wrapping[u64])) as u64 }
+    dwarf_frame_unsupported_encoding
+}
+
+fn frame_length(data: List[byte], mut c: Cursor) -> (u64, int) ! DwarfFrameError {
+    let initial = uint_le(data, mut c, 4)?
+    if initial == 4294967295 { return (uint_le(data, mut c, 8)?, 8) }
+    if initial >= 4294967280 { return reserved_dwarf_length }
+    (initial, 4)
+}
+
+/// Parse the CIE at absolute index at.
+pub fn frame_read_cie(data: List[byte], s: FrameSection, at: int) -> FrameCie ! DwarfFrameError {
+    let section_end = s.span.start + s.span.length
+    if at < s.span.start || at >= section_end { return dwarf_frame_invalid_cie_pointer }
+    var c = cursor(at, section_end, 10000000)
+    let (length, width) = frame_length(data, mut c)?
+    if length > (c.end - c.pos) as u64 { return truncated }
+    var cie = frame_empty_cie(at)
+    cie.length = length
+    cie.offset_size = width
+    cie.end = c.pos + length as int
+    c.end = cie.end
+    cie.id = uint_le(data, mut c, width)?
+    let all_ones: u64 = if width == 8 { 18446744073709551615 } else { 4294967295 }
+    if s.eh && cie.id != 0 || !s.eh && cie.id != all_ones { return dwarf_frame_invalid_cie }
+    cie.version = uint_le(data, mut c, 1)? as int
+    if s.eh && cie.version != 1 && cie.version != 3 { return dwarf_frame_unsupported_version }
+    if !s.eh && cie.version != 1 && cie.version != 3 && cie.version != 4 {
+        return dwarf_frame_unsupported_version
+    }
+    cie.augmentation = cstring(data, mut c)?
+    cie.address_size = s.address_size
+    if !s.eh && cie.version == 4 {
+        cie.address_size = uint_le(data, mut c, 1)? as int
+        cie.segment_size = uint_le(data, mut c, 1)? as int
+        if cie.address_size != 4 && cie.address_size != 8 { return dwarf_frame_unsupported_address_size }
+        if cie.segment_size != 0 { return dwarf_frame_unsupported_address_size }
+    }
+    let aug = copy cie.augmentation
+    // A debug_frame CIE with a non-empty augmentation has no format we know.
+    if !s.eh && aug.length > 0 { return dwarf_frame_unsupported_augmentation }
+    if s.eh && aug.length > 0 && data[aug.start] as int != 122 {
+        return dwarf_frame_unsupported_augmentation
+    }
+    cie.code_align = uleb64(data, mut c)?
+    cie.data_align = sleb64(data, mut c)?
+    if cie.version == 1 {
+        cie.return_register = uint_le(data, mut c, 1)?
+    } else {
+        cie.return_register = uleb64(data, mut c)?
+    }
+    if s.eh && aug.length > 0 {
+        let aug_length = uleb64(data, mut c)?
+        if aug_length > (c.end - c.pos) as u64 { return truncated }
+        cie.has_aug_data = true
+        cie.aug_data = ByteSpan { start: c.pos, length: aug_length as int }
+        var a = cursor(c.pos, c.pos + aug_length as int, c.fuel)
+        var i: int = 1
+        while i < aug.length {
+            let letter = data[aug.start + i] as int
+            if letter == 76 {
+                cie.lsda_encoding = uint_le(data, mut a, 1)? as int
+            } else if letter == 82 {
+                cie.fde_encoding = uint_le(data, mut a, 1)? as int
+            } else if letter == 80 {
+                cie.personality_encoding = uint_le(data, mut a, 1)? as int
+                cie.has_personality = true
+                cie.personality = frame_eh_pointer(data, mut a, s, cie.personality_encoding, true)?
+            } else if letter == 83 {
+                cie.signal_frame = true
+            } else {
+                return dwarf_frame_unsupported_augmentation
+            }
+            i += 1
+        }
+        c.pos += aug_length as int
+    }
+    cie.instructions = ByteSpan { start: c.pos, length: cie.end - c.pos }
+    cie
+}
+
+/// Read the entry at the cursor and advance past it. cie_cache holds CIEs
+/// already read, so each FDE's CIE is parsed once.
+pub fn frame_next(
+    data: List[byte],
+    mut c: Cursor,
+    s: FrameSection,
+    mut cie_cache: List[FrameCie],
+) -> FrameEntry ! DwarfFrameError {
+    let at = c.pos
+    var entry = FrameEntry { kind: frame_cie, offset: at, cie: frame_empty_cie(at), fde: frame_empty_fde(at) }
+    var h = cursor(at, c.end, c.fuel)
+    let (length, width) = frame_length(data, mut h)?
+    if length == 0 && s.eh {
+        entry.kind = frame_terminator
+        c.pos = h.pos
+        return entry
+    }
+    if length > (h.end - h.pos) as u64 { return truncated }
+    let end = h.pos + length as int
+    let id_at = h.pos
+    var id_c = cursor(h.pos, end, c.fuel)
+    let id = uint_le(data, mut id_c, width)?
+    let all_ones: u64 = if width == 8 { 18446744073709551615 } else { 4294967295 }
+    let is_cie = if s.eh { id == 0 } else { id == all_ones }
+    if is_cie {
+        entry.cie = frame_read_cie(data, s, at)?
+        (mut cie_cache).push(copy entry.cie)
+        c.pos = end
+        return entry
+    }
+    entry.kind = frame_fde
+    var fde = frame_empty_fde(at)
+    fde.length = length
+    fde.offset_size = width
+    fde.end = end
+    fde.cie_pointer = id
+    var cie_at: int = 0
+    if s.eh {
+        // The pointer counts back from its own field to the CIE.
+        if id > (id_at - s.span.start) as u64 { return dwarf_frame_invalid_cie_pointer }
+        cie_at = id_at - id as int
+    } else {
+        if id >= s.span.length as u64 { return dwarf_frame_invalid_cie_pointer }
+        cie_at = s.span.start + id as int
+    }
+    fde.cie_offset = cie_at
+    var k: int = -1
+    var i: int = 0
+    while i < cie_cache.len {
+        if cie_cache[i].offset == cie_at { k = i }
+        i += 1
+    }
+    if k < 0 {
+        let parsed = frame_read_cie(data, s, cie_at)?
+        (mut cie_cache).push(parsed)
+        k = cie_cache.len - 1
+    }
+    var b = cursor(id_c.pos, end, c.fuel)
+    if s.eh {
+        let encoding = cie_cache[k].fde_encoding
+        fde.begin = frame_eh_pointer(data, mut b, s, encoding, true)?
+        fde.range = frame_eh_pointer(data, mut b, s, encoding & 15, false)?
+        if cie_cache[k].has_aug_data {
+            let aug_length = uleb64(data, mut b)?
+            if aug_length > (b.end - b.pos) as u64 { return truncated }
+            let after = b.pos + aug_length as int
+            if cie_cache[k].lsda_encoding != 255 {
+                fde.has_lsda = true
+                fde.lsda = frame_eh_pointer(data, mut b, s, cie_cache[k].lsda_encoding, true)?
+            }
+            b.pos = after
+        }
+    } else {
+        let size = cie_cache[k].address_size
+        fde.begin = uint_le(data, mut b, size)?
+        fde.range = uint_le(data, mut b, size)?
+    }
+    fde.instructions = ByteSpan { start: b.pos, length: end - b.pos }
+    entry.fde = fde
+    c.pos = end
+    entry
+}
+
+/// One call frame instruction (DWARF 5 Table 7.29, plus DW_CFA_GNU_args_size
+/// 0x2e from the AMD64 psABI and LSB). The high-two-bit forms are normalised
+/// to 0x40/0x80/0xc0 with their low six bits in reg or delta.
+pub struct FrameInsn {
+    pub offset: int,
+    pub op: int,
+    pub reg: u64,
+    pub reg2: u64,
+    pub unsigned: u64,
+    pub signed: i64,
+    pub block: ByteSpan,
+}
+
+pub fn frame_instruction(
+    data: List[byte],
+    mut c: Cursor,
+    address_size: int,
+) -> FrameInsn ! DwarfFrameError {
+    let at = c.pos
+    let byte = uint_le(data, mut c, 1)? as int
+    var insn = FrameInsn {
+        offset: at, op: byte, reg: 0, reg2: 0, unsigned: 0, signed: 0,
+        block: ByteSpan { start: at, length: 0 },
+    }
+    let high = byte & 192
+    if high != 0 {
+        insn.op = high
+        if high == 64 {
+            insn.unsigned = (byte & 63) as u64
+        } else if high == 128 {
+            insn.reg = (byte & 63) as u64
+            insn.unsigned = uleb64(data, mut c)?
+        } else {
+            insn.reg = (byte & 63) as u64
+        }
+        return insn
+    }
+    if byte == 0 || byte == 10 || byte == 11 {
+    } else if byte == 1 {
+        insn.unsigned = uint_le(data, mut c, address_size)?
+    } else if byte == 2 {
+        insn.unsigned = uint_le(data, mut c, 1)?
+    } else if byte == 3 {
+        insn.unsigned = uint_le(data, mut c, 2)?
+    } else if byte == 4 {
+        insn.unsigned = uint_le(data, mut c, 4)?
+    } else if byte == 5 || byte == 9 || byte == 12 || byte == 20 {
+        insn.reg = uleb64(data, mut c)?
+        insn.unsigned = uleb64(data, mut c)?
+        insn.reg2 = insn.unsigned
+    } else if byte == 6 || byte == 7 || byte == 8 || byte == 13 {
+        insn.reg = uleb64(data, mut c)?
+    } else if byte == 14 || byte == 46 {
+        insn.unsigned = uleb64(data, mut c)?
+    } else if byte == 15 {
+        let size = uleb64(data, mut c)?
+        if size > (c.end - c.pos) as u64 { return truncated }
+        insn.block = take_span(data, mut c, size as int)?
+    } else if byte == 16 || byte == 22 {
+        insn.reg = uleb64(data, mut c)?
+        let size = uleb64(data, mut c)?
+        if size > (c.end - c.pos) as u64 { return truncated }
+        insn.block = take_span(data, mut c, size as int)?
+    } else if byte == 17 || byte == 18 || byte == 21 {
+        insn.reg = uleb64(data, mut c)?
+        insn.signed = sleb64(data, mut c)?
+    } else if byte == 19 {
+        insn.signed = sleb64(data, mut c)?
+    } else {
+        return dwarf_frame_unknown_instruction
+    }
+    insn
+}
