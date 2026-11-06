@@ -251,7 +251,9 @@ def cmd_oracle(a):
             got = (normalize(out, fired), normalize(err, fired), str(rc) + '\n')
         want = tuple(p.read_text() for p in golden_paths(row))
         if got != want:
-            print('FAIL oracle-drift ' + row['name'])
+            names = ('stdout', 'stderr', 'exit')
+            why = '; '.join(n + ' ' + first_diff(w, g) for n, g, w in zip(names, got, want) if g != w)
+            print('FAIL oracle-drift ' + row['name'] + ' ' + why)
             fails += 1
         else:
             print('PASS oracle-stable ' + row['name'])
