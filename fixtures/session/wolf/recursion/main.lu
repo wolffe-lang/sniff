@@ -1,0 +1,10 @@
+fn depth(n: int) -> int {
+    if n == 0 { return 0 }
+    let below = depth(n - 1)
+    n + below
+}
+
+fn main() -> int {
+    let total = depth(3)
+    total - 6
+}

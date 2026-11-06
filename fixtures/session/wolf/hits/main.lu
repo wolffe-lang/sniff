@@ -1,0 +1,13 @@
+fn tick(n: int) -> int {
+    n + 1
+}
+
+fn main() -> int {
+    var n = 0
+    var i = 0
+    while i < 10000 {
+        n = tick(n)
+        i += 1
+    }
+    n - 10000
+}

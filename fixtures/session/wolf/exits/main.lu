@@ -1,0 +1,13 @@
+fn code(text: str) -> int {
+    let value = text.to_int() else 0
+    value
+}
+
+fn main() -> int {
+    let args = env_args()
+    if args.len > 0 && args[0] == "kill" {
+        os_exit_signal(-9) else |_| { return 2 }
+    }
+    if args.len > 0 { return code(args[0]) }
+    0
+}
