@@ -44,6 +44,7 @@ fn cstr(s: str) -> *u8 {
     let b = s.bytes()
     let n = b.len
     unsafe {
+        // # Safety: pointers are calloc'd buffers sized for the call, and pid is the traced child.
         let p = c.calloc(1, (n + 1) as uint) as *u8
         var i = 0
         while i < n {
@@ -58,6 +59,7 @@ fn cstr(s: str) -> *u8 {
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 pub fn target_none() -> Target {
     unsafe {
+        // # Safety: pointers are calloc'd buffers sized for the call, and pid is the traced child.
         Target {
             pid: 0,
             memfd: -1,
@@ -76,6 +78,7 @@ pub fn target_none() -> Target {
 pub fn target_spawn(path: str, args: List[str], env_lines: str, env_columns: str) -> Target {
     let tgt = target_none()
     unsafe {
+        // # Safety: pointers are calloc'd buffers sized for the call, and pid is the traced child.
         let tstatus = tgt.status as *i32
         let argv = c.calloc((args.len + 2) as uint, 8) as *u64
         let cpath = cstr(path)
@@ -124,6 +127,7 @@ pub fn target_spawn(path: str, args: List[str], env_lines: str, env_columns: str
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 pub fn target_wait(t: Target) -> int {
     unsafe {
+        // # Safety: pointers are calloc'd buffers sized for the call, and pid is the traced child.
         let status = t.status as *i32
         let w = waitpid(t.pid as i32, status, 1073741824)
         if w != t.pid as i32 { return -1 }
@@ -134,19 +138,26 @@ pub fn target_wait(t: Target) -> int {
 /// PTRACE_CONT, delivering sig (0 for none).
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 pub fn target_cont(t: Target, sig: int) -> int {
-    unsafe { ptrace(req_cont as i32, t.pid as i32, 0 as u64, sig as u64) as int }
+    unsafe {
+        // # Safety: the pid is the traced child; every pointer argument is a calloc'd buffer sized for the request.
+        ptrace(req_cont as i32, t.pid as i32, 0 as u64, sig as u64) as int
+    }
 }
 
 /// PTRACE_SINGLESTEP, delivering sig (0 for none).
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 pub fn target_step(t: Target, sig: int) -> int {
-    unsafe { ptrace(req_singlestep as i32, t.pid as i32, 0 as u64, sig as u64) as int }
+    unsafe {
+        // # Safety: the pid is the traced child; every pointer argument is a calloc'd buffer sized for the request.
+        ptrace(req_singlestep as i32, t.pid as i32, 0 as u64, sig as u64) as int
+    }
 }
 
 /// Kill the child with SIGKILL and reap it. Returns the final raw status.
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 pub fn target_kill(t: Target) -> int {
     unsafe {
+        // # Safety: pointers are calloc'd buffers sized for the call, and pid is the traced child.
         let status = t.status as *i32
         let _ = kill(t.pid as i32, 9)
         let _ = close(t.memfd as i32)
@@ -168,6 +179,7 @@ pub fn target_kill(t: Target) -> int {
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 pub fn target_regs(t: Target) -> List[u64] {
     unsafe {
+        // # Safety: pointers are calloc'd buffers sized for the call, and pid is the traced child.
         var out: List[u64] = []
         let regs = t.regs as *u64
         let r = ptrace(req_getregs as i32, t.pid as i32, 0 as u64, t.regs)
@@ -185,6 +197,7 @@ pub fn target_regs(t: Target) -> List[u64] {
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 pub fn target_set_regs(t: Target, regs: List[u64]) -> int {
     unsafe {
+        // # Safety: pointers are calloc'd buffers sized for the call, and pid is the traced child.
         if regs.len != 27 { return -1 }
         let slots = t.regs as *u64
         var i = 0
@@ -200,6 +213,7 @@ pub fn target_set_regs(t: Target, regs: List[u64]) -> int {
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 pub fn target_read(t: Target, addr: u64, n: int) -> Bytes {
     unsafe {
+        // # Safety: pointers are calloc'd buffers sized for the call, and pid is the traced child.
         var out: List[byte] = []
         if n <= 0 { return Bytes { ok: true, data: out } }
         if addr > 9223372036854775807 { return Bytes { ok: false, data: out } }
@@ -219,6 +233,7 @@ pub fn target_read(t: Target, addr: u64, n: int) -> Bytes {
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 fn peek_word(t: Target, addr: u64) -> Bytes {
     unsafe {
+        // # Safety: pointers are calloc'd buffers sized for the call, and pid is the traced child.
         var out: List[byte] = []
         let e = __errno_location()
         e[0] = 0
@@ -240,6 +255,7 @@ fn peek_word(t: Target, addr: u64) -> Bytes {
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 pub fn target_write(t: Target, addr: u64, data: List[byte]) -> bool {
     unsafe {
+        // # Safety: pointers are calloc'd buffers sized for the call, and pid is the traced child.
         var off = 0
         while off < data.len {
             let remain = data.len - off
@@ -277,6 +293,7 @@ pub fn target_write(t: Target, addr: u64, data: List[byte]) -> bool {
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 pub fn target_xmm0(t: Target) -> List[byte] {
     unsafe {
+        // # Safety: pointers are calloc'd buffers sized for the call, and pid is the traced child.
         var out: List[byte] = []
         let buf = c.calloc(1, 512) as *u8
         let r = ptrace(req_getfpregs as i32, t.pid as i32, 0 as u64, buf as u64)
@@ -293,13 +310,17 @@ pub fn target_xmm0(t: Target) -> List[byte] {
 /// Detach from a traced pid after restoring nothing: used for forked children.
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 pub fn target_detach(pid: int) -> int {
-    unsafe { ptrace(req_detach as i32, pid as i32, 0 as u64, 0 as u64) as int }
+    unsafe {
+        // # Safety: the pid is the traced child; every pointer argument is a calloc'd buffer sized for the request.
+        ptrace(req_detach as i32, pid as i32, 0 as u64, 0 as u64) as int
+    }
 }
 
 /// The pid of the child a fork event stopped on (PTRACE_GETEVENTMSG).
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 pub fn target_event_pid(t: Target) -> int {
     unsafe {
+        // # Safety: pointers are calloc'd buffers sized for the call, and pid is the traced child.
         let buf = c.calloc(1, 8) as *u64
         let r = ptrace(req_geteventmsg as i32, t.pid as i32, 0 as u64, buf as u64)
         if r < 0 { return 0 - 1 }
@@ -311,6 +332,7 @@ pub fn target_event_pid(t: Target) -> int {
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 pub fn target_wait_pid(t: Target, pid: int) -> int {
     unsafe {
+        // # Safety: pointers are calloc'd buffers sized for the call, and pid is the traced child.
         let status = t.status as *i32
         let w = waitpid(pid as i32, status, 1073741824)
         if w != pid as i32 { return 0 - 1 }

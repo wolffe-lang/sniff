@@ -17,6 +17,8 @@ struct Bp {
     pub internal: bool,
     pub abs: bool,
     pub ignore: int,
+    pub loc: int,
+    pub nloc: int,
     pub orig: int,
     pub inserted: bool,
 }

@@ -36,7 +36,7 @@ fn user_bp_at(s: Session, addr: u64) -> int {
 
 /// Add an internal breakpoint at a runtime address.
 fn add_internal(mut s: Session, addr: u64) {
-    (mut s.bps).push(Bp { num: 0, addr: addr, hits: 0, temp: false, enabled: true, internal: true, abs: true, ignore: 0, orig: 0, inserted: false })
+    (mut s.bps).push(Bp { num: 0, addr: addr, hits: 0, temp: false, enabled: true, internal: true, abs: true, ignore: 0, loc: 0, nloc: 1, orig: 0, inserted: false })
 }
 
 fn drop_internal(mut s: Session) {
@@ -61,13 +61,14 @@ fn report_bp_hit(mut s: Session, idx: int) {
         }
         i += 1
     }
-    let num = s.bps[first].num
+    var num_text = "{s.bps[first].num}"
+    if s.bps[first].nloc > 1 { num_text = "{s.bps[first].num}.{s.bps[first].loc}" }
     let temp = s.bps[first].temp
     compute_frames(mut s)
     var label = "Breakpoint"
     if temp { label = "Temporary breakpoint" }
     emit_line(mut s, "")
-    emit_line(mut s, "{label} {num}, {frame_line(s, 0, false)}")
+    emit_line(mut s, "{label} {num_text}, {frame_line(s, 0, false)}")
     print_frame_source(mut s, 0, false)
     // temporary breakpoints are deleted once hit
     var keep: List[Bp] = []

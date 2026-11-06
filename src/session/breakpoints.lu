@@ -187,14 +187,21 @@ fn resolve_function(s: Session, name: str) -> Resolved {
         }
         i += 1
     }
-    if out.len > 0 { return Resolved { err: "", addrs: out, abs: false } }
+    // an ELF symbol of that name outside every function found is one more location
     i = 0
     while i < s.prog.syms.len {
         if s.prog.syms[i].name == name {
-            return Resolved { err: "", addrs: [skip_prologue_no_debug(s, s.prog.syms[i].addr)], abs: false }
+            var covered = false
+            var k = 0
+            while k < s.prog.funcs.len {
+                if s.prog.funcs[k].name == name && s.prog.funcs[k].low != 0 && s.prog.funcs[k].low <= s.prog.syms[i].addr && s.prog.syms[i].addr < s.prog.funcs[k].high { covered = true }
+                k += 1
+            }
+            if !covered { (mut out).push(skip_prologue_no_debug(s, s.prog.syms[i].addr)) }
         }
         i += 1
     }
+    if out.len > 0 { return Resolved { err: "", addrs: out, abs: false } }
     resolved_err("Function \"{name}\" not defined.")
 }
 
