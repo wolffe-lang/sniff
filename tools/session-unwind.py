@@ -26,9 +26,9 @@ ROWS = [
 
 # macOS arm64: the C binaries carry compact unwind and no DWARF CFI (R-sn00-2); wolf carries neither.
 ROWS_MAC = [
-    ('c-clang-recursion', 'c/calls/clang-O0/prog', 'main.c:6', None, True),
-    ('wolf-recursion', 'wolf/recursion/wolf-debug/prog', 'depth', None, True),
-    ('wolf-nested', 'wolf/nested/wolf-debug/prog', 'inner', None, True),
+    ('c-clang-recursion', 'c/calls/clang-O0/prog', 'main.c:6', [('depth_sum', 'compact'), ('main', 'outermost')], True),
+    ('wolf-recursion', 'wolf/recursion/wolf-debug/prog', 'depth', [('depth', 'frame-pointer'), ('main', 'frame-pointer'), ('main', 'outermost')], True),
+    ('wolf-nested', 'wolf/nested/wolf-debug/prog', 'inner', [('inner', 'frame-pointer'), ('outer', 'frame-pointer'), ('main', 'frame-pointer'), ('main', 'outermost')], True),
 ]
 
 
