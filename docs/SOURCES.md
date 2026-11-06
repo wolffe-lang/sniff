@@ -153,3 +153,26 @@ inside Apple's published `mach-o/compact_unwind_encoding.h`. This is
 comments describing their formats. It is not treated as forbidden
 implementation-source exposure. Compact unwind nevertheless remains S3's
 subject; S1 refuses it by name and implements no compact-unwind decoder.
+
+## Consulted for S2 (2026-11-06)
+
+Man pages fetched from man7.org with curl and read as text; the HTML copies
+and their digests are kept by the lane, not committed. Only these were read.
+
+| Page | SHA-256 of the fetched HTML | Used for |
+|---|---|---|
+| [ptrace(2)](https://man7.org/linux/man-pages/man2/ptrace.2.html) | `69cd309ece177d54086771701b2085e31cabd14a92484647392bcda468f7bd35` | requests, `PTRACE_O_EXITKILL`/`TRACEFORK`/`TRACEVFORK`, fork event stops (`status>>8 == SIGTRAP\|PTRACE_EVENT_FORK<<8`), `GETEVENTMSG`, the new child starting with SIGSTOP, `DETACH`, errno clearing around `PEEK*`, EIO on invalid memory |
+| [wait(2)](https://man7.org/linux/man-pages/man2/wait.2.html) (also covers waitid) | `fe247c4fc91a2dafd978157a46fa2a91fa48b902e643d852e8352d78c4b32fd3` | status macros, `__WALL` |
+| [signal(7)](https://man7.org/linux/man-pages/man7/signal.7.html) | `6ab11c524ae2c90beb2dc121ce345e2b54fcca2c008e96672e73e0e933f538db` | signal numbers and default actions (names and descriptions are gdb's, from its own `info signals`) |
+| [proc(5)](https://man7.org/linux/man-pages/man5/proc.5.html), [proc_pid_mem(5)](https://man7.org/linux/man-pages/man5/proc_pid_mem.5.html), [proc_pid_maps(5)](https://man7.org/linux/man-pages/man5/proc_pid_maps.5.html), [proc_pid_status(5)](https://man7.org/linux/man-pages/man5/proc_pid_status.5.html) | proc `b197c5fa64577269f992d50f60acfd5e0cc3df756644ddd8bd19a02591272a97`; mem `19ef71ade5b244f06592feeec0d2370ab9cdc4b661cc6a007149cd882d2004e5`; maps `3a33949653ca5132a368ed40d74b8e56ea4a8bb6b8f364fe615ddfd994d0be18`; status `1596cd2751b15f9332136b60b28ba8d5c39ebc45e9d75ca8bd1d4d702f7eee43` | `/proc/PID/mem` reads, `maps` line layout for the load base |
+| [personality(2)](https://man7.org/linux/man-pages/man2/personality.2.html) | `a416c36b196f40d5b70b3a553f2f3e68e0ddebc4cecc6e7754ea5a1ee3349f86` | `ADDR_NO_RANDOMIZE` |
+| [execve(2)](https://man7.org/linux/man-pages/man2/execve.2.html) | `ea744b044227c50f852b8cd6165b5e48ed5c8afecf2258710b5e74b06defd309` | exec stop of a traced child |
+
+Where the pages and the probe differ: ptrace(2) asks for word-aligned offsets
+only for the USER area; `POKEDATA` at an unaligned text address worked in
+every measured run. The core-dump bit of a wait status depends on the
+host's core settings, so the probe records statuses with that bit cleared.
+The request numbers, register slots and statuses come from
+`tools/abi-probe.c` (R-sn02-3), not from header text. gdb's command language
+and output shapes are taken from recorded transcripts of the pinned gdb run
+as a binary; the GDB manual pages listed under S0 define the command names.
