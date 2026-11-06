@@ -1,0 +1,220 @@
+// --symbols. ELF: the pinned `readelf --symbols --wide` layout, every symbol
+// table in section order (gABI chapter 5 fields; .dynsym version suffixes
+// from the GNU version sections, LSB Core "Symbol Versioning"). Mach-O: the
+// pinned `llvm-nm --format=darwin --no-sort --debug-syms` layout, nlist order
+// (SDK mach-o/nlist.h fields). Both oracles are R-sn01-1's.
+
+use readers
+
+fn elf_type_name(t: u64) -> str {
+    let names: List[str] = ["NOTYPE", "OBJECT", "FUNC", "SECTION", "FILE", "COMMON", "TLS"]
+    if t <= 6 { return names[t as int] }
+    if t == 10 { return "IFUNC" }
+    "<unknown>: {t}"
+}
+
+fn elf_bind_name(b: u64) -> str {
+    if b == 0 { return "LOCAL" }
+    if b == 1 { return "GLOBAL" }
+    if b == 2 { return "WEAK" }
+    if b == 10 { return "UNIQUE" }
+    "<unknown>: {b}"
+}
+
+fn elf_vis_name(v: u64) -> str {
+    let names: List[str] = ["DEFAULT", "INTERNAL", "HIDDEN", "PROTECTED"]
+    names[(v & 3) as int]
+}
+
+fn elf_ndx(raw: u64, resolved: u64) -> str {
+    if raw == 0 { return "UND" }
+    if raw == 65521 { return "ABS" }
+    if raw == 65522 { return "COM" }
+    "{resolved}"
+}
+
+/// Version index -> name for .gnu.version_r (SHT_GNU_verneed) auxiliaries.
+struct ElfVersions {
+    indexes: List[u64],
+    names: List[readers.ByteSpan],
+    versym: readers.ByteSpan,
+    has_versym: bool,
+}
+
+fn elf_u(data: List[byte], at: int, width: int, end: int) -> u64 ! DumpError {
+    var c = readers.cursor(at, end, 100)
+    readers.uint_le(data, mut c, width)?
+}
+
+fn elf_versions(data: List[byte], elf: readers.ElfFile) -> ElfVersions ! DumpError {
+    var v = ElfVersions { indexes: [], names: [], versym: readers.ByteSpan { start: 0, length: 0 }, has_versym: false }
+    var i: int = 0
+    while i < elf.sections.len {
+        let kind = elf.sections[i].kind
+        if kind == 1879048191 {
+            v.versym = readers.ByteSpan { start: elf.sections[i].offset as int, length: elf.sections[i].size as int }
+            v.has_versym = true
+        }
+        if kind == 1879048190 && elf.sections[i].link < elf.sections.len as u64 {
+            let base = elf.sections[i].offset as int
+            let end = base + elf.sections[i].size as int
+            let strings = elf.sections[elf.sections[i].link as int].offset as int
+            let strings_end = strings + elf.sections[elf.sections[i].link as int].size as int
+            var at = base
+            var guard: int = 0
+            while at < end && guard < 65536 {
+                guard += 1
+                let count = elf_u(data, at + 2, 2, end)? as int
+                let aux = elf_u(data, at + 8, 4, end)? as int
+                let next = elf_u(data, at + 12, 4, end)? as int
+                var a = at + aux
+                var k: int = 0
+                while k < count && a < end {
+                    let other = elf_u(data, a + 6, 2, end)?
+                    let name = elf_u(data, a + 8, 4, end)? as int
+                    let anext = elf_u(data, a + 12, 4, end)? as int
+                    var text = readers.cursor(strings + name, strings_end, 100000)
+                    let span = readers.cstring(data, mut text)?
+                    (mut v.indexes).push(other)
+                    (mut v.names).push(span)
+                    if anext == 0 { break }
+                    a += anext
+                    k += 1
+                }
+                if next == 0 { break }
+                at += next
+            }
+        }
+        i += 1
+    }
+    v
+}
+
+fn dump_elf_symbols(mut o: Out, data: List[byte]) -> () ! DumpError {
+    let elf = readers.elf_read(data, 131072, 1048576, 100000000)?
+    let versions = elf_versions(data, elf)?
+    var table: int = 0
+    while table < elf.sections.len {
+        let kind = elf.sections[table].kind
+        if kind != 2 && kind != 11 {
+            table += 1
+            continue
+        }
+        let count = elf.sections[table].size / 24
+        line(mut o, "")
+        put(mut o, "Symbol table '")
+        put_raw(mut o, data, elf.sections[table].name)
+        line(mut o, "' contains {count} entries:")
+        line(mut o, "   Num:    Value          Size Type    Bind   Vis      Ndx Name")
+        var i: int = 0
+        while i < elf.symbols.len {
+            if elf.symbols[i].table_section != table {
+                i += 1
+                continue
+            }
+            let sym = copy elf.symbols[i]
+            let value = hex16(sym.value)
+            let type_name = elf_type_name(sym.info & 15)
+            let bind = elf_bind_name(sym.info >> 4)
+            let vis = elf_vis_name(sym.other)
+            let ndx = elf_ndx(sym.raw_section_index, sym.section_index)
+            put(mut o, "{sym.table_index:>6}: {value} {sym.size:>5} {type_name:<7} {bind:<6} {vis:<7} {ndx:>4} ")
+            put_raw(mut o, data, sym.name)
+            if kind == 11 && versions.has_versym {
+                let at = versions.versym.start + sym.table_index * 2
+                if at + 2 <= versions.versym.start + versions.versym.length {
+                    let index = elf_u(data, at, 2, at + 2)? & 32767
+                    if index >= 2 {
+                        var k: int = 0
+                        while k < versions.indexes.len {
+                            if versions.indexes[k] == index {
+                                put(mut o, "@")
+                                put_raw(mut o, data, versions.names[k])
+                                put(mut o, " ({index})")
+                                break
+                            }
+                            k += 1
+                        }
+                    }
+                }
+            }
+            line(mut o, "")
+            i += 1
+        }
+        table += 1
+    }
+}
+
+fn dylib_short(data: List[byte], span: readers.ByteSpan) -> readers.ByteSpan {
+    // The install name's last path component, up to its first dot.
+    var start = span.start
+    var i: int = 0
+    while i < span.length {
+        if data[span.start + i] as int == 47 { start = span.start + i + 1 }
+        i += 1
+    }
+    var end = start
+    while end < span.start + span.length && data[end] as int != 46 { end += 1 }
+    readers.ByteSpan { start: start, length: end - start }
+}
+
+fn dump_macho_symbols(mut o: Out, data: List[byte]) -> () ! DumpError {
+    let mach = readers.macho_read(data, 100000000)?
+    var i: int = 0
+    while i < mach.symbols.len {
+        let sym = copy mach.symbols[i]
+        let kind = sym.kind
+        let t = kind & 14
+        let external = kind & 1 != 0
+        let pext = kind & 16 != 0
+        if t == 0 && external && sym.value == 0 {
+            put(mut o, "                 ")
+        } else {
+            put(mut o, "{hex16(sym.value)} ")
+        }
+        if t == 14 && sym.section >= 1 && sym.section <= mach.sections.len as u64 {
+            let s = sym.section as int - 1
+            put(mut o, "(")
+            put_raw(mut o, data, mach.sections[s].segment_name)
+            put(mut o, ",")
+            put_raw(mut o, data, mach.sections[s].name)
+            put(mut o, ")")
+        } else if t == 0 {
+            put(mut o, "(undefined)")
+        } else if t == 2 {
+            put(mut o, "(absolute)")
+        } else if t == 10 {
+            put(mut o, "(indirect)")
+        } else {
+            put(mut o, "(?)")
+        }
+        if sym.description & 16 != 0 { put(mut o, " [referenced dynamically]") }
+        if external && pext {
+            put(mut o, " private external ")
+        } else if external {
+            put(mut o, " external ")
+        } else if pext {
+            put(mut o, " non-external (was a private external) ")
+        } else {
+            put(mut o, " non-external ")
+        }
+        put_raw(mut o, data, sym.name)
+        if t == 0 && external && mach.flags & 128 != 0 {
+            let ordinal = (sym.description >> 8) & 255
+            if ordinal >= 1 && ordinal <= mach.dylibs.len as u64 {
+                put(mut o, " (from ")
+                put_raw(mut o, data, dylib_short(data, mach.dylibs[ordinal as int - 1]))
+                put(mut o, ")")
+            } else if ordinal == 255 {
+                put(mut o, " (dynamically looked up)")
+            }
+        }
+        line(mut o, "")
+        i += 1
+    }
+}
+
+pub fn dump_symbols(mut o: Out, data: List[byte], s: readers.DebugSections) -> () ! DumpError {
+    if s.format == readers.object_elf { return dump_elf_symbols(mut o, data)? }
+    dump_macho_symbols(mut o, data)?
+}

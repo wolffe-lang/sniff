@@ -16,7 +16,7 @@ pub fn dump_mode_known(mode: str) -> bool {
     mode == "--debug-line" || mode == "--debug-abbrev" || mode == "--debug-addr" ||
         mode == "--debug-str-offsets" || mode == "--debug-ranges" || mode == "--debug-loc" ||
         mode == "--debug-rnglists" || mode == "--debug-loclists" || mode == "--eh-frame" ||
-        mode == "--debug-frame"
+        mode == "--debug-frame" || mode == "--symbols"
 }
 
 /// Render one mode for the file at path. The caller owns flushing and status.
@@ -24,6 +24,8 @@ pub fn dump_file(mut o: Out, path: str, data: List[byte], mode: str) -> () ! Dum
     if !dump_mode_known(mode) { return unsupported_dump_mode }
     let s = readers.object_sections(data)?
     if s.has_split_dwarf { return unsupported_split_dwarf }
+    // The symbol oracles print their tables with no file header.
+    if mode == "--symbols" { return dump_symbols(mut o, data, s)? }
     line(mut o, "{path}:\tfile format {dump_format(s)}")
     line(mut o, "")
     let n = names_new()
