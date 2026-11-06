@@ -1,0 +1,30 @@
+// --debug-abbrev: every abbreviation table in section order.
+
+use readers
+
+pub fn dump_abbrev(mut o: Out, n: Names, data: List[byte], s: readers.DebugSections) -> () ! DumpError {
+    line(mut o, ".debug_abbrev contents:")
+    let start = s.abbrev.span.start
+    let end = start + s.abbrev.span.length
+    var c = readers.cursor(start, end, 100000000)
+    while c.pos < end {
+        let at = (c.pos - start) as u64
+        line(mut o, "Abbrev table for offset: 0x{hex8(at)}")
+        let table = readers.dwarf_abbrevs(data, mut c, 65536, 65536)?
+        var i: int = 0
+        while i < table.len {
+            let children = if table[i].children { "DW_CHILDREN_yes" } else { "DW_CHILDREN_no" }
+            line(mut o, "[{table[i].code}] {tag_name(n, table[i].tag)}\t{children}")
+            var k: int = 0
+            while k < table[i].attrs.len {
+                let spec = copy table[i].attrs[k]
+                put(mut o, "\t{attribute_name(n, spec.attribute)}\t{form_name(n, spec.form)}")
+                if spec.form == 33 { put(mut o, "\t{spec.implicit}") }
+                line(mut o, "")
+                k += 1
+            }
+            line(mut o, "")
+            i += 1
+        }
+    }
+}
