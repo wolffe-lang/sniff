@@ -102,6 +102,15 @@ def main():
                 failed += 1
                 print('FAIL hostile-run %s %s exit=%s %r' % (path.name, mode, code, err[-200:]))
             path.unlink()
+    # Compact unwind is refused by name wherever __unwind_info exists.
+    for seed in args.seed:
+        data = seed.read_bytes()
+        if b'__unwind_info' in data[:65536]:
+            total += 1
+            code, err = run(args.sniff, 'unwind-info', seed, args.timeout)
+            if code != 1 or b'unsupported_compact_unwind' not in err:
+                failed += 1
+                print('FAIL hostile-compact-unwind exit=%s %r' % (code, err))
     big = args.out / 'oversized'
     with open(big, 'wb') as f:
         f.truncate(67108865)
