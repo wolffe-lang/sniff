@@ -4,11 +4,12 @@ A debugger written in [wolf](https://github.com/wolffe-lang/wolf-lang),
 for x86-64 Linux and PAX, and macOS arm64. The command language is GDB's;
 a Debug Adapter Protocol server is planned for editor integration.
 
-**Status: S1, the readers.** `sniff dump` reads ELF64 x86-64 and Mach-O 64
-arm64 files (dSYM bundles included) and prints twelve read-only views. Each
-view is byte-identical to the platform's pinned oracle on every recorded
-fixture. No process is run or debugged yet; the Linux process core is S2.
-[MAP](docs/MAP.md) separates planned capabilities from measured ones.
+**Status: S2, the core on Linux x86-64.** `sniff -batch -x SCRIPT PROG` starts PROG
+under `ptrace(2)` and debugs it with gdb's command language (breakpoints,
+stepping, frames, values, registers), held to transcripts of the pinned gdb
+and to lupin's values; `sniff dump` still prints the S1 reader views. macOS
+and PAX backends are S3 and S4. [MAP](docs/MAP.md) separates planned
+capabilities from measured ones.
 
 ## Machines and pins
 
@@ -94,7 +95,7 @@ Unlabelled PRs run the cheap `tier local` unit/replay gate. `ci` requests
 Linux `tier pr`; `full-matrix` requests Linux plus macOS `tier full`. Nightly,
 relevant trunk pushes and a manual dispatch without a job filter run the full
 release gate. Saved oracle observations and passing harness selftests are not
-sniff command parity: the debugger itself remains unimplemented.
+sniff command parity; the S2 rows run sniff itself (`tools/session.py`).
 
 ## Clean room
 

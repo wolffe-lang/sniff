@@ -171,3 +171,14 @@ missing-frame; source coordinates prevent the C shim from masking frame loss.
 A light-slot setup/census observation is not a final heavy-block gauntlet or a
 timing measurement. Final-head records and the one-hunk plant are supplied
 separately with the PR.
+
+### S2 as implemented
+
+`src/platform/` is the process layer (Linux x86-64; a stub elsewhere) and
+`src/session/` the debugger: loader, line table, CFI unwinder, DWARF
+expression machine, values and formatting, breakpoints, run control,
+stepping, and the command interpreter. `src/numfmt/` formats floats exactly.
+The platform boundary is the list under "For S3 and S4" in
+`notes/sn02-the-linux-core.md`. Boundaries that remain: no CFI from wolf
+(frame-pointer fallback), eager DWARF loading, signed encodings for unsigned
+wolf types, and the unimplemented commands listed in the note.
