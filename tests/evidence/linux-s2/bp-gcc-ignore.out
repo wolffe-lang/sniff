@@ -1,0 +1,8 @@
+Breakpoint 1 at 0x1134: file /work/fixtures/session/c/hits/main.c, line 4.
+
+Breakpoint 1, tick (n=9999) at /work/fixtures/session/c/hits/main.c:4
+4	    return n + 1;
+Num     Type           Disp Enb Address            What
+1       breakpoint     keep y   0x0000555555555134 in tick at /work/fixtures/session/c/hits/main.c:4
+	breakpoint already hit 10000 times
+[Inferior 1 (process <PID>) exited normally]

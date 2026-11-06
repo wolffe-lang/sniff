@@ -1218,6 +1218,109 @@
     "info breakpoints",
     "run"
    ]
+  },
+  {
+   "name": "odd-gcc-stripped-addr",
+   "prog": "c/exits/gcc-O0-stripped/prog",
+   "script": [
+    "break *0x555555555199",
+    "run 3",
+    "info breakpoints",
+    "info registers rip",
+    "stepi",
+    "x/2xw $sp",
+    "info locals"
+   ]
+  },
+  {
+   "name": "bp-gcc-ignore",
+   "prog": "c/hits/gcc-O0/prog",
+   "script": [
+    "break tick",
+    "ignore 1 9999",
+    "run",
+    "info breakpoints",
+    "continue"
+   ]
+  },
+  {
+   "name": "odd-gcc-die-mid-step",
+   "prog": "c/exits/gcc-O0/prog",
+   "script": [
+    "break leave",
+    "run 0 7",
+    "step",
+    "step",
+    "step"
+   ]
+  },
+  {
+   "name": "odd-gcc-signal-continue",
+   "prog": "c/exits/gcc-O0/prog",
+   "script": [
+    "run fault",
+    "bt",
+    "info locals",
+    "continue",
+    "continue"
+   ]
+  },
+  {
+   "name": "odd-clang-stripped-addr",
+   "prog": "c/exits/clang-O0-stripped/prog",
+   "script": [
+    "break *0x55555555516c",
+    "run 3",
+    "info breakpoints",
+    "info registers rip",
+    "stepi",
+    "x/2xw $sp",
+    "info locals"
+   ]
+  },
+  {
+   "name": "bp-clang-ignore",
+   "prog": "c/hits/clang-O0/prog",
+   "script": [
+    "break tick",
+    "ignore 1 9999",
+    "run",
+    "info breakpoints",
+    "continue"
+   ]
+  },
+  {
+   "name": "odd-clang-die-mid-step",
+   "prog": "c/exits/clang-O0/prog",
+   "script": [
+    "break leave",
+    "run 0 7",
+    "step",
+    "step",
+    "step"
+   ]
+  },
+  {
+   "name": "odd-clang-signal-continue",
+   "prog": "c/exits/clang-O0/prog",
+   "script": [
+    "run fault",
+    "bt",
+    "info locals",
+    "continue",
+    "continue"
+   ]
+  },
+  {
+   "name": "bp-wolf-ignore",
+   "prog": "wolf/hits/wolf-debug/prog",
+   "script": [
+    "break tick",
+    "ignore 1 9999",
+    "run",
+    "info breakpoints",
+    "continue"
+   ]
   }
  ]
 }
