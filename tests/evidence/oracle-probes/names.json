@@ -1,0 +1,22 @@
+{
+ "schema": 1,
+ "probe": "names",
+ "oracle": "Apple LLVM version 21.0.0",
+ "oracle_sha256": "93be00ae40dad30cd857f8335e92bbc1bfbd967ea98571ba29a13bb08569c906",
+ "input_sha256": "37f39b8303968d9ef545cc21627a7fa029f8353bc0a688ffae3314eeee7ecef6",
+ "input_hex": "cffaedfe0c000001000000000a00000001000000e8000000000000000000000019000000e80000005f5f44574152460000000000000000000000000000000000450000000000000008010000000000004500000000000000000000000000000002000000000000005f5f64656275675f61626272657600005f5f445741524600000000000000000000000000000000001e0000000000000008010000000000000000000000000000000000000000000000000000000000005f5f64656275675f696e666f000000005f5f44574152460000000000000000001e0000000000000027000000000000002601000000000000000000000000000000000000000000000000000000000000011101030800000290810100ff7f0b070b03080000033a00ff5f0b00000023000000040000000000080163750002050661096222635c640165c3a9667f670a681b00030700",
+ "runs": [
+  {
+   "mode": "--debug-abbrev",
+   "exit_code": 0,
+   "stdout": "names.macho:\tfile format Mach-O arm64\n\n.debug_abbrev contents:\nAbbrev table for offset: 0x00000000\n[1] DW_TAG_compile_unit\tDW_CHILDREN_yes\n\tDW_AT_name\tDW_FORM_string\n\n[2] DW_TAG_unknown_4090\tDW_CHILDREN_no\n\tDW_AT_unknown_3fff\tDW_FORM_data1\n\tDW_AT_unknown_7\tDW_FORM_data1\n\tDW_AT_name\tDW_FORM_string\n\n[3] DW_TAG_imported_module\tDW_CHILDREN_no\n\tDW_AT_unknown_2fff\tDW_FORM_data1\n\n",
+   "stderr": ""
+  },
+  {
+   "mode": "--debug-info",
+   "exit_code": 0,
+   "stdout": "names.macho:\tfile format Mach-O arm64\n\n.debug_info contents:\n0x00000000: Compile Unit: length = 0x00000023, format = DWARF32, version = 0x0004, abbr_offset = 0x0000, addr_size = 0x08 (next unit at 0x00000027)\n\n0x0000000b: DW_TAG_compile_unit\n              DW_AT_name\t(\"cu\")\n\n0x0000000f:   DW_TAG_unknown_4090\n                DW_AT_unknown_3fff\t(0x05)\n                DW_AT_unknown_7\t(0x06)\n                DW_AT_name\t(\"a\\tb\\\"c\\\\d\\001e\\303\\251f\\177g\\nh\\033\")\n\n0x00000024:   DW_TAG_imported_module\n                DW_AT_unknown_2fff\t(0x07)\n\n0x00000026:   NULL\n",
+   "stderr": ""
+  }
+ ]
+}
