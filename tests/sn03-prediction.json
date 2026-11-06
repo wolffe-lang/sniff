@@ -1,0 +1,56 @@
+{
+  "schema": 1,
+  "lane": "sn03",
+  "written_before_code": "2026-11-06",
+  "scope": "S3: the macOS arm64 backend behind sn02's platform interface; the S2 command set runs unchanged above it",
+  "measured_before_code": {
+    "task_for_pid": "from a probe of the lane's own spawned child: an ad-hoc signed target WITHOUT get-task-allow is refused (KERN_FAILURE, 5); a target signed with get-task-allow is granted to an unsigned caller; a caller ad-hoc signed with com.apple.security.cs.debugger is granted both. DevToolsSecurity reports 'Developer mode is currently disabled' and the account is in _developer. No one-time maintainer step was needed, so no R-sn03 ruling on signing."
+  },
+  "platform_layer": {
+    "start": "posix_spawn with POSIX_SPAWN_START_SUSPENDED and _POSIX_SPAWN_DISABLE_ASLR (as gdb/lldb run with ASLR off); task_for_pid on the pid; an exception port allocated with a receive and a send right; task_set_exception_ports for the bad-access, bad-instruction, arithmetic, breakpoint and software masks with EXCEPTION_DEFAULT|MACH_EXCEPTION_CODES and ARM_THREAD_STATE64; then task_resume. The first stop (at exec) is the suspended start itself, before dyld has run: the load base is read from task_info(TASK_DYLD_INFO) after the first resume to dyld's entry, or fixed to the image's preferred base because ASLR is off and the main image is mapped at its __TEXT vmaddr + slide read from the loaded image list",
+    "wait": "mach_msg receive on the exception port with a short timeout, alternating with waitpid(WNOHANG); an exception message is decoded (exception, code[0], code[1]); exit and death by signal arrive as wait statuses and are passed on in wait(2) form so the session's decoding is unchanged",
+    "stop_mapping": "EXC_BREAKPOINT (BRK or the single-step trap) -> SIGTRAP; EXC_BAD_ACCESS -> SIGSEGV (SIGBUS for alignment/KERN_PROTECTION_FAILURE codes as measured); EXC_BAD_INSTRUCTION -> SIGILL; EXC_ARITHMETIC -> SIGFPE; EXC_SOFTWARE with a Unix signal code -> that signal; a stop is replied to only when the session resumes",
+    "resume": "reply KERN_SUCCESS to the pending exception message after thread_set_state, then task_resume if the task was suspended; a delivered signal is a ptrace(PT_THUPDATE)-style signal number on the reply path as documented in sys/ptrace.h",
+    "single_step": "ARM_DEBUG_STATE64 with MDSCR_EL1.SS set via thread_set_state (Arm ARM D2), or ptrace(PT_STEP) if the PT_ATTACHEXC path is the one that works; the step trap arrives as EXC_BREAKPOINT",
+    "registers": "thread_get_state/thread_set_state with ARM_THREAD_STATE64: x0-x28, fp, lr, sp, pc, cpsr: 34 slots in the struct's order",
+    "memory": "mach_vm_read_overwrite for reads; mach_vm_write for writes, after mach_vm_protect(VM_PROT_READ|VM_PROT_WRITE|VM_PROT_COPY) on the page when it is read-only text, and the protection restored; instruction cache flushed through sys_icache_invalidate in the debuggee is not possible, so the platform relies on mach_vm_write's coherence for the debuggee's text",
+    "kill": "kill(pid, SIGKILL) and waitpid; the exception port is destroyed",
+    "return_value_float": "d0 from ARM_NEON_STATE64"
+  },
+  "breakpoints": {
+    "instruction": "BRK #0xf000 (0xd43e0000), four bytes; the original word saved per address; after the trap the pc already names the BRK (arm64 exceptions report the faulting instruction, unlike int3), so no pc adjustment; step over by restoring the word, single-stepping, reinserting",
+    "unmapped": "an address in unmapped memory is refused at insertion by the memory write failing: Cannot access memory at address 0x...",
+    "own_trap": "a BRK or kill(SIGTRAP) not at a sniff breakpoint stops as 'Program received signal SIGTRAP' like Linux"
+  },
+  "signing": {
+    "sniff": "ad-hoc signed with com.apple.security.cs.debugger by tools/sign-sniff.sh (no secret, no sudo)",
+    "targets": "ad-hoc signed with com.apple.security.get-task-allow before each session row; an unsigned-or-unentitled target is refused by name ('task_for_pid refused: the target lacks get-task-allow')"
+  },
+  "unwinding": {
+    "order": "DWARF CFI where an FDE covers the pc (__eh_frame of the image, .debug_frame of the dSYM); else compact unwind from __unwind_info (R-sn00-2); else the x29/x30 frame-pointer chain",
+    "c_clang_O0": "no DWARF CFI FDEs (R-sn00-2): frames come from compact unwind, encoding UNWIND_ARM64_MODE_FRAME",
+    "wolf_0_2_37": "wolf emits no CFI and, as the linker is given no compact-unwind input, probably encoding 0 (no unwind info) for its own functions: every wolf frame uses the frame-pointer fallback, as on Linux; measured and stated in the note",
+    "fallback_cases": "at a function's first instruction (before stp x29,x30) the frame is sp-relative with the return address in x30; after the epilogue's ldp the same; otherwise [x29] and [x29+8]"
+  },
+  "values": {
+    "dsym": "Mach-O image plus the dSYM DWARF file paired by UUID (macho_match_uuid); a missing or mismatched dSYM is refused by name; the image's symbols give main when no DWARF covers a pc",
+    "registers": "info registers prints x0-x28, fp, lr, sp, pc, cpsr as gdb prints aarch64 (rows named x0..x28, fp, lr, sp, pc, cpsr; hex and natural columns)",
+    "locations": "DW_OP_fbreg against the frame base DW_OP_reg29 (clang) evaluated with the stopped task's x29; wolf's spill slots as on Linux"
+  },
+  "rows": {
+    "held_to": "lldb facts (break locations, stop lines, frames, values) by named extraction; lupin for wolf values; sn02's Linux goldens wherever both platforms answer the same text after named normalisation of hex addresses",
+    "macOS_session_rows_hosted_CI": "none: they need the pinned lldb and a task port; the hosted runner prints SKIP by name",
+    "hostile": "unsigned target refused by name; own SIGTRAP handler; a forking child (detached, as Linux); breakpoint in unmapped memory; the inferior dying mid-step"
+  },
+  "measured": {
+    "startup_to_first_breakpoint": "against lldb on the same Mac, interleaved; sniff reads the dSYM eagerly: ratio expected well under 1 for C, near the Linux 4-5x for wolf binaries",
+    "hit_loop_10000": "against lldb, interleaved; each hit is a Mach message round trip: expected faster than lldb"
+  },
+  "likely_wrong": [
+    "the load base at the first stop (dyld not yet run): the first stop may need a one-shot internal breakpoint at the image entry",
+    "exec: posix_spawn does not exec twice, so the Linux 'stopped at exec' state is replaced by 'suspended at start'",
+    "whether signals raised by the program are seen without PT_ATTACHEXC",
+    "fork: a forked child inherits the exception ports and BRK words; the Linux detach-with-restore cannot be done the same way",
+    "stripped binaries: Mach-O symbols survive strip -x differently from ELF"
+  ]
+}
