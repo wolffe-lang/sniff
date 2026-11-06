@@ -1392,6 +1392,132 @@
     "finish"
    ],
    "tty": true
+  },
+  {
+   "name": "noproc-frame",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "frame"
+   ]
+  },
+  {
+   "name": "noproc-frame-1",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "frame 1"
+   ]
+  },
+  {
+   "name": "noproc-up",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "up"
+   ]
+  },
+  {
+   "name": "noproc-down",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "down"
+   ]
+  },
+  {
+   "name": "noproc-info-registers",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "info registers"
+   ]
+  },
+  {
+   "name": "noproc-info-args",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "info args"
+   ]
+  },
+  {
+   "name": "noproc-x4xw-sp",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "x/4xw $sp"
+   ]
+  },
+  {
+   "name": "noproc-print-1",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "print 1"
+   ]
+  },
+  {
+   "name": "noproc-print-pc",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "print $pc"
+   ]
+  },
+  {
+   "name": "noproc-finish",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "finish"
+   ]
+  },
+  {
+   "name": "noproc-next",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "next"
+   ]
+  },
+  {
+   "name": "noproc-stepi",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "stepi"
+   ]
+  },
+  {
+   "name": "noproc-continue",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "continue"
+   ]
+  },
+  {
+   "name": "noproc-until",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "until"
+   ]
+  },
+  {
+   "name": "noproc-output-5",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "output 5"
+   ]
+  },
+  {
+   "name": "noproc-echo-hellon",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "echo hello\\n"
+   ]
+  },
+  {
+   "name": "noproc-info-locals",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "info locals"
+   ]
+  },
+  {
+   "name": "noproc-delete-1",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "delete 1"
+   ]
   }
  ]
 }
