@@ -1,0 +1,39 @@
+// The platform layer on hosts without a process backend yet (macOS builds the
+// platform-neutral modules; S3 and S4 supply their backends). Every call fails
+// the way a missing child does.
+
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_none() -> Target {
+    Target { pid: 0, memfd: -1, status: 0, regs: 0, word: 0 }
+}
+
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_spawn(path: str, args: List[str], env_lines: str, env_columns: str) -> Target {
+    target_none()
+}
+
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_wait(t: Target) -> int { -1 }
+
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_cont(t: Target, sig: int) -> int { -1 }
+
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_step(t: Target, sig: int) -> int { -1 }
+
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_kill(t: Target) -> int { -1 }
+
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_regs(t: Target) -> List[u64] { [] }
+
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_set_regs(t: Target, regs: List[u64]) -> int { -1 }
+
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_read(t: Target, addr: u64, n: int) -> Bytes {
+    Bytes { ok: false, data: [] }
+}
+
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_write(t: Target, addr: u64, data: List[byte]) -> bool { false }

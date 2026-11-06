@@ -1,0 +1,91 @@
+// Shared platform types: the traced child's handle, register slot indexes
+// (user_regs_struct order, measured by tools/abi-probe.c) and wait-status
+// decoding (wait(2)). No platform calls here.
+
+/// One traced child and the scratch the calls share (addresses of C buffers
+/// are held as integers: the module boundary stays free of raw pointers).
+pub struct Target {
+    pub pid: int,
+    pub memfd: int,
+    status: u64,
+    regs: u64,
+    word: u64,
+}
+
+/// Count of user_regs_struct slots.
+pub const reg_count: int = 27
+/// Slot of r15 in user_regs_struct.
+pub const reg_r15: int = 0
+/// Slot of r14 in user_regs_struct.
+pub const reg_r14: int = 1
+/// Slot of r13 in user_regs_struct.
+pub const reg_r13: int = 2
+/// Slot of r12 in user_regs_struct.
+pub const reg_r12: int = 3
+/// Slot of rbp in user_regs_struct.
+pub const reg_rbp: int = 4
+/// Slot of rbx in user_regs_struct.
+pub const reg_rbx: int = 5
+/// Slot of r11 in user_regs_struct.
+pub const reg_r11: int = 6
+/// Slot of r10 in user_regs_struct.
+pub const reg_r10: int = 7
+/// Slot of r9 in user_regs_struct.
+pub const reg_r9: int = 8
+/// Slot of r8 in user_regs_struct.
+pub const reg_r8: int = 9
+/// Slot of rax in user_regs_struct.
+pub const reg_rax: int = 10
+/// Slot of rcx in user_regs_struct.
+pub const reg_rcx: int = 11
+/// Slot of rdx in user_regs_struct.
+pub const reg_rdx: int = 12
+/// Slot of rsi in user_regs_struct.
+pub const reg_rsi: int = 13
+/// Slot of rdi in user_regs_struct.
+pub const reg_rdi: int = 14
+/// Slot of orig_rax in user_regs_struct.
+pub const reg_orig_rax: int = 15
+/// Slot of rip in user_regs_struct.
+pub const reg_rip: int = 16
+/// Slot of cs in user_regs_struct.
+pub const reg_cs: int = 17
+/// Slot of eflags in user_regs_struct.
+pub const reg_eflags: int = 18
+/// Slot of rsp in user_regs_struct.
+pub const reg_rsp: int = 19
+/// Slot of ss in user_regs_struct.
+pub const reg_ss: int = 20
+/// Slot of fs_base in user_regs_struct.
+pub const reg_fs_base: int = 21
+/// Slot of gs_base in user_regs_struct.
+pub const reg_gs_base: int = 22
+/// Slot of ds in user_regs_struct.
+pub const reg_ds: int = 23
+/// Slot of es in user_regs_struct.
+pub const reg_es: int = 24
+/// Slot of fs in user_regs_struct.
+pub const reg_fs: int = 25
+/// Slot of gs in user_regs_struct.
+pub const reg_gs: int = 26
+
+
+/// Bytes read from the child; ok is false when the read failed.
+pub struct Bytes {
+    pub ok: bool,
+    pub data: List[byte],
+}
+
+
+/// Whether the child stopped (not exited) in raw wait status st.
+pub fn status_stopped(st: int) -> bool { (st & 255) == 127 }
+/// Stop signal of a stopped status.
+pub fn status_stop_signal(st: int) -> int { (st >> 8) & 255 }
+/// Whether the child exited normally.
+pub fn status_exited(st: int) -> bool { (st & 127) == 0 }
+/// Exit code of an exited status.
+pub fn status_exit_code(st: int) -> int { (st >> 8) & 255 }
+/// Whether the child was killed by a signal.
+pub fn status_signaled(st: int) -> bool { (st & 127) != 0 && (st & 255) != 127 }
+/// Terminating signal of a signaled status.
+pub fn status_term_signal(st: int) -> int { st & 127 }

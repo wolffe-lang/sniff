@@ -36,44 +36,6 @@ extern "c" fn setenv(name: *u8, value: *u8, overwrite: i32) -> i32
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 extern "c" fn chdir(path: *u8) -> i32
 
-/// One traced child and the scratch the calls share.
-pub struct Target {
-    pub pid: int,
-    pub memfd: int,
-    status: u64,
-    regs: u64,
-    word: u64,
-}
-
-pub const reg_count: int = 27
-pub const reg_r15: int = 0
-pub const reg_r14: int = 1
-pub const reg_r13: int = 2
-pub const reg_r12: int = 3
-pub const reg_rbp: int = 4
-pub const reg_rbx: int = 5
-pub const reg_r11: int = 6
-pub const reg_r10: int = 7
-pub const reg_r9: int = 8
-pub const reg_r8: int = 9
-pub const reg_rax: int = 10
-pub const reg_rcx: int = 11
-pub const reg_rdx: int = 12
-pub const reg_rsi: int = 13
-pub const reg_rdi: int = 14
-pub const reg_orig_rax: int = 15
-pub const reg_rip: int = 16
-pub const reg_cs: int = 17
-pub const reg_eflags: int = 18
-pub const reg_rsp: int = 19
-pub const reg_ss: int = 20
-pub const reg_fs_base: int = 21
-pub const reg_gs_base: int = 22
-pub const reg_ds: int = 23
-pub const reg_es: int = 24
-pub const reg_fs: int = 25
-pub const reg_gs: int = 26
-
 /// Heap bytes holding text and a terminating zero, for the C calls.
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 fn cstr(s: str) -> *u8 {
@@ -224,11 +186,6 @@ pub fn target_set_regs(t: Target, regs: List[u64]) -> int {
 }
 
 /// Read n bytes at addr through /proc/PID/mem. ok is false on a short read.
-pub struct Bytes {
-    pub ok: bool,
-    pub data: List[byte],
-}
-
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 pub fn target_read(t: Target, addr: u64, n: int) -> Bytes {
     unsafe {
@@ -303,15 +260,3 @@ pub fn target_write(t: Target, addr: u64, data: List[byte]) -> bool {
     }
 }
 
-/// Whether the child stopped (not exited) in raw wait status st.
-pub fn status_stopped(st: int) -> bool { (st & 255) == 127 }
-/// Stop signal of a stopped status.
-pub fn status_stop_signal(st: int) -> int { (st >> 8) & 255 }
-/// Whether the child exited normally.
-pub fn status_exited(st: int) -> bool { (st & 127) == 0 }
-/// Exit code of an exited status.
-pub fn status_exit_code(st: int) -> int { (st >> 8) & 255 }
-/// Whether the child was killed by a signal.
-pub fn status_signaled(st: int) -> bool { (st & 127) != 0 && (st & 255) != 127 }
-/// Terminating signal of a signaled status.
-pub fn status_term_signal(st: int) -> int { st & 127 }

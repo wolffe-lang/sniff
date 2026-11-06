@@ -1,0 +1,181 @@
+// The gdb command language, as far as S2 covers it. Each command returns ""
+// on success or the message gdb would print as an error.
+
+
+/// gdb prints an exit code as %#o: a leading zero and octal digits.
+fn octal2(n: int) -> str {
+    var digits = ""
+    var v = n
+    while v > 0 {
+        let d = v % 8
+        digits = "{d}{digits}"
+        v = v / 8
+    }
+    "0{digits}"
+}
+
+/// The report line(s) for the end of a program.
+fn report_end(mut s: Session, e: Event) {
+    let pid = s.target.pid
+    if e.kind == ev_exited {
+        if e.code == 0 {
+            emit_line(mut s, "[Inferior 1 (process {pid}) exited normally]")
+        } else {
+            emit_line(mut s, "[Inferior 1 (process {pid}) exited with code {octal2(e.code)}]")
+        }
+    } else if e.kind == ev_signaled {
+        emit_line(mut s, "")
+        emit_line(mut s, "Program terminated with signal {signal_name(e.signal)}, {signal_description(e.signal)}.")
+        emit_line(mut s, "The program no longer exists.")
+    }
+}
+
+/// Report how a resume ended.
+fn report_event(mut s: Session, e: Event) {
+    if e.kind == ev_exited || e.kind == ev_signaled {
+        report_end(mut s, e)
+    } else if e.kind == ev_signal {
+        emit_line(mut s, "")
+        emit_line(mut s, "Program received signal {signal_name(e.signal)}, {signal_description(e.signal)}.")
+        print_stop_location(mut s, true)
+    } else if e.kind == ev_breakpoint {
+        print_breakpoint_stop(mut s, e.bp)
+    } else if e.kind == ev_lost {
+        emit_line(mut s, "The program is not being run.")
+    }
+}
+
+fn print_stop_location(mut s: Session, with_address: bool) {
+    let pc = current_pc(s)
+    emit_line(mut s, "0x{hex16(pc)} in ??")
+}
+
+fn print_breakpoint_stop(mut s: Session, at: int) {
+    s.bps[at].hits += 1
+    let num = s.bps[at].num
+    emit_line(mut s, "")
+    emit(mut s, "Breakpoint {num}, ")
+    print_stop_location(mut s, false)
+}
+
+/// 16 lowercase hex digits.
+pub fn hex16(v: u64) -> str {
+    var out = ""
+    var i: int = 15
+    while i >= 0 {
+        let d = ((v >> (4 * i as u64)) & 15) as int
+        let c = if d < 10 { 48 + d } else { 87 + d }
+        out = "{out}{char_of(c)}"
+        i -= 1
+    }
+    out
+}
+
+fn char_of(c: int) -> str {
+    let b: List[byte] = [c as byte]
+    str_from_utf8(b) else { "?" }
+}
+
+fn cmd_run(mut s: Session, rest: str) -> str {
+    let trimmed = rest.trim()
+    if trimmed.len() > 0 { s.args = trimmed.words() }
+    let why = start_process(mut s)
+    if why.len() > 0 { return why }
+    let e = cont_event(mut s)
+    report_event(mut s, e)
+    ""
+}
+
+fn cmd_continue(mut s: Session, rest: str) -> str {
+    if !s.alive { return "The program is not being run." }
+    let e = cont_event(mut s)
+    report_event(mut s, e)
+    ""
+}
+
+fn cmd_kill(mut s: Session, rest: str) -> str {
+    if !s.alive { return "The program is not being run." }
+    let pid = s.target.pid
+    kill_process(mut s)
+    emit_line(mut s, "[Inferior 1 (process {pid}) killed]")
+    ""
+}
+
+/// Execute one command line. Returns "" or the error message.
+pub fn exec_line(mut s: Session, ln: str) -> str {
+    let text = ln.trim()
+    if text.len() == 0 || text.starts_with("#") { return "" }
+    let parts = text.splitn(" ", 2)
+    let word = parts[0]
+    var rest = ""
+    if parts.len > 1 { rest = parts[1] }
+    if word == "run" || word == "r" { return cmd_run(mut s, rest) }
+    if word == "continue" || word == "c" || word == "cont" { return cmd_continue(mut s, rest) }
+    if word == "kill" || word == "k" { return cmd_kill(mut s, rest) }
+    "Undefined command: \"{word}\".  Try \"help\"."
+}
+
+/// Run a command script; the first error aborts the rest, as gdb does for -x.
+pub fn run_script(mut s: Session, path: str) -> int {
+    let raw = fs_read_bytes(path) else { 
+        eprint("{path}: No such file or directory.")
+        return 1
+    }
+    let text = str_from_utf8(raw) else { "" }
+    s.script = path
+    var n: int = 0
+    for ln in text.lines() {
+        n += 1
+        s.lineno = n
+        let err = exec_line(mut s, ln)
+        if err.len() > 0 {
+            flush_out(mut s)
+            eprint("{path}:{n}: Error in sourced command file:")
+            eprint(err)
+            return 1
+        }
+    }
+    flush_out(mut s)
+    0
+}
+
+/// The debugger entry: sniff -batch -x SCRIPT PROG [--args A...].
+pub fn session_main(args: List[str]) -> int {
+    var script = ""
+    var prog = ""
+    var run_args: List[str] = []
+    var i: int = 0
+    while i < args.len {
+        let a = args[i]
+        if a == "-batch" || a == "--batch" {
+        } else if a == "-x" && i + 1 < args.len {
+            i += 1
+            script = args[i]
+        } else if a == "--args" {
+            i += 1
+            if i < args.len { prog = args[i] }
+            i += 1
+            while i < args.len { (mut run_args).push(args[i]); i += 1 }
+            break
+        } else if prog.len() == 0 {
+            prog = a
+        }
+        i += 1
+    }
+    if prog.len() == 0 {
+        eprint("usage: sniff -batch -x SCRIPT PROG [--args ARGS...]")
+        return 2
+    }
+    let p = prog_load(prog)
+    if p.err.len() > 0 && p.data.len == 0 {
+        eprint(p.err)
+        return 1
+    }
+    var s = session_new(take p)
+    s.args = run_args
+    var rc = 0
+    if script.len() > 0 { rc = run_script(mut s, script) }
+    if s.alive { kill_process(mut s) }
+    flush_out(mut s)
+    rc
+}

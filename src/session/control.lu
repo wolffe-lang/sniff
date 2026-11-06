@@ -1,0 +1,193 @@
+// Run control: start, resume, wait, breakpoint insertion, the stepped-over
+// original instruction, and the report of how a resume ended.
+
+use platform
+
+fn parse_hex(text: str) -> u64 {
+    var v: u64 = 0
+    for b in text.bytes() {
+        let c = b as int
+        var d = 0
+        if c >= 48 && c <= 57 { d = c - 48 }
+        else if c >= 97 && c <= 102 { d = c - 87 }
+        else if c >= 65 && c <= 70 { d = c - 55 }
+        else { return v }
+        v = v * 16 + d as u64
+    }
+    v
+}
+
+/// Lowest mapping start of the file at path in /proc/PID/maps (proc(5)).
+fn exe_base(pid: int, path: str) -> u64 {
+    let raw = fs_read_bytes("/proc/{pid}/maps") else { return 0 }
+    let text = str_from_utf8(raw) else { return 0 }
+    for ln in text.lines() {
+        if !ln.ends_with(path) { continue }
+        let parts = ln.split("-")
+        if parts.len < 2 { continue }
+        return parse_hex(parts[0])
+    }
+    0
+}
+
+/// The runtime address of a file address.
+pub fn rt(s: Session, a: u64) -> u64 { a + s.base }
+
+/// Start the program stopped at its exec. Returns "" or a reason.
+pub fn start_process(mut s: Session) -> str {
+    if s.alive { kill_process(mut s) }
+    let t = platform.target_spawn(s.prog.path, s.args, "", "")
+    if t.pid == 0 { return "Cannot start {s.prog.path}" }
+    s.target = copy t
+    s.alive = true
+    s.pending_signal = 0
+    s.base = 0
+    if s.prog.pie { s.base = exe_base(t.pid, s.prog.path) }
+    ""
+}
+
+/// Kill the child and reap it. Quiet; reports are the caller's.
+pub fn kill_process(mut s: Session) {
+    if !s.alive { return }
+    let _ = platform.target_kill(s.target)
+    s.alive = false
+    s.target = platform.target_none()
+}
+
+fn insert_all(mut s: Session) {
+    var i: int = 0
+    while i < s.bps.len {
+        if s.bps[i].enabled && !s.bps[i].inserted {
+            let a = rt(s, s.bps[i].addr)
+            let r = platform.target_read(s.target, a, 1)
+            if r.ok {
+                s.bps[i].orig = r.data[0] as int
+                let w = platform.target_write(s.target, a, [204 as byte])
+                s.bps[i].inserted = w
+            }
+        }
+        i += 1
+    }
+}
+
+fn remove_all(mut s: Session) {
+    var i: int = 0
+    while i < s.bps.len {
+        if s.bps[i].inserted {
+            let a = rt(s, s.bps[i].addr)
+            // another breakpoint at the same address already restored it
+            let _ = platform.target_write(s.target, a, [s.bps[i].orig as byte])
+            s.bps[i].inserted = false
+        }
+        i += 1
+    }
+}
+
+/// The current pc, or 0 when no registers can be read.
+pub fn current_pc(s: Session) -> u64 {
+    let regs = platform.target_regs(s.target)
+    if regs.len != 27 { return 0 }
+    regs[platform.reg_rip]
+}
+
+fn set_pc(mut s: Session, pc: u64) {
+    var regs = platform.target_regs(s.target)
+    if regs.len != 27 { return }
+    regs[platform.reg_rip] = pc
+    let _ = platform.target_set_regs(s.target, regs)
+}
+
+fn bp_at(s: Session, addr: u64) -> int {
+    var i: int = 0
+    while i < s.bps.len {
+        if s.bps[i].enabled && rt(s, s.bps[i].addr) == addr { return i }
+        i += 1
+    }
+    -1
+}
+
+fn forget_inserted(mut s: Session) {
+    var i: int = 0
+    while i < s.bps.len { s.bps[i].inserted = false; i += 1 }
+}
+
+fn lost() -> Event { Event { kind: ev_lost, signal: 0, code: 0, bp: 0 } }
+
+/// Classify a raw wait status. A SIGTRAP at a breakpoint's address + 1 is
+/// that breakpoint (Intel SDM: RIP follows the int3); the pc is wound back.
+fn classify(mut s: Session, st: int, stepping: bool) -> Event {
+    if st < 0 { s.alive = false; return lost() }
+    if platform.status_exited(st) {
+        s.alive = false
+        forget_inserted(mut s)
+        return Event { kind: ev_exited, signal: 0, code: platform.status_exit_code(st), bp: 0 }
+    }
+    if platform.status_signaled(st) {
+        s.alive = false
+        forget_inserted(mut s)
+        return Event { kind: ev_signaled, signal: platform.status_term_signal(st), code: 0, bp: 0 }
+    }
+    let sig = platform.status_stop_signal(st)
+    if sig == 5 {
+        let pc = current_pc(s)
+        if !stepping && pc > 0 {
+            let at = bp_at(s, pc - 1)
+            if at >= 0 {
+                set_pc(mut s, pc - 1)
+                return Event { kind: ev_breakpoint, signal: 5, code: 0, bp: at }
+            }
+        }
+        if stepping { return Event { kind: ev_stepped, signal: 5, code: 0, bp: -1 } }
+        return Event { kind: ev_signal, signal: 5, code: 0, bp: -1 }
+    }
+    Event { kind: ev_signal, signal: sig, code: 0, bp: -1 }
+}
+
+fn take_signal(mut s: Session) -> int {
+    let sig = s.pending_signal
+    s.pending_signal = 0
+    sig
+}
+
+/// Execute one instruction with breakpoints out of the way.
+pub fn step_insn(mut s: Session) -> Event {
+    flush_out(mut s)
+    let sig = take_signal(mut s)
+    if platform.target_step(s.target, sig) < 0 { s.alive = false; return lost() }
+    let st = platform.target_wait(s.target)
+    classify(mut s, st, true)
+}
+
+/// Continue until a breakpoint, a stopping signal or the end of the program.
+/// A breakpoint at the current pc is stepped over first: its instruction runs
+/// with the int3 removed, then breakpoints go back in.
+pub fn cont_event(mut s: Session) -> Event {
+    let pc = current_pc(s)
+    if bp_at(s, pc) >= 0 {
+        let e = step_insn(mut s)
+        if e.kind != ev_stepped { return e }
+        // the step may itself land on a breakpoint address
+        let here = current_pc(s)
+        let hit = bp_at(s, here)
+        if hit >= 0 { return Event { kind: ev_breakpoint, signal: 5, code: 0, bp: hit } }
+    }
+    loop {
+        insert_all(mut s)
+        flush_out(mut s)
+        let sig = take_signal(mut s)
+        if platform.target_cont(s.target, sig) < 0 { s.alive = false; return lost() }
+        let st = platform.target_wait(s.target)
+        if st >= 0 && platform.status_stopped(st) {
+            remove_all(mut s)
+        }
+        let e = classify(mut s, st, false)
+        if e.kind == ev_signal && e.signal != 5 {
+            if !signal_stops(e.signal) {
+                if signal_passes(e.signal) { s.pending_signal = e.signal }
+                continue
+            }
+            if signal_passes(e.signal) { s.pending_signal = e.signal }
+        }
+        return e
+    }
+}

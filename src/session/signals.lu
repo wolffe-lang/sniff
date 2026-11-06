@@ -1,0 +1,85 @@
+// Linux x86-64 signal numbers (signal(7)) with gdb's names, descriptions and
+// default handling (stop, print, pass), as recorded from the pinned gdb's
+// `info signals`. SIGTRAP and SIGINT are not passed to the program.
+
+/// gdb's name for a Linux signal number, or "" when gdb has none for it.
+pub fn signal_name(n: int) -> str {
+    if n == 1 { return "SIGHUP" }
+    if n == 2 { return "SIGINT" }
+    if n == 3 { return "SIGQUIT" }
+    if n == 4 { return "SIGILL" }
+    if n == 5 { return "SIGTRAP" }
+    if n == 6 { return "SIGABRT" }
+    if n == 7 { return "SIGBUS" }
+    if n == 8 { return "SIGFPE" }
+    if n == 9 { return "SIGKILL" }
+    if n == 10 { return "SIGUSR1" }
+    if n == 11 { return "SIGSEGV" }
+    if n == 12 { return "SIGUSR2" }
+    if n == 13 { return "SIGPIPE" }
+    if n == 14 { return "SIGALRM" }
+    if n == 15 { return "SIGTERM" }
+    if n == 17 { return "SIGCHLD" }
+    if n == 18 { return "SIGCONT" }
+    if n == 19 { return "SIGSTOP" }
+    if n == 20 { return "SIGTSTP" }
+    if n == 21 { return "SIGTTIN" }
+    if n == 22 { return "SIGTTOU" }
+    if n == 23 { return "SIGURG" }
+    if n == 24 { return "SIGXCPU" }
+    if n == 25 { return "SIGXFSZ" }
+    if n == 26 { return "SIGVTALRM" }
+    if n == 27 { return "SIGPROF" }
+    if n == 28 { return "SIGWINCH" }
+    if n == 29 { return "SIGIO" }
+    if n == 30 { return "SIGPWR" }
+    if n == 31 { return "SIGSYS" }
+    if n >= 34 && n <= 64 { return "SIG{n}" }
+    ""
+}
+
+/// gdb's description of a signal.
+pub fn signal_description(n: int) -> str {
+    if n == 1 { return "Hangup" }
+    if n == 2 { return "Interrupt" }
+    if n == 3 { return "Quit" }
+    if n == 4 { return "Illegal instruction" }
+    if n == 5 { return "Trace/breakpoint trap" }
+    if n == 6 { return "Aborted" }
+    if n == 7 { return "Bus error" }
+    if n == 8 { return "Arithmetic exception" }
+    if n == 9 { return "Killed" }
+    if n == 10 { return "User defined signal 1" }
+    if n == 11 { return "Segmentation fault" }
+    if n == 12 { return "User defined signal 2" }
+    if n == 13 { return "Broken pipe" }
+    if n == 14 { return "Alarm clock" }
+    if n == 15 { return "Terminated" }
+    if n == 17 { return "Child status changed" }
+    if n == 18 { return "Continued" }
+    if n == 19 { return "Stopped (signal)" }
+    if n == 20 { return "Stopped (user)" }
+    if n == 21 { return "Stopped (tty input)" }
+    if n == 22 { return "Stopped (tty output)" }
+    if n == 23 { return "Urgent I/O condition" }
+    if n == 24 { return "CPU time limit exceeded" }
+    if n == 25 { return "File size limit exceeded" }
+    if n == 26 { return "Virtual timer expired" }
+    if n == 27 { return "Profiling timer expired" }
+    if n == 28 { return "Window size changed" }
+    if n == 29 { return "I/O possible" }
+    if n == 30 { return "Power fail/restart" }
+    if n == 31 { return "Bad system call" }
+    if n >= 34 && n <= 64 { return "Real-time event {n}" }
+    "Unknown signal {n}"
+}
+
+/// Whether gdb stops the program when it receives the signal.
+pub fn signal_stops(n: int) -> bool {
+    !(n == 14 || n == 23 || n == 17 || n == 29 || n == 26 || n == 27 || n == 28)
+}
+
+/// Whether a stopped program is handed the signal on resume.
+pub fn signal_passes(n: int) -> bool {
+    !(n == 2 || n == 5)
+}

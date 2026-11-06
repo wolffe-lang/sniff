@@ -1,0 +1,78 @@
+// The debugging session: one program, at most one traced child, the
+// breakpoint table and the command interpreter's state. Platform calls go
+// through the platform module only.
+
+use platform
+
+pub const st_none: int = 0
+pub const st_stopped: int = 1
+
+/// One breakpoint (a single location; gdb's multi-location case is a list of these).
+pub struct Bp {
+    pub num: int,
+    pub addr: u64,
+    pub hits: int,
+    pub temp: bool,
+    pub enabled: bool,
+    pub internal: bool,
+    pub orig: int,
+    pub inserted: bool,
+}
+
+/// How a resume ended.
+pub struct Event {
+    pub kind: int,
+    pub signal: int,
+    pub code: int,
+    pub bp: int,
+}
+
+pub const ev_exited: int = 1
+pub const ev_signaled: int = 2
+pub const ev_breakpoint: int = 3
+pub const ev_signal: int = 4
+pub const ev_stepped: int = 5
+pub const ev_lost: int = 6
+
+/// All of the debugger's state.
+pub struct Session {
+    pub prog: Prog,
+    pub target: platform.Target,
+    pub alive: bool,
+    pub base: u64,
+    pub args: List[str],
+    pub out: List[byte],
+    pub script: str,
+    pub lineno: int,
+    pub bps: List[Bp],
+    pub bp_next: int,
+    pub pending_signal: int,
+}
+
+/// Printed text goes to standard output through one buffer, flushed before
+/// the child runs and at exit so output and the child's own interleave.
+pub fn emit(mut s: Session, text: str) {
+    for b in text.bytes() { (mut s.out).push(b) }
+    if s.out.len >= 65536 { flush_out(mut s) }
+}
+
+/// Emit text and a newline.
+pub fn emit_line(mut s: Session, text: str) {
+    emit(mut s, text)
+    (mut s.out).push(10 as byte)
+}
+
+/// Write the buffered output.
+pub fn flush_out(mut s: Session) {
+    if s.out.len == 0 { return }
+    fs_write_chunk(1, s.out) else |_| { }
+    s.out = []
+}
+
+/// A session over a loaded program.
+pub fn session_new(take p: Prog) -> Session {
+    Session {
+        prog: p, target: platform.target_none(), alive: false, base: 0, args: [], out: [],
+        script: "", lineno: 0, bps: [], bp_next: 1, pending_signal: 0,
+    }
+}

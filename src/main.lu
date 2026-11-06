@@ -2,6 +2,7 @@
 // sniff, a debugger in wolf. S1 ships the read-only `dump` command.
 
 use dump
+use session
 
 fn usage() {
     eprint("usage: sniff dump MODE FILE")
@@ -40,6 +41,10 @@ fn resolve(path: str) -> str ! {dsym_not_found, dsym_ambiguous} {
 
 fn main() {
     let args = env_args()
+    if args.len > 0 && args[0] != "dump" {
+        os_exit(session.session_main(args))
+        return
+    }
     if args.len != 3 || args[0] != "dump" {
         usage()
         os_exit(2)
