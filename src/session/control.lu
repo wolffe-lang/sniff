@@ -290,6 +290,7 @@ fn cont_event(mut s: Session) -> Event {
     if bp_at(s, pc) >= 0 {
         let e = step_insn(mut s)
         if e.kind != ev_stepped { return e }
+        s.bps[bp_at(s, pc)].inserted = true
         // the step may itself land on a breakpoint address
         let here = current_pc(s)
         let hit = bp_at(s, here)
