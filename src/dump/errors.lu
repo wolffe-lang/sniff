@@ -1,6 +1,7 @@
 // The dump's failure set: every reader row it can propagate, plus its own.
 // Rows are structural, so each reader's narrower set flows through `?`.
 
+/// Every row a dump can stop with: the readers' rows plus the dump's own.
 pub error DumpError = {
     invalid_bounds,
     truncated,

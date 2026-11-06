@@ -2,6 +2,7 @@
 
 use readers
 
+/// Render every abbreviation table in .debug_abbrev; malformed tables stop the dump by name.
 pub fn dump_abbrev(mut o: Out, n: Names, data: List[byte], s: readers.DebugSections) -> () ! DumpError {
     line(mut o, ".debug_abbrev contents:")
     let start = s.abbrev.span.start

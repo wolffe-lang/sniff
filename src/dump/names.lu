@@ -36,6 +36,7 @@ pub fn name_in(names: List[str], code: u64) -> str {
     ""
 }
 
+/// Build every standard name list once; total, no rows.
 pub fn names_new() -> Names {
     Names {
         tag: [

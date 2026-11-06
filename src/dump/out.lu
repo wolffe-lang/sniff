@@ -11,25 +11,30 @@ pub struct Out {
     pub failed: bool,
 }
 
+/// An empty buffer over descriptor 1.
 pub fn out_new() -> Out {
     Out { buf: [], failed: false }
 }
 
+/// Append text, writing when 64 KiB are buffered.
 pub fn put(mut o: Out, s: str) {
     for b in s.bytes() { (mut o.buf).push(b) }
     if o.buf.len >= 65536 { flush(mut o) }
 }
 
+/// Append one byte, writing when 64 KiB are buffered.
 pub fn put_byte(mut o: Out, b: byte) {
     (mut o.buf).push(b)
     if o.buf.len >= 65536 { flush(mut o) }
 }
 
+/// Append text and a newline.
 pub fn line(mut o: Out, s: str) {
     put(mut o, s)
     put_byte(mut o, 10 as byte)
 }
 
+/// Write what is buffered; a failed write sets failed.
 pub fn flush(mut o: Out) {
     if o.buf.len == 0 { return }
     fs_write_chunk(1, o.buf) else |_| { o.failed = true }
@@ -71,9 +76,13 @@ pub fn put_raw(mut o: Out, data: List[byte], span: readers.ByteSpan) {
     }
 }
 
+/// Two lowercase hex digits, zero-padded.
 pub fn hex2(v: u64) -> str { "{v:02x}" }
+/// Four lowercase hex digits, zero-padded.
 pub fn hex4(v: u64) -> str { "{v:04x}" }
+/// Eight lowercase hex digits, zero-padded.
 pub fn hex8(v: u64) -> str { "{v:08x}" }
+/// Sixteen lowercase hex digits, zero-padded.
 pub fn hex16(v: u64) -> str { "{v:016x}" }
 
 /// 0x-prefixed, zero-padded to the DWARF format's offset width.

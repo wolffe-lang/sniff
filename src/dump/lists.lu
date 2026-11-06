@@ -15,6 +15,7 @@ fn lists_raw_name(kind: u64) -> str {
     "DW_LLE_start_length"
 }
 
+/// Render DWARF 4 .debug_ranges lists: offset, raw pair, end markers.
 pub fn dump_ranges(mut o: Out, data: List[byte], s: readers.DebugSections) -> () ! DumpError {
     line(mut o, ".debug_ranges contents:")
     let start = s.ranges.span.start
@@ -32,6 +33,7 @@ pub fn dump_ranges(mut o: Out, data: List[byte], s: readers.DebugSections) -> ()
     }
 }
 
+/// Render DWARF 4 .debug_loc lists with decoded expressions.
 pub fn dump_loc(mut o: Out, n: Names, data: List[byte], s: readers.DebugSections) -> () ! DumpError {
     line(mut o, ".debug_loc contents:")
     let arch = arch_of(s)
@@ -93,6 +95,7 @@ fn lists_header(mut o: Out, data: List[byte], t: readers.DwarfIndexTable, what: 
     }
 }
 
+/// Render every DWARF 5 .debug_rnglists contribution and its lists.
 pub fn dump_rnglists(mut o: Out, data: List[byte], s: readers.DebugSections) -> () ! DumpError {
     line(mut o, ".debug_rnglists contents:")
     let start = s.rnglists.span.start
@@ -125,6 +128,7 @@ pub fn dump_rnglists(mut o: Out, data: List[byte], s: readers.DebugSections) -> 
     }
 }
 
+/// Render DWARF 4 .debug_loc lists with decoded expressions.
 pub fn dump_loclists(mut o: Out, n: Names, data: List[byte], s: readers.DebugSections) -> () ! DumpError {
     line(mut o, ".debug_loclists contents:")
     let arch = arch_of(s)

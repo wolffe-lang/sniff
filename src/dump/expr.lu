@@ -3,7 +3,9 @@
 
 use readers
 
+/// Register naming for ELF64 x86-64 inputs (psABI DWARF numbers).
 pub const arch_x86_64: int = 1
+/// Register naming for Mach-O arm64 inputs (AADWARF64 numbers).
 pub const arch_arm64: int = 2
 
 /// The architecture a container implies: ELF readers take x86-64 only and

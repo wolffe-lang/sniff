@@ -19,7 +19,9 @@ pub error DwarfListError = {
 
 /// DWARF 4 entries carry no kind byte; these synthetic kinds name them.
 pub const dwarf_list4_end: u64 = 0
+/// A DWARF 4 base address selection entry (all-ones first address).
 pub const dwarf_list4_base: u64 = 1
+/// A DWARF 4 address pair, relative to the current base.
 pub const dwarf_list4_pair: u64 = 2
 
 /// One entry. value1/value2 hold its operands as encoded (addresses, indexes,

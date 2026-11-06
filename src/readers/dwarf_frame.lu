@@ -26,8 +26,11 @@ pub error DwarfFrameError = {
     dwarf_frame_unsupported_address_size,
 }
 
+/// FrameEntry.kind of a CIE.
 pub const frame_cie: int = 1
+/// FrameEntry.kind of an FDE.
 pub const frame_fde: int = 2
+/// FrameEntry.kind of an .eh_frame zero-length terminator.
 pub const frame_terminator: int = 3
 
 /// A CIE: absolute offsets, raw header fields and decoded augmentation.
@@ -334,60 +337,61 @@ pub struct FrameInsn {
     pub block: ByteSpan,
 }
 
+/// Decode one instruction; unknown opcodes are refused by name, never skipped.
 pub fn frame_instruction(
     data: List[byte],
     mut c: Cursor,
     address_size: int,
 ) -> FrameInsn ! DwarfFrameError {
     let at = c.pos
-    let byte = uint_le(data, mut c, 1)? as int
+    let code = uint_le(data, mut c, 1)? as int
     var insn = FrameInsn {
-        offset: at, op: byte, reg: 0, reg2: 0, unsigned: 0, signed: 0,
+        offset: at, op: code, reg: 0, reg2: 0, unsigned: 0, signed: 0,
         block: ByteSpan { start: at, length: 0 },
     }
-    let high = byte & 192
+    let high = code & 192
     if high != 0 {
         insn.op = high
         if high == 64 {
-            insn.unsigned = (byte & 63) as u64
+            insn.unsigned = (code & 63) as u64
         } else if high == 128 {
-            insn.reg = (byte & 63) as u64
+            insn.reg = (code & 63) as u64
             insn.unsigned = uleb64(data, mut c)?
         } else {
-            insn.reg = (byte & 63) as u64
+            insn.reg = (code & 63) as u64
         }
         return insn
     }
-    if byte == 0 || byte == 10 || byte == 11 {
-    } else if byte == 1 {
+    if code == 0 || code == 10 || code == 11 {
+    } else if code == 1 {
         insn.unsigned = uint_le(data, mut c, address_size)?
-    } else if byte == 2 {
+    } else if code == 2 {
         insn.unsigned = uint_le(data, mut c, 1)?
-    } else if byte == 3 {
+    } else if code == 3 {
         insn.unsigned = uint_le(data, mut c, 2)?
-    } else if byte == 4 {
+    } else if code == 4 {
         insn.unsigned = uint_le(data, mut c, 4)?
-    } else if byte == 5 || byte == 9 || byte == 12 || byte == 20 {
+    } else if code == 5 || code == 9 || code == 12 || code == 20 {
         insn.reg = uleb64(data, mut c)?
         insn.unsigned = uleb64(data, mut c)?
         insn.reg2 = insn.unsigned
-    } else if byte == 6 || byte == 7 || byte == 8 || byte == 13 {
+    } else if code == 6 || code == 7 || code == 8 || code == 13 {
         insn.reg = uleb64(data, mut c)?
-    } else if byte == 14 || byte == 46 {
+    } else if code == 14 || code == 46 {
         insn.unsigned = uleb64(data, mut c)?
-    } else if byte == 15 {
+    } else if code == 15 {
         let size = uleb64(data, mut c)?
         if size > (c.end - c.pos) as u64 { return truncated }
         insn.block = take_span(data, mut c, size as int)?
-    } else if byte == 16 || byte == 22 {
+    } else if code == 16 || code == 22 {
         insn.reg = uleb64(data, mut c)?
         let size = uleb64(data, mut c)?
         if size > (c.end - c.pos) as u64 { return truncated }
         insn.block = take_span(data, mut c, size as int)?
-    } else if byte == 17 || byte == 18 || byte == 21 {
+    } else if code == 17 || code == 18 || code == 21 {
         insn.reg = uleb64(data, mut c)?
         insn.signed = sleb64(data, mut c)?
-    } else if byte == 19 {
+    } else if code == 19 {
         insn.signed = sleb64(data, mut c)?
     } else {
         return dwarf_frame_unknown_instruction

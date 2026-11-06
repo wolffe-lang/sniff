@@ -214,6 +214,7 @@ fn dump_macho_symbols(mut o: Out, data: List[byte]) -> () ! DumpError {
     }
 }
 
+/// Render the symbol tables in the pinned oracle layout of the container's platform.
 pub fn dump_symbols(mut o: Out, data: List[byte], s: readers.DebugSections) -> () ! DumpError {
     if s.format == readers.object_elf { return dump_elf_symbols(mut o, data)? }
     dump_macho_symbols(mut o, data)?

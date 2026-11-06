@@ -14,6 +14,7 @@ fn index_length(t: readers.DwarfIndexTable) -> u64 {
     (t.end - t.start - header) as u64
 }
 
+/// Render every .debug_addr contribution: header line and its addresses.
 pub fn dump_addr(mut o: Out, data: List[byte], s: readers.DebugSections) -> () ! DumpError {
     line(mut o, ".debug_addr contents:")
     let start = s.addr.span.start
@@ -36,6 +37,7 @@ pub fn dump_addr(mut o: Out, data: List[byte], s: readers.DebugSections) -> () !
     }
 }
 
+/// Render every .debug_str_offsets contribution with each offset's string.
 pub fn dump_str_offsets(mut o: Out, data: List[byte], s: readers.DebugSections) -> () ! DumpError {
     line(mut o, ".debug_str_offsets contents:")
     let start = s.str_offsets.span.start

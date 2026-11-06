@@ -49,7 +49,9 @@ pub error ObjectError = {
     unsupported_split_dwarf,
 }
 
+/// DebugSections.format of an ELF64 x86-64 file.
 pub const object_elf: int = 1
+/// DebugSections.format of a Mach-O 64 arm64 file.
 pub const object_macho: int = 2
 
 /// One named section's file bytes and load address. length 0 means the

@@ -324,6 +324,7 @@ fn frame_section(
     }
 }
 
+/// Render .debug_frame then .eh_frame, each entry with its decoded rows.
 pub fn dump_frames(mut o: Out, n: Names, data: List[byte], s: readers.DebugSections) -> () ! DumpError {
     let x = FrameCtx {
         arch: arch_of(s), apple: s.format == readers.object_macho,
