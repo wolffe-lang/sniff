@@ -1,0 +1,281 @@
+// DWARF5 sections 2.5–2.6 and 7.7/Table 7.9. GNU e0/f3 layouts are
+// labelled binary observations in tests/evidence/expression-encoding.
+// This module decodes structure only: no stack execution, inferior reads,
+// register lookup, entry-state reconstruction, TLS resolution or DIE evaluation.
+
+/// Bounded byte failures, unsupported opcode identities, malformed operand or
+/// reference domains, and distinct operation/depth budget exhaustion.
+pub error DwarfExprError = {
+    invalid_bounds, truncated, unsupported_width, unterminated_leb128,
+    leb128_overflow, unterminated_string, offset_overflow, resource_limit,
+    unsupported_address_size, unsupported_dwarf_version,
+    dwarf_expr_unknown_opcode, dwarf_expr_invalid_operand,
+    dwarf_expr_invalid_branch, dwarf_expr_invalid_reference,
+    dwarf_expr_invalid_structure, dwarf_expr_operation_limit, dwarf_expr_depth_limit,
+}
+
+/// One flat pre-order operation. Parent is -1 at the root; subtree_end is an
+/// exclusive record index. end includes an entry-value body's encoded bytes.
+/// Fixed signed operands retain their original bits in unsignedN; signedN is
+/// the sign-extended value. SLEB unsignedN holds its decoded two's-complement bits.
+/// implicit is the opcode-encoded literal/register number, not a byte operand.
+/// reference_kind: 0 none, 1 CU DIE, 2 info-section DIE, 3 generic type.
+/// DIE starts/type kinds and addrx/constx table indexes need caller resolution.
+pub struct DwarfExprOp {
+    pub offset: int, pub end: int, pub opcode: u64,
+    pub parent: int, pub depth: int, pub subtree_end: int,
+    pub scope_start: int, pub scope_end: int,
+    pub operand_count: int, pub operand_span: ByteSpan,
+    pub unsigned1: u64, pub unsigned2: u64,
+    pub signed1: i64, pub signed2: i64,
+    pub first_signed: bool, pub second_signed: bool,
+    pub implicit: u64, pub has_block: bool, pub block: ByteSpan,
+    pub reference_kind: int, pub reference: int, pub branch_target: int,
+}
+
+/// Decoded operations and the caller's remaining charged work budget.
+pub struct DwarfExprProgram {
+    pub ops: List[DwarfExprOp],
+    pub fuel_remaining: int,
+}
+
+struct DwarfExprFrame {
+    start: int, end: int, position: int, parent: int, depth: int,
+}
+
+fn dwarf_expr_charge(mut fuel: int) -> () ! DwarfExprError {
+    if fuel < 1 { return resource_limit }
+    fuel -= 1
+}
+fn dwarf_expr_signed(raw: u64, width: int) -> i64 {
+    if width == 8 { return raw as wrapping[i64] as i64 }
+    let bits = (width*8) as u64
+    let sign: u64 = 1 << (bits-1)
+    if raw & sign != 0 {
+        let mask: u64 = (1 << bits)-1
+        return (raw | !mask) as wrapping[i64] as i64
+    }
+    raw as i64
+}
+fn dwarf_expr_unit_reference(raw: u64, unit: DwarfUnit) -> int ! DwarfExprError {
+    if raw < (unit.body-unit.start) as u64 || raw >= (unit.end-unit.start) as u64 {
+        return dwarf_expr_invalid_reference
+    }
+    unit.start + raw as int
+}
+fn dwarf_expr_info_reference(raw: u64, info: ByteSpan) -> int ! DwarfExprError {
+    if raw >= info.length as u64 { return dwarf_expr_invalid_reference }
+    info.start + raw as int
+}
+fn dwarf_expr_block(data: List[byte], mut c: Cursor, length: u64, nested: bool) -> ByteSpan ! DwarfExprError {
+    if length > (c.end-c.pos) as u64 { return truncated }
+    if !nested { return take_span(data, mut c, length as int)? }
+    // Child operations charge their bytes when visited. Skipping to the outer
+    // continuation is constant work and does not allocate/copy the payload.
+    let start = c.pos
+    c.pos += length as int
+    ByteSpan {start: start, length: length as int}
+}
+fn dwarf_expr_branch(after: int, delta: i64, scope_start: int, scope_end: int) -> int ! DwarfExprError {
+    if delta >= 0 {
+        if delta as u64 > (scope_end-after) as u64 { return dwarf_expr_invalid_branch }
+        return after + delta as int
+    }
+    // Branch deltas are sign-extended i16, so negation is bounded.
+    let magnitude = -delta
+    if magnitude as u64 > (after-scope_start) as u64 { return dwarf_expr_invalid_branch }
+    after - magnitude as int
+}
+fn dwarf_expr_no_operand(opcode: u64) -> bool {
+    opcode == 0x06 || (opcode >= 0x12 && opcode <= 0x14) ||
+        (opcode >= 0x16 && opcode <= 0x22) || (opcode >= 0x24 && opcode <= 0x27) ||
+        (opcode >= 0x29 && opcode <= 0x2e) || opcode == 0x96 || opcode == 0x97 ||
+        opcode == 0x9b || opcode == 0x9c || opcode == 0x9f || opcode == 0xe0
+}
+
+/// Decode one expression using a bounded iterative nesting stack. All byte
+/// offsets index data. CU and info references are domain-checked, not resolved
+/// to DIE starts/kinds. Address indexes remain raw for the indexed-table reader.
+/// Per-expression hard caps are 4096 operations and nested operation depth 64;
+/// root operations have depth 0. Work is charged globally and returned unused.
+pub fn dwarf_expr_read(data: List[byte], span: ByteSpan, unit: DwarfUnit, info: ByteSpan,
+    fuel: int, max_operations: int, max_depth: int) -> DwarfExprProgram ! DwarfExprError {
+    if fuel < 0 || fuel > 1500000000 { return resource_limit }
+    if max_operations < 0 { return dwarf_expr_operation_limit }
+    if max_depth < 0 { return dwarf_expr_depth_limit }
+    let op_cap = if max_operations < 4096 { max_operations } else { 4096 }
+    let depth_cap = if max_depth < 64 { max_depth } else { 64 }
+    let end = checked_offset(span.start, span.length, data.len)?
+    let info_end = checked_offset(info.start, info.length, data.len)?
+    if unit.version != 4 && unit.version != 5 { return unsupported_dwarf_version }
+    if unit.address_size != 1 && unit.address_size != 2 && unit.address_size != 4 && unit.address_size != 8 {
+        return unsupported_address_size
+    }
+    if unit.offset_size != 4 && unit.offset_size != 8 { return unsupported_width }
+    if unit.start < info.start || unit.body < unit.start || unit.end < unit.body || unit.end > info_end {
+        return dwarf_expr_invalid_reference
+    }
+    var remaining = fuel
+    var ops: List[DwarfExprOp] = []
+    var frames: List[DwarfExprFrame] = [DwarfExprFrame {
+        start: span.start, end: end, position: span.start, parent: -1, depth: 0}]
+    while frames.len > 0 {
+        dwarf_expr_charge(mut remaining)?
+        let top = frames.len-1
+        let frame = copy frames[top]
+        if frame.position == frame.end {
+            if frame.parent >= 0 { ops[frame.parent].subtree_end = ops.len }
+            let _ = (mut frames).pop() else { return dwarf_expr_invalid_structure }
+            continue
+        }
+        if ops.len >= op_cap { return dwarf_expr_operation_limit }
+        var c = cursor(frame.position, frame.end, remaining)
+        let opcode = uint_le(data, mut c, 1)?
+        let index = ops.len
+        var op = DwarfExprOp {offset: frame.position, end: c.pos, opcode: opcode,
+            parent: frame.parent, depth: frame.depth, subtree_end: index+1,
+            scope_start: frame.start, scope_end: frame.end,
+            operand_count: 0, operand_span: ByteSpan {start: c.pos, length: 0},
+            unsigned1: 0, unsigned2: 0, signed1: 0, signed2: 0,
+            first_signed: false, second_signed: false, implicit: 0,
+            has_block: false, block: ByteSpan {start: c.pos, length: 0},
+            reference_kind: 0, reference: -1, branch_target: -1}
+        var nested: bool = false
+        if opcode >= 0x30 && opcode <= 0x4f {
+            op.implicit = opcode-0x30
+        } else if opcode >= 0x50 && opcode <= 0x6f {
+            op.implicit = opcode-0x50
+        } else if opcode >= 0x70 && opcode <= 0x8f {
+            op.implicit = opcode-0x70
+            op.operand_count = 1
+            op.first_signed = true
+            op.signed1 = sleb64(data, mut c)?
+            op.unsigned1 = op.signed1 as wrapping[u64] as u64
+        } else if opcode == 0x03 {
+            op.operand_count = 1
+            op.unsigned1 = uint_le(data, mut c, unit.address_size)?
+        } else if opcode >= 0x08 && opcode <= 0x0f {
+            let shift = ((opcode-0x08)/2) as int
+            let width: int = 1 << shift
+            op.operand_count = 1
+            op.unsigned1 = uint_le(data, mut c, width)?
+            if opcode % 2 == 1 {
+                op.first_signed = true
+                op.signed1 = dwarf_expr_signed(op.unsigned1, width)
+            }
+        } else if opcode == 0x10 || opcode == 0x23 || opcode == 0x90 || opcode == 0x93 || opcode == 0xa1 || opcode == 0xa2 {
+            op.operand_count = 1
+            op.unsigned1 = uleb64(data, mut c)?
+        } else if opcode == 0x11 || opcode == 0x91 {
+            op.operand_count = 1
+            op.first_signed = true
+            op.signed1 = sleb64(data, mut c)?
+            op.unsigned1 = op.signed1 as wrapping[u64] as u64
+        } else if opcode == 0x15 || opcode == 0x94 || opcode == 0x95 {
+            op.operand_count = 1
+            op.unsigned1 = uint_le(data, mut c, 1)?
+            if opcode != 0x15 && op.unsigned1 > unit.address_size as u64 { return dwarf_expr_invalid_operand }
+        } else if opcode == 0x92 {
+            op.operand_count = 2
+            op.unsigned1 = uleb64(data, mut c)?
+            op.signed2 = sleb64(data, mut c)?
+            op.unsigned2 = op.signed2 as wrapping[u64] as u64
+            op.second_signed = true
+        } else if opcode == 0x9d {
+            op.operand_count = 2
+            op.unsigned1 = uleb64(data, mut c)?
+            op.unsigned2 = uleb64(data, mut c)?
+        } else if opcode == 0x28 || opcode == 0x2f {
+            op.operand_count = 1
+            op.first_signed = true
+            op.unsigned1 = uint_le(data, mut c, 2)?
+            op.signed1 = dwarf_expr_signed(op.unsigned1, 2)
+            op.branch_target = dwarf_expr_branch(c.pos, op.signed1, frame.start, frame.end)?
+        } else if opcode == 0x98 || opcode == 0x99 || opcode == 0x9a {
+            op.operand_count = 1
+            let width = if opcode == 0x98 { 2 } else if opcode == 0x99 { 4 } else { unit.offset_size }
+            op.unsigned1 = uint_le(data, mut c, width)?
+            if opcode == 0x9a {
+                op.reference_kind = 2
+                op.reference = dwarf_expr_info_reference(op.unsigned1, info)?
+            } else {
+                op.reference_kind = 1
+                op.reference = dwarf_expr_unit_reference(op.unsigned1, unit)?
+            }
+        } else if opcode == 0xa0 {
+            op.operand_count = 2
+            op.unsigned1 = uint_le(data, mut c, unit.offset_size)?
+            op.signed2 = sleb64(data, mut c)?
+            op.unsigned2 = op.signed2 as wrapping[u64] as u64
+            op.second_signed = true
+            op.reference_kind = 2
+            op.reference = dwarf_expr_info_reference(op.unsigned1, info)?
+        } else if opcode == 0x9e || opcode == 0xa3 || opcode == 0xf3 {
+            op.operand_count = 2
+            op.unsigned1 = uleb64(data, mut c)?
+            nested = opcode != 0x9e
+            op.has_block = true
+            op.block = dwarf_expr_block(data, mut c, op.unsigned1, nested)?
+        } else if opcode == 0xa4 {
+            op.operand_count = 3
+            op.unsigned1 = uleb64(data, mut c)?
+            op.unsigned2 = uint_le(data, mut c, 1)?
+            op.reference_kind = 1
+            op.reference = dwarf_expr_unit_reference(op.unsigned1, unit)?
+            op.has_block = true
+            op.block = dwarf_expr_block(data, mut c, op.unsigned2, false)?
+        } else if opcode == 0xa5 || opcode == 0xa6 || opcode == 0xa7 {
+            op.operand_count = 2
+            if opcode == 0xa5 { op.unsigned1 = uleb64(data, mut c)? }
+            else { op.unsigned1 = uint_le(data, mut c, 1)? }
+            op.unsigned2 = uleb64(data, mut c)?
+            op.reference_kind = 1
+            op.reference = dwarf_expr_unit_reference(op.unsigned2, unit)?
+        } else if opcode == 0xa8 || opcode == 0xa9 {
+            op.operand_count = 1
+            op.unsigned1 = uleb64(data, mut c)?
+            if op.unsigned1 == 0 { op.reference_kind = 3 }
+            else {
+                op.reference_kind = 1
+                op.reference = dwarf_expr_unit_reference(op.unsigned1, unit)?
+            }
+        } else if !dwarf_expr_no_operand(opcode) {
+            return dwarf_expr_unknown_opcode
+        }
+        op.end = c.pos
+        op.operand_span.length = c.pos-op.operand_span.start
+        remaining = c.fuel
+        frames[top].position = c.pos
+        let block_start = op.block.start
+        let block_length = op.block.length
+        (mut ops).push(op)
+        if nested && block_length > 0 {
+            if frame.depth >= depth_cap { return dwarf_expr_depth_limit }
+            (mut frames).push(DwarfExprFrame {start: block_start, end: block_start+block_length,
+                position: block_start, parent: index, depth: frame.depth+1})
+        }
+    }
+    // Offsets are strictly ascending even with flat nested records. Binary search
+    // avoids quadratic branch validation and rejects jumps into operands, raw
+    // blocks, or a different nested expression. A scope's end is a legal exit.
+    var i: int = 0
+    while i < ops.len {
+        dwarf_expr_charge(mut remaining)?
+        let target = ops[i].branch_target
+        if target >= 0 && target != ops[i].scope_end {
+            var low: int = 0
+            var high = ops.len
+            while low < high {
+                dwarf_expr_charge(mut remaining)?
+                let middle = low + (high-low)/2
+                if ops[middle].offset < target { low = middle+1 }
+                else { high = middle }
+            }
+            if low == ops.len || ops[low].offset != target || ops[low].parent != ops[i].parent {
+                return dwarf_expr_invalid_branch
+            }
+        }
+        i += 1
+    }
+    DwarfExprProgram {ops: ops, fuel_remaining: remaining}
+}
