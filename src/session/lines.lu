@@ -1,0 +1,71 @@
+// The line table as the session uses it: pc to source line, line to
+// addresses, and where a function's breakpoint goes past its prologue.
+
+/// A source line and the address range of its line-table row.
+pub struct Sal {
+    pub ok: bool,
+    pub file: int,
+    pub line: int,
+    pub start: u64,
+    pub end: u64,
+}
+
+fn no_sal() -> Sal { Sal { ok: false, file: -1, line: 0, start: 0, end: 0 } }
+
+/// Index of the last row whose address is <= addr, or -1.
+fn last_row_at_or_before(p: Prog, addr: u64) -> int {
+    var lo = 0
+    var hi = p.lines.len
+    while lo < hi {
+        let mid = lo + (hi - lo) / 2
+        if p.lines[mid].addr <= addr { lo = mid + 1 } else { hi = mid }
+    }
+    lo - 1
+}
+
+/// The row that covers a file address, gdb's find_pc_line.
+pub fn find_sal(p: Prog, addr: u64) -> Sal {
+    var i = last_row_at_or_before(p, addr)
+    if i < 0 { return no_sal() }
+    let at = p.lines[i].addr
+    // among rows at this address, the last that is not a sequence end
+    while i >= 0 && p.lines[i].addr == at && p.lines[i].end_seq { i -= 1 }
+    if i < 0 || p.lines[i].addr != at { return no_sal() }
+    var j = i + 1
+    while j < p.lines.len && p.lines[j].addr == at { j += 1 }
+    var end = at
+    if j < p.lines.len { end = p.lines[j].addr }
+    Sal { ok: true, file: p.lines[i].file, line: p.lines[i].line, start: at, end: end }
+}
+
+/// Whether a line-table row that is a statement boundary starts exactly at addr.
+pub fn stmt_start(p: Prog, addr: u64) -> bool {
+    var i = last_row_at_or_before(p, addr)
+    while i >= 0 && p.lines[i].addr == addr {
+        if p.lines[i].stmt && !p.lines[i].end_seq { return true }
+        i -= 1
+    }
+    false
+}
+
+/// Where gdb puts a breakpoint on a function: past `push %rbp; mov %rsp,%rbp`
+/// (after an endbr64), moved to the next row when that lands mid-row.
+pub fn skip_prologue(p: Prog, low: u64) -> u64 {
+    // clang marks the end of the prologue; gcc does not
+    var i = last_row_at_or_before(p, low)
+    if i < 0 { return low }
+    while i > 0 && p.lines[i - 1].addr == p.lines[i].addr { i -= 1 }
+    let first_line = p.lines[i].line
+    var k = i
+    var pe = 0
+    while k < p.lines.len && p.lines[k].addr < low + 4096 && k < i + 8 {
+        if p.lines[k].prologue_end && p.lines[k].addr > low { pe = p.lines[k].addr as int; break }
+        if p.lines[k].end_seq { break }
+        k += 1
+    }
+    if pe != 0 { return pe as u64 }
+    // second row with a different address
+    let s = find_sal(p, low)
+    if s.ok && s.end > low { return s.end }
+    low
+}

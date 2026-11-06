@@ -1,0 +1,214 @@
+// Breakpoints: resolving a location to addresses, the table, and the
+// commands that show and remove them.
+
+/// Where a location text resolved to.
+pub struct Resolved {
+    pub err: str,
+    pub addrs: List[u64],
+    pub abs: bool,
+}
+
+fn resolved_err(why: str) -> Resolved { Resolved { err: why, addrs: [], abs: false } }
+
+fn parse_number(text: str) -> int {
+    var n = 0
+    var any = false
+    for b in text.bytes() {
+        let c = b as int
+        if c < 48 || c > 57 { return -1 }
+        n = n * 10 + (c - 48)
+        any = true
+    }
+    if any { n } else { -1 }
+}
+
+fn all_digits(text: str) -> bool { parse_number(text) >= 0 }
+
+/// Parse a decimal or 0x-prefixed number; ok false otherwise.
+pub fn parse_uint(text: str) -> Val {
+    let t = text.trim()
+    if t.starts_with("0x") || t.starts_with("0X") {
+        var v: u64 = 0
+        var any = false
+        for b in str_from(t, 2).bytes() {
+            let c = b as int
+            var d = 0
+            if c >= 48 && c <= 57 { d = c - 48 }
+            else if c >= 97 && c <= 102 { d = c - 87 }
+            else if c >= 65 && c <= 70 { d = c - 55 }
+            else { return val_fail("") }
+            v = v * 16 + d as u64
+            any = true
+        }
+        if !any { return val_fail("") }
+        return Val { ok: true, why: "", ty: -1, bytes: [], addr: v, has_addr: true, reg: -1 }
+    }
+    let n = parse_number(t)
+    if n < 0 { return val_fail("") }
+    Val { ok: true, why: "", ty: -1, bytes: [], addr: n as u64, has_addr: true, reg: -1 }
+}
+
+/// The file address of a function by DWARF name, ELF symbol otherwise (ok false when unknown).
+fn symbol_address(p: Prog, name: str) -> Val {
+    var i = 0
+    while i < p.funcs.len {
+        if p.funcs[i].name == name && p.funcs[i].low != 0 {
+            return Val { ok: true, why: "", ty: -1, bytes: [], addr: p.funcs[i].low, has_addr: true, reg: -1 }
+        }
+        i += 1
+    }
+    i = 0
+    while i < p.syms.len {
+        if p.syms[i].name == name {
+            return Val { ok: true, why: "", ty: -1, bytes: [], addr: p.syms[i].addr, has_addr: true, reg: -1 }
+        }
+        i += 1
+    }
+    val_fail("")
+}
+
+/// Runtime addresses to file addresses when a process is running.
+fn to_file_address(s: Session, a: u64) -> u64 {
+    if s.alive && s.base != 0 && a >= s.base { return a - s.base }
+    a
+}
+
+fn files_matching(p: Prog, name: str) -> List[int] {
+    var out: List[int] = []
+    var i = 0
+    while i < p.files.len {
+        let f = p.files[i]
+        if f == name || f.ends_with("/{name}") { (mut out).push(i) }
+        i += 1
+    }
+    out
+}
+
+fn default_file(s: Session) -> int {
+    if s.alive && s.frames_ok && s.frames.len > 0 {
+        let sal = find_sal(s.prog, frame_lookup_pc(s, s.sel) - s.base)
+        if sal.ok { return sal.file }
+    }
+    let m = symbol_address(s.prog, "main")
+    if m.ok {
+        let sal = find_sal(s.prog, skip_prologue(s.prog, m.addr))
+        if sal.ok { return sal.file }
+    }
+    -1
+}
+
+/// File addresses for `line` in the given files, one per function, gdb style:
+/// the lowest is_stmt address of the best line at or after the request.
+fn line_addresses(s: Session, files: List[int], line: int) -> Resolved {
+    var best_line = 0
+    var i = 0
+    while i < s.prog.lines.len {
+        let r = copy s.prog.lines[i]
+        if r.stmt && !r.end_seq && contains_file(files, r.file) && r.line >= line {
+            if best_line == 0 || r.line < best_line { best_line = r.line }
+        }
+        i += 1
+    }
+    if best_line == 0 { return resolved_err("") }
+    var out: List[u64] = []
+    var funcs_seen: List[int] = []
+    i = 0
+    while i < s.prog.lines.len {
+        let r = copy s.prog.lines[i]
+        if r.stmt && !r.end_seq && contains_file(files, r.file) && r.line == best_line {
+            let f = func_at(s.prog, r.addr)
+            var dup = false
+            var k = 0
+            while k < funcs_seen.len { if funcs_seen[k] == f && f >= 0 { dup = true }; k += 1 }
+            if !dup {
+                (mut funcs_seen).push(f)
+                var a = r.addr
+                if f >= 0 && s.prog.funcs[f].low == a { a = skip_prologue(s.prog, a) }
+                (mut out).push(a)
+            }
+        }
+        i += 1
+    }
+    Resolved { err: "", addrs: out, abs: false }
+}
+
+fn contains_file(files: List[int], f: int) -> bool {
+    var i = 0
+    while i < files.len { if files[i] == f { return true }; i += 1 }
+    false
+}
+
+/// Resolve a location text: FUNC, FILE:LINE, LINE, FILE:FUNC or *ADDRESS.
+pub fn resolve_location(s: Session, spec: str) -> Resolved {
+    let t = spec.trim()
+    if t.starts_with("*") {
+        let rest = str_from(t, 1).trim()
+        let n = parse_uint(rest)
+        if n.ok { return Resolved { err: "", addrs: [n.addr], abs: true } }
+        let sym = symbol_address(s.prog, rest)
+        if sym.ok { return Resolved { err: "", addrs: [sym.addr], abs: false } }
+        let plus = rest.split("+")
+        if plus.len == 2 {
+            let b = symbol_address(s.prog, plus[0].trim())
+            let o = parse_uint(plus[1])
+            if b.ok && o.ok { return Resolved { err: "", addrs: [b.addr + o.addr], abs: false } }
+        }
+        return resolved_err("No symbol \"{rest}\" in current context.")
+    }
+    if t.contains(":") {
+        let parts = t.splitn(":", 2)
+        let fname = parts[0]
+        let tail = parts[1]
+        let files = files_matching(s.prog, fname)
+        if files.len == 0 { return resolved_err("No source file named {fname}.") }
+        if all_digits(tail) {
+            let r = line_addresses(s, files, parse_number(tail))
+            if r.addrs.len == 0 { return resolved_err("No line {tail} in file \"{fname}\".") }
+            return r
+        }
+        return resolve_function(s, tail)
+    }
+    if all_digits(t) {
+        let f = default_file(s)
+        if f < 0 { return resolved_err("No symbol table is loaded.  Use the \"file\" command.") }
+        let r = line_addresses(s, [f], parse_number(t))
+        if r.addrs.len == 0 { return resolved_err("No line {t} in the current file.") }
+        return r
+    }
+    resolve_function(s, t)
+}
+
+fn resolve_function(s: Session, name: str) -> Resolved {
+    var out: List[u64] = []
+    var i = 0
+    while i < s.prog.funcs.len {
+        if s.prog.funcs[i].name == name && s.prog.funcs[i].low != 0 {
+            (mut out).push(skip_prologue(s.prog, s.prog.funcs[i].low))
+        }
+        i += 1
+    }
+    if out.len > 0 { return Resolved { err: "", addrs: out, abs: false } }
+    i = 0
+    while i < s.prog.syms.len {
+        if s.prog.syms[i].name == name {
+            return Resolved { err: "", addrs: [skip_prologue_no_debug(s, s.prog.syms[i].addr)], abs: false }
+        }
+        i += 1
+    }
+    resolved_err("Function \"{name}\" not defined.")
+}
+
+/// Past `push %rbp; mov %rsp,%rbp` for code with no line table (amd64 prologue analysis).
+fn skip_prologue_no_debug(s: Session, start: u64) -> u64 {
+    let r = file_bytes_at(s.prog, start, 12)
+    if r.len < 12 { return start }
+    var a = 0
+    if r[0] as int == 243 && r[1] as int == 15 && r[2] as int == 30 && r[3] as int == 250 { a = 4 }
+    if r[a] as int == 85 {
+        if (r[a + 1] as int == 72 && r[a + 2] as int == 137 && r[a + 3] as int == 229) ||
+           (r[a + 1] as int == 72 && r[a + 2] as int == 139 && r[a + 3] as int == 236) {
+            return start + (a + 4) as u64
+        }
+    }
+    start
+}

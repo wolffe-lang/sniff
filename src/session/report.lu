@@ -1,0 +1,191 @@
+// What gdb prints when the program stops, and the frame inspection commands
+// built on the same text.
+
+/// "LINE\ttext" for a source line; "LINE\tin FILE" when the text is not available.
+pub fn source_line_text(mut s: Session, file: int, line: int) -> str {
+    let v = source_line(mut s, file, line)
+    if v.ok { return "{line}\t{v.why}" }
+    "{line}\tin {s.prog.files[file]}"
+}
+
+/// Print the source line of frame `level` (with the pc prefix when mid-line and wanted).
+pub fn print_frame_source(mut s: Session, level: int, pc_prefix: bool) {
+    let lookup = frame_lookup_pc(s, level) - s.base
+    let sal = find_sal(s.prog, lookup)
+    if !sal.ok || s.frames[level].func < 0 { return }
+    var text = source_line_text(mut s, sal.file, sal.line)
+    if pc_prefix && level == 0 && !(sal.start == s.frames[level].pc - s.base && stmt_start(s.prog, sal.start)) {
+        text = "{addr16(s.frames[level].pc)}\t{text}"
+    }
+    emit_line(mut s, text)
+}
+
+/// Print the innermost frame as a stop location. header false prints only the
+/// source line, as stepping inside one function does.
+pub fn print_stop_frame(mut s: Session, header: bool, prefix: str) {
+    compute_frames(mut s)
+    if s.frames.len == 0 {
+        emit_line(mut s, "{prefix}{addr16(current_pc(s))} in ?? ()")
+        return
+    }
+    if header {
+        emit_line(mut s, "{prefix}{frame_line(s, 0, false)}")
+        print_frame_source(mut s, 0, false)
+    } else {
+        print_frame_source(mut s, 0, true)
+    }
+}
+
+fn need_stack(s: Session) -> str {
+    if !s.alive { return "No stack." }
+    ""
+}
+
+/// The error for a frame command with no process.
+fn no_frame(s: Session) -> str {
+    if !s.alive { return "No frame selected." }
+    ""
+}
+
+fn level_prefix(n: int) -> str {
+    let t = "{n}"
+    if t.len() < 2 { return "#{t}  " }
+    "#{t} "
+}
+
+/// bt
+pub fn cmd_bt(mut s: Session, rest: str) -> str {
+    let e = need_stack(s)
+    if e.len() > 0 { return e }
+    if !s.frames_ok { compute_frames(mut s) }
+    var i = 0
+    while i < s.frames.len {
+        emit_line(mut s, "{level_prefix(i)}{frame_line(s, i, false)}")
+        i += 1
+    }
+    ""
+}
+
+fn print_selected(mut s: Session) {
+    let lvl = s.sel
+    emit_line(mut s, "{level_prefix(lvl)}{frame_line(s, lvl, false)}")
+    print_frame_source(mut s, lvl, false)
+}
+
+/// frame [N]
+pub fn cmd_frame(mut s: Session, rest: str) -> str {
+    let e = need_stack(s)
+    if e.len() > 0 { return e }
+    let t = rest.trim()
+    if t.len() > 0 {
+        let n = parse_uint(t)
+        if !n.ok { return "Invalid frame specification" }
+        if n.addr as int >= s.frames.len { return "No frame at level {t}." }
+        s.sel = n.addr as int
+    }
+    print_selected(mut s)
+    ""
+}
+
+/// up [N]
+pub fn cmd_up(mut s: Session, rest: str) -> str {
+    let e = need_stack(s)
+    if e.len() > 0 { return e }
+    var n = 1
+    let t = rest.trim()
+    if t.len() > 0 {
+        let v = parse_uint(t)
+        if v.ok { n = v.addr as int }
+    }
+    if s.sel + 1 >= s.frames.len { return "Initial frame selected; you cannot go up." }
+    var target = s.sel + n
+    if target >= s.frames.len { target = s.frames.len - 1 }
+    s.sel = target
+    print_selected(mut s)
+    ""
+}
+
+/// down [N]
+pub fn cmd_down(mut s: Session, rest: str) -> str {
+    let e = need_stack(s)
+    if e.len() > 0 { return e }
+    var n = 1
+    let t = rest.trim()
+    if t.len() > 0 {
+        let v = parse_uint(t)
+        if v.ok { n = v.addr as int }
+    }
+    if s.sel == 0 { return "Bottom (innermost) frame selected; you cannot go down." }
+    var target = s.sel - n
+    if target < 0 { target = 0 }
+    s.sel = target
+    print_selected(mut s)
+    ""
+}
+
+/// Variables of kind tag visible at the pc of frame fr, innermost block first.
+fn visible_vars(s: Session, fr: Frame, level: int, tag: u64) -> List[int] {
+    var out: List[int] = []
+    if fr.func < 0 { return out }
+    let pc = frame_lookup_pc(s, level) - s.base
+    collect_vars(s, s.prog.funcs[fr.func].die, pc, tag, mut out)
+    out
+}
+
+fn collect_vars(s: Session, owner: int, pc: u64, tag: u64, mut out: List[int]) {
+    // deeper blocks that contain pc come first
+    let blocks = children_with_tag(s.prog, owner, tag_block)
+    var i = 0
+    while i < blocks.len {
+        let b = blocks[i]
+        if block_contains(s, b, pc) { collect_vars(s, b, pc, tag, mut out) }
+        i += 1
+    }
+    let vars = children_with_tag(s.prog, owner, tag)
+    i = 0
+    while i < vars.len { (mut out).push(vars[i]); i += 1 }
+}
+
+fn block_contains(s: Session, b: int, pc: u64) -> bool {
+    let lo = attr_at(s.prog, b, 17)
+    let hi = attr_at(s.prog, b, 18)
+    if lo < 0 || hi < 0 { return true }
+    let un = s.prog.info.entries[b].unit
+    let low = value_addr(s.prog, un, s.prog.info.attributes[lo].value)
+    let hv = copy s.prog.info.attributes[hi].value
+    var high = low + hv.raw
+    if hv.form == 1 || hv.form == 27 || (hv.form >= 41 && hv.form <= 44) { high = value_addr(s.prog, un, hv) }
+    pc >= low && pc < high
+}
+
+/// info locals
+pub fn cmd_info_locals(mut s: Session) -> str {
+    if !s.alive { return "No frame selected." }
+    let fr = copy s.frames[s.sel]
+    if fr.func < 0 { emit_line(mut s, "No symbol table info available."); return "" }
+    let vars = visible_vars(s, fr, s.sel, tag_variable)
+    if vars.len == 0 { emit_line(mut s, "No locals."); return "" }
+    var i = 0
+    while i < vars.len {
+        let ui = s.prog.info.entries[vars[i]].unit
+        emit_line(mut s, "{attr_text(s.prog, ui, vars[i], 3)} = {var_text(s, fr, vars[i], false)}")
+        i += 1
+    }
+    ""
+}
+
+/// info args
+pub fn cmd_info_args(mut s: Session) -> str {
+    if !s.alive { return "No frame selected." }
+    let fr = copy s.frames[s.sel]
+    if fr.func < 0 { emit_line(mut s, "No symbol table info available."); return "" }
+    let vars = visible_vars(s, fr, s.sel, tag_formal)
+    if vars.len == 0 { emit_line(mut s, "No arguments."); return "" }
+    var i = 0
+    while i < vars.len {
+        let ui = s.prog.info.entries[vars[i]].unit
+        emit_line(mut s, "{attr_text(s.prog, ui, vars[i], 3)} = {var_text(s, fr, vars[i], false)}")
+        i += 1
+    }
+    ""
+}

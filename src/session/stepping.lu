@@ -1,0 +1,353 @@
+// step, next, until, stepi, nexti and finish. Stepping follows gdb's model:
+// single-step inside the line's address range, treat a call as a call by
+// the return address pushed (checked against the stack pointer, so recursion
+// stays in its own frame), and stop at the first is_stmt row of a different
+// line.
+
+use platform
+
+fn rsp_now(s: Session) -> u64 {
+    let r = platform.target_regs(s.target)
+    if r.len != 27 { return 0 }
+    r[platform.reg_rsp]
+}
+
+fn read_word(s: Session, addr: u64) -> u64 {
+    let r = platform.target_read(s.target, addr, 8)
+    if !r.ok { return 0 }
+    var v: u64 = 0
+    var i = 0
+    while i < 8 {
+        v = v | ((r.data[i] as int as u64) << (8 * i as u64))
+        i += 1
+    }
+    v
+}
+
+/// Index of an enabled user breakpoint at the runtime address, or -1.
+fn user_bp_at(s: Session, addr: u64) -> int {
+    var i = 0
+    while i < s.bps.len {
+        if s.bps[i].enabled && !s.bps[i].internal && bp_rt(s, i) == addr { return i }
+        i += 1
+    }
+    -1
+}
+
+/// Add an internal breakpoint at a runtime address.
+fn add_internal(mut s: Session, addr: u64) {
+    (mut s.bps).push(Bp { num: 0, addr: addr, hits: 0, temp: false, enabled: true, internal: true, abs: true, orig: 0, inserted: false })
+}
+
+fn drop_internal(mut s: Session) {
+    var keep: List[Bp] = []
+    var i = 0
+    while i < s.bps.len {
+        if !s.bps[i].internal { (mut keep).push(copy s.bps[i]) }
+        i += 1
+    }
+    s.bps = keep
+}
+
+/// Report a user breakpoint stop and bump every hit count at that pc.
+pub fn report_bp_hit(mut s: Session, idx: int) {
+    let pc = bp_rt(s, idx)
+    var first = -1
+    var i = 0
+    while i < s.bps.len {
+        if s.bps[i].enabled && !s.bps[i].internal && bp_rt(s, i) == pc {
+            s.bps[i].hits += 1
+            if first < 0 { first = i }
+        }
+        i += 1
+    }
+    let num = s.bps[first].num
+    let temp = s.bps[first].temp
+    compute_frames(mut s)
+    var label = "Breakpoint"
+    if temp { label = "Temporary breakpoint" }
+    emit_line(mut s, "")
+    emit_line(mut s, "{label} {num}, {frame_line(s, 0, false)}")
+    print_frame_source(mut s, 0, false)
+    // temporary breakpoints are deleted once hit
+    var keep: List[Bp] = []
+    i = 0
+    while i < s.bps.len {
+        let drop = s.bps[i].temp && bp_rt(s, i) == pc && s.bps[i].enabled
+        if !drop { (mut keep).push(copy s.bps[i]) }
+        i += 1
+    }
+    s.bps = keep
+}
+
+/// Report a non-breakpoint end of a resume. Returns true when the program is still stopped.
+fn report_other(mut s: Session, e: Event) -> bool {
+    if e.kind == ev_exited || e.kind == ev_signaled {
+        report_end(mut s, e)
+        s.frames = []
+        s.frames_ok = false
+        return false
+    }
+    if e.kind == ev_signal {
+        emit_line(mut s, "")
+        emit_line(mut s, "Program received signal {signal_name(e.signal)}, {signal_description(e.signal)}.")
+        print_stop_frame(mut s, true, "")
+        return true
+    }
+    if e.kind == ev_lost {
+        emit_line(mut s, "The program is not being run.")
+        return false
+    }
+    true
+}
+
+/// Report any resume result that is not an ordinary arrival. Returns true when
+/// the event was reported (the caller must stop).
+fn report_event_if_stop(mut s: Session, e: Event) -> bool {
+    if e.kind == ev_breakpoint {
+        if s.bps[e.bp].internal {
+            let user = user_bp_at(s, current_pc(s))
+            if user >= 0 { report_bp_hit(mut s, user); return true }
+            return false
+        }
+        report_bp_hit(mut s, e.bp)
+        return true
+    }
+    if e.kind == ev_stepped { return false }
+    if e.kind == ev_error { return true }
+    let _ = report_other(mut s, e)
+    true
+}
+
+/// Run to the runtime address `target` with the stack pointer equal to
+/// `want_sp` (0 for any). Returns true when the program stopped elsewhere
+/// and that was reported.
+fn run_to(mut s: Session, target: u64, want_sp: u64) -> bool {
+    add_internal(mut s, target)
+    var reported = false
+    loop {
+        let e = cont_event(mut s)
+        if e.kind == ev_breakpoint && s.bps[e.bp].internal {
+            let user = user_bp_at(s, current_pc(s))
+            if user >= 0 { drop_internal(mut s); report_bp_hit(mut s, user); return true }
+            if want_sp == 0 || rsp_now(s) == want_sp { break }
+            continue
+        }
+        reported = report_event_if_stop(mut s, e)
+        break
+    }
+    if s.alive { drop_internal(mut s) } else { s.bps = [] }
+    reported
+}
+
+fn is_call(prev_pc: u64, prev_sp: u64, pc: u64, sp: u64) -> bool {
+    sp + 8 == prev_sp && (pc < prev_pc || pc >= prev_pc + 16)
+}
+
+/// What a finished step prints: the whole location when the function or
+/// frame changed, otherwise the source line.
+fn print_step_stop(mut s: Session, start_func: u64, start_cfa: u64, by_frame: bool) {
+    compute_frames(mut s)
+    let fr = copy s.frames[0]
+    let now_func = func_start(s.prog, fr.pc - s.base)
+    var changed = now_func != start_func
+    if by_frame && fr.cfa != start_cfa { changed = true }
+    print_stop_frame(mut s, changed, "")
+}
+
+/// step, next and until. over: step over calls; until_mode: do not stop at
+/// lower addresses in the function (loop back edges).
+pub fn step_lines(mut s: Session, over: bool, until_mode: bool) -> str {
+    if !s.alive { return "The program is not being run." }
+    compute_frames(mut s)
+    let fr0 = copy s.frames[0]
+    var pc = fr0.pc
+    let sal0 = find_sal(s.prog, pc - s.base)
+    if !sal0.ok || fr0.func < 0 {
+        let fname = frame_func_name(s, fr0)
+        if func_start(s.prog, pc - s.base) == 0 { return "Cannot find bounds of current function" }
+        emit_line(mut s, "Single stepping until exit from function {fname},")
+        emit_line(mut s, "which has no line number information.")
+        return finish_frame(mut s, 0, false, false)
+    }
+    let start_func = func_start(s.prog, pc - s.base)
+    let start_cfa = fr0.cfa
+    var cur_line = sal0.line
+    var cur_func = start_func
+    var range_lo = sal0.start + s.base
+    var range_hi = sal0.end + s.base
+    if until_mode {
+        if s.prog.funcs[fr0.func].low + s.base < range_lo { range_lo = s.prog.funcs[fr0.func].low + s.base }
+        // the line's range runs on over following non-statement rows of the same line
+        var k = sal0.end
+        while true {
+            let nx = find_sal(s.prog, k)
+            if !nx.ok || nx.line != sal0.line || stmt_start(s.prog, k) || nx.end <= k { break }
+            k = nx.end
+        }
+        range_hi = k + s.base
+    }
+    var guard = 0
+    while guard < 100000000 {
+        guard += 1
+        let prev_pc = pc
+        let prev_sp = rsp_now(s)
+        let e = step_insn(mut s)
+        if e.kind != ev_stepped {
+            let _ = report_event_if_stop(mut s, e)
+            return ""
+        }
+        pc = current_pc(s)
+        let hit = user_bp_at(s, pc)
+        if hit >= 0 && pc != prev_pc {
+            report_bp_hit(mut s, hit)
+            return ""
+        }
+        if pc >= range_lo && pc < range_hi { continue }
+        let sp = rsp_now(s)
+        if is_call(prev_pc, prev_sp, pc, sp) {
+            let ret = read_word(s, sp)
+            let callee = pc - s.base
+            let cf = func_at(s.prog, callee)
+            var has_lines = false
+            if cf >= 0 {
+                let cs = find_sal(s.prog, callee)
+                has_lines = cs.ok
+            }
+            if !over && has_lines {
+                let target = skip_prologue(s.prog, s.prog.funcs[cf].low) + s.base
+                if target != pc {
+                    if run_to(mut s, target, 0) { return "" }
+                }
+                compute_frames(mut s)
+                print_stop_frame(mut s, true, "")
+                return ""
+            }
+            if run_to(mut s, ret, prev_sp) { return "" }
+            pc = current_pc(s)
+            if pc >= range_lo && pc < range_hi { continue }
+        }
+        // left the line's range: where are we?
+        let file_pc = pc - s.base
+        let now_func = func_start(s.prog, file_pc)
+        if now_func != cur_func || func_at(s.prog, file_pc) < 0 {
+            let nf = func_at(s.prog, file_pc)
+            if nf < 0 || !find_sal(s.prog, file_pc).ok {
+                // returned into code with no line information: next stops there,
+                // step runs on, as gdb does
+                if over {
+                    print_stop_frame(mut s, true, "")
+                    return ""
+                }
+                let e2 = cont_event(mut s)
+                let _ = report_event_if_stop(mut s, e2)
+                return ""
+            }
+            // returned to a caller mid-line: keep stepping to a line boundary there
+            let ns = find_sal(s.prog, file_pc)
+            cur_line = ns.line
+            cur_func = now_func
+            range_lo = ns.start + s.base
+            range_hi = ns.end + s.base
+            continue
+        }
+        let ns = find_sal(s.prog, file_pc)
+        if !ns.ok { print_step_stop(mut s, start_func, start_cfa, false); return "" }
+        if pc == ns.start + s.base && ns.line != cur_line {
+            if is_stmt_at(s, file_pc) {
+                print_step_stop(mut s, start_func, start_cfa, false)
+                return ""
+            }
+            // a non-statement row of another line: ignore it, range unchanged
+            continue
+        }
+        cur_line = ns.line
+        range_lo = ns.start + s.base
+        range_hi = ns.end + s.base
+    }
+    ""
+}
+
+fn is_stmt_at(s: Session, file_pc: u64) -> bool {
+    stmt_start(s.prog, file_pc)
+}
+
+/// stepi and nexti.
+pub fn step_insns(mut s: Session, over: bool) -> str {
+    if !s.alive { return "The program is not being run." }
+    compute_frames(mut s)
+    let start_func = func_start(s.prog, s.frames[0].pc - s.base)
+    let start_cfa = s.frames[0].cfa
+    let prev_pc = current_pc(s)
+    let prev_sp = rsp_now(s)
+    let e = step_insn(mut s)
+    if e.kind != ev_stepped {
+        let _ = report_event_if_stop(mut s, e)
+        return ""
+    }
+    var pc = current_pc(s)
+    let hit = user_bp_at(s, pc)
+    if hit >= 0 && pc != prev_pc {
+        report_bp_hit(mut s, hit)
+        return ""
+    }
+    if over && is_call(prev_pc, prev_sp, pc, rsp_now(s)) {
+        let ret = read_word(s, rsp_now(s))
+        if run_to(mut s, ret, prev_sp) { return "" }
+    }
+    print_step_stop(mut s, start_func, start_cfa, true)
+    ""
+}
+
+/// The value a function returned, read from rax/xmm0 by its type.
+fn return_value(s: Session, ty: int) -> Val {
+    let size = ty_size(s.prog, ty)
+    let st = ty_strip(s.prog, ty)
+    var bytes: List[byte] = []
+    if st >= 0 && s.prog.info.entries[st].tag == tag_base && attr_uint(s.prog, st, 62, 0) == 4 {
+        let x = platform.target_xmm0(s.target)
+        var i = 0
+        while i < size && i < x.len { (mut bytes).push(x[i]); i += 1 }
+    } else {
+        let r = platform.target_regs(s.target)
+        if r.len != 27 { return val_fail("") }
+        let v = r[platform.reg_rax]
+        var i = 0
+        while i < size && i < 8 {
+            (mut bytes).push(((v >> (8 * i as u64)) & 255) as int as byte)
+            i += 1
+        }
+    }
+    Val { ok: true, why: "", ty: ty, bytes: bytes, addr: 0, has_addr: false, reg: -1 }
+}
+
+/// finish out of frame `level`. quiet true suppresses nothing today but keeps the shape for tty mode.
+pub fn finish_frame(mut s: Session, level: int, quiet: bool, tty: bool) -> str {
+    if !s.alive { return "The program is not being run." }
+    if !s.frames_ok { compute_frames(mut s) }
+    if level + 1 >= s.frames.len { return "\"finish\" not meaningful in the outermost frame." }
+    let callee = copy s.frames[level]
+    let caller = copy s.frames[level + 1]
+    var ty = -1
+    var has_ty = false
+    if callee.func >= 0 {
+        let fd = s.prog.funcs[callee.func].die
+        let ta = attr_at(s.prog, fd, 73)
+        if ta >= 0 { ty = attr_ref(s.prog, fd, 73); has_ty = true }
+    }
+    if tty {
+        emit_line(mut s, "Run till exit from #{level}  {frame_line(s, level, false)}")
+    }
+    let start_func = func_start(s.prog, s.frames[0].pc - s.base)
+    if run_to(mut s, caller.pc, callee.cfa) { return "" }
+    compute_frames(mut s)
+    print_stop_frame(mut s, true, "")
+    if has_ty {
+        let v = return_value(s, ty)
+        if v.ok {
+            (mut s.hist).push(copy v)
+            emit_line(mut s, "Value returned is ${s.hist.len} = {format_bytes(s.prog, s.target, v.ty, v.bytes, true)}")
+        }
+    }
+    ""
+}

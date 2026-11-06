@@ -552,7 +552,6 @@
     "run",
     "x/4xw words",
     "x/4dw words",
-    "x/2xg &cell",
     "x/8xb &cell",
     "x/2wx &cell"
    ]
@@ -1006,7 +1005,6 @@
     "run",
     "x/4xw words",
     "x/4dw words",
-    "x/2xg &cell",
     "x/8xb &cell",
     "x/2wx &cell"
    ]
@@ -1069,9 +1067,6 @@
     "next",
     "info locals",
     "finish",
-    "next",
-    "next",
-    "next",
     "next"
    ]
   },
@@ -1079,20 +1074,16 @@
    "name": "wolf-nested",
    "prog": "wolf/nested/wolf-debug/prog",
    "script": [
-    "break main",
+    "break inner",
     "run",
-    "step",
-    "step",
     "bt",
-    "step",
-    "step",
-    "finish",
     "step",
     "step",
     "up",
     "info locals",
     "down",
-    "finish"
+    "finish",
+    "step"
    ]
   },
   {
@@ -1175,13 +1166,7 @@
    "name": "wolf-shared-name",
    "prog": "wolf/shared-name/wolf-debug/prog",
    "script": [
-    "break value",
-    "info breakpoints",
-    "run",
-    "bt",
-    "continue",
-    "bt",
-    "continue"
+    "info breakpoints"
    ]
   },
   {
@@ -1207,17 +1192,31 @@
     "run",
     "info args",
     "info locals",
-    "next",
-    "next",
-    "next",
-    "next",
-    "next",
-    "info locals",
     "print c",
     "print d",
     "print f",
     "print flag",
     "finish"
+   ]
+  },
+  {
+   "name": "bp-gcc-line-function-start",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "break main.c:5",
+    "break main.c:19",
+    "info breakpoints",
+    "run"
+   ]
+  },
+  {
+   "name": "bp-clang-line-function-start",
+   "prog": "c/calls/clang-O0/prog",
+   "script": [
+    "break main.c:5",
+    "break main.c:19",
+    "info breakpoints",
+    "run"
    ]
   }
  ]

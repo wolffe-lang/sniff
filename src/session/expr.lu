@@ -1,0 +1,170 @@
+// A DWARF 5 location/CFA expression machine (section 2.5): the operations
+// that gcc, clang and wolf emit for locals, frame bases and call frame
+// expressions. Anything else is refused by name in `why`.
+
+use readers
+use platform
+
+/// Result classes of a location description.
+pub const loc_memory: int = 1
+pub const loc_register: int = 2
+pub const loc_value: int = 3
+pub const loc_refused: int = 4
+
+/// A computed location. For loc_memory, value is the address; for
+/// loc_register, the DWARF register number; for loc_value, the value.
+pub struct Loc {
+    pub kind: int,
+    pub value: u64,
+    pub why: str,
+}
+
+/// Inputs to one evaluation: the frame's registers (DWARF numbering 0-16),
+/// its frame base and CFA, and the process to read memory from.
+pub struct EvalCtx {
+    pub regs: List[u64],
+    pub frame_base: u64,
+    pub has_frame_base: bool,
+    pub cfa: u64,
+    pub has_cfa: bool,
+    pub base: u64,
+}
+
+/// a + d with d signed, without wrapping (the sum must stay in range).
+pub fn add_i(a: u64, d: i64) -> u64 {
+    if d >= 0 { return a + d as u64 }
+    if d == 0 - 9223372036854775807 - 1 { return a - 9223372036854775808 }
+    a - (0 - d) as u64
+}
+
+fn refused(why: str) -> Loc { Loc { kind: loc_refused, value: 0, why: why } }
+
+/// Read an 8-byte word of the child, or fail.
+fn read_u64(t: platform.Target, addr: u64) -> u64 ! {unreadable} {
+    let r = platform.target_read(t, addr, 8)
+    if !r.ok { return unreadable }
+    var v: u64 = 0
+    var i = 0
+    while i < 8 {
+        v = v | ((r.data[i] as int as u64) << (8 * i as u64))
+        i += 1
+    }
+    v
+}
+
+/// Evaluate span of data against a stopped child.
+pub fn expr_eval(data: List[byte], span: readers.ByteSpan, ctx: EvalCtx, t: platform.Target) -> Loc {
+    var stack: List[u64] = []
+    var c = readers.cursor(span.start, span.start + span.length, 100000)
+    var is_reg = false
+    var is_value = false
+    var reg_no: u64 = 0
+    while c.pos < c.end {
+        let op = readers.uint_le(data, mut c, 1) else { return refused("truncated expression") } as int
+        if op >= 48 && op <= 79 {
+            (mut stack).push((op - 48) as u64)
+        } else if op >= 80 && op <= 111 {
+            is_reg = true
+            reg_no = (op - 80) as u64
+        } else if op >= 112 && op <= 143 {
+            let off = readers.sleb64(data, mut c) else { return refused("bad breg") }
+            let r = (op - 112)
+            if r > 16 { return refused("breg out of range") }
+            (mut stack).push(add_i(ctx.regs[r], off))
+        } else if op == 3 {
+            let a = readers.uint_le(data, mut c, 8) else { return refused("bad addr") }
+            (mut stack).push(a + ctx.base)
+        } else if op == 6 {
+            if stack.len < 1 { return refused("stack underflow") }
+            let a = stack[stack.len - 1]
+            let v = read_u64(t, a) else { return refused("cannot read memory") }
+            stack[stack.len - 1] = v
+        } else if op == 8 {
+            let v = readers.uint_le(data, mut c, 1) else { return refused("bad const") }
+            (mut stack).push(v)
+        } else if op == 9 {
+            let v = readers.uint_le(data, mut c, 1) else { return refused("bad const") }
+            var x = v
+            if v >= 128 { x = v | 18446744073709551360 }
+            (mut stack).push(x)
+        } else if op == 10 {
+            let v = readers.uint_le(data, mut c, 2) else { return refused("bad const") }
+            (mut stack).push(v)
+        } else if op == 11 {
+            let v = readers.uint_le(data, mut c, 2) else { return refused("bad const") }
+            var x = v
+            if v >= 32768 { x = v | 18446744073709486080 }
+            (mut stack).push(x)
+        } else if op == 12 {
+            let v = readers.uint_le(data, mut c, 4) else { return refused("bad const") }
+            (mut stack).push(v)
+        } else if op == 13 {
+            let v = readers.uint_le(data, mut c, 4) else { return refused("bad const") }
+            var x = v
+            if v >= 2147483648 { x = v | 18446744069414584320 }
+            (mut stack).push(x)
+        } else if op == 14 || op == 15 {
+            let v = readers.uint_le(data, mut c, 8) else { return refused("bad const") }
+            (mut stack).push(v)
+        } else if op == 16 {
+            let v = readers.uleb64(data, mut c) else { return refused("bad const") }
+            (mut stack).push(v)
+        } else if op == 17 {
+            let v = readers.sleb64(data, mut c) else { return refused("bad const") }
+            (mut stack).push(platform.bits_u64(v))
+        } else if op == 18 {
+            if stack.len < 1 { return refused("stack underflow") }
+            (mut stack).push(stack[stack.len - 1])
+        } else if op == 19 {
+            if stack.len < 1 { return refused("stack underflow") }
+            let _ = (mut stack).pop()
+        } else if op == 22 {
+            if stack.len < 2 { return refused("stack underflow") }
+            let a = stack[stack.len - 1]
+            stack[stack.len - 1] = stack[stack.len - 2]
+            stack[stack.len - 2] = a
+        } else if op == 34 {
+            if stack.len < 2 { return refused("stack underflow") }
+            let b = (mut stack).pop() else { 0 }
+            let a = (mut stack).pop() else { 0 }
+            (mut stack).push(a + b)
+        } else if op == 28 {
+            if stack.len < 2 { return refused("stack underflow") }
+            let b = (mut stack).pop() else { 0 }
+            let a = (mut stack).pop() else { 0 }
+            (mut stack).push(a - b)
+        } else if op == 35 {
+            let v = readers.uleb64(data, mut c) else { return refused("bad plus_uconst") }
+            if stack.len < 1 { return refused("stack underflow") }
+            stack[stack.len - 1] = stack[stack.len - 1] + v
+        } else if op == 145 {
+            let off = readers.sleb64(data, mut c) else { return refused("bad fbreg") }
+            if !ctx.has_frame_base { return refused("no frame base") }
+            (mut stack).push(add_i(ctx.frame_base, off))
+        } else if op == 156 {
+            if !ctx.has_cfa { return refused("no CFA") }
+            (mut stack).push(ctx.cfa)
+        } else if op == 159 {
+            is_value = true
+        } else if op == 148 {
+            let n = readers.uint_le(data, mut c, 1) else { return refused("bad deref_size") }
+            if stack.len < 1 { return refused("stack underflow") }
+            let r = platform.target_read(t, stack[stack.len - 1], n as int)
+            if !r.ok { return refused("cannot read memory") }
+            var v: u64 = 0
+            var i = 0
+            while i < n as int {
+                v = v | ((r.data[i] as int as u64) << (8 * i as u64))
+                i += 1
+            }
+            stack[stack.len - 1] = v
+        } else {
+            return refused("unsupported DWARF operation 0x{op:x}")
+        }
+    }
+    if is_reg { return Loc { kind: loc_register, value: reg_no, why: "" } }
+    if stack.len < 1 { return refused("empty expression") }
+    let top = stack[stack.len - 1]
+    if is_value { return Loc { kind: loc_value, value: top, why: "" } }
+    Loc { kind: loc_memory, value: top, why: "" }
+}

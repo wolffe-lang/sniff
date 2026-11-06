@@ -1,0 +1,209 @@
+// Reading variables of a frame and the text gdb prints for frames and
+// source lines.
+
+use platform
+
+/// The source text of line `line` of global file index `file`, or "" with
+/// ok false when the file cannot be read or has no such line.
+pub fn source_line(mut s: Session, file: int, line: int) -> Val {
+    var k = -1
+    var i = 0
+    while i < s.src_file.len {
+        if s.src_file[i] == file { k = i }
+        i += 1
+    }
+    if k < 0 {
+        var lines: List[str] = []
+        var ok = false
+        let path = s.prog.files[file]
+        var text = ""
+        var readable = false
+        let got = fs_read_bytes(path) else |_| { readable = false; return val_fail("") }
+        text = str_from_utf8(got) else { "" }
+        readable = true
+        if readable {
+            ok = true
+            lines = text.lines()
+        }
+        (mut s.src_file).push(file)
+        (mut s.src_lines).push(lines)
+        (mut s.src_ok).push(ok)
+        k = s.src_file.len - 1
+    }
+    if !s.src_ok[k] || line < 1 || line > s.src_lines[k].len {
+        return val_fail("")
+    }
+    Val { ok: true, why: s.src_lines[k][line - 1], ty: -1, bytes: [], addr: 0, has_addr: false, reg: -1 }
+}
+
+fn pad2(n: int) -> str {
+    let t = "{n}"
+    if t.len() < 2 { return "{t} " }
+    t
+}
+
+/// The dedicated hex form gdb uses for frame addresses: 0x + 16 digits.
+pub fn addr16(a: u64) -> str {
+    var out = ""
+    var i: int = 15
+    while i >= 0 {
+        let d = ((a >> (4 * i as u64)) & 15) as int
+        let c = if d < 10 { 48 + d } else { 87 + d }
+        let b: List[byte] = [c as byte]
+        out = "{out}{str_from_utf8(b) else { "?" }}"
+        i -= 1
+    }
+    "0x{out}"
+}
+
+/// Value of the variable (parameter or local) DIE in frame fr.
+pub fn var_val(s: Session, fr: Frame, die: int) -> Val {
+    let ui = copy s.prog.info.entries[die].unit
+    let la = attr_at(s.prog, die, 2)
+    if la < 0 { return val_fail("<optimized out>") }
+    let lv = copy s.prog.info.attributes[la].value
+    if lv.form != 24 && lv.form != 10 && lv.form != 9 && lv.form != 3 && lv.form != 4 {
+        return val_fail("<unsupported location form>")
+    }
+    let ty = attr_ref(s.prog, die, 73)
+    var fb: u64 = 0
+    var has_fb = false
+    if fr.func >= 0 {
+        let fd = s.prog.funcs[fr.func].die
+        let fa = attr_at(s.prog, fd, 64)
+        if fa >= 0 {
+            let fctx = EvalCtx { regs: copy fr.regs, frame_base: 0, has_frame_base: false, cfa: fr.cfa, has_cfa: fr.cfa_ok, base: s.base }
+            let fl = expr_eval(s.prog.data, s.prog.info.attributes[fa].value.bytes, fctx, s.target)
+            if fl.kind == loc_register && fl.value < 17 { fb = fr.regs[fl.value as int]; has_fb = true }
+            else if fl.kind == loc_memory || fl.kind == loc_value { fb = fl.value; has_fb = true }
+        }
+    }
+    let ctx = EvalCtx { regs: copy fr.regs, frame_base: fb, has_frame_base: has_fb, cfa: fr.cfa, has_cfa: fr.cfa_ok, base: s.base }
+    let l = expr_eval(s.prog.data, lv.bytes, ctx, s.target)
+    let size = ty_size(s.prog, ty)
+    if l.kind == loc_refused { return val_fail("<{l.why}>") }
+    if l.kind == loc_memory {
+        let r = platform.target_read(s.target, l.value, size)
+        if !r.ok { return val_fail("<error: Cannot access memory at address 0x{l.value:x}>") }
+        return Val { ok: true, why: "", ty: ty, bytes: r.data, addr: l.value, has_addr: true, reg: -1 }
+    }
+    if l.kind == loc_register {
+        if l.value >= 17 { return val_fail("<register {l.value} unavailable>") }
+        let v = fr.regs[l.value as int]
+        var bytes: List[byte] = []
+        var i = 0
+        while i < size && i < 8 {
+            (mut bytes).push(((v >> (8 * i as u64)) & 255) as int as byte)
+            i += 1
+        }
+        return Val { ok: true, why: "", ty: ty, bytes: bytes, addr: 0, has_addr: false, reg: l.value as int }
+    }
+    var bytes: List[byte] = []
+    var i = 0
+    while i < size && i < 8 {
+        (mut bytes).push(((l.value >> (8 * i as u64)) & 255) as int as byte)
+        i += 1
+    }
+    Val { ok: true, why: "", ty: ty, bytes: bytes, addr: 0, has_addr: false, reg: -1 }
+}
+
+/// Text of a variable's value: the formatted value or its failure text.
+pub fn var_text(s: Session, fr: Frame, die: int, top: bool) -> str {
+    let v = var_val(s, fr, die)
+    if !v.ok { return v.why }
+    format_bytes(s.prog, s.target, v.ty, v.bytes, top)
+}
+
+/// Direct child DIEs of `die` with the given tag.
+pub fn children_with_tag(p: Prog, die: int, tag: u64) -> List[int] {
+    var out: List[int] = []
+    var e = die + 1
+    let d = p.info.entries[die].depth
+    while e < p.info.entries.len && p.info.entries[e].depth > d {
+        if !p.info.entries[e].is_null && p.info.entries[e].depth == d + 1 && p.info.entries[e].tag == tag {
+            (mut out).push(e)
+        }
+        e += 1
+    }
+    out
+}
+
+fn is_scalar(p: Prog, t: int) -> bool {
+    let st = ty_strip(p, t)
+    if st < 0 { return true }
+    let tag = p.info.entries[st].tag
+    tag == tag_base || tag == tag_pointer || tag == tag_enum
+}
+
+/// "n=3, b=4" for the arguments of the function in frame fr.
+pub fn frame_args(s: Session, fr: Frame) -> str {
+    if fr.func < 0 { return "" }
+    let params = children_with_tag(s.prog, s.prog.funcs[fr.func].die, tag_formal)
+    var out = ""
+    var i = 0
+    while i < params.len {
+        let pd = params[i]
+        let ui = copy s.prog.info.entries[pd].unit
+        let name = attr_text(s.prog, ui, pd, 3)
+        let t = attr_ref(s.prog, pd, 73)
+        var text = "..."
+        if is_scalar(s.prog, t) { text = var_text(s, fr, pd, false) }
+        if i > 0 { out = "{out}, " }
+        out = "{out}{name}={text}"
+        i += 1
+    }
+    out
+}
+
+/// The name gdb shows for the function of a frame.
+pub fn frame_func_name(s: Session, fr: Frame) -> str {
+    let file_pc = fr.pc - s.base
+    let lookup = if fr.pc > 0 { file_pc } else { file_pc }
+    if fr.func >= 0 { return s.prog.funcs[fr.func].name }
+    let y = sym_at(s.prog, lookup)
+    if y >= 0 { return s.prog.syms[y].name }
+    "??"
+}
+
+/// The line-lookup pc of a frame: the innermost uses its pc, callers pc - 1.
+pub fn frame_lookup_pc(s: Session, level: int) -> u64 {
+    if level == 0 { return s.frames[level].pc }
+    s.frames[level].pc - 1
+}
+
+/// The shared library mapped at a runtime address, from /proc/PID/maps ("" if none).
+pub fn solib_of(s: Session, pc: u64) -> str {
+    let raw = fs_read_bytes("/proc/{s.target.pid}/maps") else { return "" }
+    let text = str_from_utf8(raw) else { return "" }
+    for ln in text.lines() {
+        let cols = ln.words()
+        if cols.len < 6 { continue }
+        let range = cols[0].split("-")
+        if range.len < 2 { continue }
+        if parse_hex(range[0]) <= pc && pc < parse_hex(range[1]) {
+            if cols[5].starts_with("/usr/lib/") { return "/lib/{str_from(cols[5], 9)}" }
+            if cols[5].starts_with("/") { return cols[5] }
+        }
+    }
+    ""
+}
+
+/// "[0x... in ]func (args) at file:line" for frame `level`; print_pc forces the address.
+pub fn frame_line(s: Session, level: int, force_pc: bool) -> str {
+    let fr = copy s.frames[level]
+    let lookup = frame_lookup_pc(s, level) - s.base
+    let sal = find_sal(s.prog, lookup)
+    var show_pc = force_pc || level > 0
+    if level == 0 && !(sal.ok && sal.start == fr.pc - s.base && stmt_start(s.prog, sal.start)) { show_pc = true }
+    var out = ""
+    if show_pc { out = "{addr16(fr.pc)} in " }
+    let name = frame_func_name(s, fr)
+    out = "{out}{name} ({frame_args(s, fr)})"
+    if sal.ok && fr.func >= 0 {
+        out = "{out} at {s.prog.files[sal.file]}:{sal.line}"
+    } else if fr.func < 0 && !in_image(s.prog, lookup) {
+        let lib = solib_of(s, fr.pc)
+        if lib.len() > 0 { out = "{out} from {lib}" }
+    }
+    out
+}

@@ -37,3 +37,18 @@ pub fn target_read(t: Target, addr: u64, n: int) -> Bytes {
 
 #[cfg(target = "aarch64-apple-darwin")]
 pub fn target_write(t: Target, addr: u64, data: List[byte]) -> bool { false }
+
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_xmm0(t: Target) -> List[byte] { [] }
+
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_detach(pid: int) -> int { -1 }
+
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_event_pid(t: Target) -> int { -1 }
+
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_wait_pid(t: Target, pid: int) -> int { -1 }
+
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_with_pid(t: Target, pid: int) -> Target { target_none() }

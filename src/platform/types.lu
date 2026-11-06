@@ -89,3 +89,15 @@ pub fn status_exit_code(st: int) -> int { (st >> 8) & 255 }
 pub fn status_signaled(st: int) -> bool { (st & 127) != 0 && (st & 255) != 127 }
 /// Terminating signal of a signaled status.
 pub fn status_term_signal(st: int) -> int { st & 127 }
+
+/// The two's-complement bits of a signed value as unsigned (no trap on negatives).
+pub fn bits_u64(x: i64) -> u64 {
+    let w = x as wrapping[u64]
+    w as u64
+}
+
+/// The bits of an unsigned value as signed (no trap above 2^63).
+pub fn bits_i64(x: u64) -> i64 {
+    let w = x as wrapping[i64]
+    w as i64
+}

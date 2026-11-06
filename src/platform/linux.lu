@@ -34,7 +34,9 @@ extern "c" fn kill(pid: i32, sig: i32) -> i32
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 extern "c" fn setenv(name: *u8, value: *u8, overwrite: i32) -> i32
 #[cfg(target = "x86_64-unknown-linux-gnu")]
-extern "c" fn chdir(path: *u8) -> i32
+extern "c" fn getenv(name: *u8) -> *u8
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+extern "c" fn getcwd(buf: *u8, size: u64) -> *u8
 
 /// Heap bytes holding text and a terminating zero, for the C calls.
 #[cfg(target = "x86_64-unknown-linux-gnu")]
@@ -88,9 +90,17 @@ pub fn target_spawn(path: str, args: List[str], env_lines: str, env_columns: str
         if pid == 0 {
             let _ = ptrace(0, 0, 0 as u64, 0 as u64)
             let _ = personality(0x0040000 as u64)
+            // gdb runs the program through a shell with LINES and COLUMNS set, and
+            // the shell exports PWD: the same environment keeps stack addresses equal.
             if env_lines.bytes().len > 0 {
                 let _ = setenv(cstr("LINES"), cstr(env_lines), 1)
                 let _ = setenv(cstr("COLUMNS"), cstr(env_columns), 1)
+                let have = getenv(cstr("PWD"))
+                if have as u64 == 0 {
+                    let cwd = c.calloc(1, 4096) as *u8
+                    let got = getcwd(cwd, 4095)
+                    if got as u64 != 0 { let _ = setenv(cstr("PWD"), cwd, 1) }
+                }
             }
             let _ = execv(cpath, argv)
             _exit(127)
@@ -103,8 +113,9 @@ pub fn target_spawn(path: str, args: List[str], env_lines: str, env_columns: str
             return tgt
         }
         let fd = open(cstr("/proc/{pid}/mem"), 0)
-        // PTRACE_SETOPTIONS PTRACE_O_EXITKILL: the child never outlives sniff.
-        let _ = ptrace(0x4200, pid, 0 as u64, 0x100000 as u64)
+        // PTRACE_SETOPTIONS: EXITKILL (the child never outlives sniff), TRACEFORK and
+        // TRACEVFORK (so a forked child can be detached with its breakpoints removed).
+        let _ = ptrace(0x4200, pid, 0 as u64, 0x100006 as u64)
         Target { pid: pid as int, memfd: fd as int, status: tgt.status, regs: tgt.regs, word: tgt.word }
     }
 }
@@ -213,7 +224,8 @@ fn peek_word(t: Target, addr: u64) -> Bytes {
         e[0] = 0
         let w = ptrace(2, t.pid as i32, addr, 0 as u64)
         if w == -1 && e[0] != 0 { return Bytes { ok: false, data: out } }
-        let u = w as u64
+        let ww = w as wrapping[u64]
+        let u = ww as u64
         var i = 0
         while i < 8 {
             (mut out).push(((u >> (8 * i as u64)) & 255) as int as byte)
@@ -260,3 +272,54 @@ pub fn target_write(t: Target, addr: u64, data: List[byte]) -> bool {
     }
 }
 
+
+/// The 16 bytes of xmm0 (user_fpregs_struct holds xmm0 at byte 160), or none.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_xmm0(t: Target) -> List[byte] {
+    unsafe {
+        var out: List[byte] = []
+        let buf = c.calloc(1, 512) as *u8
+        let r = ptrace(14, t.pid as i32, 0 as u64, buf as u64)
+        if r < 0 { return out }
+        var i = 0
+        while i < 16 {
+            (mut out).push(buf[160 + i] as int as byte)
+            i += 1
+        }
+        out
+    }
+}
+
+/// Detach from a traced pid after restoring nothing: used for forked children.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_detach(pid: int) -> int {
+    unsafe { ptrace(17, pid as i32, 0 as u64, 0 as u64) as int }
+}
+
+/// The pid of the child a fork event stopped on (PTRACE_GETEVENTMSG).
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_event_pid(t: Target) -> int {
+    unsafe {
+        let buf = c.calloc(1, 8) as *u64
+        let r = ptrace(16897, t.pid as i32, 0 as u64, buf as u64)
+        if r < 0 { return 0 - 1 }
+        buf[0] as int
+    }
+}
+
+/// Wait for a specific pid (a fork child's first stop).
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_wait_pid(t: Target, pid: int) -> int {
+    unsafe {
+        let status = t.status as *i32
+        let w = waitpid(pid as i32, status, 1073741824)
+        if w != pid as i32 { return 0 - 1 }
+        status[0] as int
+    }
+}
+
+/// A handle for another traced pid sharing this one's scratch space.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_with_pid(t: Target, pid: int) -> Target {
+    Target { pid: pid, memfd: -1, status: t.status, regs: t.regs, word: t.word }
+}

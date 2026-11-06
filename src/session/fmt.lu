@@ -1,0 +1,141 @@
+// printf("%.Ng") for IEEE 754 binary32 and binary64, exact: the bits are
+// decomposed and the value expanded in decimal with a small big-integer, so
+// the digits and the round-half-even choice match the C library's. No
+// floating-point arithmetic is used.
+
+const limb: int = 1000000000
+
+fn limbs_from(v: u64) -> List[int] {
+    var out: List[int] = []
+    var x = v
+    if x == 0 { (mut out).push(0) }
+    while x > 0 {
+        (mut out).push((x % 1000000000) as int)
+        x = x / 1000000000
+    }
+    out
+}
+
+fn limbs_mul_small(mut a: List[int], m: int) {
+    var carry = 0
+    var i = 0
+    while i < a.len {
+        let v = a[i] * m + carry
+        a[i] = v % limb
+        carry = v / limb
+        i += 1
+    }
+    while carry > 0 {
+        (mut a).push(carry % limb)
+        carry = carry / limb
+    }
+}
+
+fn limbs_text(a: List[int]) -> str {
+    var out = "{a[a.len - 1]}"
+    var i = a.len - 2
+    while i >= 0 {
+        let part = "{a[i]}"
+        out = "{out}{"0".repeat(9 - part.len())}{part}"
+        i -= 1
+    }
+    out
+}
+
+fn strip_zeros(text: str) -> str {
+    var t = text
+    if !t.contains(".") { return t }
+    while t.ends_with("0") { t = t.get(0..(t.len() - 1)) else { t } }
+    if t.ends_with(".") { t = t.get(0..(t.len() - 1)) else { t } }
+    t
+}
+
+/// %.{prec}g of mant * 2^exp2, negative when neg. mant is nonzero.
+fn format_g(neg: bool, mant: u64, exp2: int, prec: int) -> str {
+    var n = limbs_from(mant)
+    var scale = 0
+    if exp2 >= 0 {
+        var i = 0
+        while i < exp2 { limbs_mul_small(mut n, 2); i += 1 }
+    } else {
+        scale = 0 - exp2
+        var i = 0
+        while i < scale { limbs_mul_small(mut n, 5); i += 1 }
+    }
+    var digits = limbs_text(n)
+    // value = digits * 10^-scale; scientific exponent of the first digit:
+    var x = digits.len() - 1 - scale
+    if digits.len() > prec {
+        let keep = digits.get(0..prec) else { digits }
+        let rest = digits.get(prec..digits.len()) else { "" }
+        var up = false
+        let first = rest.get(0..1) else { "0" }
+        if first > "5" { up = true }
+        else if first == "5" {
+            let tail = rest.get(1..rest.len()) else { "" }
+            var nonzero = false
+            for b in tail.bytes() { if b as int != 48 { nonzero = true } }
+            if nonzero { up = true }
+            else {
+                let last = keep.get((prec - 1)..prec) else { "0" }
+                if last == "1" || last == "3" || last == "5" || last == "7" || last == "9" { up = true }
+            }
+        }
+        digits = keep
+        if up {
+            var bytes = digits.bytes()
+            var i = bytes.len - 1
+            var carry = true
+            while i >= 0 && carry {
+                if bytes[i] as int == 57 { bytes[i] = 48 as byte; i -= 1 }
+                else { bytes[i] = (bytes[i] as int + 1) as byte; carry = false }
+            }
+            digits = str_from_utf8(bytes) else { digits }
+            if carry { digits = "1{digits}"; digits = digits.get(0..prec) else { digits }; x += 1 }
+        }
+    }
+    while digits.len() < prec { digits = "{digits}0" }
+    let sign = if neg { "-" } else { "" }
+    if x < -4 || x >= prec {
+        let lead = digits.get(0..1) else { digits }
+        let frac = strip_zeros("{lead}.{digits.get(1..digits.len()) else { "" }}")
+        let ax = if x < 0 { 0 - x } else { x }
+        let es = if ax < 10 { "0{ax}" } else { "{ax}" }
+        return "{sign}{frac}e{if x < 0 { "-" } else { "+" }}{es}"
+    }
+    if x >= 0 {
+        let whole = digits.get(0..(x + 1)) else { digits }
+        let frac = digits.get((x + 1)..digits.len()) else { "" }
+        return "{sign}{strip_zeros("{whole}.{frac}")}"
+    }
+    let zeros = "0".repeat(0 - x - 1)
+    "{sign}{strip_zeros("0.{zeros}{digits}")}"
+}
+
+/// gdb's text for a binary64 value given as its 64 bits (%.17g).
+pub fn fmt_double(bits: u64) -> str {
+    let neg = (bits >> 63) == 1
+    let e = ((bits >> 52) & 2047) as int
+    let m = bits & 4503599627370495
+    if e == 2047 {
+        if m == 0 { return if neg { "-inf" } else { "inf" } }
+        return "{if neg { "-" } else { "" }}nan(0x{m:x})"
+    }
+    if e == 0 && m == 0 { return if neg { "-0" } else { "0" } }
+    if e == 0 { return format_g(neg, m, 0 - 1074, 17) }
+    format_g(neg, m + 4503599627370496, e - 1075, 17)
+}
+
+/// gdb's text for a binary32 value given as its 32 bits (%.9g).
+pub fn fmt_float(bits: u64) -> str {
+    let neg = (bits >> 31) == 1
+    let e = ((bits >> 23) & 255) as int
+    let m = bits & 8388607
+    if e == 255 {
+        if m == 0 { return if neg { "-inf" } else { "inf" } }
+        return "{if neg { "-" } else { "" }}nan(0x{m:x})"
+    }
+    if e == 0 && m == 0 { return if neg { "-0" } else { "0" } }
+    if e == 0 { return format_g(neg, m, 0 - 149, 9) }
+    format_g(neg, m + 8388608, e - 150, 9)
+}

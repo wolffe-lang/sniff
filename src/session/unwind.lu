@@ -1,0 +1,195 @@
+// Call frame information and the frames it yields: .eh_frame and
+// .debug_frame FDEs are indexed once, their instructions run to the pc, and
+// the resulting rules unwind one frame. Where no FDE covers a pc the
+// frame-pointer fallback is used and marked, so the note can say which rows
+// rest on it.
+
+use readers
+
+/// One FDE with the CIE parameters its instructions need.
+pub struct CfiFde {
+    pub begin: u64,
+    pub end: u64,
+    pub code_align: u64,
+    pub data_align: i64,
+    pub ra: u64,
+    pub cie_insns: readers.ByteSpan,
+    pub insns: readers.ByteSpan,
+    pub address_size: int,
+}
+
+fn fde_index_section(data: List[byte], s: readers.ObjectSection, eh: bool, mut out: List[CfiFde]) {
+    if !s.present || s.span.length == 0 { return }
+    let fs = readers.FrameSection { span: copy s.span, address: s.address, eh: eh, address_size: 8 }
+    var c = readers.cursor(s.span.start, s.span.start + s.span.length, 100000000)
+    var cache: List[readers.FrameCie] = []
+    var guard = 0
+    while c.pos < c.end && guard < 1000000 {
+        guard += 1
+        let e = readers.frame_next(data, mut c, fs, mut cache) else { return }
+        if e.kind == readers.frame_terminator { return }
+        if e.kind == readers.frame_fde {
+            var k = -1
+            var i = 0
+            while i < cache.len {
+                if cache[i].offset == e.fde.cie_offset { k = i }
+                i += 1
+            }
+            if k >= 0 && e.fde.range > 0 {
+                (mut out).push(CfiFde {
+                    begin: e.fde.begin, end: e.fde.begin + e.fde.range, code_align: cache[k].code_align,
+                    data_align: cache[k].data_align, ra: cache[k].return_register,
+                    cie_insns: copy cache[k].instructions, insns: copy e.fde.instructions,
+                    address_size: cache[k].address_size })
+            }
+        }
+    }
+}
+
+/// All FDEs of .eh_frame then .debug_frame.
+pub fn cfi_build(p: Prog) -> List[CfiFde] {
+    var out: List[CfiFde] = []
+    if p.secs.format != readers.object_elf { return out }
+    fde_index_section(p.data, p.secs.eh_frame, true, mut out)
+    fde_index_section(p.data, p.secs.frame, false, mut out)
+    out
+}
+
+/// Index of the FDE covering a file address, or -1.
+pub fn cfi_find(t: List[CfiFde], addr: u64) -> int {
+    var i = 0
+    while i < t.len {
+        if t[i].begin <= addr && addr < t[i].end { return i }
+        i += 1
+    }
+    -1
+}
+
+pub const rule_same: int = 0
+pub const rule_undefined: int = 1
+pub const rule_offset: int = 2
+pub const rule_val_offset: int = 3
+pub const rule_register: int = 4
+pub const rule_expr: int = 5
+pub const rule_val_expr: int = 6
+
+/// The unwind rules in force at one pc.
+pub struct Rules {
+    pub cfa_reg: int,
+    pub cfa_off: i64,
+    pub cfa_is_expr: bool,
+    pub cfa_expr: readers.ByteSpan,
+    pub kind: List[int],
+    pub val: List[i64],
+    pub expr: List[readers.ByteSpan],
+}
+
+fn rules_new() -> Rules {
+    var r = Rules { cfa_reg: 7, cfa_off: 8, cfa_is_expr: false, cfa_expr: readers.ByteSpan { start: 0, length: 0 },
+        kind: [], val: [], expr: [] }
+    var i = 0
+    while i < 17 {
+        (mut r.kind).push(rule_same)
+        (mut r.val).push(0)
+        (mut r.expr).push(readers.ByteSpan { start: 0, length: 0 })
+        i += 1
+    }
+    r
+}
+
+fn run_insns(data: List[byte], span: readers.ByteSpan, f: CfiFde, target_loc: u64, mut loc: u64,
+        mut r: Rules, init: Rules, mut stack: List[Rules]) -> bool {
+    var c = readers.cursor(span.start, span.start + span.length, 1000000)
+    while c.pos < c.end {
+        let ins = readers.frame_instruction(data, mut c, f.address_size) else { return false }
+        let op = ins.op
+        if op == 64 {
+            let next = loc + ins.unsigned * f.code_align
+            if next > target_loc { return true }
+            loc = next
+        } else if op == 2 || op == 3 || op == 4 {
+            let next = loc + ins.unsigned * f.code_align
+            if next > target_loc { return true }
+            loc = next
+        } else if op == 1 {
+            if ins.unsigned > target_loc { return true }
+            loc = ins.unsigned
+        } else if op == 12 {
+            r.cfa_reg = ins.reg as int
+            r.cfa_off = ins.unsigned as i64
+            r.cfa_is_expr = false
+        } else if op == 18 {
+            r.cfa_reg = ins.reg as int
+            r.cfa_off = ins.signed * f.data_align
+            r.cfa_is_expr = false
+        } else if op == 13 {
+            r.cfa_reg = ins.reg as int
+            r.cfa_is_expr = false
+        } else if op == 14 {
+            r.cfa_off = ins.unsigned as i64
+        } else if op == 19 {
+            r.cfa_off = ins.signed * f.data_align
+        } else if op == 15 {
+            r.cfa_is_expr = true
+            r.cfa_expr = copy ins.block
+        } else if op == 128 || op == 5 {
+            if ins.reg < 17 {
+                r.kind[ins.reg as int] = rule_offset
+                r.val[ins.reg as int] = ins.unsigned as i64 * f.data_align
+            }
+        } else if op == 17 {
+            if ins.reg < 17 {
+                r.kind[ins.reg as int] = rule_offset
+                r.val[ins.reg as int] = ins.signed * f.data_align
+            }
+        } else if op == 20 {
+            if ins.reg < 17 {
+                r.kind[ins.reg as int] = rule_val_offset
+                r.val[ins.reg as int] = ins.unsigned as i64 * f.data_align
+            }
+        } else if op == 192 || op == 6 {
+            if ins.reg < 17 {
+                r.kind[ins.reg as int] = init.kind[ins.reg as int]
+                r.val[ins.reg as int] = init.val[ins.reg as int]
+                r.expr[ins.reg as int] = copy init.expr[ins.reg as int]
+            }
+        } else if op == 7 {
+            if ins.reg < 17 { r.kind[ins.reg as int] = rule_undefined }
+        } else if op == 8 {
+            if ins.reg < 17 { r.kind[ins.reg as int] = rule_same }
+        } else if op == 9 {
+            if ins.reg < 17 {
+                r.kind[ins.reg as int] = rule_register
+                r.val[ins.reg as int] = ins.reg2 as i64
+            }
+        } else if op == 10 {
+            (mut stack).push(copy r)
+        } else if op == 11 {
+            if stack.len > 0 {
+                let top = (mut stack).pop() else { return false }
+                let saved_reg = r.cfa_reg
+                r = top
+            }
+        } else if op == 16 || op == 22 {
+            if ins.reg < 17 {
+                r.kind[ins.reg as int] = if op == 16 { rule_expr } else { rule_val_expr }
+                r.expr[ins.reg as int] = copy ins.block
+            }
+        }
+        // 0 (nop) and 46 (GNU_args_size) change nothing the unwinder reads.
+    }
+    true
+}
+
+/// The rules at file address pc under fde.
+pub fn cfi_rules(data: List[byte], f: CfiFde, pc: u64) -> Rules {
+    var r = rules_new()
+    var loc = f.begin
+    var stack: List[Rules] = []
+    let none = rules_new()
+    let _ = run_insns(data, f.cie_insns, f, pc, mut loc, mut r, none, mut stack)
+    let init = copy r
+    loc = f.begin
+    let _ = run_insns(data, f.insns, f, pc, mut loc, mut r, init, mut stack)
+    r
+}

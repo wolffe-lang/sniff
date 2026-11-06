@@ -1,0 +1,116 @@
+// break, tbreak, delete and info breakpoints.
+
+fn hex_plain(a: u64) -> str { "0x{a:x}" }
+
+fn break_message(s: Session, kind: str, num: int, addr: u64, abs: bool) -> str {
+    let shown = if abs { addr } else { addr + s.base }
+    let sal = find_sal(s.prog, if abs && addr >= s.base { addr - s.base } else { addr })
+    if sal.ok && func_at(s.prog, if abs && addr >= s.base { addr - s.base } else { addr }) >= 0 {
+        return "{kind} {num} at {hex_plain(shown)}: file {s.prog.files[sal.file]}, line {sal.line}."
+    }
+    "{kind} {num} at {hex_plain(shown)}"
+}
+
+/// break LOCATION / tbreak LOCATION
+pub fn cmd_break(mut s: Session, rest: str, temp: bool) -> str {
+    let spec = rest.trim()
+    if spec.len() == 0 { return "No default breakpoint location." }
+    var location = spec
+    // a condition is not part of S2
+    let r = resolve_location(s, location)
+    if r.err.len() > 0 {
+        flush_out(mut s)
+        eprint(r.err)
+        return ""
+    }
+    let num = s.bp_next
+    s.bp_next += 1
+    var i = 0
+    while i < r.addrs.len {
+        (mut s.bps).push(Bp { num: num, addr: r.addrs[i], hits: 0, temp: temp, enabled: true, internal: false, abs: r.abs, orig: 0, inserted: false })
+        i += 1
+    }
+    let kind = if temp { "Temporary breakpoint" } else { "Breakpoint" }
+    if r.addrs.len == 1 {
+        emit_line(mut s, break_message(s, kind, num, r.addrs[0], r.abs))
+    } else {
+        emit_line(mut s, "{kind} {num} at {hex_plain(r.addrs[0] + s.base)}: {spec}. ({r.addrs.len} locations)")
+    }
+    ""
+}
+
+/// delete [N...]
+pub fn cmd_delete(mut s: Session, rest: str) -> str {
+    let t = rest.trim()
+    if t.len() == 0 {
+        var keep: List[Bp] = []
+        var i = 0
+        while i < s.bps.len {
+            if s.bps[i].internal { (mut keep).push(copy s.bps[i]) }
+            i += 1
+        }
+        s.bps = keep
+        return ""
+    }
+    for w in t.words() {
+        let n = parse_uint(w)
+        if !n.ok { return "Bad breakpoint argument: '{w}'" }
+        var found = false
+        var keep: List[Bp] = []
+        var i = 0
+        while i < s.bps.len {
+            if s.bps[i].num == n.addr as int && !s.bps[i].internal { found = true } else { (mut keep).push(copy s.bps[i]) }
+            i += 1
+        }
+        if !found { emit_line(mut s, "No breakpoint number {w}.") }
+        s.bps = keep
+    }
+    ""
+}
+
+fn pad_right(t: str, w: int) -> str {
+    if t.len() >= w { return t }
+    "{t}{" ".repeat(w - t.len())}"
+}
+
+fn hex16_plain(a: u64) -> str { addr16(a) }
+
+fn bp_what(s: Session, addr: u64) -> str {
+    let sal = find_sal(s.prog, addr)
+    let f = func_at(s.prog, addr)
+    if sal.ok && f >= 0 {
+        return "in {s.prog.funcs[f].name} at {s.prog.files[sal.file]}:{sal.line}"
+    }
+    let sym = symbolize(s, addr + s.base)
+    sym
+}
+
+/// info breakpoints
+pub fn cmd_info_breakpoints(mut s: Session) -> str {
+    var any = false
+    var i = 0
+    while i < s.bps.len {
+        if !s.bps[i].internal { any = true }
+        i += 1
+    }
+    if !any {
+        emit_line(mut s, "No breakpoints, watchpoints, tracepoints, or catchpoints.")
+        return ""
+    }
+    emit_line(mut s, "Num     Type           Disp Enb Address            What")
+    i = 0
+    while i < s.bps.len {
+        let b = copy s.bps[i]
+        if !b.internal {
+            let disp = if b.temp { "del" } else { "keep" }
+            let enb = if b.enabled { "y" } else { "n" }
+            emit_line(mut s, "{pad_right("{b.num}", 8)}{pad_right("breakpoint", 15)}{pad_right(disp, 5)}{pad_right(enb, 4)}{pad_right(addr16(bp_rt(s, i)), 19)}{bp_what(s, if b.abs && b.addr >= s.base { b.addr - s.base } else { b.addr })}")
+            if b.hits > 0 {
+                let times = if b.hits == 1 { "time" } else { "times" }
+                emit_line(mut s, "\tbreakpoint already hit {b.hits} {times}")
+            }
+        }
+        i += 1
+    }
+    ""
+}

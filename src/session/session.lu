@@ -15,6 +15,7 @@ pub struct Bp {
     pub temp: bool,
     pub enabled: bool,
     pub internal: bool,
+    pub abs: bool,
     pub orig: int,
     pub inserted: bool,
 }
@@ -33,6 +34,7 @@ pub const ev_breakpoint: int = 3
 pub const ev_signal: int = 4
 pub const ev_stepped: int = 5
 pub const ev_lost: int = 6
+pub const ev_error: int = 7
 
 /// All of the debugger's state.
 pub struct Session {
@@ -47,6 +49,15 @@ pub struct Session {
     pub bps: List[Bp],
     pub bp_next: int,
     pub pending_signal: int,
+    pub cfi: List[CfiFde],
+    pub frames: List[Frame],
+    pub frames_ok: bool,
+    pub sel: int,
+    pub src_file: List[int],
+    pub src_lines: List[List[str]],
+    pub src_ok: List[bool],
+    pub hist: List[Val],
+    pub errmsg: str,
 }
 
 /// Printed text goes to standard output through one buffer, flushed before
@@ -73,6 +84,6 @@ pub fn flush_out(mut s: Session) {
 pub fn session_new(take p: Prog) -> Session {
     Session {
         prog: p, target: platform.target_none(), alive: false, base: 0, args: [], out: [],
-        script: "", lineno: 0, bps: [], bp_next: 1, pending_signal: 0,
+        script: "", lineno: 0, bps: [], bp_next: 1, pending_signal: 0, cfi: [], frames: [], frames_ok: false, sel: 0, src_file: [], src_lines: [], src_ok: [], hist: [], errmsg: "",
     }
 }

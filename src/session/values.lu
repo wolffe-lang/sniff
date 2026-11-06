@@ -1,0 +1,343 @@
+// Types and values: reading a variable's bytes from a stopped frame and
+// printing them as gdb does for base types, pointers, arrays, structs and
+// enums. Anything the DWARF does not describe is named, never invented.
+
+use platform
+
+/// A value read from the child (or built by the expression evaluator).
+pub struct Val {
+    pub ok: bool,
+    pub why: str,
+    pub ty: int,
+    pub bytes: List[byte],
+    pub addr: u64,
+    pub has_addr: bool,
+    pub reg: int,
+}
+
+pub fn val_fail(why: str) -> Val {
+    Val { ok: false, why: why, ty: -1, bytes: [], addr: 0, has_addr: false, reg: -1 }
+}
+
+/// DW_TAG values used here.
+pub const tag_array: u64 = 1
+pub const tag_enum: u64 = 4
+pub const tag_formal: u64 = 5
+pub const tag_block: u64 = 11
+pub const tag_member: u64 = 13
+pub const tag_pointer: u64 = 15
+pub const tag_struct: u64 = 19
+pub const tag_subroutine_type: u64 = 21
+pub const tag_typedef: u64 = 22
+pub const tag_union: u64 = 23
+pub const tag_subrange: u64 = 33
+pub const tag_base: u64 = 36
+pub const tag_const: u64 = 38
+pub const tag_enumerator: u64 = 40
+pub const tag_variable: u64 = 52
+pub const tag_volatile: u64 = 53
+pub const tag_restrict: u64 = 55
+
+/// Strip typedefs and qualifiers; -1 means void (no type attribute).
+pub fn ty_strip(p: Prog, t: int) -> int {
+    var cur = t
+    var guard = 0
+    while cur >= 0 && guard < 64 {
+        let tag = p.info.entries[cur].tag
+        if tag == tag_typedef || tag == tag_const || tag == tag_volatile || tag == tag_restrict {
+            cur = attr_ref(p, cur, 73)
+        } else {
+            return cur
+        }
+        guard += 1
+    }
+    cur
+}
+
+/// Byte size of a type, 0 when it has none that is known.
+pub fn ty_size(p: Prog, t: int) -> int {
+    if t == ty_int { return 4 }
+    if t == ty_long || t == ty_ulong || t == ty_voidp || t == ty_codep || t <= 0 - 1000 { return 8 }
+    let s = ty_strip(p, t)
+    if s < 0 { return 1 }
+    let tag = p.info.entries[s].tag
+    let bs = attr_at(p, s, 11)
+    if bs >= 0 { return p.info.attributes[bs].value.raw as int }
+    if tag == tag_pointer { return 8 }
+    if tag == tag_array {
+        let elem = ty_size(p, attr_ref(p, s, 73))
+        return elem * array_count(p, s)
+    }
+    0
+}
+
+/// Element count of a one-dimensional array type (0 when unbounded).
+pub fn array_count(p: Prog, arr: int) -> int {
+    var e = arr + 1
+    while e < p.info.entries.len && p.info.entries[e].depth > p.info.entries[arr].depth {
+        if !p.info.entries[e].is_null && p.info.entries[e].tag == tag_subrange && p.info.entries[e].depth == p.info.entries[arr].depth + 1 {
+            let c = attr_at(p, e, 55)
+            if c >= 0 { return p.info.attributes[c].value.raw as int }
+            let u = attr_at(p, e, 47)
+            if u >= 0 { return (p.info.attributes[u].value.raw + 1) as int }
+            return 0
+        }
+        e += 1
+    }
+    0
+}
+
+/// Synthetic type ids for values that have no DIE: -2 int, -3 long, -4 unsigned
+/// long, -5 void *, -6 void (*)(); <= -1000 is a pointer to DIE (-1000 - id).
+pub const ty_int: int = 0 - 2
+pub const ty_long: int = 0 - 3
+pub const ty_ulong: int = 0 - 4
+pub const ty_voidp: int = 0 - 5
+pub const ty_codep: int = 0 - 6
+
+/// The synthetic type of a pointer to DIE k.
+pub fn ty_pointer_to(k: int) -> int { 0 - 1000 - k }
+
+/// gdb's spelling of a type.
+pub fn ty_name(p: Prog, t: int) -> str {
+    if t == ty_int { return "int" }
+    if t == ty_long { return "long" }
+    if t == ty_ulong { return "unsigned long" }
+    if t == ty_voidp { return "void *" }
+    if t == ty_codep { return "void (*)()" }
+    if t <= 0 - 1000 {
+        let n = ty_name(p, 0 - 1000 - t)
+        if n.ends_with("*") { return "{n}*" }
+        return "{n} *"
+    }
+    if t < 0 { return "void" }
+    let tag = p.info.entries[t].tag
+    let ui = p.info.entries[t].unit
+    if tag == tag_base || tag == tag_typedef { return attr_text(p, ui, t, 3) }
+    if tag == tag_struct { return "struct {attr_text(p, ui, t, 3)}" }
+    if tag == tag_union { return "union {attr_text(p, ui, t, 3)}" }
+    if tag == tag_enum { return "enum {attr_text(p, ui, t, 3)}" }
+    if tag == tag_const { return "const {ty_name(p, attr_ref(p, t, 73))}" }
+    if tag == tag_volatile { return "volatile {ty_name(p, attr_ref(p, t, 73))}" }
+    if tag == tag_restrict { return ty_name(p, attr_ref(p, t, 73)) }
+    if tag == tag_pointer {
+        let inner = attr_ref(p, t, 73)
+        let n = ty_name(p, inner)
+        if n.ends_with("*") { return "{n}*" }
+        return "{n} *"
+    }
+    if tag == tag_array {
+        return "{ty_name(p, attr_ref(p, t, 73))} [{array_count(p, t)}]"
+    }
+    "<type>"
+}
+
+fn le_u64(b: List[byte], n: int) -> u64 {
+    var v: u64 = 0
+    var i = 0
+    while i < n && i < 8 && i < b.len {
+        v = v | ((b[i] as int as u64) << (8 * i as u64))
+        i += 1
+    }
+    v
+}
+
+fn sign_extend(v: u64, size: int) -> i64 {
+    if size >= 8 { return platform.bits_i64(v) }
+    let bits = (size * 8) as u64
+    let sign: u64 = (1 as u64) << (bits - 1)
+    if v & sign == 0 { return platform.bits_i64(v) }
+    platform.bits_i64(v | !(((1 as u64) << bits) - 1))
+}
+
+fn hex_text(v: u64) -> str {
+    "0x{v:x}"
+}
+
+/// A char as gdb prints it inside quotes.
+pub fn char_escape(c: int, quote: int) -> str {
+    if c == 92 { return "\\\\" }
+    if c == quote { return "\\{quote_text(quote)}" }
+    if c == 10 { return "\\n" }
+    if c == 9 { return "\\t" }
+    if c == 13 { return "\\r" }
+    if c == 7 { return "\\a" }
+    if c == 8 { return "\\b" }
+    if c == 12 { return "\\f" }
+    if c == 11 { return "\\v" }
+    if c == 27 { return "\\033" }
+    if c >= 32 && c < 127 {
+        let b: List[byte] = [c as byte]
+        return str_from_utf8(b) else { "?" }
+    }
+    let o2 = c % 8
+    let o1 = (c / 8) % 8
+    let o0 = (c / 64) % 8
+    "\\{o0}{o1}{o2}"
+}
+
+fn quote_text(q: int) -> str {
+    if q == 39 { return "'" }
+    "\""
+}
+
+/// A NUL-terminated string at addr, quoted, with gdb's 200 element limit.
+fn read_cstring(t: platform.Target, addr: u64) -> str {
+    var out = "\""
+    var n = 0
+    var done = false
+    while n < 200 && !done {
+        let r = platform.target_read(t, addr + n as u64, 1)
+        if !r.ok { return "<error: Cannot access memory at address 0x{addr + n as u64:x}>" }
+        let c = r.data[0] as int
+        if c == 0 { done = true } else {
+            out = "{out}{char_escape(c, 34)}"
+            n += 1
+        }
+    }
+    out = "{out}\""
+    if !done { out = "{out}..." }
+    out
+}
+
+fn is_char_type(p: Prog, t: int) -> bool {
+    let s = ty_strip(p, t)
+    if s < 0 || p.info.entries[s].tag != tag_base { return false }
+    let enc = attr_uint(p, s, 62, 0)
+    (enc == 6 || enc == 8) && ty_size(p, s) == 1
+}
+
+/// Format bytes of type t. top is true for the `print` command (pointers
+/// then carry a type prefix); frame is false for argument lists.
+pub fn format_bytes(p: Prog, tgt: platform.Target, t: int, b: List[byte], top: bool) -> str {
+    if t == ty_int { return "{sign_extend(le_u64(b, 4), 4)}" }
+    if t == ty_long { return "{sign_extend(le_u64(b, 8), 8)}" }
+    if t == ty_ulong { return "{le_u64(b, 8)}" }
+    if t == ty_voidp || t == ty_codep || t <= 0 - 1000 {
+        let v = le_u64(b, 8)
+        var text = hex_text(v)
+        if t <= 0 - 1000 && is_char_type(p, 0 - 1000 - t) && v != 0 {
+            text = "{text} {read_cstring(tgt, v)}"
+        }
+        if top { return "({ty_name(p, t)}) {text}" }
+        return text
+    }
+    let st = ty_strip(p, t)
+    if st < 0 { return "void" }
+    let tag = p.info.entries[st].tag
+    let size = ty_size(p, st)
+    if tag == tag_base {
+        let enc = attr_uint(p, st, 62, 0)
+        let v = le_u64(b, size)
+        if enc == 2 {
+            if v == 0 { return "false" }
+            if v == 1 { return "true" }
+            return "{v}"
+        }
+        if enc == 4 {
+            if size == 4 { return fmt_float(v) }
+            if size == 8 { return fmt_double(v) }
+            return "<unsupported {size}-byte float>"
+        }
+        if enc == 5 || enc == 6 || enc == 7 || enc == 8 {
+            // a one-byte integer is text for gdb unless it was marked not-text
+            if size == 1 {
+                let n = if enc == 6 || enc == 5 { sign_extend(v, 1) } else { platform.bits_i64(v) }
+                let c = (v & 255) as int
+                return "{n} '{char_escape(c, 39)}'"
+            }
+        }
+        if enc == 5 || enc == 6 || enc == 13 { return "{sign_extend(v, size)}" }
+        return "{v}"
+    }
+    if tag == tag_pointer {
+        let v = le_u64(b, 8)
+        let inner = attr_ref(p, st, 73)
+        var text = hex_text(v)
+        if is_char_type(p, inner) && v != 0 {
+            text = "{text} {read_cstring(tgt, v)}"
+        }
+        if top {
+            return "({ty_name(p, t)}) {text}"
+        }
+        return text
+    }
+    if tag == tag_enum {
+        let v = sign_extend(le_u64(b, size), size)
+        var e = st + 1
+        while e < p.info.entries.len && p.info.entries[e].depth > p.info.entries[st].depth {
+            if !p.info.entries[e].is_null && p.info.entries[e].tag == tag_enumerator {
+                let cv = attr_at(p, e, 28)
+                if cv >= 0 && p.info.attributes[cv].value.signed_value == v {
+                    return attr_text(p, p.info.entries[e].unit, e, 3)
+                }
+            }
+            e += 1
+        }
+        return "{v}"
+    }
+    if tag == tag_array {
+        let elem = attr_ref(p, st, 73)
+        let es = ty_size(p, elem)
+        let n = array_count(p, st)
+        if es <= 0 { return "{{...}}" }
+        var out = "{{"
+        var i = 0
+        var first = true
+        while i < n && i < 200 {
+            let chunk = slice_bytes(b, i * es, es)
+            // collapse runs of identical elements
+            var run = 1
+            while i + run < n && same_bytes(b, i * es, (i + run) * es, es) { run += 1 }
+            let item = format_bytes(p, tgt, elem, chunk, false)
+            if !first { out = "{out}, " }
+            first = false
+            if run >= 10 {
+                out = "{out}{item} <repeats {run} times>"
+                i += run
+            } else {
+                out = "{out}{item}"
+                i += 1
+            }
+        }
+        return "{out}}}"
+    }
+    if tag == tag_struct || tag == tag_union {
+        var out = "{{"
+        var first = true
+        var e = st + 1
+        while e < p.info.entries.len && p.info.entries[e].depth > p.info.entries[st].depth {
+            if !p.info.entries[e].is_null && p.info.entries[e].tag == tag_member && p.info.entries[e].depth == p.info.entries[st].depth + 1 {
+                let ui = p.info.entries[e].unit
+                let off = attr_uint(p, e, 56, 0) as int
+                let mt = attr_ref(p, e, 73)
+                let ms = ty_size(p, mt)
+                if !first { out = "{out}, " }
+                first = false
+                out = "{out}{attr_text(p, ui, e, 3)} = {format_bytes(p, tgt, mt, slice_bytes(b, off, ms), false)}"
+            }
+            e += 1
+        }
+        return "{out}}}"
+    }
+    "<unsupported type>"
+}
+
+fn slice_bytes(b: List[byte], at: int, n: int) -> List[byte] {
+    var out: List[byte] = []
+    var i = 0
+    while i < n && at + i < b.len {
+        (mut out).push(b[at + i])
+        i += 1
+    }
+    out
+}
+
+fn same_bytes(b: List[byte], x: int, y: int, n: int) -> bool {
+    var i = 0
+    while i < n {
+        if y + i >= b.len || b[x + i] != b[y + i] { return false }
+        i += 1
+    }
+    true
+}
