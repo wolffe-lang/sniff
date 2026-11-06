@@ -1,0 +1,260 @@
+// DWARF 5 sections 7.26-7.29; official errata 180326.1 and 230329.1.
+// All positions in DwarfIndexTable are absolute indexes in the original buffer.
+// Attribute bases passed to lookup APIs are relative to their section span.
+// No per-entry arrays or decoded strings are allocated by this module.
+
+/// DWARF 5 .debug_str_offsets contribution kind.
+pub const dwarf_index_str_offsets: int = 1
+/// DWARF 5 .debug_addr contribution kind.
+pub const dwarf_index_addr: int = 2
+/// DWARF 5 .debug_rnglists contribution kind.
+pub const dwarf_index_rnglists: int = 3
+/// DWARF 5 .debug_loclists contribution kind.
+pub const dwarf_index_loclists: int = 4
+
+/// Named malformed-contribution, unsupported-profile and exhausted-work results.
+/// Core byte failures propagate; a resource limit is never called malformed data.
+pub error DwarfIndexError = {
+    invalid_bounds, truncated, unsupported_width, unterminated_leb128,
+    leb128_overflow, unterminated_string, offset_overflow, resource_limit,
+    reserved_dwarf_length, unsupported_dwarf_version, unsupported_address_size,
+    unsupported_segment_selector, unsupported_index_kind, invalid_index_padding,
+    invalid_index_length, invalid_index_count, invalid_index_base, invalid_index,
+    invalid_index_table, invalid_index_target, incompatible_index_width,
+}
+
+/// Allocation-free contribution metadata. base names the first entry AFTER
+/// the header, entries_end excludes list payloads, and payload_start equals
+/// end for string/address tables. Address size is zero for string offsets.
+pub struct DwarfIndexTable {
+    pub start: int,
+    pub end: int,
+    pub version: int,
+    pub offset_size: int,
+    pub address_size: int,
+    pub entry_size: int,
+    pub base: int,
+    pub entries_end: int,
+    pub payload_start: int,
+    pub count: int,
+    pub kind: int,
+}
+
+fn dwarf_index_charge(mut work: Cursor, amount: int) -> () ! DwarfIndexError {
+    if amount < 0 { return invalid_bounds }
+    if work.fuel < amount { return resource_limit }
+    work.fuel -= amount
+}
+
+fn dwarf_index_span(data: List[byte], span: ByteSpan) -> () ! DwarfIndexError {
+    if span.start < 0 || span.length < 0 || span.start > data.len { return invalid_bounds }
+    if span.length > data.len - span.start { return invalid_bounds }
+}
+
+fn dwarf_index_body(data: List[byte], mut c: Cursor, start: int, offset_size: int,
+    kind: int) -> DwarfIndexTable ! DwarfIndexError {
+    let version = uint_le(data, mut c, 2)? as int
+    if version != 5 { return unsupported_dwarf_version }
+    var address_size: int = 0
+    var encoded_count: u64 = 0
+    if kind == dwarf_index_str_offsets {
+        let padding = uint_le(data, mut c, 2)?
+        if padding != 0 { return invalid_index_padding }
+    } else {
+        address_size = uint_le(data, mut c, 1)? as int
+        let segment_size = uint_le(data, mut c, 1)?
+        if address_size != 1 && address_size != 2 && address_size != 4 && address_size != 8 {
+            return unsupported_address_size
+        }
+        if segment_size != 0 { return unsupported_segment_selector }
+        if kind == dwarf_index_rnglists || kind == dwarf_index_loclists {
+            encoded_count = uint_le(data, mut c, 4)?
+        }
+    }
+    let base = c.pos
+    let remaining = c.end - base
+    let entry_size = if kind == dwarf_index_addr { address_size } else { offset_size }
+    var count: int = 0
+    var entries_end = c.end
+    var payload_start = c.end
+    if kind == dwarf_index_rnglists || kind == dwarf_index_loclists {
+        // Divide before multiplying or converting a hostile count to an index.
+        if encoded_count > (remaining / entry_size) as u64 { return invalid_index_count }
+        count = encoded_count as int
+        entries_end = base + count * entry_size
+        payload_start = entries_end
+        if count > 0 && payload_start == c.end { return invalid_index_count }
+    } else {
+        if remaining % entry_size != 0 { return invalid_index_length }
+        count = remaining / entry_size
+    }
+    DwarfIndexTable {
+        start: start, end: c.end, version: version, offset_size: offset_size,
+        address_size: address_size, entry_size: entry_size, base: base,
+        entries_end: entries_end, payload_start: payload_start, count: count,
+        kind: kind,
+    }
+}
+
+/// Parse one little-endian contribution and advance c to its end on success.
+/// Its enclosing c.end is preserved. Array/list payload bytes are not decoded.
+/// Charge one header operation plus byte reads, including bytes read before an
+/// error. No guessed padding or alignment is inserted between contributions.
+pub fn dwarf_index_header(data: List[byte], mut c: Cursor, kind: int) -> DwarfIndexTable ! DwarfIndexError {
+    dwarf_index_charge(mut c, 1)?
+    if kind < dwarf_index_str_offsets || kind > dwarf_index_loclists {
+        return unsupported_index_kind
+    }
+    let start = c.pos
+    let initial = uint_le(data, mut c, 4)?
+    var length: u64 = initial
+    var offset_size: int = 4
+    if initial == 0xffffffff {
+        offset_size = 8
+        length = uint_le(data, mut c, 8)?
+    } else if initial >= 0xfffffff0 {
+        return reserved_dwarf_length
+    }
+    if length > (c.end - c.pos) as u64 { return truncated }
+    let end = c.pos + length as int
+    var body = cursor(c.pos, end, c.fuel)
+    // Bind the row before propagating so failed header reads cannot refund fuel.
+    let parsed = dwarf_index_body(data, mut body, start, offset_size, kind)
+    c.pos = body.pos
+    c.fuel = body.fuel
+    let table = parsed?
+    c.pos = table.end
+    table
+}
+
+fn dwarf_index_validate(data: List[byte], table: DwarfIndexTable,
+    mut work: Cursor) -> () ! DwarfIndexError {
+    dwarf_index_charge(mut work, 1)?
+    if table.start < 0 || table.end < table.start || table.end > data.len {
+        return invalid_index_table
+    }
+    // Reparse the bounded header rather than trusting public/forged metadata.
+    // This is constant work, not an entry-array scan or allocation.
+    var c = cursor(table.start, table.end, work.fuel)
+    let parsed = dwarf_index_header(data, mut c, table.kind)
+    work.fuel = c.fuel
+    let actual = parsed?
+    if actual.start != table.start || actual.end != table.end ||
+        actual.version != table.version || actual.offset_size != table.offset_size ||
+        actual.address_size != table.address_size || actual.entry_size != table.entry_size ||
+        actual.base != table.base || actual.entries_end != table.entries_end ||
+        actual.payload_start != table.payload_start || actual.count != table.count ||
+        actual.kind != table.kind {
+        return invalid_index_table
+    }
+}
+
+/// Find the contribution whose first entry matches a section-relative base.
+/// The CU offset width must match; address width also matches for non-string
+/// tables, independently of offset width. Address width is ignored for strings.
+/// Scanning is contiguous and charged; work.pos/end are not changed, and work.fuel
+/// is updated even on failure so callers can compose one global work budget.
+pub fn dwarf_index_find(data: List[byte], section: ByteSpan, base: u64, kind: int,
+    offset_size: int, address_size: int, mut work: Cursor) -> DwarfIndexTable ! DwarfIndexError {
+    dwarf_index_charge(mut work, 1)?
+    dwarf_index_span(data, section)?
+    if kind < dwarf_index_str_offsets || kind > dwarf_index_loclists {
+        return unsupported_index_kind
+    }
+    if offset_size != 4 && offset_size != 8 { return unsupported_width }
+    if kind != dwarf_index_str_offsets && address_size != 1 && address_size != 2 &&
+        address_size != 4 && address_size != 8 { return unsupported_address_size }
+    if base > section.length as u64 { return invalid_index_base }
+    let target = section.start + base as int
+    var scan = cursor(section.start, section.start + section.length, work.fuel)
+    while scan.pos < scan.end {
+        let parsed = dwarf_index_header(data, mut scan, kind)
+        work.fuel = scan.fuel
+        let table = parsed?
+        if table.base == target {
+            if table.offset_size != offset_size ||
+                kind != dwarf_index_str_offsets && table.address_size != address_size {
+                return incompatible_index_width
+            }
+            return table
+        }
+        if target <= table.end { return invalid_index_base }
+    }
+    invalid_index_base
+}
+
+/// Read one on-demand unsigned entry after revalidating the original header.
+/// Reject out-of-range indexes before narrowing or multiplying. Only work.fuel
+/// changes; no entry array is allocated and caller stream positions are kept.
+pub fn dwarf_index_raw(data: List[byte], table: DwarfIndexTable, index: u64,
+    mut work: Cursor) -> u64 ! DwarfIndexError {
+    dwarf_index_charge(mut work, 1)?
+    dwarf_index_validate(data, table, mut work)?
+    if index >= table.count as u64 { return invalid_index }
+    // Header revalidation proves positive width and bounded count. Keep the
+    // available-byte guard explicit before the index multiplication as well.
+    let available = table.entries_end - table.base
+    if index >= (available / table.entry_size) as u64 { return invalid_index }
+    let at = table.base + index as int * table.entry_size
+    var entry = cursor(at, table.entries_end, work.fuel)
+    let value = uint_le(data, mut entry, table.entry_size)
+    work.fuel = entry.fuel
+    value
+}
+
+/// Resolve a range/location index to a span bounded by its contribution end.
+/// The encoded offset is relative to the OFFSET ARRAY, not the contribution
+/// start. Targets must lie after that array and before the contribution end.
+/// This proves position bounds, not list opcodes or terminators; payload decoding
+/// remains the list reader's responsibility, including shared/suffix lists.
+pub fn dwarf_index_list_at(data: List[byte], table: DwarfIndexTable, index: u64,
+    mut work: Cursor) -> ByteSpan ! DwarfIndexError {
+    dwarf_index_charge(mut work, 1)?
+    if table.kind != dwarf_index_rnglists && table.kind != dwarf_index_loclists {
+        return unsupported_index_kind
+    }
+    let relative = dwarf_index_raw(data, table, index, mut work)?
+    if relative < (table.payload_start - table.base) as u64 ||
+        relative >= (table.end - table.base) as u64 { return invalid_index_target }
+    let at = table.base + relative as int
+    ByteSpan {start: at, length: table.end - at}
+}
+
+/// Resolve DW_FORM_strx through an exact ordinary-section base and a bounded
+/// .debug_str span. Returned raw bytes exclude the NUL; no string is allocated.
+/// Neither split/supplementary association nor text decoding is implied.
+pub fn dwarf_index_string(data: List[byte], offsets: ByteSpan, strings: ByteSpan,
+    base: u64, index: u64, offset_size: int, mut work: Cursor) -> ByteSpan ! DwarfIndexError {
+    dwarf_index_charge(mut work, 1)?
+    dwarf_index_span(data, strings)?
+    let table = dwarf_index_find(data, offsets, base, dwarf_index_str_offsets,
+        offset_size, 0, mut work)?
+    let offset = dwarf_index_raw(data, table, index, mut work)?
+    if offset >= strings.length as u64 { return invalid_index_target }
+    var text = cursor(strings.start + offset as int, strings.start + strings.length, work.fuel)
+    let value = cstring(data, mut text)
+    work.fuel = text.fuel
+    value
+}
+
+/// Resolve DW_FORM_addrx or a decoded address index without changing signedness
+/// or applying a load bias. Both contribution and CU widths are validated.
+pub fn dwarf_index_address(data: List[byte], addresses: ByteSpan, base: u64,
+    index: u64, offset_size: int, address_size: int, mut work: Cursor) -> u64 ! DwarfIndexError {
+    dwarf_index_charge(mut work, 1)?
+    let table = dwarf_index_find(data, addresses, base, dwarf_index_addr,
+        offset_size, address_size, mut work)?
+    dwarf_index_raw(data, table, index, mut work)?
+}
+
+/// Resolve DW_FORM_rnglistx/loclistx through the exact base of a bounded section.
+/// List payload bytes are not decoded; the returned span ends at the contribution.
+pub fn dwarf_index_list(data: List[byte], section: ByteSpan, kind: int, base: u64,
+    index: u64, offset_size: int, address_size: int, mut work: Cursor) -> ByteSpan ! DwarfIndexError {
+    dwarf_index_charge(mut work, 1)?
+    if kind != dwarf_index_rnglists && kind != dwarf_index_loclists {
+        return unsupported_index_kind
+    }
+    let table = dwarf_index_find(data, section, base, kind, offset_size, address_size, mut work)?
+    dwarf_index_list_at(data, table, index, mut work)?
+}
