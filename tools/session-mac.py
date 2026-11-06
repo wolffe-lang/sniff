@@ -128,7 +128,7 @@ def facts_lldb(text):
         if line.startswith('(lldb) '):
             expect_print = line.startswith('(lldb) print ') or line.startswith('(lldb) p ')
             continue
-        m = re.match(r'^Breakpoint (\d+): where = \S+ at (\S+?):(\d+)(?::\d+)?, address = (0x[0-9a-f]+)$', line)
+        m = re.match(r'^Breakpoint (\d+): where = .*? at (\S+?):(\d+)(?::\d+)?, address = (0x[0-9a-f]+)$', line)
         if m:
             facts.append(('bpset', int(m[1]), hexint(m[4]) & 0xffffffffffff, base(m[2]), int(m[3])))
             continue

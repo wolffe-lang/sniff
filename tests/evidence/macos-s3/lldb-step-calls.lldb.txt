@@ -1,0 +1,116 @@
+(lldb) target create "/Users/mfwolffe/lanes/sn03/fx/c/calls/clang-O0/prog"
+Current executable set to '/Users/mfwolffe/lanes/sn03/fx/c/calls/clang-O0/prog' (arm64).
+(lldb) command source -s 0 '/Users/mfwolffe/lanes/sn03/tmp/cap/lldb-step-calls.lldb'
+Executing commands in '/Users/mfwolffe/lanes/sn03/tmp/cap/lldb-step-calls.lldb'.
+(lldb) breakpoint set -n main
+Breakpoint 1: where = prog`main + 16 at main.c:20:13, address = 0x00000001000003e8
+(lldb) run
+Process 30268 launched: '/Users/mfwolffe/lanes/sn03/fx/c/calls/clang-O0/prog' (arm64)
+Process 30268 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 1.1
+    frame #0: 0x00000001000003e8 prog`main at main.c:20:13
+   17  	}
+   18  	
+   19  	int main(void) {
+-> 20  	    int a = plain_twice(4);
+    	            ^
+   21  	    int b = depth_sum(3);
+   22  	    int c = count(5);
+   23  	    return a + b + c - 24;
+Target 0: (prog) stopped.
+(lldb) frame info
+frame #0: 0x00000001000003e8 prog`main at main.c:20:13
+(lldb) step
+Process 30268 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = step in
+    frame #0: 0x00000001000003f4 prog`main at main.c:21:13
+   18  	
+   19  	int main(void) {
+   20  	    int a = plain_twice(4);
+-> 21  	    int b = depth_sum(3);
+    	            ^
+   22  	    int c = count(5);
+   23  	    return a + b + c - 24;
+   24  	}
+Target 0: (prog) stopped.
+(lldb) frame info
+frame #0: 0x00000001000003f4 prog`main at main.c:21:13
+(lldb) step
+Process 30268 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = step in
+    frame #0: 0x0000000100000338 prog`depth_sum(n=3) at main.c:6:9
+   3   	int plain_twice(int v);
+   4   	
+   5   	int depth_sum(int n) {
+-> 6   	    if (n == 0) return 0;
+    	        ^
+   7   	    int below = depth_sum(n - 1);
+   8   	    return n + below;
+   9   	}
+Target 0: (prog) stopped.
+(lldb) frame info
+frame #0: 0x0000000100000338 prog`depth_sum(n=3) at main.c:6:9
+(lldb) next
+Process 30268 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = step over
+    frame #0: 0x000000010000034c prog`depth_sum(n=3) at main.c:7:27
+   4   	
+   5   	int depth_sum(int n) {
+   6   	    if (n == 0) return 0;
+-> 7   	    int below = depth_sum(n - 1);
+    	                          ^
+   8   	    return n + below;
+   9   	}
+   10  	
+Target 0: (prog) stopped.
+(lldb) frame info
+frame #0: 0x000000010000034c prog`depth_sum(n=3) at main.c:7:27
+(lldb) next
+Process 30268 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = step over
+    frame #0: 0x000000010000035c prog`depth_sum(n=3) at main.c:8:12
+   5   	int depth_sum(int n) {
+   6   	    if (n == 0) return 0;
+   7   	    int below = depth_sum(n - 1);
+-> 8   	    return n + below;
+    	           ^
+   9   	}
+   10  	
+   11  	int count(int limit) {
+Target 0: (prog) stopped.
+(lldb) frame info
+frame #0: 0x000000010000035c prog`depth_sum(n=3) at main.c:8:12
+(lldb) step
+Process 30268 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = step in
+    frame #0: 0x0000000100000370 prog`depth_sum(n=3) at main.c:9:1
+   6   	    if (n == 0) return 0;
+   7   	    int below = depth_sum(n - 1);
+   8   	    return n + below;
+-> 9   	}
+    	^
+   10  	
+   11  	int count(int limit) {
+   12  	    int total = 0;
+Target 0: (prog) stopped.
+(lldb) frame info
+frame #0: 0x0000000100000370 prog`depth_sum(n=3) at main.c:9:1
+(lldb) finish
+Process 30268 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = step out
+Return value: (int) $0 = 6
+
+    frame #0: 0x00000001000003fc prog`main at main.c:21:9
+   18  	
+   19  	int main(void) {
+   20  	    int a = plain_twice(4);
+-> 21  	    int b = depth_sum(3);
+    	        ^
+   22  	    int c = count(5);
+   23  	    return a + b + c - 24;
+   24  	}
+Target 0: (prog) stopped.
+(lldb) frame info
+frame #0: 0x00000001000003fc prog`main at main.c:21:9
+(lldb) process kill
+Process 30268 exited with status = 9 (0x00000009) killed

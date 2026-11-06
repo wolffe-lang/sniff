@@ -1,0 +1,59 @@
+(lldb) target create "/Users/mfwolffe/lanes/sn03/fx/wolf/recursion/wolf-debug/prog"
+Current executable set to '/Users/mfwolffe/lanes/sn03/fx/wolf/recursion/wolf-debug/prog' (arm64).
+(lldb) command source -s 0 '/Users/mfwolffe/lanes/sn03/tmp/cap/lldb-wolf-recursion.lldb'
+Executing commands in '/Users/mfwolffe/lanes/sn03/tmp/cap/lldb-wolf-recursion.lldb'.
+(lldb) breakpoint set -n depth
+Breakpoint 1: where = prog`depth + 24 at main.lu:2:5, address = 0x00000001000007e0
+(lldb) run
+1 location added to breakpoint 1
+Process 30350 launched: '/Users/mfwolffe/lanes/sn03/fx/wolf/recursion/wolf-debug/prog' (arm64)
+Process 30350 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 1.1
+    frame #0: 0x00000001000007e0 prog`depth(n=3) at main.lu:2:5
+   1   	fn depth(n: int) -> int {
+-> 2   	    if n == 0 { return 0 }
+    	    ^
+   3   	    let below = depth(n - 1)
+   4   	    n + below
+   5   	}
+   6   	
+   7   	fn main() -> int {
+Target 0: (prog) stopped.
+(lldb) continue
+Process 30350 resuming
+Process 30350 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 1.1
+    frame #0: 0x00000001000007e0 prog`depth(n=2) at main.lu:2:5
+   1   	fn depth(n: int) -> int {
+-> 2   	    if n == 0 { return 0 }
+    	    ^
+   3   	    let below = depth(n - 1)
+   4   	    n + below
+   5   	}
+   6   	
+   7   	fn main() -> int {
+Target 0: (prog) stopped.
+(lldb) continue
+Process 30350 resuming
+Process 30350 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 1.1
+    frame #0: 0x00000001000007e0 prog`depth(n=1) at main.lu:2:5
+   1   	fn depth(n: int) -> int {
+-> 2   	    if n == 0 { return 0 }
+    	    ^
+   3   	    let below = depth(n - 1)
+   4   	    n + below
+   5   	}
+   6   	
+   7   	fn main() -> int {
+Target 0: (prog) stopped.
+(lldb) bt
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 1.1
+  * frame #0: 0x00000001000007e0 prog`depth(n=1) at main.lu:2:5
+    frame #1: 0x000000010000080c prog`depth(n=2) at main.lu:3:5
+    frame #2: 0x000000010000080c prog`depth(n=3) at main.lu:3:5
+    frame #3: 0x00000001000008a8 prog`main at main.lu:8:5
+    frame #4: 0x000000010000090c prog`main + 24
+    frame #5: 0x000000018403bda4 dyld`start + 6992
+(lldb) process kill
+Process 30350 exited with status = 9 (0x00000009) killed

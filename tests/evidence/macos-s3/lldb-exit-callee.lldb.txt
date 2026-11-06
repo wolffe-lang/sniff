@@ -1,0 +1,29 @@
+(lldb) target create "/Users/mfwolffe/lanes/sn03/fx/c/exits/clang-O0/prog"
+Current executable set to '/Users/mfwolffe/lanes/sn03/fx/c/exits/clang-O0/prog' (arm64).
+(lldb) command source -s 0 '/Users/mfwolffe/lanes/sn03/tmp/cap/lldb-exit-callee.lldb'
+Executing commands in '/Users/mfwolffe/lanes/sn03/tmp/cap/lldb-exit-callee.lldb'.
+(lldb) breakpoint set -n code
+Breakpoint 1: where = prog`code + 16 at main.c:7:22, address = 0x0000000100000470
+(lldb) run x 7
+Process 30321 launched: '/Users/mfwolffe/lanes/sn03/fx/c/exits/clang-O0/prog' (arm64)
+Process 30321 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 1.1
+    frame #0: 0x0000000100000470 prog`code(text="7") at main.c:7:22
+   4   	#include <string.h>
+   5   	
+   6   	int code(const char *text) {
+-> 7   	    int value = atoi(text);
+    	                     ^
+   8   	    return value;
+   9   	}
+   10  	
+Target 0: (prog) stopped.
+(lldb) bt
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 1.1
+  * frame #0: 0x0000000100000470 prog`code(text="7") at main.c:7:22
+    frame #1: 0x00000001000004a4 prog`leave(text="7") at main.c:12:17
+    frame #2: 0x0000000100000524 prog`main(argc=3, argv=0x000000016fdffb20) at main.c:21:19
+    frame #3: 0x000000018403bda4 dyld`start + 6992
+(lldb) continue
+Process 30321 resuming
+Process 30321 exited with status = 7 (0x00000007)

@@ -1,0 +1,36 @@
+(lldb) target create "/Users/mfwolffe/lanes/sn03/fx/c/exits/clang-O0/prog"
+Current executable set to '/Users/mfwolffe/lanes/sn03/fx/c/exits/clang-O0/prog' (arm64).
+(lldb) command source -s 0 '/Users/mfwolffe/lanes/sn03/tmp/cap/lldb-fault.lldb'
+Executing commands in '/Users/mfwolffe/lanes/sn03/tmp/cap/lldb-fault.lldb'.
+(lldb) run fault
+Process 30328 launched: '/Users/mfwolffe/lanes/sn03/fx/c/exits/clang-O0/prog' (arm64)
+Process 30328 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = EXC_BAD_ACCESS (code=1, address=0x0)
+    frame #0: 0x0000000100000500 prog`main(argc=2, argv=0x000000016fdffb28) at main.c:19:18
+   16  	int main(int argc, char **argv) {
+   17  	    if (argc > 1 && strcmp(argv[1], "fault") == 0) {
+   18  	        volatile int *nowhere = 0;
+-> 19  	        *nowhere = 1;
+    	                 ^
+   20  	    }
+   21  	    if (argc > 2) leave(argv[2]);
+   22  	    if (argc > 1) return code(argv[1]);
+Target 0: (prog) stopped.
+(lldb) bt
+* thread #1, queue = 'com.apple.main-thread', stop reason = EXC_BAD_ACCESS (code=1, address=0x0)
+  * frame #0: 0x0000000100000500 prog`main(argc=2, argv=0x000000016fdffb28) at main.c:19:18
+    frame #1: 0x000000018403bda4 dyld`start + 6992
+(lldb) continue
+Process 30328 resuming
+Process 30328 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = EXC_BAD_ACCESS (code=1, address=0x0)
+    frame #0: 0x0000000100000500 prog`main(argc=2, argv=0x000000016fdffb28) at main.c:19:18
+   16  	int main(int argc, char **argv) {
+   17  	    if (argc > 1 && strcmp(argv[1], "fault") == 0) {
+   18  	        volatile int *nowhere = 0;
+-> 19  	        *nowhere = 1;
+    	                 ^
+   20  	    }
+   21  	    if (argc > 2) leave(argv[2]);
+   22  	    if (argc > 1) return code(argv[1]);
+Target 0: (prog) stopped.

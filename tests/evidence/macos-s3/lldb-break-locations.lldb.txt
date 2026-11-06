@@ -1,0 +1,12 @@
+(lldb) target create "/Users/mfwolffe/lanes/sn03/fx/c/calls/clang-O0/prog"
+Current executable set to '/Users/mfwolffe/lanes/sn03/fx/c/calls/clang-O0/prog' (arm64).
+(lldb) command source -s 0 '/Users/mfwolffe/lanes/sn03/tmp/cap/lldb-break-locations.lldb'
+Executing commands in '/Users/mfwolffe/lanes/sn03/tmp/cap/lldb-break-locations.lldb'.
+(lldb) breakpoint set -n depth_sum
+Breakpoint 1: where = prog`depth_sum + 16 at main.c:6:9, address = 0x0000000100000338
+(lldb) breakpoint set -f main.c -l 13
+Breakpoint 2: where = prog`count + 12 at main.c:13:14, address = 0x000000010000038c
+(lldb) breakpoint set -f main.c -l 22
+Breakpoint 3: where = prog`main + 40 at main.c:22:13, address = 0x0000000100000400
+(lldb) breakpoint set -n count
+Breakpoint 4: where = prog`count + 8 at main.c:12:9, address = 0x0000000100000388

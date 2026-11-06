@@ -1,0 +1,34 @@
+(lldb) target create "/Users/mfwolffe/lanes/sn03/fx/c/signals/clang-O0/prog"
+Current executable set to '/Users/mfwolffe/lanes/sn03/fx/c/signals/clang-O0/prog' (arm64).
+(lldb) command source -s 0 '/Users/mfwolffe/lanes/sn03/tmp/cap/lldb-own-trap.lldb'
+Executing commands in '/Users/mfwolffe/lanes/sn03/tmp/cap/lldb-own-trap.lldb'.
+(lldb) run
+Process 30343 launched: '/Users/mfwolffe/lanes/sn03/fx/c/signals/clang-O0/prog' (arm64)
+Process 30343 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = EXC_BREAKPOINT (code=1, subcode=0x1000004c8)
+    frame #0: 0x00000001000004c8 prog`main at main.c:13:5
+   10  	}
+   11  	int main(void) {
+   12  	    signal(SIGTRAP, on_trap);
+-> 13  	    __asm__ volatile(TRAP_INSN);
+    	    ^
+   14  	    return seen == SIGTRAP ? 0 : 1;
+   15  	}
+Target 0: (prog) stopped.
+(lldb) bt
+* thread #1, queue = 'com.apple.main-thread', stop reason = EXC_BREAKPOINT (code=1, subcode=0x1000004c8)
+  * frame #0: 0x00000001000004c8 prog`main at main.c:13:5
+    frame #1: 0x000000018403bda4 dyld`start + 6992
+(lldb) continue
+Process 30343 resuming
+Process 30343 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = EXC_BREAKPOINT (code=1, subcode=0x1000004c8)
+    frame #0: 0x00000001000004c8 prog`main at main.c:13:5
+   10  	}
+   11  	int main(void) {
+   12  	    signal(SIGTRAP, on_trap);
+-> 13  	    __asm__ volatile(TRAP_INSN);
+    	    ^
+   14  	    return seen == SIGTRAP ? 0 : 1;
+   15  	}
+Target 0: (prog) stopped.
