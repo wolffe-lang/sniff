@@ -1,0 +1,89 @@
+{
+  "schema": 1,
+  "lane": "sn02",
+  "written_before_code": "2026-11-05",
+  "scope": "S2: the session core on Linux x86-64; session rows are Linux only, the Mac runs only what needs no Linux process",
+  "rulings": {
+    "R-sn02-1": "finish prints 'Run till exit from #0 ...' and continue prints 'Continuing.' only in gdb's terminal mode; sniff has a small terminal mode (--tty), held to pty transcripts; the prompt and the 80-column wrap are normalised by name",
+    "R-sn02-2": "S2 session rows run -O0 C and wolf; -O2 C stays reader-corpus only",
+    "R-sn02-3": "ptrace request numbers, user_regs_struct layout and the wait-status truth table come from a compiled C probe run in the oracle container (tools/abi-probe.c, its output committed), never from header text; man pages are the semantics source"
+  },
+  "state_machine": {
+    "states": ["not_started", "running", "stopped_breakpoint", "stopped_step", "stopped_signal", "exited", "killed", "signaled"],
+    "edges": {
+      "not_started": {"run": "stopped_at_exec then running"},
+      "running": {"wait: int3 SIGTRAP with pc-1 in breakpoint table": "stopped_breakpoint", "wait: single-step SIGTRAP": "stopped_step", "wait: other signal": "stopped_signal", "wait: WIFEXITED": "exited", "wait: WIFSIGNALED": "signaled"},
+      "stopped_*": {"continue/step/next/stepi/finish/until": "running", "kill": "killed", "run": "kill then restart (batch: auto-yes)"},
+      "exited|killed|signaled": {"run": "running", "other execution command": "refused: The program is not being run."}
+    },
+    "stop_signals": "a non-SIGTRAP stop reports 'Program received signal NAME, Description.' and the next resume delivers it; SIGTRAP not from a sniff breakpoint or step is delivered to the inferior (its own handler), not swallowed"
+  },
+  "ptrace_requests": ["PTRACE_TRACEME", "PTRACE_CONT", "PTRACE_SINGLESTEP", "PTRACE_KILL or kill(2)+wait", "PTRACE_PEEKTEXT/PEEKDATA", "PTRACE_POKETEXT/POKEDATA", "PTRACE_GETREGS", "PTRACE_SETREGS", "PTRACE_PEEKUSER (only if GETREGS is not enough)", "PTRACE_SETOPTIONS with PTRACE_O_EXITKILL"],
+  "other_calls": ["fork", "personality(ADDR_NO_RANDOMIZE) in the child before exec", "execv", "waitpid with __WALL", "/proc/PID/maps for the load base", "/proc/PID/mem for bulk reads"],
+  "wait_statuses": {"stopped": "low byte 0x7f, signal in bits 8-15; the stop at exec is 0x57f", "exited": "low 7 bits zero, code in bits 8-15", "signaled": "low 7 bits the signal, bit 7 the core flag"},
+  "output_shapes": {
+    "run_exit_zero": "[Inferior 1 (process N) exited normally]",
+    "run_exit_nonzero": "[Inferior 1 (process N) exited with code OO]  (code printed in octal, two digits minimum)",
+    "signal_stop": "\\nProgram received signal SIGSEGV, Segmentation fault.\\n0xADDR in main (argc=2, argv=0xADDR) at FILE:LINE\\nLINE\\tSOURCE",
+    "signal_death": "\\nProgram terminated with signal SIGSEGV, Segmentation fault.\\nThe program no longer exists.",
+    "break_set": "Breakpoint N at 0xADDR: file FILE, line L.",
+    "break_hit": "\\nBreakpoint N, FUNC (ARGS) at FILE:LINE\\nLINE\\tSOURCE",
+    "info_breakpoints": "Num     Type           Disp Enb Address            What / one row per location / '\\tbreakpoint already hit N time(s)'; empty: 'No breakpoints, watchpoints, tracepoints, or catchpoints.'",
+    "bt": "#0  FUNC (ARGS) at FILE:LINE / #N  0xADDR in FUNC (ARGS) at FILE:LINE",
+    "frame_up_down": "#N  [0xADDR in ]FUNC (ARGS) at FILE:LINE\\nLINE\\tSOURCE",
+    "finish": "Run till exit from #0 ... (terminal mode only), then '0xADDR in CALLER (...) at FILE:LINE\\nLINE\\tSOURCE\\nValue returned is $N = VALUE'",
+    "print": "$N = VALUE (history numbering); char as '65 'A''; bool true/false; float %.9g; double %.17g; pointer as '(int *) 0xADDR' at top level",
+    "kill": "[Inferior 1 (process N) killed]",
+    "x": "ADDR <sym+off>:\\tVAL\\tVAL ... in the requested /N /x /w /g /b /h /d /u /c /s /i subset",
+    "info_registers": "name, hex value padded to 19, natural value; eflags as [ ZF PF ] flag lists; segment registers decimal"
+  },
+  "refusals": {
+    "no_process_execution": "The program is not being run.",
+    "no_process_stack": "No stack.",
+    "no_process_registers": "The program has no registers now.",
+    "no_process_frame": "No frame selected.",
+    "bad_function": "Function \"NAME\" not defined.",
+    "bad_line": "No line N in file \"F\".",
+    "bad_file": "No source file named F.",
+    "bad_delete": "No breakpoint number N.",
+    "bad_frame": "No frame at level N.",
+    "stripped": "No symbol table is loaded.  Use the \"file\" command.  (symbolic commands only; *ADDRESS still works)",
+    "unmapped_address": "Cannot insert breakpoint N.\\nCannot access memory at address 0xADDR",
+    "fork_follows_parent_only": "sniff states: S2 follows the parent only; the child runs untraced",
+    "script_abort": "an error in a -x style script aborts the rest of the script, as gdb does"
+  },
+  "findings_from_gdb_15_1": [
+    "exit codes print in octal",
+    "float %.9g, double %.17g",
+    "Run till exit and Continuing. only in terminal mode",
+    "break main in a wolf program makes two locations (module main and the C shim)",
+    "next over the program's own int3 trips an internal assert in gdb 15.1: no row is held to that path",
+    "batch mode auto-answers queries; pty sessions start gdb with -iex 'set confirm off' and 'set pagination off'"
+  ],
+  "normalisations": {
+    "pid": "the N of '(process N)' only",
+    "load_base": "none: both debuggers disable ASLR; PIE base 0x555555554000 must match unnormalised",
+    "stack_addresses": "env and auxv differ between debuggers (LINES/COLUMNS set by gdb); a stack pointer value is normalised by name only on rows that print one, otherwise argv-style values are held exactly under a fixed env",
+    "thread_db_banner": "the two '[Thread debugging using libthread_db enabled]' lines are dropped by name",
+    "version_banner": "gdb's own banner is never produced; sniff prints none",
+    "pty_prompt": "'(gdb) ' / '(sniff) ' prompt and echoed input, tty rows only",
+    "wrap_80": "terminal rows: gdb's 80-column wrap is removed by name",
+    "lane_root": "the configured root prefix of source paths"
+  },
+  "rows": {
+    "inferior": ["c/exits: exit 0, exit 3, exit 255, SIGSEGV, kill while stopped", "wolf/exits: exit 0, exit nonzero"],
+    "breakpoints": ["c/calls: function, file:line, *address, info breakpoints, delete, hit counts", "c/hits: several breakpoints at one address, break at current pc then continue, 10000-hit loop", "wolf/hits"],
+    "stepping": ["c/calls: step into function, step over no-line-info plain.c, next over a call, finish, until, stepping off the end of main", "wolf/recursion: next stays in frame, finish out of recursion"],
+    "frames": ["c/calls and wolf/recursion: bt, frame N, up, down; CFI for C, named frame-pointer fallback for wolf where it has no FDE"],
+    "values": ["c/values: print and info locals/args for char, unsigned, short, long, float, double, bool, pointer; finish Value returned for each", "wolf/recursion and wolf/hits: locals equal lupin's values at the same source point"],
+    "hostile": ["breakpoint at *0x10 (unmapped)", "c/signals: program installing its own SIGTRAP handler", "c/forks: parent only", "stripped binary: symbolic commands refused, *ADDR works", "inferior dying mid-step"],
+    "measured": ["startup to first breakpoint and 10000-hit loop, sniff vs gdb 15.1 interleaved, ratio with stated margin"]
+  },
+  "known_limits_predicted": [
+    "wolf emits no CFI for its own functions today (s283): wolf bt uses the frame-pointer fallback and the note says which rows",
+    "wolf u8/u64/uint carry signed encodings (R-sn00-1): sniff prints what DWARF says and the row names the gap",
+    "wolf aggregates are undescribed: print refuses by name, never invents from source",
+    "the session layer is Linux x86-64 only; macOS rows compile-check the platform-neutral modules"
+  ],
+  "honesty": "A SKIP is never a measurement. A row that did not run is reported as not run."
+}
