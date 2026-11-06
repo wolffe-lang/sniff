@@ -1321,6 +1321,77 @@
     "info breakpoints",
     "continue"
    ]
+  },
+  {
+   "name": "tty-gcc-finish-continue",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "break depth_sum",
+    "run",
+    "bt",
+    "finish",
+    "continue",
+    "next",
+    "step",
+    "finish",
+    "kill",
+    "continue"
+   ],
+   "tty": true
+  },
+  {
+   "name": "tty-gcc-exit-and-errors",
+   "prog": "c/exits/gcc-O0/prog",
+   "script": [
+    "run 3",
+    "continue",
+    "finish",
+    "frame 1",
+    "info locals"
+   ],
+   "tty": true
+  },
+  {
+   "name": "tty-clang-finish-continue",
+   "prog": "c/calls/clang-O0/prog",
+   "script": [
+    "break depth_sum",
+    "run",
+    "bt",
+    "finish",
+    "continue",
+    "next",
+    "step",
+    "finish",
+    "kill",
+    "continue"
+   ],
+   "tty": true
+  },
+  {
+   "name": "tty-clang-exit-and-errors",
+   "prog": "c/exits/clang-O0/prog",
+   "script": [
+    "run 3",
+    "continue",
+    "finish",
+    "frame 1",
+    "info locals"
+   ],
+   "tty": true
+  },
+  {
+   "name": "tty-wolf-recursion",
+   "prog": "session/wolf/recursion/wolf-debug/prog",
+   "script": [
+    "break depth",
+    "run",
+    "continue",
+    "finish",
+    "next",
+    "finish"
+   ],
+   "tty": true
   }
  ]
 }

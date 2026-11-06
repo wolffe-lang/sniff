@@ -1,0 +1,19 @@
+Reading symbols from /work/target/session-fixtures/wolf/recursion/wolf-debug/prog...
+Breakpoint 1 at 0xa53a: file /work/fixtures/session/wolf/recursion/main.lu, line 2.
+Starting program: /work/target/session-fixtures/wolf/recursion/wolf-debug/prog 
+
+Breakpoint 1, depth (n=3) at /work/fixtures/session/wolf/recursion/main.lu:2
+2	    if n == 0 { return 0 }
+Continuing.
+
+Breakpoint 1, depth (n=2) at /work/fixtures/session/wolf/recursion/main.lu:2
+2	    if n == 0 { return 0 }
+Run till exit from #0  depth (n=2) at /work/fixtures/session/wolf/recursion/main.lu:2
+
+Breakpoint 1, depth (n=1) at /work/fixtures/session/wolf/recursion/main.lu:2
+2	    if n == 0 { return 0 }
+3	    let below = depth(n - 1)
+Run till exit from #0  depth (n=1) at /work/fixtures/session/wolf/recursion/main.lu:3
+
+Breakpoint 1, depth (n=0) at /work/fixtures/session/wolf/recursion/main.lu:2
+2	    if n == 0 { return 0 }

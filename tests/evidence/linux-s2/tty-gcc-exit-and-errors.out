@@ -1,0 +1,7 @@
+Reading symbols from /work/target/session-fixtures/c/exits/gcc-O0/prog...
+Starting program: /work/target/session-fixtures/c/exits/gcc-O0/prog 3
+[Inferior 1 (process <PID>) exited with code 03]
+The program is not being run.
+The program is not being run.
+No registers.
+No frame selected.

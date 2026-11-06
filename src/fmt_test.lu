@@ -1,5 +1,5 @@
 //! member: false
-use session
+use numfmt
 
 fn check(name: str, got: str, want: str) {
     assert(got == want)
@@ -7,17 +7,17 @@ fn check(name: str, got: str, want: str) {
 }
 
 fn main() {
-    check("double-tenth", session.fmt_double(4591870180066957722), "0.10000000000000001")
-    check("double-half", session.fmt_double(4602678819172646912), "0.5")
-    check("double-one", session.fmt_double(4607182418800017408), "1")
-    check("double-neg-quarter-plus", session.fmt_double(13831680355561635840), "-1.25")
-    check("double-big", session.fmt_double(6103021453049119613), "1e+100")
-    check("double-small", session.fmt_double(4503599627370496), "2.2250738585072014e-308")
-    check("double-subnormal", session.fmt_double(1), "4.9406564584124654e-324")
-    check("double-inf", session.fmt_double(9218868437227405312), "inf")
-    check("float-third", session.fmt_float(1051372203), "0.333333343")
-    check("float-1.25", session.fmt_float(1067450368), "1.25")
-    check("float-max", session.fmt_float(2139095039), "3.40282347e+38")
-    check("float-two", session.fmt_float(1073741824), "2")
-    check("float-1e-5", session.fmt_float(925353388), "9.99999975e-06")
+    check("double-tenth", numfmt.fmt_double(4591870180066957722), "0.10000000000000001")
+    check("double-half", numfmt.fmt_double(4602678819172646912), "0.5")
+    check("double-one", numfmt.fmt_double(4607182418800017408), "1")
+    check("double-neg-quarter-plus", numfmt.fmt_double(13831680355561635840), "-1.25")
+    check("double-big", numfmt.fmt_double(6103021453049119613), "1e+100")
+    check("double-small", numfmt.fmt_double(4503599627370496), "2.2250738585072014e-308")
+    check("double-subnormal", numfmt.fmt_double(1), "4.9406564584124654e-324")
+    check("double-inf", numfmt.fmt_double(9218868437227405312), "inf")
+    check("float-third", numfmt.fmt_float(1051372203), "0.333333343")
+    check("float-1.25", numfmt.fmt_float(1067450368), "1.25")
+    check("float-max", numfmt.fmt_float(2139095039), "3.40282347e+38")
+    check("float-two", numfmt.fmt_float(1073741824), "2")
+    check("float-1e-5", numfmt.fmt_float(925353388), "9.99999975e-06")
 }

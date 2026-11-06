@@ -59,6 +59,8 @@ pub struct Session {
     pub src_ok: List[bool],
     pub hist: List[Val],
     pub errmsg: str,
+    pub tty: bool,
+    pub quit: bool,
 }
 
 /// Printed text goes to standard output through one buffer, flushed before
@@ -85,6 +87,6 @@ pub fn flush_out(mut s: Session) {
 pub fn session_new(take p: Prog) -> Session {
     Session {
         prog: p, target: platform.target_none(), alive: false, base: 0, args: [], out: [],
-        script: "", lineno: 0, bps: [], bp_next: 1, pending_signal: 0, cfi: [], frames: [], frames_ok: false, sel: 0, src_file: [], src_lines: [], src_ok: [], hist: [], errmsg: "",
+        script: "", lineno: 0, bps: [], bp_next: 1, pending_signal: 0, cfi: [], frames: [], frames_ok: false, sel: 0, src_file: [], src_lines: [], src_ok: [], hist: [], errmsg: "", tty: false, quit: false,
     }
 }

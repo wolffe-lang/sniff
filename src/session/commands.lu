@@ -1,6 +1,8 @@
 // The gdb command language, as far as S2 covers it. Each command returns ""
 // on success or the message gdb would print as an error.
 
+use std.io
+
 
 /// gdb prints an exit code as %#o: a leading zero and octal digits.
 fn octal2(n: int) -> str {
@@ -42,6 +44,15 @@ fn report_event(mut s: Session, e: Event) {
 fn cmd_run(mut s: Session, rest: str) -> str {
     let trimmed = rest.trim()
     if trimmed.len() > 0 { s.args = trimmed.words() }
+    if s.tty {
+        var line = "Starting program: {s.prog.path} "
+        var i = 0
+        while i < s.args.len {
+            line = "{line}{if i > 0 { " " } else { "" }}{s.args[i]}"
+            i += 1
+        }
+        emit_line(mut s, line)
+    }
     let why = start_process(mut s)
     if why.len() > 0 { return why }
     s.frames = []
@@ -53,6 +64,7 @@ fn cmd_run(mut s: Session, rest: str) -> str {
 
 fn cmd_continue(mut s: Session, rest: str) -> str {
     if !s.alive { return "The program is not being run." }
+    if s.tty { emit_line(mut s, "Continuing.") }
     s.frames = []
     s.frames_ok = false
     let e = cont_user(mut s)
@@ -155,7 +167,7 @@ fn dispatch(mut s: Session, word: str, rest: str, text: str) -> str {
     if word == "until" || word == "u" { return repeat_cmd(mut s, rest, 3) }
     if word == "stepi" || word == "si" { return repeat_cmd(mut s, rest, 4) }
     if word == "nexti" || word == "ni" { return repeat_cmd(mut s, rest, 5) }
-    if word == "finish" || word == "fin" { return finish_frame(mut s, s.sel, false, false) }
+    if word == "finish" || word == "fin" { return finish_frame(mut s, s.sel, false, s.tty) }
     if word == "print" || word == "p" || word == "inspect" || word == "call" { return cmd_print(mut s, rest) }
     if word.starts_with("print/") || word.starts_with("p/") || word.starts_with("output/") {
         let fmt = word.splitn("/", 2)[1]
@@ -164,6 +176,7 @@ fn dispatch(mut s: Session, word: str, rest: str, text: str) -> str {
     }
     if word == "output" { return cmd_output(mut s, rest) }
     if word == "x" || word.starts_with("x/") { return cmd_x(mut s, if word == "x" { rest } else { "{str_from(word, 1)} {rest}" }) }
+    if word == "quit" || word == "q" || word == "exit" { s.quit = true; return "" }
     if word == "echo" { emit(mut s, unescape_echo(rest)); return "" }
     if word == "info" || word == "i" { return cmd_info(mut s, rest) }
     "Undefined command: \"{word}\".  Try \"help\"."
@@ -190,6 +203,22 @@ pub fn run_script(mut s: Session, path: str) -> int {
         }
     }
     flush_out(mut s)
+    0
+}
+
+/// Terminal mode: prompt, read a command, run it. An error is printed and the
+/// loop goes on, as in an interactive gdb.
+pub fn run_interactive(mut s: Session) -> int {
+    s.tty = true
+    emit_line(mut s, "Reading symbols from {s.prog.path}...")
+    while !s.quit {
+        emit(mut s, "(sniff) ")
+        flush_out(mut s)
+        let ln = io.input_line() else { break }
+        let err = exec_line(mut s, ln)
+        flush_out(mut s)
+        if err.len() > 0 { eprint(err) }
+    }
     0
 }
 
@@ -229,6 +258,7 @@ pub fn session_main(args: List[str]) -> int {
     s.args = run_args
     var rc = 0
     if script.len() > 0 { rc = run_script(mut s, script) }
+    else { rc = run_interactive(mut s) }
     if s.alive { kill_process(mut s) }
     flush_out(mut s)
     rc

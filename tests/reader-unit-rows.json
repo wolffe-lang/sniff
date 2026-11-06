@@ -80,5 +80,20 @@
     "frame-eh-relative-cie-and-pcrel",
     "frame-debug-section-offsets",
     "frame-hostile-refusals"
+  ],
+  "fmt_test.lu": [
+    "fmt-double-tenth",
+    "fmt-double-half",
+    "fmt-double-one",
+    "fmt-double-neg-quarter-plus",
+    "fmt-double-big",
+    "fmt-double-small",
+    "fmt-double-subnormal",
+    "fmt-double-inf",
+    "fmt-float-third",
+    "fmt-float-1.25",
+    "fmt-float-max",
+    "fmt-float-two",
+    "fmt-float-1e-5"
   ]
 }

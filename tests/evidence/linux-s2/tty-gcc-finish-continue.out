@@ -1,0 +1,26 @@
+Reading symbols from /work/target/session-fixtures/c/calls/gcc-O0/prog...
+Breakpoint 1 at 0x1138: file /work/fixtures/session/c/calls/main.c, line 6.
+Starting program: /work/target/session-fixtures/c/calls/gcc-O0/prog 
+
+Breakpoint 1, depth_sum (n=3) at /work/fixtures/session/c/calls/main.c:6
+6	    if (n == 0) return 0;
+#0  depth_sum (n=3) at /work/fixtures/session/c/calls/main.c:6
+#1  0x00005555555551b4 in main () at /work/fixtures/session/c/calls/main.c:21
+Run till exit from #0  depth_sum (n=3) at /work/fixtures/session/c/calls/main.c:6
+
+Breakpoint 1, depth_sum (n=2) at /work/fixtures/session/c/calls/main.c:6
+6	    if (n == 0) return 0;
+Continuing.
+
+Breakpoint 1, depth_sum (n=1) at /work/fixtures/session/c/calls/main.c:6
+6	    if (n == 0) return 0;
+7	    int below = depth_sum(n - 1);
+
+Breakpoint 1, depth_sum (n=0) at /work/fixtures/session/c/calls/main.c:6
+6	    if (n == 0) return 0;
+Run till exit from #0  depth_sum (n=0) at /work/fixtures/session/c/calls/main.c:6
+0x0000555555555152 in depth_sum (n=1) at /work/fixtures/session/c/calls/main.c:7
+7	    int below = depth_sum(n - 1);
+Value returned is $1 = 0
+[Inferior 1 (process <PID>) killed]
+The program is not being run.

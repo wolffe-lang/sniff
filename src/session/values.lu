@@ -3,6 +3,7 @@
 // enums. Anything the DWARF does not describe is named, never invented.
 
 use platform
+use numfmt
 
 /// A value read from the child (or built by the expression evaluator).
 pub struct Val {
@@ -235,8 +236,8 @@ pub fn format_bytes(p: Prog, tgt: platform.Target, t: int, b: List[byte], top: b
             return "{v}"
         }
         if enc == 4 {
-            if size == 4 { return fmt_float(v) }
-            if size == 8 { return fmt_double(v) }
+            if size == 4 { return numfmt.fmt_float(v) }
+            if size == 8 { return numfmt.fmt_double(v) }
             return "<unsupported {size}-byte float>"
         }
         if enc == 5 || enc == 6 || enc == 7 || enc == 8 {

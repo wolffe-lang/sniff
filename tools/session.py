@@ -11,15 +11,21 @@ never a pass.
 Normalisations, each named in every PASS/FAIL line only when it fired:
   pid     the N of '(process N)' and 'child process N'
   banner  gdb's two thread_db lines are dropped from the golden
-  tty     (tty rows) the prompt text and gdb's 80-column wrap
+  tty     (tty rows) carriage returns and the prompt text
+  wrap80  (tty rows) gdb's 80-column wrap of a long frame line ("\n    at ")
+Terminal rows run both debuggers in a pseudo-terminal with echo off and send
+one command per prompt, as R-sn02-1 specifies.
 """
 import argparse
 import json
 import os
 from pathlib import Path
 import re
+import select
 import subprocess
 import sys
+import termios
+import time
 
 ROOT = Path(__file__).resolve().parents[1]
 ROWS = ROOT / 'tests/session-rows.json'
@@ -51,6 +57,77 @@ def normalize(text, fired):
             fired.add('pid')
         out.append(n)
     return ''.join(out)
+
+
+def run_pty(argv, cmds, prompt, work, timeout=60):
+    import pty
+    master, slave = pty.openpty()
+    attr = termios.tcgetattr(slave)
+    attr[3] &= ~termios.ECHO
+    termios.tcsetattr(slave, termios.TCSANOW, attr)
+    env = dict(ENV_BASE)
+    proc = subprocess.Popen(argv, stdin=slave, stdout=slave, stderr=slave, close_fds=True, env=env, cwd=work)
+    os.close(slave)
+    buf = b''
+    tag = prompt.encode()
+
+    def read_until_prompt():
+        nonlocal buf
+        end = time.time() + timeout
+        while time.time() < end:
+            ready, _, _ = select.select([master], [], [], 0.2)
+            if ready:
+                try:
+                    data = os.read(master, 4096)
+                except OSError:
+                    return
+                if not data:
+                    return
+                buf += data
+                if buf.endswith(tag):
+                    return
+
+    read_until_prompt()
+    for c in cmds:
+        os.write(master, (c + '\n').encode())
+        read_until_prompt()
+    os.write(master, b'quit\n')
+    time.sleep(0.3)
+    try:
+        while True:
+            ready, _, _ = select.select([master], [], [], 0.3)
+            if not ready:
+                break
+            data = os.read(master, 4096)
+            if not data:
+                break
+            buf += data
+    except OSError:
+        pass
+    try:
+        proc.wait(timeout=20)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+    os.close(master)
+    return buf.decode(errors='replace'), '', proc.returncode
+
+
+def normalize_tty(text, fired):
+    t = text.replace('\r\n', '\n').replace('\r', '')
+    if t != text:
+        fired.add('tty')
+    for prompt in ('(gdb) ', '(sniff) '):
+        t = t.replace(prompt, '')
+    t = re.sub(r'\n    at ', ' at ', t)
+    if '\n    at ' in text.replace('\r\n', '\n'):
+        fired.add('wrap80')
+    return t
+
+
+def tty_argv(tool, row, prog, gdb):
+    if gdb:
+        return [tool, '-nx', '-q', '-iex', 'set confirm off', '-iex', 'set pagination off', '--args', prog] + row.get('args', [])
+    return [tool, prog] + (['--args'] + row['args'] if row.get('args') else [])
 
 
 def write_script(row, work):
@@ -87,11 +164,18 @@ def cmd_capture(a):
     work = a.work
     GOLD.mkdir(parents=True, exist_ok=True)
     for row in load_rows(a.only):
-        script = write_script(row, work)
-        out, err, rc = run_tool(gdb_argv(a.gdb, row, script, prog_path(a.fixtures, row)), work, 120)
-        fired = set()
-        o = normalize(out, fired)
-        e = normalize(err, fired)
+        if row.get('tty'):
+            out, err, rc = run_pty(tty_argv(a.gdb, row, prog_path(a.fixtures, row), True), row['script'], '(gdb) ', work)
+            fired = set()
+            o = normalize(normalize_tty(out, fired), fired)
+            e = ''
+            rc = 0
+        else:
+            script = write_script(row, work)
+            out, err, rc = run_tool(gdb_argv(a.gdb, row, script, prog_path(a.fixtures, row)), work, 120)
+            fired = set()
+            o = normalize(out, fired)
+            e = normalize(err, fired)
         for path, text in zip(golden_paths(row), (o, e, str(rc) + '\n')):
             path.write_text(text)
         print('CAPTURE ' + row['name'] + ' rc=' + str(rc))
@@ -118,15 +202,22 @@ def cmd_check(a):
             print('FAIL %s no-golden' % row['name'])
             fails += 1
             continue
-        script = write_script(row, work)
         try:
-            out, err, rc = run_tool(sniff_argv(a.sniff, row, script, prog_path(a.fixtures, row)), work, row.get('timeout', 120))
+            if row.get('tty'):
+                out, err, rc = run_pty(tty_argv(a.sniff, row, prog_path(a.fixtures, row), False), row['script'], '(sniff) ', work)
+                fired = set()
+                out = normalize_tty(out, fired)
+                rc = 0
+            else:
+                script = write_script(row, work)
+                out, err, rc = run_tool(sniff_argv(a.sniff, row, script, prog_path(a.fixtures, row)), work, row.get('timeout', 120))
         except subprocess.TimeoutExpired:
             print('FAIL %s timeout' % row['name'])
             fails += 1
             continue
         ran += 1
-        fired = set()
+        if not row.get('tty'):
+            fired = set()
         o, e = normalize(out, fired), normalize(err, fired)
         want_o, want_e, want_rc = (p.read_text() for p in gold)
         bad = []
@@ -150,10 +241,14 @@ def cmd_oracle(a):
     work = a.work
     fails = 0
     for row in load_rows(a.only):
-        script = write_script(row, work)
-        out, err, rc = run_tool(gdb_argv(a.gdb, row, script, prog_path(a.fixtures, row)), work, 120)
         fired = set()
-        got = (normalize(out, fired), normalize(err, fired), str(rc) + '\n')
+        if row.get('tty'):
+            out, err, rc = run_pty(tty_argv(a.gdb, row, prog_path(a.fixtures, row), True), row['script'], '(gdb) ', work)
+            got = (normalize(normalize_tty(out, fired), fired), '', '0\n')
+        else:
+            script = write_script(row, work)
+            out, err, rc = run_tool(gdb_argv(a.gdb, row, script, prog_path(a.fixtures, row)), work, 120)
+            got = (normalize(out, fired), normalize(err, fired), str(rc) + '\n')
         want = tuple(p.read_text() for p in golden_paths(row))
         if got != want:
             print('FAIL oracle-drift ' + row['name'])
