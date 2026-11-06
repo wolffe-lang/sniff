@@ -40,7 +40,7 @@ def mac_sign(exe, env):
     run(['codesign', '--force', '--sign', '-', '--entitlements', ROOT / 'tests/get-task-allow.plist', exe], env, ROOT)
 
 
-def c_build(cc, source_dir, out, env, strip):
+def c_build(cc, source_dir, out, env, strip, static=False):
     out.mkdir(parents=True, exist_ok=True)
     objects = []
     for source in sorted(source_dir.glob('*.c')):
@@ -48,11 +48,12 @@ def c_build(cc, source_dir, out, env, strip):
         debug = [] if source.name.startswith('plain') else ['-g', '-gdwarf-5']
         # the arm64 trap instruction for the signals program (x86-64 keeps the source's int3)
         trap = ['-DTRAP_INSN="brk #0x1"'] if platform.system() == 'Darwin' else []
-        run([cc, *debug, *trap, '-O0', '-c', source, '-o', obj], env, source_dir)
+        # PAX loads only static ET_EXEC files (no PT_INTERP, no ET_DYN): -fno-pie objects
+        run([cc, *debug, *trap, '-O0', *(['-fno-pie'] if static else []), '-c', source, '-o', obj], env, source_dir)
         objects.append(obj)
     exe = out / 'prog'
     mac = platform.system() == 'Darwin'
-    run([cc, *(['-s'] if strip and not mac else []), *objects, '-o', exe], env, source_dir)
+    run([cc, *(['-s'] if strip and not mac else []), *(['-static', '-no-pie'] if static else []), *objects, '-o', exe], env, source_dir)
     if mac:
         if not strip:
             run(['dsymutil', exe, '-o', str(exe) + '.dSYM'], env, source_dir)
@@ -67,6 +68,8 @@ def main():
     p.add_argument('--wolf', required=True, type=Path)
     p.add_argument('--out', required=True, type=Path)
     p.add_argument('--compilers', nargs='+', default=['gcc', 'clang'])
+    p.add_argument('--static', action='store_true',
+                   help='static ET_EXEC builds for PAX (C: -static -no-pie; wolf: a static cc in front of the link)')
     args = p.parse_args()
     mac = platform.system() == 'Darwin'
     if platform.system() not in ('Linux', 'Darwin'):
@@ -78,6 +81,18 @@ def main():
     if out.exists(): shutil.rmtree(out)
     out.mkdir(parents=True)
     env = dict(os.environ, LC_ALL='C', TZ='UTC')
+    if args.static:
+        if mac:
+            raise SystemExit('FAIL session-fixtures: --static is for the Linux build that PAX runs')
+        # wolf has no --static: it links through the first cc on PATH, so put a static cc there
+        shim = out.parent / (out.name + '-static-cc')
+        shim.mkdir(parents=True, exist_ok=True)
+        real = shutil.which('cc')
+        (shim / 'cc').write_text('#!/bin/sh\nexec %s -static "$@"\n' % real)
+        (shim / 'cc').chmod(0o755)
+        wolf_env = dict(env, PATH=str(shim) + os.pathsep + env['PATH'])
+    else:
+        wolf_env = env
     env.pop('SOURCE_DATE_EPOCH', None)
     versions = {'wolf': subprocess.check_output([str(args.wolf), '--version'], text=True).strip()}
     rows = []
@@ -86,7 +101,7 @@ def main():
         for source_dir in sorted(d for d in (ROOT / 'fixtures/session/c').iterdir() if d.is_dir()):
             for strip in (False, True) if source_dir.name in STRIPPED else (False,):
                 ident = 'c/' + source_dir.name + '/' + cc + '-O0' + ('-stripped' if strip else '')
-                exe = c_build(cc, source_dir, out / ident, env, strip)
+                exe = c_build(cc, source_dir, out / ident, env, strip, args.static)
                 rows.append({'id': ident, 'producer': cc, 'binary': str(exe.relative_to(out)), 'sha256': sha(exe)})
     wolf_sources = sorted((ROOT / 'fixtures/session/wolf').glob('*/main.lu'))
     wolf_sources += sorted((ROOT / 'fixtures/wolf').glob('*/main.lu'))
@@ -95,7 +110,7 @@ def main():
         directory = out / ident
         directory.mkdir(parents=True, exist_ok=True)
         exe = directory / 'prog'
-        run([args.wolf, 'build', source, '--no-cache', '-o', exe], env, source.parent)
+        run([args.wolf, 'build', source, '--no-cache', '-o', exe], wolf_env, source.parent)
         if mac:
             mac_sign(exe, env)
         rows.append({'id': ident, 'producer': 'wolf', 'source': str(source.relative_to(ROOT)),
