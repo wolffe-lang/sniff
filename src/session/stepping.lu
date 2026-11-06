@@ -8,8 +8,8 @@ use platform
 
 fn rsp_now(s: Session) -> u64 {
     let r = platform.target_regs(s.target)
-    if r.len != 27 { return 0 }
-    r[platform.reg_rsp]
+    if r.len != platform.arch_nregs() { return 0 }
+    r[platform.arch_sp_slot()]
 }
 
 fn read_word(s: Session, addr: u64) -> u64 {
@@ -141,8 +141,32 @@ fn run_to(mut s: Session, target: u64, want_sp: u64) -> bool {
     reported
 }
 
-fn is_call(prev_pc: u64, prev_sp: u64, pc: u64, sp: u64) -> bool {
+/// Whether the instruction just stepped was a call. x86-64: a return address was
+/// pushed and the pc left the neighbourhood. arm64: the instruction at the old pc is BL or BLR.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+fn call_made(s: Session, prev_pc: u64, prev_sp: u64, pc: u64, sp: u64) -> bool {
     sp + 8 == prev_sp && (pc < prev_pc || pc >= prev_pc + 16)
+}
+
+#[cfg(target = "aarch64-apple-darwin")]
+fn call_made(s: Session, prev_pc: u64, prev_sp: u64, pc: u64, sp: u64) -> bool {
+    if pc == prev_pc + 4 { return false }
+    let r = platform.target_read(s.target, prev_pc, 4)
+    if !r.ok { return false }
+    let word = (r.data[0] as int as u64) + ((r.data[1] as int as u64) << 8) + ((r.data[2] as int as u64) << 16) + ((r.data[3] as int as u64) << 24)
+    platform.arch_word_is_call(word)
+}
+
+/// The address a call just made will return to: the word at the stack pointer on
+/// x86-64, the link register on arm64.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+fn return_addr(s: Session, sp: u64) -> u64 { read_word(s, sp) }
+
+#[cfg(target = "aarch64-apple-darwin")]
+fn return_addr(s: Session, sp: u64) -> u64 {
+    let r = platform.target_regs(s.target)
+    if r.len != platform.arch_nregs() { return 0 }
+    r[30]
 }
 
 /// What a finished step prints: the whole location when the function or
@@ -206,8 +230,8 @@ fn step_lines(mut s: Session, over: bool, until_mode: bool) -> str {
         }
         if pc >= range_lo && pc < range_hi { continue }
         let sp = rsp_now(s)
-        if is_call(prev_pc, prev_sp, pc, sp) {
-            let ret = read_word(s, sp)
+        if call_made(s, prev_pc, prev_sp, pc, sp) {
+            let ret = return_addr(s, sp)
             let callee = pc - s.base
             let cf = func_at(s.prog, callee)
             var has_lines = false
@@ -292,8 +316,8 @@ fn step_insns(mut s: Session, over: bool) -> str {
         report_bp_hit(mut s, hit)
         return ""
     }
-    if over && is_call(prev_pc, prev_sp, pc, rsp_now(s)) {
-        let ret = read_word(s, rsp_now(s))
+    if over && call_made(s, prev_pc, prev_sp, pc, rsp_now(s)) {
+        let ret = return_addr(s, rsp_now(s))
         if run_to(mut s, ret, prev_sp) { return "" }
     }
     print_step_stop(mut s, start_func, start_cfa, true)
@@ -311,8 +335,8 @@ fn return_value(s: Session, ty: int) -> Val {
         while i < size && i < x.len { (mut bytes).push(x[i]); i += 1 }
     } else {
         let r = platform.target_regs(s.target)
-        if r.len != 27 { return val_fail("") }
-        let v = r[platform.reg_rax]
+        if r.len != platform.arch_nregs() { return val_fail("") }
+        let v = r[platform.arch_ret_slot()]
         var i = 0
         while i < size && i < 8 {
             (mut bytes).push(((v >> (8 * i as u64)) & 255) as int as byte)

@@ -58,6 +58,7 @@ fn signed_of(s: Session, v: Val) -> i64 {
     platform.bits_i64(raw)
 }
 
+#[cfg(target = "x86_64-unknown-linux-gnu")]
 fn reg_slot(name: str) -> int {
     if name == "rax" { return platform.reg_rax }
     if name == "rbx" { return platform.reg_rbx }
@@ -91,12 +92,13 @@ fn reg_slot(name: str) -> int {
 }
 
 /// The value of register `name` in the selected frame (frame 0 reads the live registers).
+#[cfg(target = "x86_64-unknown-linux-gnu")]
 fn reg_value(s: Session, name: str) -> Val {
     if !s.alive { return val_fail("No registers.") }
     let slot = reg_slot(name)
     if slot < 0 { return val_fail("Invalid register `{name}'") }
     let raw = platform.target_regs(s.target)
-    if raw.len != 27 { return val_fail("The program has no registers now.") }
+    if raw.len != platform.arch_nregs() { return val_fail("The program has no registers now.") }
     var v = raw[slot]
     if s.sel > 0 && s.sel < s.frames.len {
         if slot == platform.reg_rip { v = s.frames[s.sel].pc }
@@ -108,6 +110,49 @@ fn reg_value(s: Session, name: str) -> Val {
     if name == "eflags" || slot >= platform.reg_cs && slot != platform.reg_fs_base && slot != platform.reg_gs_base {
         return int_val(v, ty_int)
     }
+    int_val(v, ty_long)
+}
+
+
+/// Slot of an arm64 register by gdb's name: x0-x30, sp, pc, cpsr; fp and lr are x29 and x30.
+#[cfg(target = "aarch64-apple-darwin")]
+fn reg_slot(name: str) -> int {
+    if name == "sp" { return 31 }
+    if name == "pc" { return 32 }
+    if name == "cpsr" { return 33 }
+    if name == "fp" { return 29 }
+    if name == "lr" { return 30 }
+    if name.starts_with("x") {
+        let digits = name.strip_prefix("x") else { return 0 - 1 }
+        if digits.len() == 0 || digits.len() > 2 { return 0 - 1 }
+        var v = 0
+        for b in digits.bytes() {
+            let c = b as int
+            if c < 48 || c > 57 { return 0 - 1 }
+            v = v * 10 + (c - 48)
+        }
+        if v <= 30 && ("{v}" == digits) { return v }
+    }
+    0 - 1
+}
+
+/// The value of register `name` in the selected frame (frame 0 reads the live registers).
+#[cfg(target = "aarch64-apple-darwin")]
+fn reg_value(s: Session, name: str) -> Val {
+    if !s.alive { return val_fail("No registers.") }
+    let slot = reg_slot(name)
+    if slot < 0 { return val_fail("Invalid register `{name}'") }
+    let raw = platform.target_regs(s.target)
+    if raw.len != platform.arch_nregs() { return val_fail("The program has no registers now.") }
+    var v = raw[slot]
+    if s.sel > 0 && s.sel < s.frames.len {
+        if slot == 32 { v = s.frames[s.sel].pc }
+        if slot == 31 || slot == 29 || slot == 30 { v = s.frames[s.sel].regs[slot] }
+    }
+    if slot == 32 { return int_val(v, ty_codep) }
+    if slot == 31 || slot == 29 { return int_val(v, ty_voidp) }
+    if slot == 30 { return int_val(v, ty_codep) }
+    if slot == 33 { return int_val(v, ty_int) }
     int_val(v, ty_long)
 }
 
@@ -498,6 +543,7 @@ fn read_string_at(s: Session, addr: u64) -> (str, int) {
     ("{out}\"...", n)
 }
 
+#[cfg(target = "x86_64-unknown-linux-gnu")]
 fn flags_text(v: u64) -> str {
     let names = ["CF", "", "PF", "", "AF", "", "ZF", "SF", "TF", "IF", "DF", "OF", "", "", "NT", "", "RF", "VM", "AC", "VIF", "VIP", "ID"]
     var out = "["
@@ -510,6 +556,7 @@ fn flags_text(v: u64) -> str {
 }
 
 /// info registers [names]
+#[cfg(target = "x86_64-unknown-linux-gnu")]
 fn cmd_info_registers(mut s: Session, rest: str) -> str {
     if !s.alive { return "The program has no registers now." }
     var names: List[str] = ["rax", "rbx", "rcx", "rdx", "rsi", "rdi", "rbp", "rsp", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15", "rip", "eflags", "cs", "ss", "ds", "es", "fs", "gs", "fs_base", "gs_base"]
@@ -531,6 +578,66 @@ fn cmd_info_registers(mut s: Session, rest: str) -> str {
         }
         else if name == "eflags" { natural = flags_text(raw) }
         else if name == "cs" || name == "ss" || name == "ds" || name == "es" || name == "fs" || name == "gs" { natural = "{raw}" }
+        let hex = "0x{raw:x}"
+        emit_line(mut s, "{name}{" ".repeat(15 - name.len())}{hex}{" ".repeat(19 - hex.len())} {natural}")
+    }
+    ""
+}
+
+/// aarch64 cpsr as gdb's flags type prints it: the exception level, then the set flags from the low bit up.
+#[cfg(target = "aarch64-apple-darwin")]
+fn cpsr_text(v: u64) -> str {
+    var out = "[ EL={(v >> 2) & 3}"
+    let names = ["SP", "", "", "", "nRW", "", "F", "I", "A", "D", "", "", "SSBS", "", "", "", "", "", "", "", "IL", "SS", "PAN", "UAO", "DIT", "TCO", "", "", "V", "C", "Z", "N"]
+    var i = 0
+    while i < names.len {
+        if names[i].len() > 0 && ((v >> i as u64) & 1) == 1 { out = "{out} {names[i]}" }
+        i += 1
+    }
+    let bt = (v >> 10) & 3
+    if bt != 0 { out = "{out} BTYPE={bt}" }
+    "{out} ]"
+}
+
+/// info registers [names]: x0-x30, sp, pc, cpsr, fpsr and fpcr, in gdb's aarch64 layout.
+#[cfg(target = "aarch64-apple-darwin")]
+fn cmd_info_registers(mut s: Session, rest: str) -> str {
+    if !s.alive { return "The program has no registers now." }
+    var names: List[str] = []
+    var k = 0
+    while k <= 30 { (mut names).push("x{k}"); k += 1 }
+    (mut names).push("sp")
+    (mut names).push("pc")
+    (mut names).push("cpsr")
+    (mut names).push("fpsr")
+    (mut names).push("fpcr")
+    let want = rest.trim()
+    if want.len() > 0 {
+        names = []
+        for w in want.words() { (mut names).push(w.strip_prefix("$") else { w }) }
+    }
+    for name in names {
+        var raw: u64 = 0
+        var natural = ""
+        if name == "fpsr" || name == "fpcr" {
+            let fp = platform.target_fp_status(s.target)
+            if fp.len != 2 { return "The program has no registers now." }
+            raw = if name == "fpsr" { fp[0] } else { fp[1] }
+            natural = "{raw}"
+        } else {
+            let v = reg_value(s, name)
+            if !v.ok { return v.why }
+            raw = as_u64(v.bytes)
+            natural = "{signed_raw(raw, 8)}"
+            let slot = reg_slot(name)
+            if slot == 29 || slot == 31 { natural = "0x{raw:x}" }
+            else if slot == 30 || slot == 32 {
+                natural = "0x{raw:x}"
+                let sym = symbolize(s, raw)
+                if sym.len() > 0 { natural = "{natural} {sym}" }
+            }
+            else if slot == 33 { natural = cpsr_text(raw); raw = raw & 4294967295 }
+        }
         let hex = "0x{raw:x}"
         emit_line(mut s, "{name}{" ".repeat(15 - name.len())}{hex}{" ".repeat(19 - hex.len())} {natural}")
     }

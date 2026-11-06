@@ -18,6 +18,7 @@ fn parse_hex(text: str) -> u64 {
 }
 
 /// Lowest mapping start of the file at path in /proc/PID/maps (proc(5)).
+#[cfg(target = "x86_64-unknown-linux-gnu")]
 fn exe_base(pid: int, path: str) -> u64 {
     let raw = fs_read_bytes("/proc/{pid}/maps") else { return 0 }
     let text = str_from_utf8(raw) else { return 0 }
@@ -30,8 +31,47 @@ fn exe_base(pid: int, path: str) -> u64 {
     0
 }
 
+/// The load slide of the main image: the runtime address of its first byte minus the file's.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+fn image_base(s: Session, t: platform.Target) -> u64 {
+    if s.prog.pie { return exe_base(t.pid, s.prog.path) }
+    0
+}
+
+/// The load slide of the main image: its Mach-O header is found among the task's regions.
+#[cfg(target = "aarch64-apple-darwin")]
+fn image_base(s: Session, t: platform.Target) -> u64 {
+    let b = platform.target_image_base(t)
+    if b == 0 { return 0 }
+    b - s.prog.text_addr
+}
+
 /// The runtime address of a file address.
 fn rt(s: Session, a: u64) -> u64 { a + s.base }
+
+/// The bytes of a replaced instruction as one integer (little endian), at most 8.
+fn pack_bytes(b: List[byte]) -> int {
+    var v: int = 0
+    var i = b.len
+    while i > 0 {
+        i -= 1
+        v = v * 256 + (b[i] as int)
+    }
+    v
+}
+
+/// The first n bytes of v, little endian.
+fn unpack_bytes(v: int, n: int) -> List[byte] {
+    var out: List[byte] = []
+    var x = v
+    var i = 0
+    while i < n {
+        (mut out).push((x % 256) as byte)
+        x = x / 256
+        i += 1
+    }
+    out
+}
 
 /// The runtime address of breakpoint i: a literal address stays as typed.
 fn bp_rt(s: Session, i: int) -> u64 {
@@ -43,12 +83,15 @@ fn bp_rt(s: Session, i: int) -> u64 {
 fn start_process(mut s: Session) -> str {
     if s.alive { kill_process(mut s) }
     let t = platform.target_spawn(s.prog.path, s.args, "24", "80")
-    if t.pid == 0 { return "Cannot start {s.prog.path}" }
+    if t.pid == 0 {
+        let why = platform.target_refusal(t)
+        if why.len() > 0 { return why }
+        return "Cannot start {s.prog.path}"
+    }
     s.target = copy t
     s.alive = true
     s.pending_signal = 0
-    s.base = 0
-    if s.prog.pie { s.base = exe_base(t.pid, s.prog.path) }
+    s.base = image_base(s, t)
     ""
 }
 
@@ -80,10 +123,11 @@ fn insert_all(mut s: Session) -> int {
                 s.bps[i].inserted = true
                 placed = true
             } else {
-                let r = platform.target_read(s.target, a, 1)
+                let insn = platform.arch_bp_insn()
+                let r = platform.target_read(s.target, a, insn.len)
                 if r.ok {
-                    s.bps[i].orig = r.data[0] as int
-                    placed = platform.target_write(s.target, a, [204 as byte])
+                    s.bps[i].orig = pack_bytes(r.data)
+                    placed = platform.target_write(s.target, a, insn)
                     s.bps[i].inserted = placed
                 }
             }
@@ -103,7 +147,7 @@ fn remove_all(mut s: Session) {
     while i >= 0 {
         if s.bps[i].inserted {
             let a = bp_rt(s, i)
-            let _ = platform.target_write(s.target, a, [s.bps[i].orig as byte])
+            let _ = platform.target_write(s.target, a, unpack_bytes(s.bps[i].orig, platform.arch_bp_insn().len))
             s.bps[i].inserted = false
         }
         i -= 1
@@ -113,14 +157,14 @@ fn remove_all(mut s: Session) {
 /// The current pc, or 0 when no registers can be read.
 fn current_pc(s: Session) -> u64 {
     let regs = platform.target_regs(s.target)
-    if regs.len != 27 { return 0 }
-    regs[platform.reg_rip]
+    if regs.len != platform.arch_nregs() { return 0 }
+    regs[platform.arch_pc_slot()]
 }
 
 fn set_pc(s: Session, pc: u64) {
     var regs = platform.target_regs(s.target)
-    if regs.len != 27 { return }
-    regs[platform.reg_rip] = pc
+    if regs.len != platform.arch_nregs() { return }
+    regs[platform.arch_pc_slot()] = pc
     let _ = platform.target_set_regs(s.target, regs)
 }
 
@@ -150,7 +194,7 @@ fn handle_fork(mut s: Session, st: int) {
     var i: int = 0
     while i < s.bps.len {
         if s.bps[i].inserted {
-            let _ = platform.target_write(ct, bp_rt(s, i), [s.bps[i].orig as byte])
+            let _ = platform.target_write(ct, bp_rt(s, i), unpack_bytes(s.bps[i].orig, platform.arch_bp_insn().len))
         }
         i += 1
     }
@@ -162,8 +206,10 @@ fn is_fork_event(st: int) -> bool {
     platform.status_stopped(st) && (st >> 16) != 0 && (st >> 16) <= 3 && platform.status_stop_signal(st) == 5
 }
 
-/// Classify a raw wait status. A SIGTRAP at a breakpoint's address + 1 is
-/// that breakpoint (Intel SDM: RIP follows the int3); the pc is wound back.
+/// Classify a raw wait status. A SIGTRAP at a breakpoint's address, plus the
+/// bytes the trap leaves the pc past (one after int3, Intel SDM; none after
+/// BRK, Arm ARM), is that breakpoint; the pc is wound back. A signal delivered
+/// as a Unix signal (status kind 259 on macOS) is never a breakpoint.
 fn classify(mut s: Session, st: int, stepping: bool) -> Event {
     if st < 0 { s.alive = false; return lost() }
     if platform.status_exited(st) {
@@ -179,10 +225,11 @@ fn classify(mut s: Session, st: int, stepping: bool) -> Event {
     let sig = platform.status_stop_signal(st)
     if sig == 5 {
         let pc = current_pc(s)
-        if !stepping && pc > 0 {
-            let at = bp_at(s, pc - 1)
+        if !stepping && pc > 0 && (st >> 16) != 259 {
+            let adjust = platform.arch_trap_adjust()
+            let at = bp_at(s, pc - adjust)
             if at >= 0 {
-                set_pc(s, pc - 1)
+                if adjust > 0 { set_pc(s, pc - adjust) }
                 return Event { kind: ev_breakpoint, signal: 5, code: 0, bp: at }
             }
         }

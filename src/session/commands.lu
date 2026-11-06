@@ -128,7 +128,7 @@ fn cmd_maint(mut s: Session, rest: str) -> str {
     if !s.alive { return "No stack." }
     var i = 0
     while i < s.frames.len {
-        var how = if s.frames[i].fallback { "frame-pointer" } else { "cfi" }
+        var how = s.frames[i].basis
         if i + 1 == s.frames.len { how = "outermost" }
         emit_line(mut s, "#{i} {frame_func_name(s, s.frames[i])} unwind={how}")
         i += 1
