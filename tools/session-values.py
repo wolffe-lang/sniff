@@ -29,6 +29,7 @@ CASES = [
 ]
 BITS = {'u8': 8, 'u16': 16, 'u32': 32, 'u64': 64, 'uint': 64}
 ENV = {'PATH': '/usr/local/bin:/usr/bin:/bin', 'HOME': '/work/target/home', 'LC_ALL': 'C', 'TZ': 'UTC', 'TERM': 'dumb'}
+CWD = '/work'
 
 
 def sniff_stops(sniff, fixtures, case, function, count, work):
@@ -38,7 +39,7 @@ def sniff_stops(sniff, fixtures, case, function, count, work):
         lines += ['echo @@STOP\\n', 'frame', 'echo @@ARGS\\n', 'info args', 'echo @@LOCALS\\n', 'info locals', 'next']
     script = Path(work) / ('values-' + case.replace('/', '-') + '-' + function + '.cmd')
     script.write_text('\n'.join(lines) + '\n')
-    run = subprocess.run([sniff, '-batch', '-x', str(script), str(program)], cwd='/work', env=ENV,
+    run = subprocess.run([sniff, '-batch', '-x', str(script), str(program)], cwd=CWD, env=ENV,
                          capture_output=True, text=True, timeout=60)
     stops = []
     for chunk in run.stdout.split('@@STOP\n')[1:]:
@@ -80,7 +81,12 @@ def main():
     p.add_argument('--fixtures', required=True, type=Path)
     p.add_argument('--work', default='/work/target/s2')
     p.add_argument('--out', type=Path)
+    p.add_argument('--cwd', default='/work')
     a = p.parse_args()
+    global CWD
+    CWD = a.cwd
+    if a.cwd != '/work':
+        ENV.update({'PATH': '/usr/bin:/bin:/usr/sbin:/sbin', 'HOME': a.cwd})
     Path(a.work).mkdir(parents=True, exist_ok=True)
     values = json.loads(a.values.read_text())
     record = []

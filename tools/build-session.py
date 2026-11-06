@@ -46,7 +46,9 @@ def c_build(cc, source_dir, out, env, strip):
     for source in sorted(source_dir.glob('*.c')):
         obj = out / (source.stem + '.o')
         debug = [] if source.name.startswith('plain') else ['-g', '-gdwarf-5']
-        run([cc, *debug, '-O0', '-c', source, '-o', obj], env, source_dir)
+        # the arm64 trap instruction for the signals program (x86-64 keeps the source's int3)
+        trap = ['-DTRAP_INSN="brk #0x1"'] if platform.system() == 'Darwin' else []
+        run([cc, *debug, *trap, '-O0', '-c', source, '-o', obj], env, source_dir)
         objects.append(obj)
     exe = out / 'prog'
     mac = platform.system() == 'Darwin'
@@ -55,7 +57,7 @@ def c_build(cc, source_dir, out, env, strip):
         if not strip:
             run(['dsymutil', exe, '-o', str(exe) + '.dSYM'], env, source_dir)
         else:
-            run(['strip', '-x', exe], env, source_dir)
+            run(['strip', exe], env, source_dir)
         mac_sign(exe, env)
     return exe
 
