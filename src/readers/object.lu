@@ -1,0 +1,195 @@
+// Container dispatch for the dump modes: ELF64 little-endian x86-64 executables
+// (ELF gABI) and Mach-O 64 little-endian arm64 images and dSYM companions
+// (SDK mach-o/loader.h). Sections are found by name; no bytes are copied.
+
+/// Every container failure the two readers name, plus formats neither reads.
+pub error ObjectError = {
+    invalid_bounds,
+    truncated,
+    unsupported_width,
+    unterminated_string,
+    unterminated_leb128,
+    leb128_overflow,
+    offset_overflow,
+    resource_limit,
+    elf_bad_magic,
+    elf_truncated,
+    elf_offset_overflow,
+    elf_invalid_header,
+    elf_invalid_section,
+    elf_invalid_link,
+    elf_invalid_string,
+    elf_invalid_symbol,
+    elf_invalid_index,
+    elf_resource_limit,
+    elf_unsupported_class,
+    elf_unsupported_endian,
+    elf_unsupported_machine,
+    elf_unsupported_relocatable,
+    elf_unsupported_type,
+    elf_unsupported_compression,
+    invalid_macho_magic,
+    unsupported_object_class,
+    unsupported_endianness,
+    unsupported_architecture,
+    unsupported_fat_macho,
+    unsupported_filetype,
+    invalid_load_commands,
+    invalid_segment,
+    invalid_section,
+    unsupported_compressed_section,
+    duplicate_symtab,
+    duplicate_uuid,
+    invalid_symbol_string,
+    invalid_symbol_section,
+    missing_uuid,
+    dsym_uuid_mismatch,
+    unsupported_compact_unwind,
+    unsupported_object_format,
+    unsupported_split_dwarf,
+}
+
+pub const object_elf: int = 1
+pub const object_macho: int = 2
+
+/// One named section's file bytes and load address. length 0 means the
+/// section is absent, empty, or has no file bytes (NOBITS, dSYM address-only).
+pub struct ObjectSection {
+    pub span: ByteSpan,
+    pub address: u64,
+    pub present: bool,
+}
+
+/// The debug and unwind sections the dump modes read, by container.
+pub struct DebugSections {
+    pub format: int,
+    pub info: ObjectSection,
+    pub abbrev: ObjectSection,
+    pub line: ObjectSection,
+    pub str: ObjectSection,
+    pub line_str: ObjectSection,
+    pub str_offsets: ObjectSection,
+    pub addr: ObjectSection,
+    pub ranges: ObjectSection,
+    pub rnglists: ObjectSection,
+    pub loc: ObjectSection,
+    pub loclists: ObjectSection,
+    pub frame: ObjectSection,
+    pub eh_frame: ObjectSection,
+    pub types: ObjectSection,
+    pub has_split_dwarf: bool,
+    pub has_compact_unwind: bool,
+}
+
+fn object_absent() -> ObjectSection {
+    ObjectSection { span: ByteSpan { start: 0, length: 0 }, address: 0, present: false }
+}
+
+/// Byte-for-byte comparison of a bounded name span with ASCII text.
+pub fn span_is(data: List[byte], span: ByteSpan, text: str) -> bool {
+    let want = text.bytes()
+    if span.length != want.len || span.start < 0 || span.start > data.len - span.length {
+        return false
+    }
+    var i: int = 0
+    while i < want.len {
+        if data[span.start + i] != want[i] { return false }
+        i += 1
+    }
+    true
+}
+
+fn span_has_suffix(data: List[byte], span: ByteSpan, text: str) -> bool {
+    let want = text.bytes()
+    if span.length < want.len { return false }
+    span_is(data, ByteSpan { start: span.start + span.length - want.len, length: want.len }, text)
+}
+
+fn object_empty() -> DebugSections {
+    DebugSections {
+        format: 0,
+        info: object_absent(),
+        abbrev: object_absent(),
+        line: object_absent(),
+        str: object_absent(),
+        line_str: object_absent(),
+        str_offsets: object_absent(),
+        addr: object_absent(),
+        ranges: object_absent(),
+        rnglists: object_absent(),
+        loc: object_absent(),
+        loclists: object_absent(),
+        frame: object_absent(),
+        eh_frame: object_absent(),
+        types: object_absent(),
+        has_split_dwarf: false,
+        has_compact_unwind: false,
+    }
+}
+
+fn object_assign(mut s: DebugSections, data: List[byte], name: ByteSpan, section: ObjectSection, macho: bool) {
+    let p = if macho { "__" } else { "." }
+    if span_is(data, name, "{p}debug_info") { s.info = section; return }
+    if span_is(data, name, "{p}debug_abbrev") { s.abbrev = section; return }
+    if span_is(data, name, "{p}debug_line") { s.line = section; return }
+    if span_is(data, name, "{p}debug_str") { s.str = section; return }
+    if span_is(data, name, "{p}debug_line_str") { s.line_str = section; return }
+    if span_is(data, name, "{p}debug_addr") { s.addr = section; return }
+    if span_is(data, name, "{p}debug_ranges") { s.ranges = section; return }
+    if span_is(data, name, "{p}debug_rnglists") { s.rnglists = section; return }
+    if span_is(data, name, "{p}debug_loc") { s.loc = section; return }
+    if span_is(data, name, "{p}debug_loclists") { s.loclists = section; return }
+    if span_is(data, name, "{p}debug_frame") { s.frame = section; return }
+    if span_is(data, name, "{p}eh_frame") { s.eh_frame = section; return }
+    if span_is(data, name, "{p}debug_types") { s.types = section; return }
+    // Mach-O section names are 16-byte fields: the oracle's long name is cut.
+    if macho && span_is(data, name, "__debug_str_offs") { s.str_offsets = section; return }
+    if !macho && span_is(data, name, ".debug_str_offsets") { s.str_offsets = section; return }
+    if macho && span_is(data, name, "__unwind_info") { s.has_compact_unwind = true; return }
+    if span_has_suffix(data, name, ".dwo") { s.has_split_dwarf = true }
+}
+
+/// Locate the dump sections of an ELF64 or Mach-O 64 file. Unsupported
+/// containers, compressed sections and malformed tables are refused by the
+/// container readers; split DWARF sections are recorded for refusal.
+pub fn object_sections(data: List[byte]) -> DebugSections ! ObjectError {
+    if data.len < 4 { return unsupported_object_format }
+    var s = object_empty()
+    let magic = (data[0] as int) | (data[1] as int) << 8 | (data[2] as int) << 16 | (data[3] as int) << 24
+    if magic == 1179403647 {
+        let elf = elf_read(data, 131072, 1048576, 100000000)?
+        s.format = object_elf
+        var i: int = 0
+        while i < elf.sections.len {
+            let kind = elf.sections[i].kind
+            var span = ByteSpan { start: 0, length: 0 }
+            if kind != 8 && kind != 0 {
+                span = ByteSpan { start: elf.sections[i].offset as int, length: elf.sections[i].size as int }
+            }
+            let section = ObjectSection { span: span, address: elf.sections[i].address, present: true }
+            object_assign(mut s, data, elf.sections[i].name, section, false)
+            i += 1
+        }
+        return s
+    }
+    if magic == 4277009103 || magic == 3489328638 || magic == 3405691582 || magic == 3199925962 {
+        let mach = macho_read(data, 100000000)?
+        s.format = object_macho
+        s.has_compact_unwind = mach.has_compact_unwind
+        var i: int = 0
+        while i < mach.sections.len {
+            var span = ByteSpan { start: 0, length: 0 }
+            if mach.sections[i].has_file_data {
+                span = ByteSpan {
+                    start: mach.sections[i].file_offset as int,
+                    length: mach.sections[i].size as int,
+                }
+            }
+            let section = ObjectSection { span: span, address: mach.sections[i].address, present: true }
+            object_assign(mut s, data, mach.sections[i].name, section, true)
+            i += 1
+        }
+        return s
+    }
+    unsupported_object_format
+}
