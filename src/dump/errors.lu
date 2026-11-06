@@ -90,4 +90,12 @@ pub error DumpError = {
     unsupported_dump_mode,
     dump_write_failed,
     dwarf_list_unknown_kind,
+    dwarf_frame_invalid_cie,
+    dwarf_frame_invalid_cie_pointer,
+    dwarf_frame_unsupported_version,
+    dwarf_frame_unsupported_augmentation,
+    dwarf_frame_unsupported_encoding,
+    dwarf_frame_unknown_instruction,
+    dwarf_frame_unsupported_address_size,
+    dwarf_frame_invalid_state,
 }

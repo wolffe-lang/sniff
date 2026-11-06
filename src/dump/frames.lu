@@ -1,0 +1,339 @@
+// --eh-frame and --debug-frame print both sections, as the oracle does: each
+// CIE and FDE with its decoded instructions, then the unwind rows those
+// instructions define (DWARF 5 section 6.4.1's table, built without a process).
+
+use readers
+
+/// One register's rule. kind: 1 undefined, 2 same value, 3 offset(N),
+/// 4 val_offset(N), 5 register(R), 6 expression(E), 7 val_expression(E).
+pub struct FrameRule {
+    pub reg: u64,
+    pub kind: int,
+    pub value: i64,
+    pub other: u64,
+    pub block: readers.ByteSpan,
+}
+
+/// The row state. cfa_kind: 0 undefined, 1 register+offset, 2 expression.
+/// Rules stay sorted by register number, the order rows print in.
+pub struct FrameState {
+    pub cfa_kind: int,
+    pub cfa_reg: u64,
+    pub cfa_offset: i64,
+    pub cfa_block: readers.ByteSpan,
+    pub rules: List[FrameRule],
+}
+
+fn frame_state_new() -> FrameState {
+    FrameState {
+        cfa_kind: 0, cfa_reg: 0, cfa_offset: 0,
+        cfa_block: readers.ByteSpan { start: 0, length: 0 }, rules: [],
+    }
+}
+
+fn frame_set(mut st: FrameState, rule: FrameRule) {
+    var i: int = 0
+    while i < st.rules.len {
+        if st.rules[i].reg == rule.reg {
+            st.rules[i] = rule
+            return
+        }
+        if st.rules[i].reg > rule.reg { break }
+        i += 1
+    }
+    (mut st.rules).insert(i, rule)
+}
+
+fn frame_remove(mut st: FrameState, reg: u64) {
+    var i: int = 0
+    while i < st.rules.len {
+        if st.rules[i].reg == reg {
+            let _ = (mut st.rules).remove(i)
+            return
+        }
+        i += 1
+    }
+}
+
+fn frame_rule(reg: u64, kind: int, value: i64) -> FrameRule {
+    FrameRule { reg: reg, kind: kind, value: value, other: 0, block: readers.ByteSpan { start: 0, length: 0 } }
+}
+
+fn frame_signed(v: i64) -> str {
+    if v >= 0 { return "+{v}" }
+    "{v}"
+}
+
+fn frame_reg(arch: int, r: u64) -> str {
+    if arch == arch_arm64 && r >= 64 && r <= 95 { return "B{r - 64}" }
+    let name = reg_name(arch, r)
+    if name.len > 0 { return name }
+    "reg{r}"
+}
+
+fn frame_factored(v: u64, factor: i64) -> i64 {
+    v as wrapping[i64] as i64 * factor
+}
+
+struct FrameCtx {
+    arch: int,
+    apple: bool,
+    unit: readers.DwarfUnit,
+    info: readers.ByteSpan,
+}
+
+fn put_cfa(mut o: Out, n: Names, data: List[byte], st: FrameState, x: FrameCtx) {
+    put(mut o, "CFA=")
+    if st.cfa_kind == 1 {
+        put(mut o, frame_reg(x.arch, st.cfa_reg))
+        if st.cfa_offset != 0 { put(mut o, frame_signed(st.cfa_offset)) }
+    } else if st.cfa_kind == 2 {
+        put_expr(mut o, n, data, st.cfa_block, x.unit, x.info, x.arch)
+    } else {
+        put(mut o, "undefined")
+    }
+    var i: int = 0
+    while i < st.rules.len {
+        let sep = if i == 0 { ": " } else { ", " }
+        put(mut o, sep)
+        put(mut o, "{frame_reg(x.arch, st.rules[i].reg)}=")
+        let kind = st.rules[i].kind
+        if kind == 1 {
+            put(mut o, "undefined")
+        } else if kind == 2 {
+            put(mut o, "same")
+        } else if kind == 3 {
+            put(mut o, "[CFA{frame_signed(st.rules[i].value)}]")
+        } else if kind == 4 {
+            put(mut o, "CFA{frame_signed(st.rules[i].value)}")
+        } else if kind == 5 {
+            put(mut o, frame_reg(x.arch, st.rules[i].other))
+        } else if kind == 6 {
+            put(mut o, "[")
+            put_expr(mut o, n, data, st.rules[i].block, x.unit, x.info, x.arch)
+            put(mut o, "]")
+        } else {
+            put_expr(mut o, n, data, st.rules[i].block, x.unit, x.info, x.arch)
+        }
+        i += 1
+    }
+    line(mut o, "")
+}
+
+/// Print and apply one entry's instructions. loc advances from begin; rows
+/// are emitted before each advance and once at the end when rows is true.
+fn frame_program(
+    mut o: Out,
+    n: Names,
+    data: List[byte],
+    program: readers.ByteSpan,
+    cie: readers.FrameCie,
+    initial: FrameState,
+    start: FrameState,
+    begin: u64,
+    x: FrameCtx,
+    mut rows: List[u64],
+    mut states: List[FrameState],
+) -> () ! DumpError {
+    var st = copy start
+    var loc = begin
+    var stack: List[FrameState] = []
+    var c = readers.cursor(program.start, program.start + program.length, 100000000)
+    while c.pos < c.end {
+        let insn = readers.frame_instruction(data, mut c, cie.address_size)?
+        let op = insn.op
+        put(mut o, "  ")
+        if op == 64 || op == 2 || op == 3 || op == 4 {
+            let delta = insn.unsigned * cie.code_align
+            let name = if op == 64 { "DW_CFA_advance_loc" } else if op == 2 { "DW_CFA_advance_loc1" } else if op == 3 { "DW_CFA_advance_loc2" } else { "DW_CFA_advance_loc4" }
+            (mut rows).push(loc)
+            (mut states).push(copy st)
+            loc += delta
+            if x.apple { line(mut o, "{name}: {delta} to 0x{loc:x}") } else { line(mut o, "{name}: {delta}") }
+        } else if op == 1 {
+            (mut rows).push(loc)
+            (mut states).push(copy st)
+            loc = insn.unsigned
+            line(mut o, "DW_CFA_set_loc: 0x{loc:x}")
+        } else if op == 128 || op == 5 || op == 17 {
+            let off = if op == 17 { insn.signed * cie.data_align } else { frame_factored(insn.unsigned, cie.data_align) }
+            let name = if op == 128 { "DW_CFA_offset" } else if op == 5 { "DW_CFA_offset_extended" } else { "DW_CFA_offset_extended_sf" }
+            line(mut o, "{name}: {frame_reg(x.arch, insn.reg)} {frame_signed(off)}")
+            frame_set(mut st, frame_rule(insn.reg, 3, off))
+        } else if op == 20 || op == 21 {
+            let off = if op == 21 { insn.signed * cie.data_align } else { frame_factored(insn.unsigned, cie.data_align) }
+            let name = if op == 20 { "DW_CFA_val_offset" } else { "DW_CFA_val_offset_sf" }
+            line(mut o, "{name}: {frame_reg(x.arch, insn.reg)} {frame_signed(off)}")
+            frame_set(mut st, frame_rule(insn.reg, 4, off))
+        } else if op == 192 || op == 6 {
+            let name = if op == 192 { "DW_CFA_restore" } else { "DW_CFA_restore_extended" }
+            line(mut o, "{name}: {frame_reg(x.arch, insn.reg)}")
+            var found = false
+            var i: int = 0
+            while i < initial.rules.len {
+                if initial.rules[i].reg == insn.reg {
+                    frame_set(mut st, copy initial.rules[i])
+                    found = true
+                }
+                i += 1
+            }
+            if !found { frame_remove(mut st, insn.reg) }
+        } else if op == 0 {
+            line(mut o, "DW_CFA_nop:")
+        } else if op == 7 || op == 8 {
+            let name = if op == 7 { "DW_CFA_undefined" } else { "DW_CFA_same_value" }
+            line(mut o, "{name}: {frame_reg(x.arch, insn.reg)}")
+            frame_set(mut st, frame_rule(insn.reg, if op == 7 { 1 } else { 2 }, 0))
+        } else if op == 9 {
+            line(mut o, "DW_CFA_register: {frame_reg(x.arch, insn.reg)} {frame_reg(x.arch, insn.reg2)}")
+            var rule = frame_rule(insn.reg, 5, 0)
+            rule.other = insn.reg2
+            frame_set(mut st, rule)
+        } else if op == 10 {
+            line(mut o, "DW_CFA_remember_state:")
+            (mut stack).push(copy st)
+        } else if op == 11 {
+            line(mut o, "DW_CFA_restore_state:")
+            let saved = (mut stack).pop() else { return dwarf_frame_invalid_state }
+            st = saved
+        } else if op == 12 || op == 18 {
+            let off = if op == 18 { insn.signed * cie.data_align } else { insn.unsigned as wrapping[i64] as i64 }
+            let name = if op == 12 { "DW_CFA_def_cfa" } else { "DW_CFA_def_cfa_sf" }
+            line(mut o, "{name}: {frame_reg(x.arch, insn.reg)} {frame_signed(off)}")
+            st.cfa_kind = 1
+            st.cfa_reg = insn.reg
+            st.cfa_offset = off
+        } else if op == 13 {
+            line(mut o, "DW_CFA_def_cfa_register: {frame_reg(x.arch, insn.reg)}")
+            if st.cfa_kind != 1 { st.cfa_offset = 0 }
+            st.cfa_kind = 1
+            st.cfa_reg = insn.reg
+        } else if op == 14 || op == 19 {
+            let off = if op == 19 { insn.signed * cie.data_align } else { insn.unsigned as wrapping[i64] as i64 }
+            let name = if op == 14 { "DW_CFA_def_cfa_offset" } else { "DW_CFA_def_cfa_offset_sf" }
+            line(mut o, "{name}: {frame_signed(off)}")
+            st.cfa_offset = off
+        } else if op == 15 {
+            put(mut o, "DW_CFA_def_cfa_expression: ")
+            put_expr(mut o, n, data, insn.block, x.unit, x.info, x.arch)
+            line(mut o, "")
+            st.cfa_kind = 2
+            st.cfa_block = copy insn.block
+        } else if op == 16 || op == 22 {
+            let name = if op == 16 { "DW_CFA_expression" } else { "DW_CFA_val_expression" }
+            put(mut o, "{name}: {frame_reg(x.arch, insn.reg)} ")
+            put_expr(mut o, n, data, insn.block, x.unit, x.info, x.arch)
+            line(mut o, "")
+            var rule = frame_rule(insn.reg, if op == 16 { 6 } else { 7 }, 0)
+            rule.block = copy insn.block
+            frame_set(mut st, rule)
+        } else {
+            line(mut o, "DW_CFA_GNU_args_size: {frame_signed(insn.unsigned as wrapping[i64] as i64)}")
+        }
+    }
+    (mut rows).push(loc)
+    (mut states).push(st)
+}
+
+fn frame_section(
+    mut o: Out,
+    n: Names,
+    data: List[byte],
+    section: readers.ObjectSection,
+    eh: bool,
+    x: FrameCtx,
+) -> () ! DumpError {
+    let fs = readers.FrameSection { span: copy section.span, address: section.address, eh: eh, address_size: 8 }
+    var cache: List[readers.FrameCie] = []
+    var c = readers.cursor(section.span.start, section.span.start + section.span.length, 1000000000)
+    while c.pos < c.end {
+        let e = readers.frame_next(data, mut c, fs, mut cache)?
+        let at = (e.offset - section.span.start) as u64
+        if e.kind == readers.frame_terminator {
+            line(mut o, "{hex8(at)} ZERO terminator")
+            continue
+        }
+        if e.kind == readers.frame_cie {
+            let cie = copy e.cie
+            let id = if cie.offset_size == 8 { hex16(cie.id) } else { hex8(cie.id) }
+            line(mut o, "{hex8(at)} {hex8(cie.length)} {id} CIE")
+            let cformat = if cie.offset_size == 8 { "DWARF64" } else { "DWARF32" }
+            line(mut o, "  Format:                {cformat}")
+            line(mut o, "  Version:               {cie.version}")
+            put(mut o, "  Augmentation:          \"")
+            put_escaped(mut o, data, cie.augmentation)
+            line(mut o, "\"")
+            if !eh && cie.version == 4 {
+                line(mut o, "  Address size:          {cie.address_size}")
+                line(mut o, "  Segment desc size:     {cie.segment_size}")
+            }
+            line(mut o, "  Code alignment factor: {cie.code_align}")
+            line(mut o, "  Data alignment factor: {cie.data_align}")
+            line(mut o, "  Return address column: {cie.return_register}")
+            if cie.has_personality { line(mut o, "  Personality Address: {hex16(cie.personality)}") }
+            if cie.has_aug_data {
+                put(mut o, "  Augmentation data:    ")
+                var i: int = 0
+                while i < cie.aug_data.length {
+                    let b = data[cie.aug_data.start + i] as int
+                    put(mut o, " {b:02X}")
+                    i += 1
+                }
+                line(mut o, "")
+            }
+            line(mut o, "")
+            var rows: List[u64] = []
+            var states: List[FrameState] = []
+            frame_program(mut o, n, data, cie.instructions, cie, frame_state_new(), frame_state_new(), 0, x,
+                mut rows, mut states)?
+            line(mut o, "")
+            put(mut o, "  ")
+            put_cfa(mut o, n, data, states[states.len - 1], x)
+            line(mut o, "")
+            continue
+        }
+        let fde = copy e.fde
+        var k: int = 0
+        while k < cache.len && cache[k].offset != fde.cie_offset { k += 1 }
+        let cie = copy cache[k]
+        let cie_at = (fde.cie_offset - section.span.start) as u64
+        let pointer = if fde.offset_size == 8 { hex16(fde.cie_pointer) } else { hex8(fde.cie_pointer) }
+        line(mut o, "{hex8(at)} {hex8(fde.length)} {pointer} FDE cie={hex8(cie_at)} pc={hex8(fde.begin)}...{hex8(fde.begin + fde.range)}")
+        let fformat = if fde.offset_size == 8 { "DWARF64" } else { "DWARF32" }
+        line(mut o, "  Format:       {fformat}")
+        if fde.has_lsda { line(mut o, "  LSDA Address: {hex16(fde.lsda)}") }
+        // The CIE's initial instructions define the state every FDE starts from.
+        var quiet = out_new()
+        var crows: List[u64] = []
+        var cstates: List[FrameState] = []
+        frame_program(mut quiet, n, data, cie.instructions, cie, frame_state_new(), frame_state_new(), 0, x,
+            mut crows, mut cstates)?
+        let initial = copy cstates[cstates.len - 1]
+        var rows: List[u64] = []
+        var states: List[FrameState] = []
+        frame_program(mut o, n, data, fde.instructions, cie, initial, copy cstates[cstates.len - 1],
+            fde.begin, x, mut rows, mut states)?
+        line(mut o, "")
+        var i: int = 0
+        while i < rows.len {
+            put(mut o, "  0x{rows[i]:x}: ")
+            put_cfa(mut o, n, data, states[i], x)
+            i += 1
+        }
+        line(mut o, "")
+    }
+}
+
+pub fn dump_frames(mut o: Out, n: Names, data: List[byte], s: readers.DebugSections) -> () ! DumpError {
+    let x = FrameCtx {
+        arch: arch_of(s), apple: s.format == readers.object_macho,
+        unit: expr_section_unit(s), info: copy s.info.span,
+    }
+    line(mut o, ".debug_frame contents:")
+    line(mut o, "")
+    frame_section(mut o, n, data, s.frame, false, x)?
+    line(mut o, "")
+    line(mut o, ".eh_frame contents:")
+    line(mut o, "")
+    frame_section(mut o, n, data, s.eh_frame, true, x)?
+}

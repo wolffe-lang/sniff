@@ -15,7 +15,8 @@ fn dump_format(s: readers.DebugSections) -> str {
 pub fn dump_mode_known(mode: str) -> bool {
     mode == "--debug-line" || mode == "--debug-abbrev" || mode == "--debug-addr" ||
         mode == "--debug-str-offsets" || mode == "--debug-ranges" || mode == "--debug-loc" ||
-        mode == "--debug-rnglists" || mode == "--debug-loclists"
+        mode == "--debug-rnglists" || mode == "--debug-loclists" || mode == "--eh-frame" ||
+        mode == "--debug-frame"
 }
 
 /// Render one mode for the file at path. The caller owns flushing and status.
@@ -34,4 +35,5 @@ pub fn dump_file(mut o: Out, path: str, data: List[byte], mode: str) -> () ! Dum
     if mode == "--debug-loc" { dump_loc(mut o, n, data, s)? }
     if mode == "--debug-rnglists" { dump_rnglists(mut o, data, s)? }
     if mode == "--debug-loclists" { dump_loclists(mut o, n, data, s)? }
+    if mode == "--eh-frame" || mode == "--debug-frame" { dump_frames(mut o, n, data, s)? }
 }
