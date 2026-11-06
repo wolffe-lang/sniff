@@ -1,0 +1,91 @@
+// Buffered standard output for the dump renderers. Text is assembled as
+// ASCII str values; raw section bytes only reach the stream through
+// put_escaped, so output never depends on a string's encoding being valid.
+
+use readers
+
+/// A 64 KiB write-behind buffer over descriptor 1. A failed write marks the
+/// stream; main reports it and exits nonzero.
+pub struct Out {
+    pub buf: List[byte],
+    pub failed: bool,
+}
+
+pub fn out_new() -> Out {
+    Out { buf: [], failed: false }
+}
+
+pub fn put(mut o: Out, s: str) {
+    for b in s.bytes() { (mut o.buf).push(b) }
+    if o.buf.len >= 65536 { flush(mut o) }
+}
+
+pub fn put_byte(mut o: Out, b: byte) {
+    (mut o.buf).push(b)
+    if o.buf.len >= 65536 { flush(mut o) }
+}
+
+pub fn line(mut o: Out, s: str) {
+    put(mut o, s)
+    put_byte(mut o, 10 as byte)
+}
+
+pub fn flush(mut o: Out) {
+    if o.buf.len == 0 { return }
+    fs_write_chunk(1, o.buf) else |_| { o.failed = true }
+    o.buf = []
+}
+
+/// Raw bytes as the oracle escapes them: printable ASCII as itself, the four
+/// named escapes, everything else as a backslash and three octal digits.
+pub fn put_escaped(mut o: Out, data: List[byte], span: readers.ByteSpan) {
+    var i: int = 0
+    while i < span.length {
+        let b = data[span.start + i] as int
+        if b == 92 {
+            put(mut o, "\\\\")
+        } else if b == 34 {
+            put(mut o, "\\\"")
+        } else if b == 9 {
+            put(mut o, "\\t")
+        } else if b == 10 {
+            put(mut o, "\\n")
+        } else if b >= 32 && b < 127 {
+            put_byte(mut o, b as byte)
+        } else {
+            put_byte(mut o, 92 as byte)
+            put_byte(mut o, (48 + b / 64) as byte)
+            put_byte(mut o, (48 + b / 8 % 8) as byte)
+            put_byte(mut o, (48 + b % 8) as byte)
+        }
+        i += 1
+    }
+}
+
+/// Raw bytes copied unescaped (section names and paths the oracle prints raw).
+pub fn put_raw(mut o: Out, data: List[byte], span: readers.ByteSpan) {
+    var i: int = 0
+    while i < span.length {
+        put_byte(mut o, data[span.start + i])
+        i += 1
+    }
+}
+
+pub fn hex2(v: u64) -> str { "{v:02x}" }
+pub fn hex4(v: u64) -> str { "{v:04x}" }
+pub fn hex8(v: u64) -> str { "{v:08x}" }
+pub fn hex16(v: u64) -> str { "{v:016x}" }
+
+/// 0x-prefixed, zero-padded to the DWARF format's offset width.
+pub fn hex_offset(v: u64, offset_size: int) -> str {
+    if offset_size == 8 { return "0x{v:016x}" }
+    "0x{v:08x}"
+}
+
+/// 0x-prefixed, zero-padded to an address width in bytes.
+pub fn hex_address(v: u64, address_size: int) -> str {
+    if address_size == 8 { return "0x{v:016x}" }
+    if address_size == 4 { return "0x{v:08x}" }
+    if address_size == 2 { return "0x{v:04x}" }
+    "0x{v:02x}"
+}
