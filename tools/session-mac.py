@@ -104,7 +104,7 @@ def facts_sniff(text):
             continue
         m = re.match(r'^\$\d+ = (.*)$', line)
         if m:
-            facts.append(('print', m[1]))
+            facts.append(('print', re.sub(r"^-?\d+ ('.*')$", r'\1', m[1])))
             continue
         m = re.match(r'^([A-Za-z_]\w*) = (.*)$', line)
         if m:
@@ -169,7 +169,7 @@ def facts_lldb(text):
         if m:
             facts.append(('var', m[1], m[2]))
             continue
-        m = re.match(r'^Process \d+ exited with status = (\d+) ', line)
+        m = re.match(r'^Process \d+ exited with status = (\d+) \(0x[0-9a-f]+\)$', line)
         if m:
             facts.append(('exit', int(m[1])))
             continue

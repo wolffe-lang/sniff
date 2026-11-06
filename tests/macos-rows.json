@@ -351,6 +351,10 @@
     {
      "match": "^(rip|pc) ",
      "why": "register name: arm64's pc against x86-64's rip"
+    },
+    {
+     "match": "^(Breakpoint 1, )?0xA in (\\?\\?|_mh_execute_header) \\(\\)$",
+     "why": "a stripped Mach-O keeps its exported header symbol, which sniff names a pc after; stripped ELF has none"
     }
    ]
   },
