@@ -4,8 +4,10 @@ A debugger written in [wolf](https://github.com/wolffe-lang/wolf-lang),
 for x86-64 Linux and PAX, and macOS arm64. The command language is GDB's;
 a Debug Adapter Protocol server is planned for editor integration.
 
-**Status: S0, the map. No debugger commands are implemented.**
-The readers come first, then the Linux process core, then macOS and PAX.
+**Status: S1, the readers.** `sniff dump` reads ELF64 x86-64 and Mach-O 64
+arm64 files (dSYM bundles included) and prints twelve read-only views. Each
+view is byte-identical to the platform's pinned oracle on every recorded
+fixture. No process is run or debugged yet; the Linux process core is S2.
 [MAP](docs/MAP.md) separates planned capabilities from measured ones.
 
 ## Machines and pins
@@ -31,9 +33,26 @@ SHA-256 before fixture work on either platform; a mismatched PATH binary is
 refused by name. Nothing is installed globally. Built fixture binaries and
 downloads are not committed.
 
+## Use
+
+```sh
+wolf build src/main.lu -o target/sniff
+target/sniff dump --debug-info prog            # or prog.dSYM on macOS
+```
+
+Modes: `--debug-info`, `--debug-abbrev`, `--debug-line`, `--debug-addr`,
+`--debug-str-offsets`, `--debug-ranges`, `--debug-rnglists`, `--debug-loc`,
+`--debug-loclists`, `--eh-frame`, `--debug-frame` and `--symbols`. ELF output
+follows the Linux oracle (`llvm-dwarfdump-18`, and `readelf --symbols --wide`
+for symbols). Mach-O output follows the SDK `llvm-dwarfdump` and `llvm-nm`.
+The two oracles differ in a few spellings, and each container format keeps its
+platform's. Malformed or unsupported input is refused by name on standard
+error with status 1. Compact unwind, split DWARF and compressed sections are
+among the refusals.
+
 ## Build and measure
 
-There is no sniff executable yet. S0 supplies the reproducible corpus builder,
+S0 supplies the reproducible corpus builder,
 producer-separated DWARF census, scripted debugger capture and comparison,
 and lupin's statement-boundary local-value recorder. The corpus contains five
 wolf programs and six C programs. Linux builds every C program with GCC and
@@ -42,6 +61,7 @@ emits DWARF in its default tier and has no `-g` option.
 
 ```sh
 bash tools/gate unit                 # parser/comparator/tier contracts and saved transcript replay
+                                     # (macos and linux add reader rows, hostile inputs and the dump matrix)
 bash tools/gate macos                # SDK tools; downloads only pinned wolf/lupin archives
 SNIFF_CPUS=0 bash tools/in-container  # Docker; bounded Linux fixture and oracle gates
 ```
