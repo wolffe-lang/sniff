@@ -1,0 +1,83 @@
+//! member: false
+// sniff, a debugger in wolf. S1 ships the read-only `dump` command.
+
+use dump
+
+fn usage() {
+    eprint("usage: sniff dump MODE FILE")
+    eprint("modes: --debug-info --debug-abbrev --debug-line --debug-addr --debug-str-offsets")
+    eprint("       --debug-ranges --debug-rnglists --debug-loc --debug-loclists")
+    eprint("       --eh-frame --debug-frame --symbols")
+}
+
+fn base_name(path: str) -> str {
+    let bytes = path.bytes()
+    var cut: int = 0
+    var i: int = 0
+    while i < bytes.len {
+        if bytes[i] as int == 47 { cut = i + 1 }
+        i += 1
+    }
+    var out: List[byte] = []
+    i = cut
+    while i < bytes.len { (mut out).push(bytes[i]); i += 1 }
+    str_from_utf8(out) else { "" }
+}
+
+/// A dSYM bundle path resolves to its one DWARF companion, named for the
+/// bundle (Apple: Contents/Resources/DWARF/<binary-name>). Anything else in
+/// that directory makes the companion ambiguous, refused by name.
+fn resolve(path: str) -> str ! {dsym_not_found, dsym_ambiguous} {
+    if !fs_is_dir(path) { return path }
+    let name = base_name(path)
+    let binary = name.strip_suffix(".dSYM") else { return dsym_not_found }
+    let inner = "{path}/Contents/Resources/DWARF"
+    let entries = fs_read_dir(inner) else { return dsym_not_found }
+    if entries.len != 1 || entries[0] != binary { return dsym_ambiguous }
+    "{inner}/{binary}"
+}
+
+fn main() {
+    let args = env_args()
+    if args.len != 3 || args[0] != "dump" {
+        usage()
+        os_exit(2)
+    }
+    let mode = args[1]
+    if !dump.dump_mode_known(mode) {
+        eprint("error: unsupported-dump-mode {mode}")
+        os_exit(2)
+    }
+    let path = resolve(args[2]) else |err| {
+        eprint("error: {err}: {args[2]}")
+        os_exit(1)
+        return
+    }
+    let size = fs_size(path) else |err| {
+        eprint("error: {err}: {path}")
+        os_exit(1)
+        return
+    }
+    let cap = dump.dump_input_cap()
+    if size > cap {
+        eprint("error: resource_limit: input of {size} bytes exceeds {cap}")
+        os_exit(1)
+    }
+    let data = fs_read_bytes(path) else |err| {
+        eprint("error: {err}: {path}")
+        os_exit(1)
+        return
+    }
+    var o = dump.out_new()
+    let result = dump.dump_file(mut o, path, data, mode)
+    dump.flush(mut o)
+    let _ = result else |err| {
+        eprint("error: {err}")
+        os_exit(1)
+        return
+    }
+    if o.failed {
+        eprint("error: dump_write_failed")
+        os_exit(1)
+    }
+}

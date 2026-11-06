@@ -1,0 +1,121 @@
+// --debug-line: every contribution in section order, rendered from
+// readers.dwarf_line_read's prologue and rows. Layout is the oracle's.
+
+use readers
+
+fn line_opcode_name(i: int) -> str {
+    let names: List[str] = [
+        "DW_LNS_copy", "DW_LNS_advance_pc", "DW_LNS_advance_line", "DW_LNS_set_file",
+        "DW_LNS_set_column", "DW_LNS_negate_stmt", "DW_LNS_set_basic_block",
+        "DW_LNS_const_add_pc", "DW_LNS_fixed_advance_pc", "DW_LNS_set_prologue_end",
+        "DW_LNS_set_epilogue_begin", "DW_LNS_set_isa",
+    ]
+    if i >= 1 && i <= 12 { return names[i - 1] }
+    "DW_LNS_unknown_{i:x}"
+}
+
+fn line_index(i: int) -> str {
+    "{i:>3}"
+}
+
+fn line_entry(mut o: Out, data: List[byte], e: readers.DwarfLineEntry, version: int) {
+    put(mut o, "           name: \"")
+    put_escaped(mut o, data, e.name)
+    line(mut o, "\"")
+    line(mut o, "      dir_index: {e.directory_index}")
+    if e.has_md5 {
+        put(mut o, "   md5_checksum: ")
+        var i: int = 0
+        while i < e.md5.length {
+            put(mut o, hex2(data[e.md5.start + i] as int as u64))
+            i += 1
+        }
+        line(mut o, "")
+    }
+    if version < 5 || e.has_timestamp {
+        line(mut o, "       mod_time: 0x{hex8(e.timestamp)}")
+    }
+    if version < 5 || e.has_size {
+        line(mut o, "         length: 0x{hex8(e.size)}")
+    }
+}
+
+fn line_row(mut o: Out, r: readers.DwarfLineRow) {
+    let address = hex16(r.address)
+    put(mut o, "0x{address} {r.line:>6} {r.column:>6} {r.file:>6} {r.isa:>3} {r.discriminator:>13} {r.op_index:>7} ")
+    if r.is_stmt { put(mut o, " is_stmt") }
+    if r.basic_block { put(mut o, " basic_block") }
+    if r.prologue_end { put(mut o, " prologue_end") }
+    if r.epilogue_begin { put(mut o, " epilogue_begin") }
+    if r.end_sequence { put(mut o, " end_sequence") }
+    line(mut o, "")
+}
+
+fn line_table(mut o: Out, data: List[byte], t: readers.DwarfLineTable, section_start: int) {
+    let at = (t.start - section_start) as u64
+    line(mut o, "debug_line[0x{hex8(at)}]")
+    line(mut o, "Line table prologue:")
+    line(mut o, "    total_length: {hex_offset(t.total_length, t.offset_size)}")
+    let format = if t.offset_size == 8 { "DWARF64" } else { "DWARF32" }
+    line(mut o, "          format: {format}")
+    line(mut o, "         version: {t.version}")
+    if t.version >= 5 {
+        line(mut o, "    address_size: {t.address_size}")
+        line(mut o, " seg_select_size: {t.segment_selector_size}")
+    }
+    line(mut o, " prologue_length: {hex_offset(t.header_length, t.offset_size)}")
+    line(mut o, " min_inst_length: {t.minimum_instruction_length}")
+    if t.version >= 4 {
+        line(mut o, "max_ops_per_inst: {t.maximum_operations_per_instruction}")
+    }
+    let stmt = if t.default_is_stmt { 1 } else { 0 }
+    line(mut o, " default_is_stmt: {stmt}")
+    line(mut o, "       line_base: {t.line_base}")
+    line(mut o, "      line_range: {t.line_range}")
+    line(mut o, "     opcode_base: {t.opcode_base}")
+    var i: int = 0
+    while i < t.standard_opcode_lengths.len {
+        line(mut o, "standard_opcode_lengths[{line_opcode_name(i + 1)}] = {t.standard_opcode_lengths[i]}")
+        i += 1
+    }
+    let first = if t.version >= 5 { 0 } else { 1 }
+    i = 0
+    while i < t.directories.len {
+        put(mut o, "include_directories[{line_index(i + first)}] = \"")
+        put_escaped(mut o, data, t.directories[i].name)
+        line(mut o, "\"")
+        i += 1
+    }
+    i = 0
+    while i < t.files.len {
+        line(mut o, "file_names[{line_index(i + first)}]:")
+        line_entry(mut o, data, t.files[i], t.version)
+        i += 1
+    }
+    line(mut o, "")
+    // A contribution without rows ends at its prologue: no row header.
+    if t.rows.len == 0 { return }
+    line(mut o, "Address            Line   Column File   ISA Discriminator OpIndex Flags")
+    line(mut o, "------------------ ------ ------ ------ --- ------------- ------- -------------")
+    i = 0
+    while i < t.rows.len {
+        line_row(mut o, t.rows[i])
+        i += 1
+    }
+    line(mut o, "")
+}
+
+/// Render every line contribution in .debug_line. A v4 contribution has no
+/// address size of its own; both supported containers are 64-bit.
+pub fn dump_line(mut o: Out, data: List[byte], s: readers.DebugSections) -> () ! DumpError {
+    line(mut o, ".debug_line contents:")
+    let start = s.line.span.start
+    let end = start + s.line.span.length
+    var pos = start
+    while pos < end {
+        let t = readers.dwarf_line_read(data, readers.ByteSpan { start: pos, length: end - pos }, 8,
+            s.str.span, s.line_str.span, 100000000, 1048576)?
+        line_table(mut o, data, t, start)
+        pos = t.end
+    }
+}

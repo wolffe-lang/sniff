@@ -1,0 +1,27 @@
+// sniff dump: read-only renderings that mirror the pinned reader oracles.
+// Each mode prints the oracle's header line, then its sections, streaming.
+
+use readers
+
+/// Input files above this are refused before reading (4.7x the largest fixture).
+pub fn dump_input_cap() -> int { 67108864 }
+
+fn dump_format(s: readers.DebugSections) -> str {
+    if s.format == readers.object_elf { return "elf64-x86-64" }
+    "Mach-O arm64"
+}
+
+/// The modes this build renders, in the oracle's spelling.
+pub fn dump_mode_known(mode: str) -> bool {
+    mode == "--debug-line"
+}
+
+/// Render one mode for the file at path. The caller owns flushing and status.
+pub fn dump_file(mut o: Out, path: str, data: List[byte], mode: str) -> () ! DumpError {
+    if !dump_mode_known(mode) { return unsupported_dump_mode }
+    let s = readers.object_sections(data)?
+    if s.has_split_dwarf { return unsupported_split_dwarf }
+    line(mut o, "{path}:\tfile format {dump_format(s)}")
+    line(mut o, "")
+    if mode == "--debug-line" { dump_line(mut o, data, s)? }
+}
