@@ -6,6 +6,7 @@ Two kinds of row (tests/macos-rows.json):
   linux  the S2 row of the same name, run by sniff on the Mac and compared with sn02's
          recorded gdb output (tests/evidence/linux-s2) wherever both platforms answer
          the same, after named normalisations:
+           prog   the built-fixtures directory and the Linux one are one name
            root   the checkout's fixture directory and the Linux one are one name
            addr   every 0x... number is one name (the load addresses and the code differ)
            off    <fn+N> offsets are one name (arm64 and x86-64 prologues differ)
@@ -53,6 +54,10 @@ def linux_rows():
 
 def normalize(text, roots, fired):
     out = text
+    n = re.sub(r'(?:/[\w.-]+)+/(?:session-fixtures|fx)/', '<SF>/', out)
+    if n != out:
+        fired.add('prog')
+    out = n
     n = re.sub(r'(?:/[\w.-]+)+/fixtures/', '<FX>/', out)
     if n != out:
         fired.add('root')
@@ -208,6 +213,19 @@ def sniff_run(sniff, prog, script, args, work, name, timeout=120):
     return run(argv, work, timeout)
 
 
+def tty_run(sniff, prog, script, args, work):
+    """Run sniff in a pty (the S2 harness's own runner) the way a terminal user does."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('s2_session', ROOT / 'tools/session.py')
+    s2 = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(s2)
+    s2.ENV_BASE = dict(ENV_BASE)
+    Path(work).mkdir(parents=True, exist_ok=True)
+    argv = [sniff, prog] + (['--args'] + args if args else [])
+    out, err, rc = s2.run_pty(argv, script, '(sniff) ', work)
+    return s2.normalize_tty(out, set()), err, rc
+
+
 def lldb_run(lldb, prog, script, work, name, timeout=120):
     d = Path(work)
     d.mkdir(parents=True, exist_ok=True)
@@ -280,7 +298,10 @@ def cmd_check(a):
         args = r.get('args', [])
         prog = str(Path(a.fixtures) / row_prog)
         try:
-            out, err, rc = sniff_run(a.sniff, prog, script, args, a.work, r['name'], r.get('timeout', 120))
+            if r['kind'] == 'linux' and lin[r['name']].get('tty'):
+                out, err, rc = tty_run(a.sniff, prog, script, args, a.work)
+            else:
+                out, err, rc = sniff_run(a.sniff, prog, script, args, a.work, r['name'], r.get('timeout', 120))
         except subprocess.TimeoutExpired:
             print('FAIL %s timeout' % r['name'])
             fails += 1
