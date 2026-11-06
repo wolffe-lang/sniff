@@ -1,0 +1,28 @@
+//! member: false
+// Live platform rows: a traced child, run on Linux x86-64 only.
+//   live_platform PROG-EXIT3
+use platform
+
+fn main() -> int {
+    let args = env_args()
+    let t = platform.target_spawn(args[0], ["3"], "", "")
+    assert(t.pid > 0)
+    print("PASS platform-spawn-stops-at-exec")
+    let regs = platform.target_regs(t)
+    assert(regs.len == 27)
+    let rip = regs[platform.reg_rip]
+    assert(rip != 0)
+    let word = platform.target_read(t, rip, 8)
+    assert(word.ok)
+    print("PASS platform-regs-and-memory")
+    let bad = platform.target_read(t, 16, 8)
+    assert(!bad.ok)
+    print("PASS platform-unmapped-read-fails")
+    let rc = platform.target_cont(t, 0)
+    assert(rc == 0)
+    let st = platform.target_wait(t)
+    assert(platform.status_exited(st))
+    assert(platform.status_exit_code(st) == 3)
+    print("PASS platform-exit-code")
+    0
+}

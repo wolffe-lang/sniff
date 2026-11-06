@@ -1,0 +1,317 @@
+// The Linux x86-64 process layer: everything the session needs from the
+// platform, and nothing else. ptrace(2), wait(2), personality(2), execve(2)
+// and proc(5) are reached through wolf's C membrane. The request numbers and
+// the user_regs_struct slot indexes below are the ones tools/abi-probe.c
+// measured in the oracle container (R-sn02-3).
+//
+// A Target is one traced child. pid 0 means no child.
+
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+import c "stdlib.h"
+
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+extern "c" fn fork() -> i32
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+extern "c" fn execv(path: *u8, argv: *u64) -> i32
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+extern "c" fn ptrace(request: i32, ...) -> i64
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+extern "c" fn waitpid(pid: i32, status: *i32, options: i32) -> i32
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+extern "c" fn personality(persona: u64) -> i32
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+extern "c" fn _exit(code: i32) -> never
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+extern "c" fn __errno_location() -> *i32
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+extern "c" fn open(path: *u8, flags: i32, ...) -> i32
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+extern "c" fn pread(fd: i32, buf: *u8, n: u64, off: i64) -> i64
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+extern "c" fn close(fd: i32) -> i32
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+extern "c" fn kill(pid: i32, sig: i32) -> i32
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+extern "c" fn setenv(name: *u8, value: *u8, overwrite: i32) -> i32
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+extern "c" fn chdir(path: *u8) -> i32
+
+/// One traced child and the scratch the calls share.
+pub struct Target {
+    pub pid: int,
+    pub memfd: int,
+    status: u64,
+    regs: u64,
+    word: u64,
+}
+
+pub const reg_count: int = 27
+pub const reg_r15: int = 0
+pub const reg_r14: int = 1
+pub const reg_r13: int = 2
+pub const reg_r12: int = 3
+pub const reg_rbp: int = 4
+pub const reg_rbx: int = 5
+pub const reg_r11: int = 6
+pub const reg_r10: int = 7
+pub const reg_r9: int = 8
+pub const reg_r8: int = 9
+pub const reg_rax: int = 10
+pub const reg_rcx: int = 11
+pub const reg_rdx: int = 12
+pub const reg_rsi: int = 13
+pub const reg_rdi: int = 14
+pub const reg_orig_rax: int = 15
+pub const reg_rip: int = 16
+pub const reg_cs: int = 17
+pub const reg_eflags: int = 18
+pub const reg_rsp: int = 19
+pub const reg_ss: int = 20
+pub const reg_fs_base: int = 21
+pub const reg_gs_base: int = 22
+pub const reg_ds: int = 23
+pub const reg_es: int = 24
+pub const reg_fs: int = 25
+pub const reg_gs: int = 26
+
+/// Heap bytes holding text and a terminating zero, for the C calls.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+fn cstr(s: str) -> *u8 {
+    let b = s.bytes()
+    let n = b.len
+    unsafe {
+        let p = c.calloc(1, (n + 1) as uint) as *u8
+        var i = 0
+        while i < n {
+            p[i] = b[i] as int as u8
+            i += 1
+        }
+        p
+    }
+}
+
+/// No child.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_none() -> Target {
+    unsafe {
+        Target {
+            pid: 0,
+            memfd: -1,
+            status: c.calloc(1, 8) as u64,
+            regs: c.calloc(27, 8) as u64,
+            word: c.calloc(1, 16) as u64,
+        }
+    }
+}
+
+/// Start path as a traced child with ASLR off (as gdb's disable-randomization
+/// does), stopped at its exec. The returned Target has pid 0 when fork or the
+/// first wait fails; exec_failed is reported through the first stop never
+/// arriving as a stop (the child exits 127).
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_spawn(path: str, args: List[str], env_lines: str, env_columns: str) -> Target {
+    let tgt = target_none()
+    unsafe {
+        let tstatus = tgt.status as *i32
+        let argv = c.calloc((args.len + 2) as uint, 8) as *u64
+        let cpath = cstr(path)
+        argv[0] = cpath as u64
+        var i = 0
+        while i < args.len {
+            argv[i + 1] = cstr(args[i]) as u64
+            i += 1
+        }
+        argv[args.len + 1] = 0
+        let pid = fork()
+        if pid == 0 {
+            let _ = ptrace(0, 0, 0 as u64, 0 as u64)
+            let _ = personality(0x0040000 as u64)
+            if env_lines.bytes().len > 0 {
+                let _ = setenv(cstr("LINES"), cstr(env_lines), 1)
+                let _ = setenv(cstr("COLUMNS"), cstr(env_columns), 1)
+            }
+            let _ = execv(cpath, argv)
+            _exit(127)
+        }
+        if pid < 0 { return tgt }
+        let w = waitpid(pid, tstatus, 1073741824)
+        if w != pid { return tgt }
+        let st = tstatus[0] as int
+        if (st & 255) != 127 {
+            return tgt
+        }
+        let fd = open(cstr("/proc/{pid}/mem"), 0)
+        // PTRACE_SETOPTIONS PTRACE_O_EXITKILL: the child never outlives sniff.
+        let _ = ptrace(0x4200, pid, 0 as u64, 0x100000 as u64)
+        Target { pid: pid as int, memfd: fd as int, status: tgt.status, regs: tgt.regs, word: tgt.word }
+    }
+}
+
+/// Wait for the next event of the child. Returns the raw wait status, or -1.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_wait(t: Target) -> int {
+    unsafe {
+        let status = t.status as *i32
+        let w = waitpid(t.pid as i32, status, 1073741824)
+        if w != t.pid as i32 { return -1 }
+        status[0] as int
+    }
+}
+
+/// PTRACE_CONT, delivering sig (0 for none).
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_cont(t: Target, sig: int) -> int {
+    unsafe { ptrace(7, t.pid as i32, 0 as u64, sig as u64) as int }
+}
+
+/// PTRACE_SINGLESTEP, delivering sig (0 for none).
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_step(t: Target, sig: int) -> int {
+    unsafe { ptrace(9, t.pid as i32, 0 as u64, sig as u64) as int }
+}
+
+/// Kill the child with SIGKILL and reap it. Returns the final raw status.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_kill(t: Target) -> int {
+    unsafe {
+        let status = t.status as *i32
+        let _ = kill(t.pid as i32, 9)
+        let _ = close(t.memfd as i32)
+        var last: int = -1
+        var n = 0
+        while n < 8 {
+            let w = waitpid(t.pid as i32, status, 1073741824)
+            if w != t.pid as i32 { return last }
+            last = status[0] as int
+            if (last & 127) != 127 && (last & 255) != 127 { return last }
+            let _ = ptrace(7, t.pid as i32, 0 as u64, 9 as u64)
+            n += 1
+        }
+        last
+    }
+}
+
+/// The 27 user_regs_struct slots, or an empty list when the child cannot be read.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_regs(t: Target) -> List[u64] {
+    unsafe {
+        var out: List[u64] = []
+        let regs = t.regs as *u64
+        let r = ptrace(12, t.pid as i32, 0 as u64, t.regs)
+        if r < 0 { return out }
+        var i = 0
+        while i < 27 {
+            (mut out).push(regs[i])
+            i += 1
+        }
+        out
+    }
+}
+
+/// Write the 27 slots back. Returns 0 or -1.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_set_regs(t: Target, regs: List[u64]) -> int {
+    unsafe {
+        if regs.len != 27 { return -1 }
+        let slots = t.regs as *u64
+        var i = 0
+        while i < 27 {
+            slots[i] = regs[i]
+            i += 1
+        }
+        ptrace(13, t.pid as i32, 0 as u64, t.regs) as int
+    }
+}
+
+/// Read n bytes at addr through /proc/PID/mem. ok is false on a short read.
+pub struct Bytes {
+    pub ok: bool,
+    pub data: List[byte],
+}
+
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_read(t: Target, addr: u64, n: int) -> Bytes {
+    unsafe {
+        var out: List[byte] = []
+        if n <= 0 { return Bytes { ok: true, data: out } }
+        if addr > 9223372036854775807 { return Bytes { ok: false, data: out } }
+        let buf = c.calloc(1, n as uint) as *u8
+        let got = pread(t.memfd as i32, buf, n as u64, addr as i64)
+        if got != n as i64 { return Bytes { ok: false, data: out } }
+        var i = 0
+        while i < n {
+            (mut out).push(buf[i] as int as byte)
+            i += 1
+        }
+        Bytes { ok: true, data: out }
+    }
+}
+
+/// Read one 8-byte word with PTRACE_PEEKDATA. ok is false when unmapped.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+fn peek_word(t: Target, addr: u64) -> Bytes {
+    unsafe {
+        var out: List[byte] = []
+        let e = __errno_location()
+        e[0] = 0
+        let w = ptrace(2, t.pid as i32, addr, 0 as u64)
+        if w == -1 && e[0] != 0 { return Bytes { ok: false, data: out } }
+        let u = w as u64
+        var i = 0
+        while i < 8 {
+            (mut out).push(((u >> (8 * i as u64)) & 255) as int as byte)
+            i += 1
+        }
+        Bytes { ok: true, data: out }
+    }
+}
+
+/// Write bytes at addr with PTRACE_POKEDATA, a word at a time with
+/// read-modify-write at the edges. Returns true when every word was written.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_write(t: Target, addr: u64, data: List[byte]) -> bool {
+    unsafe {
+        var off = 0
+        while off < data.len {
+            let remain = data.len - off
+            var start = addr + off as u64
+            var skip = 0
+            var chunk = remain
+            if chunk > 8 { chunk = 8 }
+            var cur = peek_word(t, start)
+            if !cur.ok {
+                // the word would run past the end of a mapping: end it at the last byte
+                if start < 8 { return false }
+                start = start - (8 - chunk) as u64
+                skip = 8 - chunk
+                cur = peek_word(t, start)
+                if !cur.ok { return false }
+            }
+            var w: u64 = 0
+            var j = 0
+            while j < 8 {
+                var b = cur.data[j] as int
+                if j >= skip && j - skip < chunk { b = data[off + j - skip] as int }
+                w = w | ((b as u64) << (8 * j as u64))
+                j += 1
+            }
+            let r = ptrace(5, t.pid as i32, start, w)
+            if r < 0 { return false }
+            off += chunk
+        }
+        true
+    }
+}
+
+/// Whether the child stopped (not exited) in raw wait status st.
+pub fn status_stopped(st: int) -> bool { (st & 255) == 127 }
+/// Stop signal of a stopped status.
+pub fn status_stop_signal(st: int) -> int { (st >> 8) & 255 }
+/// Whether the child exited normally.
+pub fn status_exited(st: int) -> bool { (st & 127) == 0 }
+/// Exit code of an exited status.
+pub fn status_exit_code(st: int) -> int { (st >> 8) & 255 }
+/// Whether the child was killed by a signal.
+pub fn status_signaled(st: int) -> bool { (st & 127) != 0 && (st & 255) != 127 }
+/// Terminating signal of a signaled status.
+pub fn status_term_signal(st: int) -> int { st & 127 }
