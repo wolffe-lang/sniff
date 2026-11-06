@@ -383,7 +383,6 @@ fn handle_foreign(t: Target) {
         let m = st[st_msg] as *u32
         let c0 = (m[17] as u64) | ((m[18] as u64) << 32)
         let exc = m[15] as int
-        eprint("DEBUG foreign exc={exc} c0={c0}\n")
         if exc == 6 && c0 == 1 {
             // a BRK of ours in the child's copy: step the child past it is not possible without its
             // original bytes; the session's detach path handles breakpoints, so just let it fail
