@@ -70,5 +70,15 @@
     "dwarf-expr-bounded-branch-boundaries",
     "dwarf-expr-reference-domains-independent-widths",
     "dwarf-expr-hostile-bounds-and-caps"
+  ],
+  "lists_test.lu": [
+    "lists-dwarf5-entries",
+    "lists-dwarf4-entries",
+    "lists-hostile-bounds"
+  ],
+  "frame_test.lu": [
+    "frame-eh-relative-cie-and-pcrel",
+    "frame-debug-section-offsets",
+    "frame-hostile-refusals"
   ]
 }

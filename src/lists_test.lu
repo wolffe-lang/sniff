@@ -1,0 +1,90 @@
+//! member: false
+use readers
+
+fn lists_bytes(values: List[int]) -> List[byte] {
+    var result: List[byte] = []
+    for value in values { (mut result).push(value as byte) }
+    result
+}
+
+fn lists_dwarf5() {
+    // offset_pair(0x10, 0x20) reg5; startx_length(2, 8) lit0; base_address; end.
+    let data = lists_bytes([4, 16, 32, 1, 85, 3, 2, 8, 1, 48, 6, 0, 16, 0, 0, 0, 0, 0, 0, 0])
+    var c = readers.cursor(0, data.len, 1000)
+    let a = readers.dwarf_loclist_entry(data, mut c, 8) else { assert(false); return }
+    assert(a.kind == 4 && a.value1 == 16 && a.value2 == 32 && a.has_expr && a.expr.start == 4 && a.expr.length == 1)
+    let b = readers.dwarf_loclist_entry(data, mut c, 8) else { assert(false); return }
+    assert(b.kind == 3 && b.value1 == 2 && b.value2 == 8 && b.expr.length == 1)
+    let base = readers.dwarf_loclist_entry(data, mut c, 8) else { assert(false); return }
+    assert(base.kind == 6 && base.value1 == 4096 && !base.has_expr)
+    let end = readers.dwarf_loclist_entry(data, mut c, 8) else { assert(false); return }
+    assert(end.kind == 0 && c.pos == data.len)
+    // Range lists carry no counted expressions; start_length is address + ULEB.
+    let ranges = lists_bytes([7, 0, 16, 0, 0, 0, 0, 0, 0, 43, 4, 1, 2, 0])
+    var r = readers.cursor(0, ranges.len, 1000)
+    let s = readers.dwarf_rnglist_entry(ranges, mut r, 8) else { assert(false); return }
+    assert(s.kind == 7 && s.value1 == 4096 && s.value2 == 43 && !s.has_expr)
+    let p = readers.dwarf_rnglist_entry(ranges, mut r, 8) else { assert(false); return }
+    assert(p.kind == 4 && p.value1 == 1 && p.value2 == 2)
+    print("PASS lists-dwarf5-entries")
+}
+
+fn lists_dwarf4() {
+    // .debug_loc: base selection, pair with a two-byte counted expression, end.
+    var data: List[byte] = []
+    var i: int = 0
+    while i < 8 { (mut data).push(255 as byte); i += 1 }
+    for v in [0, 16, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 1, 0, 80] {
+        (mut data).push(v as byte)
+    }
+    i = 0
+    while i < 16 { (mut data).push(0 as byte); i += 1 }
+    var c = readers.cursor(0, data.len, 1000)
+    let base = readers.dwarf_loc4_entry(data, mut c, 8) else { assert(false); return }
+    assert(base.kind == readers.dwarf_list4_base && base.value2 == 4096 && !base.has_expr)
+    let pair = readers.dwarf_loc4_entry(data, mut c, 8) else { assert(false); return }
+    assert(pair.kind == readers.dwarf_list4_pair && pair.value1 == 1 && pair.value2 == 2 && pair.expr.length == 1)
+    let end = readers.dwarf_loc4_entry(data, mut c, 8) else { assert(false); return }
+    assert(end.kind == readers.dwarf_list4_end && c.pos == data.len)
+    // A four-byte address width keeps its own all-ones base marker.
+    let narrow = lists_bytes([255, 255, 255, 255, 0, 32, 0, 0])
+    var n = readers.cursor(0, narrow.len, 1000)
+    let r = readers.dwarf_range4_entry(narrow, mut n, 4) else { assert(false); return }
+    assert(r.kind == readers.dwarf_list4_base && r.value2 == 8192)
+    print("PASS lists-dwarf4-entries")
+}
+
+fn lists_hostile() {
+    // A counted expression longer than its bound is truncated, never skipped.
+    let long = lists_bytes([4, 0, 1, 68, 80])
+    var c = readers.cursor(0, long.len, 1000)
+    let a = readers.dwarf_loclist_entry(long, mut c, 8)
+    assert("{a}" == "truncated")
+    let unknown = lists_bytes([9, 0, 0])
+    var u = readers.cursor(0, unknown.len, 1000)
+    let b = readers.dwarf_loclist_entry(unknown, mut u, 8)
+    assert("{b}" == "dwarf_list_unknown_kind")
+    let range_kind = lists_bytes([8])
+    var k = readers.cursor(0, range_kind.len, 1000)
+    let d = readers.dwarf_rnglist_entry(range_kind, mut k, 8)
+    assert("{d}" == "dwarf_list_unknown_kind")
+    let open = lists_bytes([4, 128])
+    var o = readers.cursor(0, open.len, 1000)
+    let e = readers.dwarf_loclist_entry(open, mut o, 8)
+    assert("{e}" == "unterminated_leb128")
+    let short = lists_bytes([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+    var s = readers.cursor(0, short.len, 1000)
+    let f = readers.dwarf_loc4_entry(short, mut s, 8)
+    assert("{f}" == "truncated")
+    let cost = lists_bytes([4, 0, 1, 1, 80])
+    var w = readers.cursor(0, cost.len, 3)
+    let g = readers.dwarf_loclist_entry(cost, mut w, 8)
+    assert("{g}" == "resource_limit")
+    print("PASS lists-hostile-bounds")
+}
+
+fn main() {
+    lists_dwarf5()
+    lists_dwarf4()
+    lists_hostile()
+}

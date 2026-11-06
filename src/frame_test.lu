@@ -1,0 +1,125 @@
+//! member: false
+use readers
+
+fn frame_bytes(values: List[int]) -> List[byte] {
+    var result: List[byte] = []
+    for value in values { (mut result).push(value as byte) }
+    result
+}
+
+fn frame_eh_sample() -> List[byte] {
+    // CIE "zR" (FDE pointers pcrel|sdata4), then an FDE whose begin field at
+    // section offset 32 holds 0xe0, and a zero terminator. Loaded at 0x1000.
+    frame_bytes([
+        20, 0, 0, 0, 0, 0, 0, 0, 1, 122, 82, 0, 1, 120, 16, 1, 27,
+        12, 7, 8, 144, 1, 0, 0,
+        20, 0, 0, 0, 28, 0, 0, 0, 224, 0, 0, 0, 16, 0, 0, 0, 0,
+        68, 14, 16, 0, 0, 0, 0,
+        0, 0, 0, 0,
+    ])
+}
+
+fn frame_section(data: List[byte], eh: bool) -> readers.FrameSection {
+    readers.FrameSection { span: readers.ByteSpan { start: 0, length: data.len }, address: 4096, eh: eh, address_size: 8 }
+}
+
+fn frame_eh() {
+    let data = frame_eh_sample()
+    let s = frame_section(data, true)
+    var cache: List[readers.FrameCie] = []
+    var c = readers.cursor(0, data.len, 10000)
+    let cie = readers.frame_next(data, mut c, s, mut cache) else |err| { print("FAIL frame-eh {err}"); assert(false); return }
+    assert(cie.kind == readers.frame_cie && cie.cie.version == 1 && cie.cie.code_align == 1)
+    assert(cie.cie.data_align == -8 && cie.cie.return_register == 16 && cie.cie.fde_encoding == 27)
+    assert(cie.cie.instructions.start == 17 && cie.cie.instructions.length == 7 && c.pos == 24)
+    let fde = readers.frame_next(data, mut c, s, mut cache) else { assert(false); return }
+    // The CIE pointer counts back from its own field (28 - 28 = 0), and the
+    // pc-relative begin is the field's address plus its signed value.
+    assert(fde.kind == readers.frame_fde && fde.fde.cie_offset == 0 && fde.fde.cie_pointer == 28)
+    assert(fde.fde.begin == 4352 && fde.fde.range == 16 && !fde.fde.has_lsda)
+    assert(fde.fde.instructions.start == 41 && fde.fde.instructions.length == 7)
+    let end = readers.frame_next(data, mut c, s, mut cache) else { assert(false); return }
+    assert(end.kind == readers.frame_terminator && c.pos == data.len)
+    var i = readers.cursor(41, 48, 100)
+    let advance = readers.frame_instruction(data, mut i, 8) else { assert(false); return }
+    assert(advance.op == 64 && advance.unsigned == 4)
+    let offset = readers.frame_instruction(data, mut i, 8) else { assert(false); return }
+    assert(offset.op == 14 && offset.unsigned == 16)
+    print("PASS frame-eh-relative-cie-and-pcrel")
+}
+
+fn frame_debug() {
+    // A version 4 .debug_frame CIE (id all ones, own address and segment
+    // sizes) and an FDE whose CIE pointer is a section offset, not a distance.
+    let data = frame_bytes([
+        14, 0, 0, 0, 255, 255, 255, 255, 4, 0, 8, 0, 1, 120, 30, 12, 31, 0,
+        21, 0, 0, 0, 0, 0, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0, 64, 0, 0, 0, 0, 0, 0, 0, 68,
+    ])
+    let s = frame_section(data, false)
+    var cache: List[readers.FrameCie] = []
+    var c = readers.cursor(0, data.len, 10000)
+    let cie = readers.frame_next(data, mut c, s, mut cache) else |err| { print("FAIL frame-debug {err}"); assert(false); return }
+    assert(cie.kind == readers.frame_cie && cie.cie.version == 4 && cie.cie.address_size == 8)
+    assert(cie.cie.return_register == 30 && cie.cie.instructions.length == 3)
+    let fde = readers.frame_next(data, mut c, s, mut cache) else { assert(false); return }
+    assert(fde.kind == readers.frame_fde && fde.fde.cie_offset == 0 && fde.fde.begin == 8192 && fde.fde.range == 64)
+    assert(c.pos == data.len)
+    print("PASS frame-debug-section-offsets")
+}
+
+fn frame_expect(data: List[byte], eh: bool, want: str) {
+    let s = frame_section(data, eh)
+    var cache: List[readers.FrameCie] = []
+    var c = readers.cursor(0, data.len, 10000)
+    var result = ""
+    loop {
+        if c.pos >= c.end { break }
+        let e = readers.frame_next(data, mut c, s, mut cache) else |err| { result = "{err}"; break }
+        var i = readers.cursor(e.cie.instructions.start, e.cie.instructions.start + e.cie.instructions.length, 1000)
+        while i.pos < i.end {
+            let _ = readers.frame_instruction(data, mut i, 8) else |err| { result = "{err}"; break }
+        }
+        if result.len > 0 { break }
+    }
+    if result != want { print("FAIL frame-hostile want={want} got={result}") }
+    assert(result == want)
+}
+
+fn frame_hostile() {
+    // An eh_frame-style zero id read as .debug_frame is an FDE whose CIE is not a CIE.
+    frame_expect(frame_eh_sample(), false, "dwarf_frame_invalid_cie")
+    var far = frame_eh_sample()
+    far[28] = 200 as byte
+    frame_expect(far, true, "dwarf_frame_invalid_cie_pointer")
+    var encoding = frame_eh_sample()
+    encoding[16] = 13 as byte
+    frame_expect(encoding, true, "dwarf_frame_unsupported_encoding")
+    var datarel = frame_eh_sample()
+    datarel[16] = 59 as byte
+    frame_expect(datarel, true, "dwarf_frame_unsupported_encoding")
+    var letter = frame_eh_sample()
+    letter[10] = 88 as byte
+    frame_expect(letter, true, "dwarf_frame_unsupported_augmentation")
+    var insn = frame_eh_sample()
+    insn[22] = 45 as byte
+    frame_expect(insn, true, "dwarf_frame_unknown_instruction")
+    var reserved = frame_eh_sample()
+    reserved[0] = 240 as byte
+    reserved[1] = 255 as byte
+    reserved[2] = 255 as byte
+    reserved[3] = 255 as byte
+    frame_expect(reserved, true, "reserved_dwarf_length")
+    var version = frame_eh_sample()
+    version[8] = 4 as byte
+    frame_expect(version, true, "dwarf_frame_unsupported_version")
+    var long = frame_eh_sample()
+    long[0] = 99 as byte
+    frame_expect(long, true, "truncated")
+    print("PASS frame-hostile-refusals")
+}
+
+fn main() {
+    frame_eh()
+    frame_debug()
+    frame_hostile()
+}
