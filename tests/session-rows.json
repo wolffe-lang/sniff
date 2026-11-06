@@ -504,7 +504,7 @@
    "name": "value-gcc-args-locals",
    "prog": "c/values/gcc-O0/prog",
    "script": [
-    "break inspect",
+    "break main.c:20",
     "run",
     "info args",
     "info locals"
@@ -957,7 +957,7 @@
    "name": "value-clang-args-locals",
    "prog": "c/values/clang-O0/prog",
    "script": [
-    "break inspect",
+    "break main.c:20",
     "run",
     "info args",
     "info locals"
@@ -1175,13 +1175,13 @@
    "script": [
     "break *helper",
     "run",
-    "bt",
+    "frame 1",
     "stepi",
-    "bt",
+    "frame 1",
     "stepi",
-    "bt",
+    "frame 1",
     "stepi",
-    "bt"
+    "frame 1"
    ]
   },
   {
