@@ -79,8 +79,7 @@ fn print_selected(mut s: Session) {
 
 /// frame [N]
 pub fn cmd_frame(mut s: Session, rest: str) -> str {
-    let e = need_stack(s)
-    if e.len() > 0 { return e }
+    if !s.alive { return "No registers." }
     let t = rest.trim()
     if t.len() > 0 {
         let n = parse_uint(t)

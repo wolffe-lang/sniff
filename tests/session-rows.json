@@ -1382,7 +1382,7 @@
   },
   {
    "name": "tty-wolf-recursion",
-   "prog": "session/wolf/recursion/wolf-debug/prog",
+   "prog": "wolf/recursion/wolf-debug/prog",
    "script": [
     "break depth",
     "run",
