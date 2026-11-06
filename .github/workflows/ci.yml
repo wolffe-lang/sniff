@@ -69,7 +69,9 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - run: bash tools/gate macos
+      # No hosted image carries the pinned macOS oracle binaries: the oracle
+      # rows SKIP by name here and run in the Mac's local gauntlet record.
+      - run: SNIFF_HOSTED_MACOS_CI=1 bash tools/gate macos
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
