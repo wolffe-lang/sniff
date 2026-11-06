@@ -1,0 +1,150 @@
+// Range and location list entries, one at a time from a bounded cursor:
+// DWARF 4 sections 2.17.3 (.debug_ranges) and 2.6.2 (.debug_loc), and DWARF 5
+// sections 2.17.3 / 2.6.2 with Tables 7.10 and 7.30 (.debug_rnglists and
+// .debug_loclists). Entries are decoded, never resolved against a base: the
+// caller owns base-address state, since a section dump and a DIE differ.
+
+/// Byte failures, unknown entry kinds and malformed counted expressions.
+pub error DwarfListError = {
+    invalid_bounds,
+    truncated,
+    unsupported_width,
+    unterminated_leb128,
+    leb128_overflow,
+    unterminated_string,
+    offset_overflow,
+    resource_limit,
+    dwarf_list_unknown_kind,
+}
+
+/// DWARF 4 entries carry no kind byte; these synthetic kinds name them.
+pub const dwarf_list4_end: u64 = 0
+pub const dwarf_list4_base: u64 = 1
+pub const dwarf_list4_pair: u64 = 2
+
+/// One entry. value1/value2 hold its operands as encoded (addresses, indexes,
+/// offsets or a length); expr is the counted location description, if any.
+pub struct DwarfListEntry {
+    pub offset: int,
+    pub end: int,
+    pub kind: u64,
+    pub value1: u64,
+    pub value2: u64,
+    pub has_expr: bool,
+    pub expr: ByteSpan,
+}
+
+fn dwarf_list_entry(offset: int, kind: u64) -> DwarfListEntry {
+    DwarfListEntry {
+        offset: offset, end: offset, kind: kind, value1: 0, value2: 0,
+        has_expr: false, expr: ByteSpan { start: offset, length: 0 },
+    }
+}
+
+fn dwarf_list_block(data: List[byte], mut c: Cursor, length: u64) -> ByteSpan ! DwarfListError {
+    valid_cursor(data, c)?
+    if length > (c.end - c.pos) as u64 { return truncated }
+    take_span(data, mut c, length as int)?
+}
+
+fn dwarf_list_all_ones(address_size: int) -> u64 {
+    if address_size == 8 { return 18446744073709551615 }
+    ((1 as u64) << (address_size * 8) as u64) - 1
+}
+
+/// One DWARF 4 .debug_ranges entry: an address pair, a base selection
+/// (all-ones first address) or the zero pair ending the list.
+pub fn dwarf_range4_entry(data: List[byte], mut c: Cursor, address_size: int) -> DwarfListEntry ! DwarfListError {
+    let start = c.pos
+    let a = uint_le(data, mut c, address_size)?
+    let b = uint_le(data, mut c, address_size)?
+    var kind = dwarf_list4_pair
+    if a == 0 && b == 0 { kind = dwarf_list4_end }
+    if a == dwarf_list_all_ones(address_size) { kind = dwarf_list4_base }
+    var e = dwarf_list_entry(start, kind)
+    e.value1 = a
+    e.value2 = b
+    e.end = c.pos
+    e
+}
+
+/// One DWARF 4 .debug_loc entry: a pair with a two-byte counted expression,
+/// a base selection, or the zero pair ending the list.
+pub fn dwarf_loc4_entry(data: List[byte], mut c: Cursor, address_size: int) -> DwarfListEntry ! DwarfListError {
+    let start = c.pos
+    let a = uint_le(data, mut c, address_size)?
+    let b = uint_le(data, mut c, address_size)?
+    var e = dwarf_list_entry(start, dwarf_list4_pair)
+    e.value1 = a
+    e.value2 = b
+    if a == 0 && b == 0 {
+        e.kind = dwarf_list4_end
+    } else if a == dwarf_list_all_ones(address_size) {
+        e.kind = dwarf_list4_base
+    } else {
+        let length = uint_le(data, mut c, 2)?
+        e.has_expr = true
+        e.expr = dwarf_list_block(data, mut c, length)?
+    }
+    e.end = c.pos
+    e
+}
+
+/// One DWARF 5 .debug_rnglists entry (Table 7.30).
+pub fn dwarf_rnglist_entry(data: List[byte], mut c: Cursor, address_size: int) -> DwarfListEntry ! DwarfListError {
+    let start = c.pos
+    let kind = uint_le(data, mut c, 1)?
+    var e = dwarf_list_entry(start, kind)
+    if kind == 0 {
+    } else if kind == 1 {
+        e.value1 = uleb64(data, mut c)?
+    } else if kind == 2 || kind == 3 || kind == 4 {
+        e.value1 = uleb64(data, mut c)?
+        e.value2 = uleb64(data, mut c)?
+    } else if kind == 5 {
+        e.value1 = uint_le(data, mut c, address_size)?
+    } else if kind == 6 {
+        e.value1 = uint_le(data, mut c, address_size)?
+        e.value2 = uint_le(data, mut c, address_size)?
+    } else if kind == 7 {
+        e.value1 = uint_le(data, mut c, address_size)?
+        e.value2 = uleb64(data, mut c)?
+    } else {
+        return dwarf_list_unknown_kind
+    }
+    e.end = c.pos
+    e
+}
+
+/// One DWARF 5 .debug_loclists entry (Table 7.10) with its ULEB-counted
+/// location description.
+pub fn dwarf_loclist_entry(data: List[byte], mut c: Cursor, address_size: int) -> DwarfListEntry ! DwarfListError {
+    let start = c.pos
+    let kind = uint_le(data, mut c, 1)?
+    var e = dwarf_list_entry(start, kind)
+    if kind == 0 {
+    } else if kind == 1 {
+        e.value1 = uleb64(data, mut c)?
+    } else if kind == 2 || kind == 3 || kind == 4 {
+        e.value1 = uleb64(data, mut c)?
+        e.value2 = uleb64(data, mut c)?
+    } else if kind == 5 {
+    } else if kind == 6 {
+        e.value1 = uint_le(data, mut c, address_size)?
+    } else if kind == 7 {
+        e.value1 = uint_le(data, mut c, address_size)?
+        e.value2 = uint_le(data, mut c, address_size)?
+    } else if kind == 8 {
+        e.value1 = uint_le(data, mut c, address_size)?
+        e.value2 = uleb64(data, mut c)?
+    } else {
+        return dwarf_list_unknown_kind
+    }
+    if kind >= 2 && kind != 6 {
+        let length = uleb64(data, mut c)?
+        e.has_expr = true
+        e.expr = dwarf_list_block(data, mut c, length)?
+    }
+    e.end = c.pos
+    e
+}
