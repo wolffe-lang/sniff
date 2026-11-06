@@ -30,12 +30,36 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 ROWS = ROOT / 'tests/session-rows.json'
 GOLD = ROOT / 'tests/evidence/linux-s2'
+# S4: the same rows on static ET_EXEC builds (all PAX loads), with goldens captured from the pinned gdb on those
+# builds. tests/pax-rows.json overrides a row's script, names the lines it drops and names a row's SKIP.
+PAX_GOLD = ROOT / 'tests/evidence/pax-linux'
+PAX_ROWS = ROOT / 'tests/pax-rows.json'
+PAX_MODE = False
+STACK_HEX = re.compile(r'0x7ff[0-9a-f]{9}\b')
+STACK_DEC = re.compile(r'\b140[67][0-9]{11}\b')
 SCRIPTS = 'target/s2'
 ENV_BASE = {'PATH': '/usr/local/bin:/usr/bin:/bin', 'HOME': '/work/target/home', 'LC_ALL': 'C', 'TZ': 'UTC', 'TERM': 'dumb'}
 
 
+def use_pax():
+    """Select the PAX row set: static builds, their own goldens."""
+    global GOLD, PAX_MODE
+    GOLD = PAX_GOLD
+    PAX_MODE = True
+
+
 def load_rows(only=None):
     rows = json.loads(ROWS.read_text())['rows']
+    if PAX_MODE:
+        over = json.loads(PAX_ROWS.read_text())['rows']
+        unknown = sorted(set(over) - {r['name'] for r in rows})
+        if unknown:
+            raise SystemExit('FAIL session-rows: pax override for no row: ' + ', '.join(unknown))
+        merged = []
+        for r in rows:
+            o = over.get(r['name'], {})
+            merged.append(dict(r, **{k: v for k, v in o.items()}))
+        rows = merged
     if only:
         rows = [r for r in rows if re.search(only, r['name'])]
     names = [r['name'] for r in rows]
@@ -44,9 +68,18 @@ def load_rows(only=None):
     return rows
 
 
-def normalize(text, fired):
+def normalize(text, fired, row=None):
     out = []
+    drops = [re.compile(d) for d in (row or {}).get('drop', [])] if PAX_MODE else []
     for line in text.splitlines(keepends=True):
+        if any(d.search(line) for d in drops):
+            fired.add('drop')
+            continue
+        if PAX_MODE:
+            m = STACK_DEC.sub('<STACK>', STACK_HEX.sub('<STACK>', line))
+            if m != line:
+                fired.add('stack')
+                line = m
         if line.startswith('[Thread debugging using libthread_db enabled]') or \
            line.startswith('Using host libthread_db library'):
             fired.add('banner')
@@ -164,18 +197,21 @@ def cmd_capture(a):
     work = a.work
     GOLD.mkdir(parents=True, exist_ok=True)
     for row in load_rows(a.only):
+        if row.get('skip'):
+            print('SKIP ' + row['name'] + ' reason=' + row['skip'])
+            continue
         if row.get('tty'):
             out, err, rc = run_pty(tty_argv(a.gdb, row, prog_path(a.fixtures, row), True), row['script'], '(gdb) ', work)
             fired = set()
-            o = normalize(normalize_tty(out, fired), fired)
+            o = normalize(normalize_tty(out, fired), fired, row)
             e = ''
             rc = 0
         else:
             script = write_script(row, work)
             out, err, rc = run_tool(gdb_argv(a.gdb, row, script, prog_path(a.fixtures, row)), work, 120)
             fired = set()
-            o = normalize(out, fired)
-            e = normalize(err, fired)
+            o = normalize(out, fired, row)
+            e = normalize(err, fired, row)
         for path, text in zip(golden_paths(row), (o, e, str(rc) + '\n')):
             path.write_text(text)
         print('CAPTURE ' + row['name'] + ' rc=' + str(rc))
@@ -197,6 +233,9 @@ def cmd_check(a):
     fails = 0
     ran = 0
     for row in load_rows(a.only):
+        if row.get('skip'):
+            print('SKIP ' + row['name'] + ' reason=' + row['skip'])
+            continue
         gold = golden_paths(row)
         if not all(p.exists() for p in gold):
             print('FAIL %s no-golden' % row['name'])
@@ -218,7 +257,7 @@ def cmd_check(a):
         ran += 1
         if not row.get('tty'):
             fired = set()
-        o, e = normalize(out, fired), normalize(err, fired)
+        o, e = normalize(out, fired, row), normalize(err, fired, row)
         want_o, want_e, want_rc = (p.read_text() for p in gold)
         bad = []
         if o != want_o:
@@ -241,14 +280,17 @@ def cmd_oracle(a):
     work = a.work
     fails = 0
     for row in load_rows(a.only):
+        if row.get('skip'):
+            print('SKIP ' + row['name'] + ' reason=' + row['skip'])
+            continue
         fired = set()
         if row.get('tty'):
             out, err, rc = run_pty(tty_argv(a.gdb, row, prog_path(a.fixtures, row), True), row['script'], '(gdb) ', work)
-            got = (normalize(normalize_tty(out, fired), fired), '', '0\n')
+            got = (normalize(normalize_tty(out, fired), fired, row), '', '0\n')
         else:
             script = write_script(row, work)
             out, err, rc = run_tool(gdb_argv(a.gdb, row, script, prog_path(a.fixtures, row)), work, 120)
-            got = (normalize(out, fired), normalize(err, fired), str(rc) + '\n')
+            got = (normalize(out, fired, row), normalize(err, fired, row), str(rc) + '\n')
         want = tuple(p.read_text() for p in golden_paths(row))
         if got != want:
             names = ('stdout', 'stderr', 'exit')
@@ -263,7 +305,7 @@ def cmd_oracle(a):
 def cmd_verify(a):
     rows = load_rows()
     have = {p.name for p in GOLD.glob('*') if p.is_file() and p.suffix in ('.out', '.err', '.rc')}
-    want = {p.name for r in rows for p in golden_paths(r)}
+    want = {p.name for r in rows if not r.get('skip') for p in golden_paths(r)}
     if want - have:
         print('FAIL session-goldens-missing: ' + ', '.join(sorted(want - have)))
         return 1
@@ -276,6 +318,7 @@ def cmd_verify(a):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument('--set', choices=('s2', 'pax'), default='s2', help='pax: static builds and their goldens (S4)')
     sub = p.add_subparsers(dest='cmd', required=True)
     for name in ('capture', 'check', 'oracle'):
         s = sub.add_parser(name)
@@ -288,6 +331,8 @@ def main():
             s.add_argument('--sniff', default='/work/target/sniff')
     sub.add_parser('verify')
     a = p.parse_args()
+    if a.set == 'pax':
+        use_pax()
     return {'capture': cmd_capture, 'check': cmd_check, 'oracle': cmd_oracle, 'verify': cmd_verify}[a.cmd](a)
 
 
