@@ -89,4 +89,5 @@ pub error DumpError = {
     unsupported_debug_types,
     unsupported_dump_mode,
     dump_write_failed,
+    dwarf_list_unknown_kind,
 }

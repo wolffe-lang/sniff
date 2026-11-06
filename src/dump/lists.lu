@@ -1,0 +1,178 @@
+// --debug-ranges, --debug-loc, --debug-rnglists and --debug-loclists: each
+// section read sequentially, list by list, as its own format defines it.
+// A section dump knows no CU, so bases come only from the entries themselves.
+
+use readers
+
+fn lists_raw_name(kind: u64) -> str {
+    if kind == 1 { return "DW_LLE_base_addressx" }
+    if kind == 2 { return "DW_LLE_startx_endx" }
+    if kind == 3 { return "DW_LLE_startx_length" }
+    if kind == 4 { return "DW_LLE_offset_pair" }
+    if kind == 5 { return "DW_LLE_default_location" }
+    if kind == 6 { return "DW_LLE_base_address" }
+    if kind == 7 { return "DW_LLE_start_end" }
+    "DW_LLE_start_length"
+}
+
+pub fn dump_ranges(mut o: Out, data: List[byte], s: readers.DebugSections) -> () ! DumpError {
+    line(mut o, ".debug_ranges contents:")
+    let start = s.ranges.span.start
+    var c = readers.cursor(start, start + s.ranges.span.length, 1000000000)
+    var list = c.pos
+    while c.pos < c.end {
+        let e = readers.dwarf_range4_entry(data, mut c, 8)?
+        let at = hex8((list - start) as u64)
+        if e.kind == readers.dwarf_list4_end {
+            line(mut o, "{at} <End of list>")
+            list = c.pos
+        } else {
+            line(mut o, "{at} {hex16(e.value1)} {hex16(e.value2)}")
+        }
+    }
+}
+
+pub fn dump_loc(mut o: Out, n: Names, data: List[byte], s: readers.DebugSections) -> () ! DumpError {
+    line(mut o, ".debug_loc contents:")
+    let arch = arch_of(s)
+    let unit = expr_section_unit(s)
+    let start = s.loc.span.start
+    var c = readers.cursor(start, start + s.loc.span.length, 1000000000)
+    var open = false
+    var first = true
+    var known = false
+    var base: u64 = 0
+    while c.pos < c.end {
+        if !open {
+            // Lists are separated, not terminated, by an empty line.
+            if !first { line(mut o, "") }
+            first = false
+            line(mut o, "0x{hex8((c.pos - start) as u64)}: ")
+            open = true
+            known = false
+            base = 0
+        }
+        let e = readers.dwarf_loc4_entry(data, mut c, 8)?
+        if e.kind == readers.dwarf_list4_end {
+            open = false
+        } else if e.kind == readers.dwarf_list4_pair {
+            if known {
+                put(mut o, "            [0x{hex16(base + e.value1)}, 0x{hex16(base + e.value2)}): ")
+            } else if s.format == readers.object_elf {
+                put(mut o, "            [0x{hex16(e.value1)}, 0x{hex16(e.value2)}): ")
+            } else {
+                put(mut o, "            (0x{hex16(e.value1)}, 0x{hex16(e.value2)}): ")
+            }
+            put_expr(mut o, n, data, e.expr, unit, s.info.span, arch)
+            line(mut o, "")
+        } else {
+            // A base selection entry prints nothing and rebases what follows.
+            known = true
+            base = e.value2
+        }
+    }
+}
+
+fn lists_header(mut o: Out, data: List[byte], t: readers.DwarfIndexTable, what: str) -> () ! DumpError {
+    let header = if t.offset_size == 8 { 12 } else { 4 }
+    let length = (t.end - t.start - header) as u64
+    let format = if t.offset_size == 8 { "DWARF64" } else { "DWARF32" }
+    put(mut o, "{what} list header: length = {hex_offset(length, t.offset_size)}, format = {format}, ")
+    put(mut o, "version = 0x{hex4(t.version as u64)}, addr_size = 0x{hex2(t.address_size as u64)}, ")
+    line(mut o, "seg_size = 0x00, offset_entry_count = 0x{hex8(t.count as u64)}")
+    if t.count > 0 {
+        line(mut o, "offsets: [")
+        var i: int = 0
+        while i < t.count {
+            var work = readers.cursor(0, 0, 1000)
+            let value = readers.dwarf_index_raw(data, t, i as u64, mut work)?
+            line(mut o, hex_offset(value, t.offset_size))
+            i += 1
+        }
+        line(mut o, "]")
+    }
+}
+
+pub fn dump_rnglists(mut o: Out, data: List[byte], s: readers.DebugSections) -> () ! DumpError {
+    line(mut o, ".debug_rnglists contents:")
+    let start = s.rnglists.span.start
+    var c = readers.cursor(start, start + s.rnglists.span.length, 1000000000)
+    while c.pos < c.end {
+        let t = readers.dwarf_index_header(data, mut c, readers.dwarf_index_rnglists)?
+        lists_header(mut o, data, t, "range")?
+        line(mut o, "ranges:")
+        var e = readers.cursor(t.payload_start, t.end, 1000000000)
+        var base: u64 = 0
+        while e.pos < e.end {
+            let r = readers.dwarf_rnglist_entry(data, mut e, t.address_size)?
+            if r.kind == 0 {
+                line(mut o, "<End of list>")
+                base = 0
+            } else if r.kind == 1 {
+                base = 0
+            } else if r.kind == 5 {
+                base = r.value1
+            } else if r.kind == 4 {
+                line(mut o, "[0x{hex16(base + r.value1)}, 0x{hex16(base + r.value2)})")
+            } else if r.kind == 6 {
+                line(mut o, "[0x{hex16(r.value1)}, 0x{hex16(r.value2)})")
+            } else if r.kind == 7 {
+                line(mut o, "[0x{hex16(r.value1)}, 0x{hex16(r.value1 + r.value2)})")
+            } else {
+                line(mut o, "[0x{hex16(r.value1)}, 0x{hex16(r.value2)})")
+            }
+        }
+    }
+}
+
+pub fn dump_loclists(mut o: Out, n: Names, data: List[byte], s: readers.DebugSections) -> () ! DumpError {
+    line(mut o, ".debug_loclists contents:")
+    let arch = arch_of(s)
+    let unit = expr_section_unit(s)
+    let start = s.loclists.span.start
+    var c = readers.cursor(start, start + s.loclists.span.length, 1000000000)
+    while c.pos < c.end {
+        let t = readers.dwarf_index_header(data, mut c, readers.dwarf_index_loclists)?
+        lists_header(mut o, data, t, "locations")?
+        var e = readers.cursor(t.payload_start, t.end, 1000000000)
+        var first = true
+        while e.pos < e.end {
+            if !first { line(mut o, "") }
+            first = false
+            line(mut o, "0x{hex8((e.pos - start) as u64)}: ")
+            var known: bool = false
+            var base: u64 = 0
+            loop {
+                let r = readers.dwarf_loclist_entry(data, mut e, t.address_size)?
+                if r.kind == 0 { break }
+                if r.kind == 6 {
+                    known = true
+                    base = r.value1
+                    continue
+                }
+                if r.kind == 1 {
+                    known = false
+                    line(mut o, "            {lists_raw_name(r.kind):<23}(0x{hex16(r.value1)})")
+                    continue
+                }
+                var resolved: bool = r.kind == 7 || r.kind == 8 || r.kind == 4 && known
+                if resolved {
+                    var low = r.value1
+                    var high = r.value2
+                    if r.kind == 8 { high = r.value1 + r.value2 }
+                    if r.kind == 4 {
+                        low = base + r.value1
+                        high = base + r.value2
+                    }
+                    put(mut o, "            [0x{hex16(low)}, 0x{hex16(high)}): ")
+                } else if r.kind == 5 {
+                    put(mut o, "            {lists_raw_name(r.kind):<23}: ")
+                } else {
+                    put(mut o, "            {lists_raw_name(r.kind):<23}(0x{hex16(r.value1)}, 0x{hex16(r.value2)}): ")
+                }
+                put_expr(mut o, n, data, r.expr, unit, s.info.span, arch)
+                line(mut o, "")
+            }
+        }
+    }
+}
