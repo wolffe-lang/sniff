@@ -146,6 +146,15 @@ unwinder's non-CFI bases (`arm64.lu`; x86-64's frame-pointer fallback), signing 
   instructions put back first. The fork fixture's `waitpid` retries on `EINTR`, because a traced parent's wait
   is interrupted when its child exits (lldb does the same).
 
+## The lost hit
+
+An intermittent lost hit in the 10,000-hit loops was a stale instruction cache: every `mach_vm_write` of `BRK`
+succeeded, yet the child kept running the old bytes and exited without the trap. Arm requires a data-cache
+clean and instruction-cache invalidate before modified code is fetched; `target_write` now asks the kernel with
+`mach_vm_machine_attribute(MATTR_CACHE, MATTR_VAL_ICACHE_FLUSH)` (`mach/vm_attributes.h`). `tools/bp-stress.sh`
+(gate step `bp-stress`, 200 runs) was red at `d45d30f` (122 of 200) and reads 0 misses of 400 after the fix.
+The trace run lost 45 of 200 against the stress run's 122 of 200; that rate difference is unexplained.
+
 ## Done-when
 
 - [x] the prediction before code; platform layer; arm64 registers, `BRK`, compact unwind

@@ -89,6 +89,7 @@ else
   step macos-rows-inventory python3 -I tools/session-mac.py verify
   step macos-lldb-replay python3 -I tools/session-mac.py replay
   mac_live_step macos-rows bash -c "mkdir -p target/s3 && python3 -I tools/session-mac.py check --sniff '$root/target/sniff' --fixtures '$root/target/session-fixtures' --work '$root/target/s3'"
+  mac_live_step bp-stress bash tools/bp-stress.sh "$root/target/sniff" "$root/target/session-fixtures" "$root/target/s3" 200
   mac_live_step session-lupin-join python3 -I tools/session-values.py --sniff "$root/target/sniff" --values target/values/values.json --fixtures "$root/target/session-fixtures" --work "$root/target/s3v" --cwd "$root"
   mac_live_step session-unwind-basis python3 -I tools/session-unwind.py --sniff "$root/target/sniff" --fixtures "$root/target/session-fixtures" --work "$root/target/s3u" --platform macos --cwd "$root"
   mac_live_step session-perf python3 -I tools/session-perf.py --sniff "$root/target/sniff" --lldb "$debugger" --fixtures "$root/target/session-fixtures" --work "$root/target/s3p" --cwd "$root"
