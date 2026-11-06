@@ -5,6 +5,7 @@
 // rest on it.
 
 use readers
+use platform
 
 /// One FDE with the CIE parameters its instructions need.
 struct CfiFde {
@@ -16,9 +17,11 @@ struct CfiFde {
     pub cie_insns: readers.ByteSpan,
     pub insns: readers.ByteSpan,
     pub address_size: int,
+    /// Whether the instructions are bytes of the image (a Mach-O __eh_frame) rather than of the DWARF file.
+    pub img: bool,
 }
 
-fn fde_index_section(data: List[byte], s: readers.ObjectSection, eh: bool, mut out: List[CfiFde]) {
+fn fde_index_section(data: List[byte], s: readers.ObjectSection, eh: bool, img: bool, mut out: List[CfiFde]) {
     if !s.present || s.span.length == 0 { return }
     let fs = readers.FrameSection { span: copy s.span, address: s.address, eh: eh, address_size: 8 }
     var c = readers.cursor(s.span.start, s.span.start + s.span.length, 100000000)
@@ -40,7 +43,7 @@ fn fde_index_section(data: List[byte], s: readers.ObjectSection, eh: bool, mut o
                     begin: e.fde.begin, end: e.fde.begin + e.fde.range, code_align: cache[k].code_align,
                     data_align: cache[k].data_align, ra: cache[k].return_register,
                     cie_insns: copy cache[k].instructions, insns: copy e.fde.instructions,
-                    address_size: cache[k].address_size })
+                    address_size: cache[k].address_size, img: img })
             }
         }
     }
@@ -49,9 +52,14 @@ fn fde_index_section(data: List[byte], s: readers.ObjectSection, eh: bool, mut o
 /// All FDEs of .eh_frame then .debug_frame.
 fn cfi_build(p: Prog) -> List[CfiFde] {
     var out: List[CfiFde] = []
-    if p.secs.format != readers.object_elf { return out }
-    fde_index_section(p.data, p.secs.eh_frame, true, mut out)
-    fde_index_section(p.data, p.secs.frame, false, mut out)
+    if p.img.len > 0 {
+        // Mach-O: the image's __eh_frame, then the dSYM's .debug_frame
+        fde_index_section(p.img, p.isecs.eh_frame, true, true, mut out)
+        fde_index_section(p.data, p.secs.frame, false, false, mut out)
+        return out
+    }
+    fde_index_section(p.data, p.secs.eh_frame, true, false, mut out)
+    fde_index_section(p.data, p.secs.frame, false, false, mut out)
     out
 }
 
@@ -85,10 +93,10 @@ struct Rules {
 }
 
 fn rules_new() -> Rules {
-    var r = Rules { cfa_reg: 7, cfa_off: 8, cfa_is_expr: false, cfa_expr: readers.ByteSpan { start: 0, length: 0 },
+    var r = Rules { cfa_reg: platform.arch_sp_col(), cfa_off: 8, cfa_is_expr: false, cfa_expr: readers.ByteSpan { start: 0, length: 0 },
         kind: [], val: [], expr: [] }
     var i = 0
-    while i < 17 {
+    while i < platform.arch_cfi_cols() {
         (mut r.kind).push(rule_same)
         (mut r.val).push(0)
         (mut r.expr).push(readers.ByteSpan { start: 0, length: 0 })
@@ -133,32 +141,32 @@ fn run_insns(data: List[byte], span: readers.ByteSpan, f: CfiFde, target_loc: u6
             r.cfa_is_expr = true
             r.cfa_expr = copy ins.block
         } else if op == 128 || op == 5 {
-            if ins.reg < 17 {
+            if ins.reg < platform.arch_cfi_cols() as u64 {
                 r.kind[ins.reg as int] = rule_offset
                 r.val[ins.reg as int] = ins.unsigned as i64 * f.data_align
             }
         } else if op == 17 {
-            if ins.reg < 17 {
+            if ins.reg < platform.arch_cfi_cols() as u64 {
                 r.kind[ins.reg as int] = rule_offset
                 r.val[ins.reg as int] = ins.signed * f.data_align
             }
         } else if op == 20 {
-            if ins.reg < 17 {
+            if ins.reg < platform.arch_cfi_cols() as u64 {
                 r.kind[ins.reg as int] = rule_val_offset
                 r.val[ins.reg as int] = ins.unsigned as i64 * f.data_align
             }
         } else if op == 192 || op == 6 {
-            if ins.reg < 17 {
+            if ins.reg < platform.arch_cfi_cols() as u64 {
                 r.kind[ins.reg as int] = init.kind[ins.reg as int]
                 r.val[ins.reg as int] = init.val[ins.reg as int]
                 r.expr[ins.reg as int] = copy init.expr[ins.reg as int]
             }
         } else if op == 7 {
-            if ins.reg < 17 { r.kind[ins.reg as int] = rule_undefined }
+            if ins.reg < platform.arch_cfi_cols() as u64 { r.kind[ins.reg as int] = rule_undefined }
         } else if op == 8 {
-            if ins.reg < 17 { r.kind[ins.reg as int] = rule_same }
+            if ins.reg < platform.arch_cfi_cols() as u64 { r.kind[ins.reg as int] = rule_same }
         } else if op == 9 {
-            if ins.reg < 17 {
+            if ins.reg < platform.arch_cfi_cols() as u64 {
                 r.kind[ins.reg as int] = rule_register
                 r.val[ins.reg as int] = ins.reg2 as i64
             }
@@ -171,7 +179,7 @@ fn run_insns(data: List[byte], span: readers.ByteSpan, f: CfiFde, target_loc: u6
                 r = top
             }
         } else if op == 16 || op == 22 {
-            if ins.reg < 17 {
+            if ins.reg < platform.arch_cfi_cols() as u64 {
                 r.kind[ins.reg as int] = if op == 16 { rule_expr } else { rule_val_expr }
                 r.expr[ins.reg as int] = copy ins.block
             }

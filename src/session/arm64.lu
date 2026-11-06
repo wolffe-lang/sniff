@@ -1,0 +1,235 @@
+// arm64 unwinding where no DWARF CFI covers a pc: Apple's compact unwind
+// (__unwind_info, the declarations of mach-o/compact_unwind_encoding.h), a
+// small analysis of the prologue and epilogue the standard way a function
+// sets up its frame (Arm ARM instruction encodings; Apple's arm64 ABI notes),
+// and the frame-pointer chain (x29 points at the saved x29, x30 pair) for
+// code that none of them covers. Each frame names the basis it used.
+
+use platform
+
+/// A little-endian 32-bit word of a byte list, or 0 when out of range.
+fn word_of(data: List[byte], at: int) -> u64 {
+    if at < 0 || at + 4 > data.len { return 0 }
+    (data[at] as int as u64) + ((data[at + 1] as int as u64) << 8) + ((data[at + 2] as int as u64) << 16) + ((data[at + 3] as int as u64) << 24)
+}
+
+/// A little-endian 16-bit half-word of a byte list, or 0.
+fn half_of(data: List[byte], at: int) -> u64 {
+    if at < 0 || at + 2 > data.len { return 0 }
+    (data[at] as int as u64) + ((data[at + 1] as int as u64) << 8)
+}
+
+/// The compact unwind encoding of the function holding file address `pc`, or 0 when
+/// the image has none (no __unwind_info, no entry, or an entry with encoding 0).
+/// First level: pages indexed by function offset from the text segment; second level:
+/// regular (kind 2) or compressed (kind 3) pages, as the header declares.
+fn compact_encoding(p: Prog, pc: u64) -> u64 {
+    if p.ui_size < 28 || p.img.len == 0 { return 0 }
+    let ui = p.ui_off
+    let off = pc - p.text_addr
+    let img = p.img
+    if word_of(img, ui) != 1 { return 0 }
+    let common_off = word_of(img, ui + 4) as int
+    let common_n = word_of(img, ui + 8) as int
+    let index_off = word_of(img, ui + 20) as int
+    let index_n = word_of(img, ui + 24) as int
+    if index_n < 2 { return 0 }
+    // the last first-level entry at or below off (the final entry is a sentinel)
+    var lo = 0
+    var hi = index_n - 1
+    while lo + 1 < hi {
+        let mid = (lo + hi) / 2
+        if word_of(img, ui + index_off + 12 * mid) <= off { lo = mid } else { hi = mid }
+    }
+    let entry = ui + index_off + 12 * lo
+    let first = word_of(img, entry)
+    if first > off { return 0 }
+    let page_off = word_of(img, entry + 4) as int
+    if page_off == 0 { return 0 }
+    let page = ui + page_off
+    let kind = word_of(img, page)
+    let entries_at = page + half_of(img, page + 4) as int
+    let count = half_of(img, page + 6) as int
+    if kind == 2 {
+        var a = 0
+        var b = count
+        while a + 1 < b {
+            let mid = (a + b) / 2
+            if word_of(img, entries_at + 8 * mid) <= off { a = mid } else { b = mid }
+        }
+        if count == 0 || word_of(img, entries_at + 8 * a) > off { return 0 }
+        return word_of(img, entries_at + 8 * a + 4)
+    }
+    if kind == 3 {
+        let enc_at = page + half_of(img, page + 8) as int
+        var a = 0
+        var b = count
+        while a + 1 < b {
+            let mid = (a + b) / 2
+            let fo = (word_of(img, entries_at + 4 * mid) & 16777215) + first
+            if fo <= off { a = mid } else { b = mid }
+        }
+        if count == 0 { return 0 }
+        let e = word_of(img, entries_at + 4 * a)
+        if (e & 16777215) + first > off { return 0 }
+        let idx = (e >> 24) as int
+        if idx < common_n { return word_of(img, ui + common_off + 4 * idx) }
+        return word_of(img, enc_at + 4 * (idx - common_n))
+    }
+    0
+}
+
+/// What the instructions from a function's first one up to the pc have done to its frame.
+struct ArmPro {
+    /// Bytes subtracted from sp so far.
+    pub delta: u64,
+    /// x29 and x30 have been stored; their address is CFA + saved_rel (saved_rel is negative).
+    pub saved: bool,
+    pub saved_rel: i64,
+    /// x29 now holds the frame address.
+    pub fp_set: bool,
+    /// The address of the first instruction that is not part of setting up the frame.
+    pub end: u64,
+}
+
+fn signed7(v: u64) -> i64 {
+    let x = v as int
+    if x >= 64 { return (x - 128) as i64 }
+    x as i64
+}
+
+/// Walk the recognised frame-setup instructions from the function's first one while they
+/// precede `pc`: `sub sp, sp, #n`; `stp x29, x30, [sp, #n]` (also pre-indexed); `add x29, sp, #n`;
+/// other stores of register pairs and the pointer-authentication hint are stepped over.
+fn arm_scan(s: Session, start: u64, pc: u64) -> ArmPro {
+    var st = ArmPro { delta: 0, saved: false, saved_rel: 0, fp_set: false, end: start }
+    var at = start
+    var n = 0
+    while n < 16 {
+        let r = platform.target_read(s.target, at, 4)
+        if !r.ok { return st }
+        let w = (r.data[0] as int as u64) + ((r.data[1] as int as u64) << 8) + ((r.data[2] as int as u64) << 16) + ((r.data[3] as int as u64) << 24)
+        var known = false
+        if (w & 4286579711) == 3506439167 {
+            // sub sp, sp, #imm12 {, lsl #12}
+            var imm = (w >> 10) & 4095
+            if ((w >> 22) & 1) == 1 { imm = imm << 12 }
+            if at < pc { st.delta += imm }
+            known = true
+        } else if (w & 4290805759) == 2835381245 || (w & 4290805759) == 2843769853 {
+            // stp x29, x30, [sp, #imm]  /  [sp, #imm]!
+            let pre = (w & 4290805759) == 2843769853
+            let imm = signed7((w >> 15) & 127) * 8
+            if pre {
+                if at < pc { st.delta += (0 - imm) as u64 }
+                if at < pc { st.saved = true; st.saved_rel = 0 - (st.delta as i64) }
+            } else if at < pc {
+                st.saved = true
+                st.saved_rel = imm - (st.delta as i64)
+            }
+            known = true
+        } else if (w & 4286579711) == 2432697341 {
+            // add x29, sp, #imm
+            if at < pc { st.fp_set = true }
+            known = true
+            st.end = at + 4
+            return st
+        } else if (w & 4290773984) == 2835350496 || (w & 4290773984) == 2843739104 || (w & 4290773984) == 1828717536 || (w & 4290773984) == 1837106144 || w == 3573752639 || w == 3573752703 {
+            // stp xA, xB, [sp, #imm] of callee-saved registers, or paciasp
+            known = true
+        }
+        if !known { return st }
+        at += 4
+        st.end = at
+        n += 1
+    }
+    st
+}
+
+/// Whether the instruction word at `at` is RET.
+fn is_ret_at(s: Session, at: u64) -> bool {
+    let r = platform.target_read(s.target, at, 4)
+    if !r.ok { return false }
+    let w = (r.data[0] as int as u64) + ((r.data[1] as int as u64) << 8) + ((r.data[2] as int as u64) << 16) + ((r.data[3] as int as u64) << 24)
+    w == 3596551104
+}
+
+/// `add sp, sp, #imm` at `at`: the immediate, else -1.
+fn add_sp_at(s: Session, at: u64) -> i64 {
+    let r = platform.target_read(s.target, at, 4)
+    if !r.ok { return -1 }
+    let w = (r.data[0] as int as u64) + ((r.data[1] as int as u64) << 8) + ((r.data[2] as int as u64) << 16) + ((r.data[3] as int as u64) << 24)
+    if (w & 4286579711) != 2432697343 { return -1 }
+    var imm = (w >> 10) & 4095
+    if ((w >> 22) & 1) == 1 { imm = imm << 12 }
+    imm as i64
+}
+
+/// Unwind one frame of arm64 code that DWARF CFI does not cover. Level 0 may be
+/// inside the prologue or the epilogue; every other frame is at a call. The basis
+/// is "prologue" for the instruction analysis, "compact" for __unwind_info and
+/// "frame-pointer" for the x29 chain.
+fn unwind_arm64(s: Session, f: Frame, level: int) -> Frame ! {no_caller} {
+    let sp = f.regs[31]
+    let fp = f.regs[29]
+    let lr = f.regs[30]
+    let lookup = if level == 0 { f.pc } else { f.pc - 1 }
+    let file_pc = lookup - s.base
+    let fstart = func_start(s.prog, file_pc)
+    var cfa: u64 = 0
+    var fp_at: u64 = 0
+    var lr_at: u64 = 0
+    var basis = ""
+    if level == 0 && fstart != 0 {
+        let start = fstart + s.base
+        if is_ret_at(s, f.pc) {
+            cfa = sp
+            basis = "prologue"
+        } else {
+            let pro = arm_scan(s, start, f.pc)
+            if f.pc < pro.end || (pro.end == start && f.pc == start) {
+                cfa = sp + pro.delta
+                if pro.saved {
+                    fp_at = (cfa as i64 + pro.saved_rel) as u64
+                    lr_at = fp_at + 8
+                }
+                basis = "prologue"
+            } else {
+                let n = add_sp_at(s, f.pc)
+                if n >= 0 && is_ret_at(s, f.pc + 4) {
+                    cfa = sp + n as u64
+                    basis = "prologue"
+                }
+            }
+        }
+    }
+    if basis == "" {
+        let enc = compact_encoding(s.prog, file_pc)
+        let mode = enc & 251658240
+        if mode == 67108864 {
+            cfa = fp + 16
+            fp_at = fp
+            lr_at = fp + 8
+            basis = "compact"
+        } else if mode == 33554432 && level == 0 {
+            cfa = sp + ((enc >> 12) & 4095) * 16
+            basis = "compact"
+        } else {
+            // no usable compact entry: the frame-pointer chain
+            cfa = fp + 16
+            fp_at = fp
+            lr_at = fp + 8
+            basis = "frame-pointer"
+        }
+    }
+    var ra = lr
+    if lr_at != 0 { ra = rd64(s.target, lr_at) else { return no_caller } }
+    var nfp = fp
+    if fp_at != 0 { nfp = rd64(s.target, fp_at) else { return no_caller } }
+    var regs = copy f.regs
+    regs[29] = nfp
+    regs[30] = ra
+    regs[31] = cfa
+    regs[32] = ra
+    Frame { pc: ra, cfa: cfa, regs: regs, func: -1, fallback: basis == "frame-pointer", cfa_ok: true, basis: basis }
+}

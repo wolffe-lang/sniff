@@ -74,7 +74,7 @@ fn var_val(s: Session, fr: Frame, die: int) -> Val {
         if fa >= 0 {
             let fctx = EvalCtx { regs: copy fr.regs, frame_base: 0, has_frame_base: false, cfa: fr.cfa, has_cfa: fr.cfa_ok, base: s.base }
             let fl = expr_eval(s.prog.data, s.prog.info.attributes[fa].value.bytes, fctx, s.target)
-            if fl.kind == loc_register && fl.value < 17 { fb = fr.regs[fl.value as int]; has_fb = true }
+            if fl.kind == loc_register && fl.value < platform.arch_ncols() as u64 { fb = fr.regs[fl.value as int]; has_fb = true }
             else if fl.kind == loc_memory || fl.kind == loc_value { fb = fl.value; has_fb = true }
         }
     }
@@ -88,7 +88,7 @@ fn var_val(s: Session, fr: Frame, die: int) -> Val {
         return Val { ok: true, why: "", ty: ty, bytes: r.data, addr: l.value, has_addr: true, reg: -1 }
     }
     if l.kind == loc_register {
-        if l.value >= 17 { return val_fail("<register {l.value} unavailable>") }
+        if l.value >= platform.arch_ncols() as u64 { return val_fail("<register {l.value} unavailable>") }
         let v = fr.regs[l.value as int]
         var bytes: List[byte] = []
         var i = 0
@@ -171,7 +171,12 @@ fn frame_lookup_pc(s: Session, level: int) -> u64 {
     s.frames[level].pc - 1
 }
 
+/// Libraries mapped from the dyld shared cache have no file to name on macOS.
+#[cfg(target = "aarch64-apple-darwin")]
+fn solib_of(s: Session, pc: u64) -> str { "" }
+
 /// The shared library mapped at a runtime address, from /proc/PID/maps ("" if none).
+#[cfg(target = "x86_64-unknown-linux-gnu")]
 fn solib_of(s: Session, pc: u64) -> str {
     let raw = fs_read_bytes("/proc/{s.target.pid}/maps") else { return "" }
     let text = str_from_utf8(raw) else { return "" }

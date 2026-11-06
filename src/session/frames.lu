@@ -12,14 +12,12 @@ struct Frame {
     pub func: int,
     pub fallback: bool,
     pub cfa_ok: bool,
+    /// How this frame was unwound: "cfi", "compact", "prologue" or "frame-pointer".
+    pub basis: str,
 }
 
-/// DWARF register numbers for x86-64 (psABI 3.6.2): rax rdx rcx rbx rsi rdi
-/// rbp rsp r8-r15 and the return address column 16.
-fn dwarf_regs(r: List[u64]) -> List[u64] {
-    if r.len != 27 { return [] }
-    [r[10], r[12], r[11], r[5], r[13], r[14], r[4], r[19], r[9], r[8], r[7], r[6], r[3], r[2], r[1], r[0], r[16]]
-}
+/// The register list in DWARF column order (platform.arch_dwarf_regs).
+fn dwarf_regs(r: List[u64]) -> List[u64] { platform.arch_dwarf_regs(r) }
 
 /// Index into prog.funcs of the DWARF function containing a file address, or -1.
 fn func_at(p: Prog, addr: u64) -> int {
@@ -94,8 +92,8 @@ fn byte_at(s: Session, addr: u64) -> int {
 }
 
 /// A frame whose CFA and caller registers come from the frame pointer, with
-/// gdb's prologue/epilogue cases for a function with no CFI.
-fn unwind_fp(s: Session, f: Frame) -> Frame ! {no_caller} {
+/// gdb's prologue/epilogue cases for a function with no CFI (x86-64).
+fn unwind_fp_x86(s: Session, f: Frame) -> Frame ! {no_caller} {
     let rsp = f.regs[7]
     let rbp = f.regs[6]
     let pc = f.pc
@@ -128,42 +126,55 @@ fn unwind_fp(s: Session, f: Frame) -> Frame ! {no_caller} {
     }
     regs[7] = cfa
     regs[16] = ra
-    Frame { pc: ra, cfa: cfa, regs: regs, func: -1, fallback: true, cfa_ok: true }
+    Frame { pc: ra, cfa: cfa, regs: regs, func: -1, fallback: true, cfa_ok: true, basis: "frame-pointer" }
 }
+
+/// The frame-pointer unwind for this machine; arm64 also uses compact unwind and its prologue analysis.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+fn unwind_fp(s: Session, f: Frame, level: int) -> Frame ! {no_caller} { unwind_fp_x86(s, f) }
+
+#[cfg(target = "aarch64-apple-darwin")]
+fn unwind_fp(s: Session, f: Frame, level: int) -> Frame ! {no_caller} { unwind_arm64(s, f, level) }
 
 /// Unwind through the CFI rules of fde. The CFA of frame f is filled in.
 fn unwind_cfi(s: Session, f: Frame, fi: int, lookup: u64) -> Frame ! {no_caller} {
-    let r = cfi_rules(s.prog.data, s.cfi[fi], lookup - s.base)
+    let fdata = if s.cfi[fi].img { copy s.prog.img } else { copy s.prog.data }
+    let r = cfi_rules(fdata, s.cfi[fi], lookup - s.base)
+    let cols = platform.arch_cfi_cols()
+    let ra = platform.arch_ra_col()
+    let sp_col = platform.arch_sp_col()
     var cfa: u64 = 0
     if r.cfa_is_expr {
         let ctx = EvalCtx { regs: copy f.regs, frame_base: 0, has_frame_base: false, cfa: 0, has_cfa: false, base: s.base }
-        let l = expr_eval(s.prog.data, r.cfa_expr, ctx, s.target)
+        let l = expr_eval(fdata, r.cfa_expr, ctx, s.target)
         if l.kind != loc_memory { return no_caller }
         cfa = l.value
     } else {
-        if r.cfa_reg > 16 { return no_caller }
+        if r.cfa_reg >= cols { return no_caller }
         cfa = add_i(f.regs[r.cfa_reg], r.cfa_off)
     }
     var regs = copy f.regs
     var i = 0
-    var ra_known = false
-    while i < 17 {
+    // arm64's link register keeps its value in a leaf, so "same value" is a known return address there
+    var ra_known = platform.arch_cfi_cols() > 17
+    while i < cols {
         if r.kind[i] == rule_offset {
             let v = rd64(s.target, add_i(cfa, r.val[i])) else { return no_caller }
             regs[i] = v
-            if i == 16 { ra_known = true }
+            if i == ra { ra_known = true }
         } else if r.kind[i] == rule_val_offset {
             regs[i] = add_i(cfa, r.val[i])
         } else if r.kind[i] == rule_register {
             regs[i] = f.regs[r.val[i] as int]
         } else if r.kind[i] == rule_undefined {
-            if i == 16 { return no_caller }
+            if i == ra { return no_caller }
         }
         i += 1
     }
     if !ra_known { return no_caller }
-    regs[7] = cfa
-    Frame { pc: regs[16], cfa: cfa, regs: regs, func: -1, fallback: false, cfa_ok: true }
+    regs[sp_col] = cfa
+    regs[platform.arch_ncols() - 1] = regs[ra]
+    Frame { pc: regs[ra], cfa: cfa, regs: regs, func: -1, fallback: false, cfa_ok: true, basis: "cfi" }
 }
 
 /// Compute the stack of the stopped child. Stops after the frame of main
@@ -175,9 +186,9 @@ fn compute_frames(mut s: Session) {
     if !s.alive { return }
     let raw = platform.target_regs(s.target)
     let regs = dwarf_regs(raw)
-    if regs.len != 17 { return }
+    if regs.len != platform.arch_ncols() { return }
     if s.cfi.len == 0 { s.cfi = cfi_build(s.prog) }
-    var f = Frame { pc: regs[16], cfa: 0, regs: regs, func: -1, fallback: false, cfa_ok: false }
+    var f = Frame { pc: platform.arch_frame_pc(regs), cfa: 0, regs: regs, func: -1, fallback: false, cfa_ok: false, basis: "cfi" }
     let stop_at = main_addr(s.prog)
     var level = 0
     while level < 4096 {
@@ -190,17 +201,24 @@ fn compute_frames(mut s: Session) {
         var caller = copy f
         if fi >= 0 {
             f.fallback = false
+            f.basis = "cfi"
             caller = unwind_cfi(s, f, fi, lookup) else { next_ok = false; copy f }
         } else {
-            f.fallback = true
-            caller = unwind_fp(s, f) else { next_ok = false; copy f }
+            caller = unwind_fp(s, f, level) else { next_ok = false; copy f }
+            f.fallback = caller.fallback
+            f.basis = caller.basis
         }
         if next_ok { f.cfa = caller.cfa; f.cfa_ok = true }
         (mut s.frames).push(copy f)
         if stop_at != 0 && start == stop_at { return }
         if !next_ok { return }
         if caller.pc == 0 { return }
-        if caller.regs[7] <= f.regs[7] { return }
+        // the stack grows downward, so a caller's sp is above the callee's; at a function's first
+        // instruction on arm64 the CFA equals sp, so equality is allowed when the pc moved
+        let csp = caller.regs[platform.arch_sp_col()]
+        let fsp = f.regs[platform.arch_sp_col()]
+        if csp < fsp || (csp == fsp && caller.pc == f.pc) { return }
+        if csp == fsp && platform.arch_cfi_cols() == 17 { return }
         f = caller
         level += 1
     }
