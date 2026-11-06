@@ -1,0 +1,318 @@
+// The loaded program: sections, DIEs, line table, functions and symbols, as
+// the session needs them. Everything here is a view over one ELF file read
+// once; no process is involved. Addresses are file (unrelocated) addresses.
+
+use readers
+
+/// A compile unit's bases and names.
+pub struct Unit {
+    pub root: int,
+    pub end: int,
+    pub name: str,
+    pub comp_dir: str,
+    pub str_table: readers.DwarfIndexTable,
+    pub has_str_table: bool,
+    pub addr_base: u64,
+    pub has_addr_base: bool,
+    pub version: int,
+    pub address_size: int,
+    pub offset_size: int,
+    pub files_first: int,
+    pub files_count: int,
+}
+
+/// One line-table row, resolved to a global file index.
+pub struct LineEnt {
+    pub addr: u64,
+    pub file: int,
+    pub line: int,
+    pub stmt: bool,
+    pub prologue_end: bool,
+    pub end_seq: bool,
+}
+
+/// A subprogram with an address range.
+pub struct Func {
+    pub name: str,
+    pub low: u64,
+    pub high: u64,
+    pub file: int,
+    pub line: int,
+    pub die: int,
+    pub unit: int,
+}
+
+/// An ELF function symbol, for code that has no DWARF.
+pub struct Sym {
+    pub name: str,
+    pub addr: u64,
+    pub size: u64,
+}
+
+/// The loaded program.
+pub struct Prog {
+    pub err: str,
+    pub path: str,
+    pub data: List[byte],
+    pub secs: readers.DebugSections,
+    pub info: readers.DwarfInfo,
+    pub has_info: bool,
+    pub units: List[Unit],
+    pub files: List[str],
+    pub lines: List[LineEnt],
+    pub funcs: List[Func],
+    pub syms: List[Sym],
+    pub entry: u64,
+    pub pie: bool,
+}
+
+/// Bytes of a span as text; invalid UTF-8 yields the empty string.
+pub fn span_text(data: List[byte], span: readers.ByteSpan) -> str {
+    var bytes: List[byte] = []
+    var i: int = 0
+    while i < span.length { (mut bytes).push(data[span.start + i]); i += 1 }
+    str_from_utf8(bytes) else { "" }
+}
+
+fn empty_table() -> readers.DwarfIndexTable {
+    readers.DwarfIndexTable { start: 0, end: 0, version: 0, offset_size: 0, address_size: 0,
+        entry_size: 0, base: 0, entries_end: 0, payload_start: 0, count: 0, kind: 0 }
+}
+
+/// A failed load.
+pub fn prog_failed(why: str) -> Prog {
+    let none = readers.ByteSpan { start: 0, length: 0 }
+    let sec = readers.ObjectSection { span: readers.ByteSpan { start: 0, length: 0 }, address: 0, present: false }
+    Prog {
+        err: why, path: "", data: [],
+        secs: readers.DebugSections { format: 0, info: copy sec, abbrev: copy sec, line: copy sec, str: copy sec,
+            line_str: copy sec, str_offsets: copy sec, addr: copy sec, ranges: copy sec, rnglists: copy sec,
+            loc: copy sec, loclists: copy sec, frame: copy sec, eh_frame: copy sec, types: copy sec,
+            has_split_dwarf: false, has_compact_unwind: false },
+        info: readers.DwarfInfo { info: copy none, abbrev: copy none, units: [], entries: [], attributes: [],
+            tables: [], die_count: 0, abbreviation_tables_read: 0, fuel_remaining: 0 },
+        has_info: false, units: [], files: [], lines: [], funcs: [], syms: [], entry: 0, pie: false,
+    }
+}
+
+/// Index of the attribute on entry, or -1.
+pub fn attr_at(p: Prog, e: int, attribute: u64) -> int {
+    readers.dwarf_info_find(p.info, e, attribute)
+}
+
+fn is_string_form(form: u64) -> bool {
+    form == 8 || form == 14 || form == 31 || form == 26 || form >= 37 && form <= 40
+}
+
+/// A string attribute value through its form (inline, strp, line_strp, strx).
+pub fn value_text(p: Prog, ui: int, value: readers.DwarfValue) -> str {
+    let form = value.form
+    if form == 8 { return span_text(p.data, value.bytes) }
+    if form == 14 || form == 31 {
+        let section = if form == 14 { copy p.secs.str.span } else { copy p.secs.line_str.span }
+        if value.raw >= section.length as u64 { return "" }
+        var c = readers.cursor(section.start + value.raw as int, section.start + section.length, 10000000)
+        let span = readers.cstring(p.data, mut c) else { return "" }
+        return span_text(p.data, span)
+    }
+    if !is_string_form(form) { return "" }
+    if !p.units[ui].has_str_table { return "" }
+    var work = readers.cursor(0, 0, 100000)
+    let offset = readers.dwarf_index_raw(p.data, p.units[ui].str_table, value.raw, mut work) else { return "" }
+    let section = copy p.secs.str.span
+    if offset >= section.length as u64 { return "" }
+    var c = readers.cursor(section.start + offset as int, section.start + section.length, 10000000)
+    let span = readers.cstring(p.data, mut c) else { return "" }
+    span_text(p.data, span)
+}
+
+/// A string attribute of entry e, or "" when absent.
+pub fn attr_text(p: Prog, ui: int, e: int, attribute: u64) -> str {
+    let at = attr_at(p, e, attribute)
+    if at < 0 { return "" }
+    value_text(p, ui, p.info.attributes[at].value)
+}
+
+/// An address-class value: addr, or addrx through .debug_addr.
+pub fn value_addr(p: Prog, ui: int, value: readers.DwarfValue) -> u64 {
+    if value.form == 1 { return value.raw }
+    if !p.units[ui].has_addr_base { return 0 }
+    var work = readers.cursor(0, 0, 100000)
+    let a = readers.dwarf_index_address(p.data, p.secs.addr.span, p.units[ui].addr_base,
+        value.raw, p.units[ui].offset_size, p.units[ui].address_size, mut work) else { return 0 }
+    a
+}
+
+/// A constant attribute (data forms), or the default when absent.
+pub fn attr_uint(p: Prog, e: int, attribute: u64, absent: u64) -> u64 {
+    let at = attr_at(p, e, attribute)
+    if at < 0 { return absent }
+    p.info.attributes[at].value.raw
+}
+
+/// The entry an attribute of e refers to, or -1.
+pub fn attr_ref(p: Prog, e: int, attribute: u64) -> int {
+    let at = attr_at(p, e, attribute)
+    if at < 0 { return -1 }
+    var fuel: int = 1000
+    let t = readers.dwarf_info_target(p.info, e, p.info.attributes[at].value, mut fuel) else { return -1 }
+    t
+}
+
+/// The unit index owning entry e.
+pub fn unit_of(p: Prog, e: int) -> int {
+    p.info.entries[e].unit
+}
+
+fn join_path(dir: str, name: str) -> str {
+    if name.starts_with("/") || dir.len() == 0 { return name }
+    if dir.ends_with("/") { return "{dir}{name}" }
+    "{dir}/{name}"
+}
+
+fn line_file_name(data: List[byte], t: readers.DwarfLineTable, u: Unit, index: int) -> str {
+    // DWARF 5 numbers files from 0; DWARF 4 from 1 (0 means the CU itself).
+    var k = index
+    if t.version < 5 { k = index - 1 }
+    if k < 0 || k >= t.files.len { return u.name }
+    let entry = copy t.files[k]
+    let name = span_text(data, entry.name)
+    var dir = ""
+    let d = entry.directory_index as int
+    if t.version >= 5 {
+        if d > 0 && d < t.directories.len { dir = span_text(data, t.directories[d].name) }
+        if d == 0 { return join_path(u.comp_dir, name) }
+    } else {
+        if d == 0 { return join_path(u.comp_dir, name) }
+        if d - 1 < t.directories.len { dir = span_text(data, t.directories[d - 1].name) }
+    }
+    if !dir.starts_with("/") { dir = join_path(u.comp_dir, dir) }
+    join_path(dir, name)
+}
+
+fn intern_file(mut files: List[str], name: str) -> int {
+    var i: int = 0
+    while i < files.len {
+        if files[i] == name { return i }
+        i += 1
+    }
+    (mut files).push(name)
+    files.len - 1
+}
+
+fn unit_bases(data: List[byte], p: Prog, ui: int, root: int) -> Unit {
+    let header = copy p.info.units[ui].header
+    var u = Unit {
+        root: root, end: p.info.units[ui].end_entry, name: "", comp_dir: "", str_table: empty_table(),
+        has_str_table: false, addr_base: 0, has_addr_base: false, version: header.version,
+        address_size: header.address_size, offset_size: header.offset_size, files_first: 0, files_count: 0,
+    }
+    let sb = attr_at(p, root, 114)
+    if sb >= 0 {
+        var work = readers.cursor(0, 0, 10000000)
+        let t = readers.dwarf_index_find(data, p.secs.str_offsets.span, p.info.attributes[sb].value.raw,
+            readers.dwarf_index_str_offsets, header.offset_size, 0, mut work) else { return u }
+        u.str_table = t
+        u.has_str_table = true
+    }
+    let ab = attr_at(p, root, 115)
+    if ab >= 0 { u.addr_base = p.info.attributes[ab].value.raw; u.has_addr_base = true }
+    u
+}
+
+fn sym_name_less(a: Sym, b: Sym) -> bool { a.addr < b.addr }
+
+/// Read the ELF file at path and build the session's view of it. A program
+/// without DWARF loads with has_info false; symbols still work.
+pub fn prog_load(path: str) -> Prog {
+    let size = fs_size(path) else |err| { return prog_failed("cannot read {path}: {err}") }
+    if size > 268435456 { return prog_failed("{path} is too large") }
+    let data = fs_read_bytes(path) else |err| { return prog_failed("cannot read {path}: {err}") }
+    let elf = readers.elf_read(data, 131072, 1048576, 100000000) else |err| {
+        return prog_failed("{path}: not in executable format: {err}")
+    }
+    var p = prog_failed("")
+    p.path = path
+    p.data = copy data
+    p.entry = elf.entry
+    p.pie = elf.file_type == 3
+    // function symbols
+    var i: int = 0
+    while i < elf.symbols.len {
+        let s = copy elf.symbols[i]
+        if (s.info & 15) == 2 && s.value != 0 && s.section_index != 0 {
+            (mut p.syms).push(Sym { name: span_text(data, s.name), addr: s.value, size: s.size })
+        }
+        i += 1
+    }
+    let secs = readers.object_sections(data) else |err| { return p }
+    p.secs = copy secs
+    if !secs.info.present || secs.info.span.length == 0 { return p }
+    let info = readers.dwarf_info_read(data, secs.info.span, secs.abbrev.span, readers.dwarf_info_limits()) else |err| {
+        p.err = "dwarf: {err}"
+        return p
+    }
+    p.info = copy info
+    p.has_info = true
+    var ui: int = 0
+    while ui < p.info.units.len {
+        let root = p.info.units[ui].first_entry
+        if root >= p.info.units[ui].end_entry || p.info.entries[root].is_null {
+            (mut p.units).push(unit_bases(data, p, ui, root))
+        } else {
+            var u = unit_bases(data, p, ui, root)
+            (mut p.units).push(copy u)
+            u.name = attr_text(p, ui, root, 3)
+            u.comp_dir = attr_text(p, ui, root, 27)
+            p.units[ui] = copy u
+            let sl = attr_at(p, root, 16)
+            if sl >= 0 {
+                let offset = p.info.attributes[sl].value.raw
+                if offset < secs.line.span.length as u64 {
+                    let start = secs.line.span.start + offset as int
+                    let span = readers.ByteSpan { start: start, length: secs.line.span.start + secs.line.span.length - start }
+                    let table = readers.dwarf_line_read(data, span, u.address_size, secs.str.span, secs.line_str.span,
+                        100000000, 1048576) else |err| {
+                        p.err = "line table: {err}"
+                        return p
+                    }
+                    var r: int = 0
+                    while r < table.rows.len {
+                        let row = copy table.rows[r]
+                        let fname = line_file_name(data, table, p.units[ui], row.file as int)
+                        let fi = intern_file(mut p.files, fname)
+                        (mut p.lines).push(LineEnt { addr: row.address, file: fi, line: row.line as int,
+                            stmt: row.is_stmt, prologue_end: row.prologue_end, end_seq: row.end_sequence })
+                        r += 1
+                    }
+                }
+            }
+        }
+        ui += 1
+    }
+    // subprograms with ranges
+    var e: int = 0
+    while e < p.info.entries.len {
+        if !p.info.entries[e].is_null && p.info.entries[e].tag == 46 {
+            let lo = attr_at(p, e, 17)
+            let hi = attr_at(p, e, 18)
+            if lo >= 0 && hi >= 0 {
+                let un = p.info.entries[e].unit
+                let low = value_addr(p, un, p.info.attributes[lo].value)
+                let hv = copy p.info.attributes[hi].value
+                var high = hv.raw
+                if hv.form != 1 && hv.form != 27 && !(hv.form >= 41 && hv.form <= 44) { high = low + hv.raw }
+                else { high = value_addr(p, un, hv) }
+                var name = attr_text(p, un, e, 3)
+                var file = -1
+                let df = attr_uint(p, e, 58, 0)
+                let line = attr_uint(p, e, 59, 0) as int
+                if name.len() > 0 {
+                    (mut p.funcs).push(Func { name: name, low: low, high: high, file: file, line: line, die: e, unit: un })
+                }
+            }
+        }
+        e += 1
+    }
+    p
+}

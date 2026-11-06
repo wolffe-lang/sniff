@@ -1,0 +1,153 @@
+{
+ "schema": 1,
+ "rows": [
+  {
+   "name": "inferior-c-gcc-exit0",
+   "prog": "c/exits/gcc-O0/prog",
+   "script": [
+    "run"
+   ]
+  },
+  {
+   "name": "inferior-c-gcc-exit3",
+   "prog": "c/exits/gcc-O0/prog",
+   "script": [
+    "run 3"
+   ]
+  },
+  {
+   "name": "inferior-c-gcc-exit255",
+   "prog": "c/exits/gcc-O0/prog",
+   "script": [
+    "run 255"
+   ]
+  },
+  {
+   "name": "inferior-c-gcc-exit-callee",
+   "prog": "c/exits/gcc-O0/prog",
+   "script": [
+    "run x 7"
+   ]
+  },
+  {
+   "name": "inferior-c-gcc-segv",
+   "prog": "c/exits/gcc-O0/prog",
+   "script": [
+    "run fault",
+    "bt",
+    "continue",
+    "info registers rip"
+   ]
+  },
+  {
+   "name": "inferior-c-gcc-rerun",
+   "prog": "c/exits/gcc-O0/prog",
+   "script": [
+    "run 2",
+    "run 5"
+   ]
+  },
+  {
+   "name": "inferior-c-gcc-norun-refusals",
+   "prog": "c/exits/gcc-O0/prog",
+   "script": [
+    "continue"
+   ]
+  },
+  {
+   "name": "inferior-c-gcc-norun-kill",
+   "prog": "c/exits/gcc-O0/prog",
+   "script": [
+    "kill"
+   ]
+  },
+  {
+   "name": "inferior-c-clang-exit0",
+   "prog": "c/exits/clang-O0/prog",
+   "script": [
+    "run"
+   ]
+  },
+  {
+   "name": "inferior-c-clang-exit3",
+   "prog": "c/exits/clang-O0/prog",
+   "script": [
+    "run 3"
+   ]
+  },
+  {
+   "name": "inferior-c-clang-exit255",
+   "prog": "c/exits/clang-O0/prog",
+   "script": [
+    "run 255"
+   ]
+  },
+  {
+   "name": "inferior-c-clang-exit-callee",
+   "prog": "c/exits/clang-O0/prog",
+   "script": [
+    "run x 7"
+   ]
+  },
+  {
+   "name": "inferior-c-clang-segv",
+   "prog": "c/exits/clang-O0/prog",
+   "script": [
+    "run fault",
+    "bt",
+    "continue",
+    "info registers rip"
+   ]
+  },
+  {
+   "name": "inferior-c-clang-rerun",
+   "prog": "c/exits/clang-O0/prog",
+   "script": [
+    "run 2",
+    "run 5"
+   ]
+  },
+  {
+   "name": "inferior-c-clang-norun-refusals",
+   "prog": "c/exits/clang-O0/prog",
+   "script": [
+    "continue"
+   ]
+  },
+  {
+   "name": "inferior-c-clang-norun-kill",
+   "prog": "c/exits/clang-O0/prog",
+   "script": [
+    "kill"
+   ]
+  },
+  {
+   "name": "inferior-wolf-exit0",
+   "prog": "wolf/exits/wolf-debug/prog",
+   "script": [
+    "run"
+   ]
+  },
+  {
+   "name": "inferior-wolf-exit3",
+   "prog": "wolf/exits/wolf-debug/prog",
+   "script": [
+    "run 3"
+   ]
+  },
+  {
+   "name": "inferior-wolf-exit255",
+   "prog": "wolf/exits/wolf-debug/prog",
+   "script": [
+    "run 255"
+   ]
+  },
+  {
+   "name": "inferior-wolf-kill-signal",
+   "prog": "wolf/exits/wolf-debug/prog",
+   "script": [
+    "run kill"
+   ]
+  }
+ ]
+}
