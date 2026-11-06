@@ -42,7 +42,7 @@ fn line_entry(mut o: Out, data: List[byte], e: readers.DwarfLineEntry, version: 
 
 fn line_row(mut o: Out, r: readers.DwarfLineRow) {
     let address = hex16(r.address)
-    put(mut o, "0x{address} {r.line:>6} {r.column:>6} {r.file:>6} {r.isa:>3} {r.discriminator:>13} {r.op_index:>7} ")
+    put(mut o, "0x{address} {r.line:>6} {r.column:>6} {r.file:>6} {r.isa:>3} {r.op_index:>13} {r.op_index:>7} ")
     if r.is_stmt { put(mut o, " is_stmt") }
     if r.basic_block { put(mut o, " basic_block") }
     if r.prologue_end { put(mut o, " prologue_end") }
