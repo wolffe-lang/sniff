@@ -50,6 +50,12 @@ step sniff-build "$wolf" build src/main.lu --no-cache -o "$root/target/sniff"
 compilers=(clang)
 [ "$mode" != linux ] || compilers+=(gcc)
 step fixture-builds python3 -I tools/build-fixtures.py --wolf "$wolf" --out "$root/target/fixtures" --compilers "${compilers[@]}"
+if [ "$mode" = linux ]; then
+  seeds=(--seed target/fixtures/c/inlining/gcc-O2/prog --seed target/fixtures/c/threads/clang-O2/prog)
+else
+  seeds=(--seed target/fixtures/c/threads/clang-O2/prog.dSYM/Contents/Resources/DWARF/prog --seed target/fixtures/c/threads/clang-O2/prog)
+fi
+step hostile-inputs python3 -I tools/test-hostile.py --sniff "$root/target/sniff" "${seeds[@]}" --out "$root/target/hostile"
 step dump-matrix python3 -I tools/dump-matrix.py --sniff "$root/target/sniff" --platform "$mode" --fixtures "$root/target/fixtures"
 if [ "$mode" = macos ]; then
   dwarfdump=$(xcrun --find llvm-dwarfdump)
