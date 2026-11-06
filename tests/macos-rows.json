@@ -1,0 +1,629 @@
+{
+ "schema": 1,
+ "rows": [
+  {
+   "name": "inferior-c-clang-exit0",
+   "kind": "linux"
+  },
+  {
+   "name": "inferior-c-clang-exit3",
+   "kind": "linux"
+  },
+  {
+   "name": "inferior-c-clang-exit255",
+   "kind": "linux"
+  },
+  {
+   "name": "inferior-c-clang-exit-callee",
+   "kind": "linux"
+  },
+  {
+   "name": "inferior-c-clang-segv",
+   "kind": "linux"
+  },
+  {
+   "name": "inferior-c-clang-rerun",
+   "kind": "linux"
+  },
+  {
+   "name": "inferior-c-clang-norun-refusals",
+   "kind": "linux"
+  },
+  {
+   "name": "inferior-c-clang-norun-kill",
+   "kind": "linux"
+  },
+  {
+   "name": "inferior-wolf-exit0",
+   "kind": "linux"
+  },
+  {
+   "name": "inferior-wolf-exit3",
+   "kind": "linux"
+  },
+  {
+   "name": "inferior-wolf-exit255",
+   "kind": "linux"
+  },
+  {
+   "name": "inferior-wolf-kill-signal",
+   "kind": "linux"
+  },
+  {
+   "name": "bp-clang-func-line-addr",
+   "kind": "linux"
+  },
+  {
+   "name": "bp-clang-main-and-delete",
+   "kind": "linux"
+  },
+  {
+   "name": "bp-clang-same-address",
+   "kind": "linux"
+  },
+  {
+   "name": "bp-clang-hits3",
+   "kind": "linux"
+  },
+  {
+   "name": "bp-clang-delete-current",
+   "kind": "linux"
+  },
+  {
+   "name": "bp-clang-tbreak",
+   "kind": "linux"
+  },
+  {
+   "name": "bp-clang-current-pc",
+   "kind": "linux"
+  },
+  {
+   "name": "bp-clang-bad-locations",
+   "kind": "linux"
+  },
+  {
+   "name": "bp-clang-bad-line",
+   "kind": "linux"
+  },
+  {
+   "name": "bp-clang-bad-file",
+   "kind": "linux"
+  },
+  {
+   "name": "bp-clang-bad-delete",
+   "kind": "linux"
+  },
+  {
+   "name": "bp-clang-info-empty",
+   "kind": "linux"
+  },
+  {
+   "name": "bp-clang-unmapped",
+   "kind": "linux"
+  },
+  {
+   "name": "step-clang-calls",
+   "kind": "linux"
+  },
+  {
+   "name": "step-clang-off-main-step",
+   "kind": "linux"
+  },
+  {
+   "name": "step-clang-off-main-next",
+   "kind": "linux"
+  },
+  {
+   "name": "step-clang-into-plain",
+   "kind": "linux"
+  },
+  {
+   "name": "step-clang-recursion-next",
+   "kind": "linux"
+  },
+  {
+   "name": "step-clang-until-recursion",
+   "kind": "linux"
+  },
+  {
+   "name": "step-clang-finish-main",
+   "kind": "linux"
+  },
+  {
+   "name": "step-clang-finish-types",
+   "kind": "linux"
+  },
+  {
+   "name": "step-clang-stepi",
+   "kind": "linux"
+  },
+  {
+   "name": "step-clang-noproc",
+   "kind": "linux"
+  },
+  {
+   "name": "frame-clang-bt-up-down",
+   "kind": "linux"
+  },
+  {
+   "name": "frame-clang-frame-errors",
+   "kind": "linux"
+  },
+  {
+   "name": "frame-clang-down-bottom",
+   "kind": "linux"
+  },
+  {
+   "name": "frame-clang-bt-noproc",
+   "kind": "linux"
+  },
+  {
+   "name": "frame-clang-fault",
+   "kind": "linux"
+  },
+  {
+   "name": "frame-clang-leave",
+   "kind": "linux"
+  },
+  {
+   "name": "value-clang-args-locals",
+   "kind": "linux"
+  },
+  {
+   "name": "value-clang-print",
+   "kind": "linux"
+  },
+  {
+   "name": "value-clang-main-locals",
+   "kind": "linux"
+  },
+  {
+   "name": "value-clang-x",
+   "kind": "linux"
+  },
+  {
+   "name": "value-clang-registers",
+   "kind": "linux"
+  },
+  {
+   "name": "value-clang-noproc",
+   "kind": "linux"
+  },
+  {
+   "name": "odd-clang-signals",
+   "kind": "linux"
+  },
+  {
+   "name": "odd-clang-forks",
+   "kind": "linux"
+  },
+  {
+   "name": "odd-clang-stripped",
+   "kind": "linux"
+  },
+  {
+   "name": "wolf-scalars",
+   "kind": "linux"
+  },
+  {
+   "name": "wolf-nested",
+   "kind": "linux"
+  },
+  {
+   "name": "wolf-loops",
+   "kind": "linux"
+  },
+  {
+   "name": "wolf-recursion",
+   "kind": "linux"
+  },
+  {
+   "name": "wolf-recursion-next",
+   "kind": "linux"
+  },
+  {
+   "name": "wolf-hits-tbreak",
+   "kind": "linux"
+  },
+  {
+   "name": "wolf-exits-code",
+   "kind": "linux"
+  },
+  {
+   "name": "wolf-shared-name",
+   "kind": "linux"
+  },
+  {
+   "name": "wolf-start-stepi",
+   "kind": "linux"
+  },
+  {
+   "name": "wolf-types",
+   "kind": "linux"
+  },
+  {
+   "name": "bp-clang-line-function-start",
+   "kind": "linux"
+  },
+  {
+   "name": "odd-clang-stripped-addr",
+   "kind": "linux"
+  },
+  {
+   "name": "bp-clang-ignore",
+   "kind": "linux"
+  },
+  {
+   "name": "odd-clang-die-mid-step",
+   "kind": "linux"
+  },
+  {
+   "name": "odd-clang-signal-continue",
+   "kind": "linux"
+  },
+  {
+   "name": "bp-wolf-ignore",
+   "kind": "linux"
+  },
+  {
+   "name": "noproc-frame",
+   "kind": "linux"
+  },
+  {
+   "name": "noproc-frame-1",
+   "kind": "linux"
+  },
+  {
+   "name": "noproc-up",
+   "kind": "linux"
+  },
+  {
+   "name": "noproc-down",
+   "kind": "linux"
+  },
+  {
+   "name": "noproc-info-registers",
+   "kind": "linux"
+  },
+  {
+   "name": "noproc-info-args",
+   "kind": "linux"
+  },
+  {
+   "name": "noproc-x4xw-sp",
+   "kind": "linux"
+  },
+  {
+   "name": "noproc-print-1",
+   "kind": "linux"
+  },
+  {
+   "name": "noproc-print-pc",
+   "kind": "linux"
+  },
+  {
+   "name": "noproc-finish",
+   "kind": "linux"
+  },
+  {
+   "name": "noproc-next",
+   "kind": "linux"
+  },
+  {
+   "name": "noproc-stepi",
+   "kind": "linux"
+  },
+  {
+   "name": "noproc-continue",
+   "kind": "linux"
+  },
+  {
+   "name": "noproc-until",
+   "kind": "linux"
+  },
+  {
+   "name": "noproc-output-5",
+   "kind": "linux"
+  },
+  {
+   "name": "noproc-echo-hellon",
+   "kind": "linux"
+  },
+  {
+   "name": "noproc-info-locals",
+   "kind": "linux"
+  },
+  {
+   "name": "noproc-delete-1",
+   "kind": "linux"
+  },
+  {
+   "name": "wolf-break-main-two-locations",
+   "kind": "linux"
+  },
+  {
+   "name": "lldb-break-hits",
+   "kind": "lldb",
+   "prog": "c/hits/clang-O0/prog",
+   "script": [
+    "break tick",
+    "break main.c:12",
+    "info breakpoints",
+    "run",
+    "frame",
+    "bt",
+    "continue",
+    "frame",
+    "finish",
+    "frame",
+    "next",
+    "frame",
+    "step",
+    "frame",
+    "kill"
+   ],
+   "lldb": [
+    "breakpoint set -n tick",
+    "breakpoint set -f main.c -l 12",
+    "run",
+    "frame info",
+    "bt",
+    "continue",
+    "frame info",
+    "finish",
+    "frame info",
+    "next",
+    "frame info",
+    "step",
+    "frame info",
+    "process kill"
+   ]
+  },
+  {
+   "name": "lldb-break-locations",
+   "kind": "lldb",
+   "prog": "c/calls/clang-O0/prog",
+   "script": [
+    "break depth_sum",
+    "break main.c:13",
+    "break main.c:22",
+    "break count"
+   ],
+   "lldb": [
+    "breakpoint set -n depth_sum",
+    "breakpoint set -f main.c -l 13",
+    "breakpoint set -f main.c -l 22",
+    "breakpoint set -n count"
+   ]
+  },
+  {
+   "name": "lldb-recursion-bt",
+   "kind": "lldb",
+   "prog": "c/calls/clang-O0/prog",
+   "script": [
+    "break depth_sum",
+    "run",
+    "continue",
+    "continue",
+    "continue",
+    "bt",
+    "up",
+    "frame",
+    "kill"
+   ],
+   "lldb": [
+    "breakpoint set -n depth_sum",
+    "run",
+    "continue",
+    "continue",
+    "continue",
+    "bt",
+    "up",
+    "frame info",
+    "process kill"
+   ]
+  },
+  {
+   "name": "lldb-step-calls",
+   "kind": "lldb",
+   "prog": "c/calls/clang-O0/prog",
+   "script": [
+    "break main",
+    "run",
+    "frame",
+    "step",
+    "frame",
+    "step",
+    "frame",
+    "next",
+    "frame",
+    "next",
+    "frame",
+    "step",
+    "frame",
+    "finish",
+    "frame",
+    "kill"
+   ],
+   "lldb": [
+    "breakpoint set -n main",
+    "run",
+    "frame info",
+    "step",
+    "frame info",
+    "step",
+    "frame info",
+    "next",
+    "frame info",
+    "next",
+    "frame info",
+    "step",
+    "frame info",
+    "finish",
+    "frame info",
+    "process kill"
+   ]
+  },
+  {
+   "name": "lldb-finish-values",
+   "kind": "lldb",
+   "prog": "c/values/clang-O0/prog",
+   "script": [
+    "break widen",
+    "break all_ones",
+    "break tenth",
+    "run",
+    "finish",
+    "continue",
+    "finish",
+    "continue",
+    "finish",
+    "kill"
+   ],
+   "lldb": [
+    "breakpoint set -n widen",
+    "breakpoint set -n all_ones",
+    "breakpoint set -n tenth",
+    "run",
+    "finish",
+    "continue",
+    "finish",
+    "continue",
+    "finish",
+    "process kill"
+   ]
+  },
+  {
+   "name": "lldb-print-ints",
+   "kind": "lldb",
+   "prog": "c/values/clang-O0/prog",
+   "script": [
+    "break inspect",
+    "run",
+    "print i",
+    "print l",
+    "print u",
+    "print ul",
+    "print c",
+    "print s",
+    "kill"
+   ],
+   "lldb": [
+    "breakpoint set -n inspect",
+    "run",
+    "print i",
+    "print l",
+    "print u",
+    "print ul",
+    "print c",
+    "print s",
+    "process kill"
+   ]
+  },
+  {
+   "name": "lldb-exit-codes",
+   "kind": "lldb",
+   "prog": "c/exits/clang-O0/prog",
+   "script": [
+    "run 3"
+   ],
+   "lldb": [
+    "run 3"
+   ]
+  },
+  {
+   "name": "lldb-exit-callee",
+   "kind": "lldb",
+   "prog": "c/exits/clang-O0/prog",
+   "script": [
+    "break code",
+    "run x 7",
+    "bt",
+    "continue"
+   ],
+   "lldb": [
+    "breakpoint set -n code",
+    "run x 7",
+    "bt",
+    "continue"
+   ]
+  },
+  {
+   "name": "lldb-fault",
+   "kind": "lldb",
+   "prog": "c/exits/clang-O0/prog",
+   "script": [
+    "run fault",
+    "bt",
+    "continue"
+   ],
+   "lldb": [
+    "run fault",
+    "bt",
+    "continue"
+   ]
+  },
+  {
+   "name": "lldb-own-trap",
+   "kind": "lldb",
+   "prog": "c/signals/clang-O0/prog",
+   "script": [
+    "run",
+    "bt",
+    "continue"
+   ],
+   "lldb": [
+    "run",
+    "bt",
+    "continue"
+   ]
+  },
+  {
+   "name": "lldb-wolf-recursion",
+   "kind": "lldb",
+   "prog": "wolf/recursion/wolf-debug/prog",
+   "script": [
+    "break depth",
+    "run",
+    "continue",
+    "continue",
+    "bt",
+    "kill"
+   ],
+   "lldb": [
+    "breakpoint set -n depth",
+    "run",
+    "continue",
+    "continue",
+    "bt",
+    "process kill"
+   ]
+  },
+  {
+   "name": "lldb-wolf-scalars",
+   "kind": "lldb",
+   "prog": "wolf/scalars/wolf-debug/prog",
+   "script": [
+    "break helper",
+    "run",
+    "frame",
+    "next",
+    "frame",
+    "finish",
+    "frame",
+    "kill"
+   ],
+   "lldb": [
+    "breakpoint set -n helper",
+    "run",
+    "frame info",
+    "next",
+    "frame info",
+    "finish",
+    "frame info",
+    "process kill"
+   ]
+  }
+ ],
+ "excluded": {}
+}
