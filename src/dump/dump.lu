@@ -13,7 +13,8 @@ fn dump_format(s: readers.DebugSections) -> str {
 
 /// The modes this build renders, in the oracle's spelling.
 pub fn dump_mode_known(mode: str) -> bool {
-    mode == "--debug-line" || mode == "--debug-abbrev"
+    mode == "--debug-line" || mode == "--debug-abbrev" || mode == "--debug-addr" ||
+        mode == "--debug-str-offsets"
 }
 
 /// Render one mode for the file at path. The caller owns flushing and status.
@@ -26,4 +27,6 @@ pub fn dump_file(mut o: Out, path: str, data: List[byte], mode: str) -> () ! Dum
     let n = names_new()
     if mode == "--debug-line" { dump_line(mut o, data, s)? }
     if mode == "--debug-abbrev" { dump_abbrev(mut o, n, data, s)? }
+    if mode == "--debug-addr" { dump_addr(mut o, data, s)? }
+    if mode == "--debug-str-offsets" { dump_str_offsets(mut o, data, s)? }
 }

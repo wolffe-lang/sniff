@@ -1,0 +1,64 @@
+// --debug-addr and --debug-str-offsets: DWARF 5 sections 7.27 and 7.26,
+// every contribution in section order through readers.dwarf_index_header.
+
+use readers
+
+fn index_format(offset_size: int) -> str {
+    if offset_size == 8 { return "DWARF64" }
+    "DWARF32"
+}
+
+fn index_length(t: readers.DwarfIndexTable) -> u64 {
+    // unit_length counts everything after its own encoding.
+    let header = if t.offset_size == 8 { 12 } else { 4 }
+    (t.end - t.start - header) as u64
+}
+
+pub fn dump_addr(mut o: Out, data: List[byte], s: readers.DebugSections) -> () ! DumpError {
+    line(mut o, ".debug_addr contents:")
+    let start = s.addr.span.start
+    var c = readers.cursor(start, start + s.addr.span.length, 100000000)
+    while c.pos < c.end {
+        let t = readers.dwarf_index_header(data, mut c, readers.dwarf_index_addr)?
+        let length = index_length(t)
+        put(mut o, "Address table header: length = {hex_offset(length, t.offset_size)}, ")
+        put(mut o, "format = {index_format(t.offset_size)}, version = 0x{hex4(t.version as u64)}, ")
+        line(mut o, "addr_size = 0x{hex2(t.address_size as u64)}, seg_size = 0x00")
+        line(mut o, "Addrs: [")
+        var i: int = 0
+        while i < t.count {
+            var work = readers.cursor(0, 0, 1000)
+            let value = readers.dwarf_index_raw(data, t, i as u64, mut work)?
+            line(mut o, hex_address(value, t.address_size))
+            i += 1
+        }
+        line(mut o, "]")
+    }
+}
+
+pub fn dump_str_offsets(mut o: Out, data: List[byte], s: readers.DebugSections) -> () ! DumpError {
+    line(mut o, ".debug_str_offsets contents:")
+    let start = s.str_offsets.span.start
+    var c = readers.cursor(start, start + s.str_offsets.span.length, 100000000)
+    while c.pos < c.end {
+        let t = readers.dwarf_index_header(data, mut c, readers.dwarf_index_str_offsets)?
+        let at = (t.start - start) as u64
+        let length = index_length(t)
+        line(mut o, "0x{hex8(at)}: Contribution size = {length}, Format = {index_format(t.offset_size)}, Version = {t.version}")
+        var i: int = 0
+        while i < t.count {
+            var work = readers.cursor(0, 0, 1000)
+            let value = readers.dwarf_index_raw(data, t, i as u64, mut work)?
+            let entry = (t.base + i * t.entry_size - start) as u64
+            let shown = if t.offset_size == 8 { hex16(value) } else { hex8(value) }
+            put(mut o, "0x{hex8(entry)}: {shown} \"")
+            if value < s.str.span.length as u64 {
+                var text = readers.cursor(s.str.span.start + value as int, s.str.span.start + s.str.span.length, 100000000)
+                let span = readers.cstring(data, mut text)?
+                put_escaped(mut o, data, span)
+            }
+            line(mut o, "\"")
+            i += 1
+        }
+    }
+}
