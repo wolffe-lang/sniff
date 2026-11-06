@@ -82,5 +82,7 @@ if [ "$mode" = linux ]; then
   step session-unwind-basis python3 -I tools/session-unwind.py --sniff "$root/target/sniff"
   step session-perf python3 -I tools/session-perf.py --sniff "$root/target/sniff"
 else
-  echo 'SKIP session-live reason=linux-only (S2 runs a Linux process; S3 supplies the macOS backend)'
+  # S3: the macOS arm64 backend. The rows need a task port and, for the oracle rows, the pinned lldb.
+  step session-fixtures python3 -I tools/build-session.py --wolf "$wolf" --out "$root/target/session-fixtures"
+  step platform-live bash -c "'$wolf' build src/live_platform.lu --no-cache -o '$root/target/live_platform' && '$root/target/live_platform' '$root/target/session-fixtures/c/exits/clang-O0/prog'"
 fi

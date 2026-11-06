@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Build the S2 session fixtures at fixed absolute paths, recording digests.
 
+On macOS arm64 (S3) only clang builds: each C program gets a dSYM from dsymutil
+and is ad-hoc signed with get-task-allow, and so is each wolf program (its dSYM
+is paired by UUID, which signing leaves alone).
+
 Session fixtures are separate from the S1 reader corpus (fixtures/c, wolf):
 the dump matrix and census never see them. C programs are built by each
 named compiler at -O0 with DWARF 5 and no prefix maps, so a debugger finds
@@ -31,6 +35,11 @@ def run(command, env, cwd):
     subprocess.run(list(map(str, command)), cwd=cwd, env=env, check=True, timeout=180)
 
 
+def mac_sign(exe, env):
+    """Ad-hoc sign with get-task-allow so the debugger can get the task port."""
+    run(['codesign', '--force', '--sign', '-', '--entitlements', ROOT / 'tests/get-task-allow.plist', exe], env, ROOT)
+
+
 def c_build(cc, source_dir, out, env, strip):
     out.mkdir(parents=True, exist_ok=True)
     objects = []
@@ -40,7 +49,14 @@ def c_build(cc, source_dir, out, env, strip):
         run([cc, *debug, '-O0', '-c', source, '-o', obj], env, source_dir)
         objects.append(obj)
     exe = out / 'prog'
-    run([cc, *(['-s'] if strip else []), *objects, '-o', exe], env, source_dir)
+    mac = platform.system() == 'Darwin'
+    run([cc, *(['-s'] if strip and not mac else []), *objects, '-o', exe], env, source_dir)
+    if mac:
+        if not strip:
+            run(['dsymutil', exe, '-o', str(exe) + '.dSYM'], env, source_dir)
+        else:
+            run(['strip', '-x', exe], env, source_dir)
+        mac_sign(exe, env)
     return exe
 
 
@@ -50,8 +66,11 @@ def main():
     p.add_argument('--out', required=True, type=Path)
     p.add_argument('--compilers', nargs='+', default=['gcc', 'clang'])
     args = p.parse_args()
-    if platform.system() != 'Linux':
-        raise SystemExit('FAIL session-fixtures: S2 session fixtures are Linux x86-64 only')
+    mac = platform.system() == 'Darwin'
+    if platform.system() not in ('Linux', 'Darwin'):
+        raise SystemExit('FAIL session-fixtures: session fixtures build on Linux x86-64 and macOS arm64')
+    if mac:
+        args.compilers = ['clang']
     args.wolf = args.wolf.resolve()
     out = args.out.resolve()
     if out.exists(): shutil.rmtree(out)
@@ -75,6 +94,8 @@ def main():
         directory.mkdir(parents=True, exist_ok=True)
         exe = directory / 'prog'
         run([args.wolf, 'build', source, '--no-cache', '-o', exe], env, source.parent)
+        if mac:
+            mac_sign(exe, env)
         rows.append({'id': ident, 'producer': 'wolf', 'source': str(source.relative_to(ROOT)),
                      'binary': str(exe.relative_to(out)), 'sha256': sha(exe)})
     (out / 'builds.json').write_text(json.dumps({'schema': 1, 'versions': versions, 'fixtures': rows}, indent=2) + '\n')

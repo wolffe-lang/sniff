@@ -1,5 +1,6 @@
 //! member: false
-// Live platform rows: a traced child, run on Linux x86-64 only.
+// Live platform rows: a traced child, run on the hosts that have a process
+// backend (Linux x86-64 and macOS arm64).
 //   live_platform PROG-EXIT3
 use platform
 
@@ -7,12 +8,12 @@ fn main() -> int {
     let args = env_args()
     let t = platform.target_spawn(args[0], ["3"], "", "")
     assert(t.pid > 0)
-    print("PASS platform-spawn-stops-at-exec")
+    print("PASS platform-spawn-stops-at-start")
     let regs = platform.target_regs(t)
-    assert(regs.len == 27)
-    let rip = regs[platform.reg_rip]
-    assert(rip != 0)
-    let word = platform.target_read(t, rip, 8)
+    assert(regs.len == platform.arch_nregs())
+    let pc = regs[platform.arch_pc_slot()]
+    assert(pc != 0)
+    let word = platform.target_read(t, pc, 4)
     assert(word.ok)
     print("PASS platform-regs-and-memory")
     let bad = platform.target_read(t, 16, 8)
