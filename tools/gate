@@ -46,9 +46,11 @@ step toolchain "${fetch[@]}"
 wolf=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["tools"]["wolf"]["root"]+"/wolf")' "$stage/manifest.json")
 lupin=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["tools"]["lupin"]["root"]+"/lupin")' "$stage/manifest.json")
 step reader-unit python3 -I tools/test-readers.py --wolf "$wolf"
+step sniff-build "$wolf" build src/main.lu --no-cache -o "$root/target/sniff"
 compilers=(clang)
 [ "$mode" != linux ] || compilers+=(gcc)
 step fixture-builds python3 -I tools/build-fixtures.py --wolf "$wolf" --out "$root/target/fixtures" --compilers "${compilers[@]}"
+step dump-matrix python3 -I tools/dump-matrix.py --sniff "$root/target/sniff" --platform "$mode" --fixtures "$root/target/fixtures"
 if [ "$mode" = macos ]; then
   dwarfdump=$(xcrun --find llvm-dwarfdump)
   debugger=$(xcrun --find lldb)
