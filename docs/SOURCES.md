@@ -176,3 +176,26 @@ The request numbers, register slots and statuses come from
 `tools/abi-probe.c` (R-sn02-3), not from header text. gdb's command language
 and output shapes are taken from recorded transcripts of the pinned gdb run
 as a binary; the GDB manual pages listed under S0 define the command names.
+
+## Consulted for S3 (2026-11-06)
+
+Fetched by curl into the lane's sources directory; the sha256 is of the JSON the page's documentation
+endpoint returned.
+
+| source | sha256 | used for |
+|---|---|---|
+| [com.apple.security.cs.debugger](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.security.cs.debugger) (`https://developer.apple.com/tutorials/data/documentation/bundleresources/entitlements/com.apple.security.cs.debugger.json`) | `15dbc845196782aed4e0d0349b6979800f9dc5d6780df3d73779ed1a53fdc873` | the debugger entitlement sniff is signed with |
+| [Hardened Runtime](https://developer.apple.com/documentation/security/hardened-runtime) (`https://developer.apple.com/tutorials/data/documentation/security/hardened-runtime.json`) | `799ccc6382dfe13d4c732d41981606d5659e56dad6404342643eb37b55ec7bef` | which entitlements let a process take another's task port |
+
+Also read, as interface declarations only, from the macOS SDK: `mach/message.h`, `mach/exception_types.h`,
+`mach/mach_exc.defs` (the layout of the exception request), `mach/thread_status.h`, `mach/arm/_structs.h`
+(`ARM_THREAD_STATE64`, `ARM_DEBUG_STATE64`), `mach/vm_prot.h`, `mach-o/loader.h`, `mach-o/compact_unwind_encoding.h`,
+`sys/ptrace.h`, `sys/spawn.h` (`POSIX_SPAWN_START_SUSPENDED`, `_POSIX_SPAWN_DISABLE_ASLR`). The Arm ARM
+pages for `BRK`, `MDSCR_EL1.SS` and the AArch64 instruction encodings the prologue analysis recognises
+(`STP`/`LDP` pre- and post-index, `SUB`/`ADD` of sp, `MOV x29, sp`, `RET`). Apple's arm64 ABI notes for the
+x29/x30 frame record. The measurements that no page states (what `task_for_pid` accepts on this Mac, the
+exception request's byte layout, the status of a forked child that inherits the exception port) come from
+compiled probes of the lane's own children, recorded in `notes/sn03-macos.md`.
+
+Apple's lldb ran as a binary (`lldb -b -s`); its output is the oracle in `tests/evidence/macos-s3`, with the
+extraction named in `tools/session-mac.py`.

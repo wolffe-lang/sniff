@@ -4,11 +4,11 @@ A debugger written in [wolf](https://github.com/wolffe-lang/wolf-lang),
 for x86-64 Linux and PAX, and macOS arm64. The command language is GDB's;
 a Debug Adapter Protocol server is planned for editor integration.
 
-**Status: S2, the core on Linux x86-64.** `sniff -batch -x SCRIPT PROG` starts PROG
-under `ptrace(2)` and debugs it with gdb's command language (breakpoints,
+**Status: S3, macOS arm64 beside the S2 Linux core.** `sniff -batch -x SCRIPT PROG` starts PROG
+(under `ptrace(2)` on Linux; as a suspended child with its task port and exception port on macOS) and debugs it with gdb's command language (breakpoints,
 stepping, frames, values, registers), held to transcripts of the pinned gdb
-and to lupin's values; `sniff dump` still prints the S1 reader views. macOS
-and PAX backends are S3 and S4. [MAP](docs/MAP.md) separates planned
+and, on macOS, to Apple's lldb (facts) and to lupin's values; `sniff dump` still prints the S1 reader views.
+The PAX backend is S4. [MAP](docs/MAP.md) separates planned
 capabilities from measured ones.
 
 ## Machines and pins
@@ -81,6 +81,10 @@ normalizations. Frame assertions include source coordinates so the C entry
 shim cannot stand in for a missing wolf frame. Lupin traces describe state
 **after** a statement; the scalar join explicitly compares that state with the
 debugger stopped **before** the next statement.
+
+On macOS, `tools/sign-sniff.sh` ad-hoc signs sniff with the debugger entitlement
+(`com.apple.security.cs.debugger`); the fixtures are signed with `get-task-allow`. Neither needs
+`sudo` or a change to `DevToolsSecurity`. A target without `get-task-allow` is refused by name.
 
 Hosted CI's macOS job runs the oracle-free rows only: units, the reader rows
 natively and checked, the sniff build, fixture builds, hostile inputs and lupin

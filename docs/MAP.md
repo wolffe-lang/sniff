@@ -9,7 +9,7 @@ frontier and reader scope below refine it without rewriting that prediction.
 | S0 | fixture builders, binary oracle adapters, transcript comparison, census | digest-bound builds, named red-first harness failures |
 | S1 | bounded bytes, ELF64, Mach-O64/dSYM, DWARF units/forms/lines, symbols, ranges/locations, CFI | dump modes byte-identical to the pinned reader oracle |
 | S2 | Linux x86-64 process control, breakpoint patching, source stepping, unwind, scalar values, GDB command parser | scripted GDB sessions and lupin local-value agreement |
-| S3 | macOS arm64 task/exception ports, BRK, register access, signing | S2 commands against LLDB and lupin |
+| S3 | macOS arm64 task/exception ports, BRK, register access, compact unwind, Mach-O + dSYM by UUID, signing | S2 commands against lldb facts, lupin, and the Linux goldens where both answer alike |
 | S4 | PAX process backend, static dev-image packaging | S2 console session agrees with Linux after named normalization |
 | S5 | hardware watchpoints, conditions, expressions, aggregate presentation | pinned fenrir front end; every unsupported construct refused by name |
 | S6 | all-stop threads, signals, attach/detach | per-platform scripted sessions |
@@ -174,7 +174,7 @@ separately with the PR.
 
 ### S2 as implemented
 
-`src/platform/` is the process layer (Linux x86-64; a stub elsewhere) and
+`src/platform/` is the process layer (`linux.lu` for x86-64 Linux, `macos.lu` for arm64 macOS, `arch.lu` for what differs by architecture) and
 `src/session/` the debugger: loader, line table, CFI unwinder, DWARF
 expression machine, values and formatting, breakpoints, run control,
 stepping, and the command interpreter. `src/numfmt/` formats floats exactly.
@@ -182,3 +182,17 @@ The platform boundary is the list under "For S3 and S4" in
 `notes/sn02-the-linux-core.md`. Boundaries that remain: no CFI from wolf
 (frame-pointer fallback), eager DWARF loading, signed encodings for unsigned
 wolf types, and the unimplemented commands listed in the note.
+
+### S3 as implemented
+
+`src/platform/macos.lu` starts the child with `posix_spawn` suspended and with ASLR off, takes its task
+port with `task_for_pid`, receives its exceptions on a port set with `task_set_exception_ports`, steps with
+`MDSCR_EL1.SS` and reads registers and memory through `thread_get_state` and `mach_vm_*`. Breakpoints are
+`BRK #0xf000`. `src/session/arm64.lu` unwinds where no DWARF CFI covers a pc: compact unwind from
+`__unwind_info`, a prologue and epilogue analysis, and the x29 chain; `maint frames` names the basis per
+frame. The dSYM is paired with the image by UUID. The macOS rows are `tests/macos-rows.json`, run by
+`tools/session-mac.py`: rows held to sn02's Linux output (after named normalisations and per-line drops
+with reasons) and rows held to lldb facts (a named extraction per fact kind). Boundaries that remain: no
+symbolication of system images (dyld, the shared cache) until S6, and no `fork` follow mode (a forked
+child is detached when it first traps on an inherited breakpoint, after its original instructions are
+written back).
