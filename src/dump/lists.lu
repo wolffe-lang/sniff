@@ -59,7 +59,7 @@ pub fn dump_loc(mut o: Out, n: Names, data: List[byte], s: readers.DebugSections
             open = false
         } else if e.kind == readers.dwarf_list4_pair {
             if known {
-                put(mut o, "            [0x{hex16(base + e.value1)}, 0x{hex16(base + e.value2)}): ")
+                put(mut o, "            [0x{hex16(wrap_add(base, e.value1))}, 0x{hex16(wrap_add(base, e.value2))}): ")
             } else if s.format == readers.object_elf {
                 put(mut o, "            [0x{hex16(e.value1)}, 0x{hex16(e.value2)}): ")
             } else {
@@ -116,11 +116,11 @@ pub fn dump_rnglists(mut o: Out, data: List[byte], s: readers.DebugSections) -> 
             } else if r.kind == 5 {
                 base = r.value1
             } else if r.kind == 4 {
-                line(mut o, "[0x{hex16(base + r.value1)}, 0x{hex16(base + r.value2)})")
+                line(mut o, "[0x{hex16(wrap_add(base, r.value1))}, 0x{hex16(wrap_add(base, r.value2))})")
             } else if r.kind == 6 {
                 line(mut o, "[0x{hex16(r.value1)}, 0x{hex16(r.value2)})")
             } else if r.kind == 7 {
-                line(mut o, "[0x{hex16(r.value1)}, 0x{hex16(r.value1 + r.value2)})")
+                line(mut o, "[0x{hex16(r.value1)}, 0x{hex16(wrap_add(r.value1, r.value2))})")
             } else {
                 line(mut o, "[0x{hex16(r.value1)}, 0x{hex16(r.value2)})")
             }
@@ -163,10 +163,10 @@ pub fn dump_loclists(mut o: Out, n: Names, data: List[byte], s: readers.DebugSec
                 if resolved {
                     var low = r.value1
                     var high = r.value2
-                    if r.kind == 8 { high = r.value1 + r.value2 }
+                    if r.kind == 8 { high = wrap_add(r.value1, r.value2) }
                     if r.kind == 4 {
-                        low = base + r.value1
-                        high = base + r.value2
+                        low = wrap_add(base, r.value1)
+                        high = wrap_add(base, r.value2)
                     }
                     put(mut o, "            [0x{hex16(low)}, 0x{hex16(high)}): ")
                 } else if r.kind == 5 {

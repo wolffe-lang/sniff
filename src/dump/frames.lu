@@ -72,7 +72,7 @@ fn frame_reg(arch: int, r: u64) -> str {
 }
 
 fn frame_factored(v: u64, factor: i64) -> i64 {
-    v as wrapping[i64] as i64 * factor
+    wrap_imul(v as wrapping[i64] as i64, factor)
 }
 
 struct FrameCtx {
@@ -144,11 +144,11 @@ fn frame_program(
         let op = insn.op
         put(mut o, "  ")
         if op == 64 || op == 2 || op == 3 || op == 4 {
-            let delta = insn.unsigned * cie.code_align
+            let delta = wrap_mul(insn.unsigned, cie.code_align)
             let name = if op == 64 { "DW_CFA_advance_loc" } else if op == 2 { "DW_CFA_advance_loc1" } else if op == 3 { "DW_CFA_advance_loc2" } else { "DW_CFA_advance_loc4" }
             (mut rows).push(loc)
             (mut states).push(copy st)
-            loc += delta
+            loc = wrap_add(loc, delta)
             if x.apple { line(mut o, "{name}: {delta} to 0x{loc:x}") } else { line(mut o, "{name}: {delta}") }
         } else if op == 1 {
             (mut rows).push(loc)
@@ -156,12 +156,12 @@ fn frame_program(
             loc = insn.unsigned
             line(mut o, "DW_CFA_set_loc: 0x{loc:x}")
         } else if op == 128 || op == 5 || op == 17 {
-            let off = if op == 17 { insn.signed * cie.data_align } else { frame_factored(insn.unsigned, cie.data_align) }
+            let off = if op == 17 { wrap_imul(insn.signed, cie.data_align) } else { frame_factored(insn.unsigned, cie.data_align) }
             let name = if op == 128 { "DW_CFA_offset" } else if op == 5 { "DW_CFA_offset_extended" } else { "DW_CFA_offset_extended_sf" }
             line(mut o, "{name}: {frame_reg(x.arch, insn.reg)} {frame_signed(off)}")
             frame_set(mut st, frame_rule(insn.reg, 3, off))
         } else if op == 20 || op == 21 {
-            let off = if op == 21 { insn.signed * cie.data_align } else { frame_factored(insn.unsigned, cie.data_align) }
+            let off = if op == 21 { wrap_imul(insn.signed, cie.data_align) } else { frame_factored(insn.unsigned, cie.data_align) }
             let name = if op == 20 { "DW_CFA_val_offset" } else { "DW_CFA_val_offset_sf" }
             line(mut o, "{name}: {frame_reg(x.arch, insn.reg)} {frame_signed(off)}")
             frame_set(mut st, frame_rule(insn.reg, 4, off))
@@ -197,7 +197,7 @@ fn frame_program(
             let saved = (mut stack).pop() else { return dwarf_frame_invalid_state }
             st = saved
         } else if op == 12 || op == 18 {
-            let off = if op == 18 { insn.signed * cie.data_align } else { insn.unsigned as wrapping[i64] as i64 }
+            let off = if op == 18 { wrap_imul(insn.signed, cie.data_align) } else { insn.unsigned as wrapping[i64] as i64 }
             let name = if op == 12 { "DW_CFA_def_cfa" } else { "DW_CFA_def_cfa_sf" }
             line(mut o, "{name}: {frame_reg(x.arch, insn.reg)} {frame_signed(off)}")
             st.cfa_kind = 1
@@ -209,7 +209,7 @@ fn frame_program(
             st.cfa_kind = 1
             st.cfa_reg = insn.reg
         } else if op == 14 || op == 19 {
-            let off = if op == 19 { insn.signed * cie.data_align } else { insn.unsigned as wrapping[i64] as i64 }
+            let off = if op == 19 { wrap_imul(insn.signed, cie.data_align) } else { insn.unsigned as wrapping[i64] as i64 }
             let name = if op == 14 { "DW_CFA_def_cfa_offset" } else { "DW_CFA_def_cfa_offset_sf" }
             line(mut o, "{name}: {frame_signed(off)}")
             st.cfa_offset = off
@@ -298,7 +298,7 @@ fn frame_section(
         let cie = copy cache[k]
         let cie_at = (fde.cie_offset - section.span.start) as u64
         let pointer = if fde.offset_size == 8 { hex16(fde.cie_pointer) } else { hex8(fde.cie_pointer) }
-        line(mut o, "{hex8(at)} {hex8(fde.length)} {pointer} FDE cie={hex8(cie_at)} pc={hex8(fde.begin)}...{hex8(fde.begin + fde.range)}")
+        line(mut o, "{hex8(at)} {hex8(fde.length)} {pointer} FDE cie={hex8(cie_at)} pc={hex8(fde.begin)}...{hex8(wrap_add(fde.begin, fde.range))}")
         let fformat = if fde.offset_size == 8 { "DWARF64" } else { "DWARF32" }
         line(mut o, "  Format:       {fformat}")
         if fde.has_lsda { line(mut o, "  LSDA Address: {hex16(fde.lsda)}") }

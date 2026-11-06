@@ -85,6 +85,22 @@ pub fn hex8(v: u64) -> str { "{v:08x}" }
 /// Sixteen lowercase hex digits, zero-padded.
 pub fn hex16(v: u64) -> str { "{v:016x}" }
 
+/// Address arithmetic as the oracle prints it: modulo 2^64, never a trap on
+/// hostile operands (tools/test-hostile.py).
+pub fn wrap_add(a: u64, b: u64) -> u64 {
+    ((a as wrapping[u64]) + (b as wrapping[u64])) as u64
+}
+
+/// Unsigned product modulo 2^64.
+pub fn wrap_mul(a: u64, b: u64) -> u64 {
+    ((a as wrapping[u64]) * (b as wrapping[u64])) as u64
+}
+
+/// Signed product modulo 2^64.
+pub fn wrap_imul(a: i64, b: i64) -> i64 {
+    ((a as wrapping[i64]) * (b as wrapping[i64])) as i64
+}
+
 /// 0x-prefixed, zero-padded to the DWARF format's offset width.
 pub fn hex_offset(v: u64, offset_size: int) -> str {
     if offset_size == 8 { return "0x{v:016x}" }

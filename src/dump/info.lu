@@ -221,7 +221,7 @@ fn info_dims(x: InfoCtx, entry: int) -> str {
             if count >= 0 {
                 dims = dims + "[{x.info.attributes[count].value.raw}]"
             } else if upper >= 0 {
-                let n = x.info.attributes[upper].value.raw + 1
+                let n = wrap_add(x.info.attributes[upper].value.raw, 1)
                 dims = dims + "[{n}]"
             } else {
                 dims = dims + "[]"
@@ -371,11 +371,11 @@ fn info_loclist(mut o: Out, n: Names, data: List[byte], x: InfoCtx, u: InfoUnit,
         if r.kind == 6 { base = r.value1; continue }
         var low: u64 = 0
         var high: u64 = 0
-        if r.kind == 4 { low = base + r.value1; high = base + r.value2 }
+        if r.kind == 4 { low = wrap_add(base, r.value1); high = wrap_add(base, r.value2) }
         if r.kind == 7 { low = r.value1; high = r.value2 }
-        if r.kind == 8 { low = r.value1; high = r.value1 + r.value2 }
+        if r.kind == 8 { low = r.value1; high = wrap_add(r.value1, r.value2) }
         if r.kind == 2 { low = info_address(data, x, u, header, r.value1)?; high = info_address(data, x, u, header, r.value2)? }
-        if r.kind == 3 { low = info_address(data, x, u, header, r.value1)?; high = low + r.value2 }
+        if r.kind == 3 { low = info_address(data, x, u, header, r.value1)?; high = wrap_add(low, r.value2) }
         line(mut o, "")
         put(mut o, indent)
         if r.kind == 5 {
@@ -403,17 +403,17 @@ fn info_rnglist(mut o: Out, data: List[byte], x: InfoCtx, u: InfoUnit, header: r
             if r.kind == 0 { break }
             if r.kind == 1 { base = info_address(data, x, u, header, r.value1)?; continue }
             if r.kind == 5 { base = r.value1; continue }
-            if r.kind == 4 { low = base + r.value1; high = base + r.value2 }
+            if r.kind == 4 { low = wrap_add(base, r.value1); high = wrap_add(base, r.value2) }
             if r.kind == 6 { low = r.value1; high = r.value2 }
-            if r.kind == 7 { low = r.value1; high = r.value1 + r.value2 }
+            if r.kind == 7 { low = r.value1; high = wrap_add(r.value1, r.value2) }
             if r.kind == 2 { low = info_address(data, x, u, header, r.value1)?; high = info_address(data, x, u, header, r.value2)? }
-            if r.kind == 3 { low = info_address(data, x, u, header, r.value1)?; high = low + r.value2 }
+            if r.kind == 3 { low = info_address(data, x, u, header, r.value1)?; high = wrap_add(low, r.value2) }
         } else {
             let r = readers.dwarf_range4_entry(data, mut c4, header.address_size)?
             if r.kind == readers.dwarf_list4_end { break }
             if r.kind == readers.dwarf_list4_base { base = r.value2; continue }
-            low = base + r.value1
-            high = base + r.value2
+            low = wrap_add(base, r.value1)
+            high = wrap_add(base, r.value2)
         }
         line(mut o, "")
         put(mut o, "{indent}[{hex_address(low, header.address_size)}, {hex_address(high, header.address_size)})")
@@ -445,7 +445,7 @@ fn info_value(mut o: Out, n: Names, data: List[byte], x: InfoCtx, u: InfoUnit, h
         let low = info_find(x, entry, 17)
         var base: u64 = 0
         if low >= 0 { base = info_addr_value(data, x, u, header, x.info.attributes[low].value)? }
-        put(mut o, hex_address(base + value.raw, header.address_size))
+        put(mut o, hex_address(wrap_add(base, value.raw), header.address_size))
     } else if readers.dwarf_info_is_reference(form) {
         let t = info_target(x, entry, value)
         let target_offset = if t >= 0 { (x.info.entries[t].offset - x.info.info.start) as u64 } else { value.raw }
