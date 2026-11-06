@@ -1249,9 +1249,9 @@
    "script": [
     "break leave",
     "run 0 7",
-    "step",
-    "step",
-    "step"
+    "next",
+    "next",
+    "next"
    ]
   },
   {
@@ -1295,9 +1295,9 @@
    "script": [
     "break leave",
     "run 0 7",
-    "step",
-    "step",
-    "step"
+    "next",
+    "next",
+    "next"
    ]
   },
   {

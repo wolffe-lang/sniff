@@ -200,6 +200,27 @@ pub fn step_insn(mut s: Session) -> Event {
     classify(mut s, st, true)
 }
 
+/// cont_event, but a user breakpoint with an ignore count passes silently
+/// (its hit still counts), as gdb's ignore does.
+pub fn cont_user(mut s: Session) -> Event {
+    loop {
+        let e = cont_event(mut s)
+        if e.kind != ev_breakpoint || s.bps[e.bp].internal { return e }
+        let pc = bp_rt(s, e.bp)
+        var skip = false
+        var i: int = 0
+        while i < s.bps.len {
+            if s.bps[i].enabled && !s.bps[i].internal && bp_rt(s, i) == pc && s.bps[i].ignore > 0 {
+                s.bps[i].ignore -= 1
+                s.bps[i].hits += 1
+                skip = true
+            }
+            i += 1
+        }
+        if !skip { return e }
+    }
+}
+
 /// Continue until a breakpoint, a stopping signal or the end of the program.
 /// A breakpoint at the current pc is stepped over first: its instruction runs
 /// with the int3 removed, then breakpoints go back in.

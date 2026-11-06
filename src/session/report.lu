@@ -28,7 +28,12 @@ pub fn print_stop_frame(mut s: Session, header: bool, prefix: str) {
         emit_line(mut s, "{prefix}{addr16(current_pc(s))} in ?? ()")
         return
     }
-    if header {
+    var show_header = header
+    if !show_header {
+        let sal = find_sal(s.prog, s.frames[0].pc - s.base)
+        if !sal.ok || s.frames[0].func < 0 { show_header = true }
+    }
+    if show_header {
         emit_line(mut s, "{prefix}{frame_line(s, 0, false)}")
         print_frame_source(mut s, 0, false)
     } else {

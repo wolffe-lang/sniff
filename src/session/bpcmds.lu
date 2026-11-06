@@ -27,7 +27,7 @@ pub fn cmd_break(mut s: Session, rest: str, temp: bool) -> str {
     s.bp_next += 1
     var i = 0
     while i < r.addrs.len {
-        (mut s.bps).push(Bp { num: num, addr: r.addrs[i], hits: 0, temp: temp, enabled: true, internal: false, abs: r.abs, orig: 0, inserted: false })
+        (mut s.bps).push(Bp { num: num, addr: r.addrs[i], hits: 0, temp: temp, enabled: true, internal: false, abs: r.abs, ignore: 0, orig: 0, inserted: false })
         i += 1
     }
     let kind = if temp { "Temporary breakpoint" } else { "Breakpoint" }
@@ -36,6 +36,23 @@ pub fn cmd_break(mut s: Session, rest: str, temp: bool) -> str {
     } else {
         emit_line(mut s, "{kind} {num} at {hex_plain(r.addrs[0] + s.base)}: {spec}. ({r.addrs.len} locations)")
     }
+    ""
+}
+
+/// ignore N COUNT: pass the next COUNT crossings of breakpoint N silently.
+pub fn cmd_ignore(mut s: Session, rest: str) -> str {
+    let w = rest.words()
+    if w.len < 2 { return "Argument required (a breakpoint number)." }
+    let n = parse_uint(w[0])
+    let c = parse_uint(w[1])
+    if !n.ok || !c.ok { return "Bad breakpoint argument: '{rest.trim()}'" }
+    var found = false
+    var i = 0
+    while i < s.bps.len {
+        if s.bps[i].num == n.addr as int && !s.bps[i].internal { s.bps[i].ignore = c.addr as int; found = true }
+        i += 1
+    }
+    if !found { return "No breakpoint number {w[0]}." }
     ""
 }
 

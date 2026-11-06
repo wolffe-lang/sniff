@@ -46,7 +46,7 @@ fn cmd_run(mut s: Session, rest: str) -> str {
     if why.len() > 0 { return why }
     s.frames = []
     s.frames_ok = false
-    let e = cont_event(mut s)
+    let e = cont_user(mut s)
     report_event(mut s, e)
     ""
 }
@@ -55,7 +55,7 @@ fn cmd_continue(mut s: Session, rest: str) -> str {
     if !s.alive { return "The program is not being run." }
     s.frames = []
     s.frames_ok = false
-    let e = cont_event(mut s)
+    let e = cont_user(mut s)
     report_event(mut s, e)
     ""
 }
@@ -145,6 +145,7 @@ fn dispatch(mut s: Session, word: str, rest: str, text: str) -> str {
     if word == "break" || word == "b" || word == "br" || word == "brea" { return cmd_break(mut s, rest, false) }
     if word == "tbreak" || word == "tb" { return cmd_break(mut s, rest, true) }
     if word == "delete" || word == "d" { return cmd_delete(mut s, rest) }
+    if word == "ignore" { return cmd_ignore(mut s, rest) }
     if word == "bt" || word == "backtrace" || word == "where" { return cmd_bt(mut s, rest) }
     if word == "frame" || word == "f" { return cmd_frame(mut s, rest) }
     if word == "up" { return cmd_up(mut s, rest) }

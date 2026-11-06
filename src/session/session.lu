@@ -16,6 +16,7 @@ pub struct Bp {
     pub enabled: bool,
     pub internal: bool,
     pub abs: bool,
+    pub ignore: int,
     pub orig: int,
     pub inserted: bool,
 }

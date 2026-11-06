@@ -36,7 +36,7 @@ fn user_bp_at(s: Session, addr: u64) -> int {
 
 /// Add an internal breakpoint at a runtime address.
 fn add_internal(mut s: Session, addr: u64) {
-    (mut s.bps).push(Bp { num: 0, addr: addr, hits: 0, temp: false, enabled: true, internal: true, abs: true, orig: 0, inserted: false })
+    (mut s.bps).push(Bp { num: 0, addr: addr, hits: 0, temp: false, enabled: true, internal: true, abs: true, ignore: 0, orig: 0, inserted: false })
 }
 
 fn drop_internal(mut s: Session) {
