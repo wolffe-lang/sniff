@@ -52,5 +52,23 @@
     "dwarf-info-invalid-references",
     "dwarf-info-cycles-and-limits",
     "dwarf-info-cross-unit-references"
+  ],
+  "indexes_test.lu": [
+    "indexes-header-widths-and-boundaries",
+    "indexes-string-and-address-resolution",
+    "indexes-list-offset-array-domain",
+    "indexes-hostile-contribution-headers",
+    "indexes-exact-bases-and-contiguous-contributions",
+    "indexes-forged-metadata-and-target-bounds",
+    "indexes-shared-budget-and-error-accounting"
+  ],
+  "expression_test.lu": [
+    "dwarf-expr-families-stack-arithmetic",
+    "dwarf-expr-signed-unsigned-constants",
+    "dwarf-expr-register-piece-index-operands",
+    "dwarf-expr-flat-nesting-opaque-blocks",
+    "dwarf-expr-bounded-branch-boundaries",
+    "dwarf-expr-reference-domains-independent-widths",
+    "dwarf-expr-hostile-bounds-and-caps"
   ]
 }
