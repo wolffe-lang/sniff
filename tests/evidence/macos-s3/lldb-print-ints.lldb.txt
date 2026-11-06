@@ -5,8 +5,8 @@ Executing commands in '/Users/mfwolffe/lanes/sn03/tmp/cap/lldb-print-ints.lldb'.
 (lldb) breakpoint set -n inspect
 Breakpoint 1: where = prog`inspect + 44 at main.c:17:15, address = 0x00000001000005b4
 (lldb) run
-Process 30282 launched: '/Users/mfwolffe/lanes/sn03/fx/c/values/clang-O0/prog' (arm64)
-Process 30282 stopped
+Process 49309 launched: '/Users/mfwolffe/lanes/sn03/fx/c/values/clang-O0/prog' (arm64)
+Process 49309 stopped
 * thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 1.1
     frame #0: 0x00000001000005b4 prog`inspect(c='z', s=-2, i=3, l=-4000000000, u=5, ul=6, f=0.5, d=0.10000000000000001, b=true, p=0x000000016fdff488) at main.c:17:15
    14  	
@@ -31,4 +31,4 @@ Target 0: (prog) stopped.
 (lldb) print s
 (short) -2
 (lldb) process kill
-Process 30282 exited with status = 9 (0x00000009) killed
+Process 49309 exited with status = 9 (0x00000009) killed

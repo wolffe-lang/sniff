@@ -1,1 +1,1 @@
-[["signal", "SIGTRAP"], ["frame", 0, "main", "main.c", 13], ["signal", "SIGTRAP"], ["frame", 0, "main", "main.c", 13], ["signal", "SIGTRAP"], ["frame", 0, "main", "main.c", 13]]
+[["signal", "SIGTRAP"], ["frame", 0, "main", "main.c", 13]]

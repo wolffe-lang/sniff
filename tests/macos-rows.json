@@ -103,7 +103,42 @@
   },
   {
    "name": "step-clang-calls",
-   "kind": "linux"
+   "kind": "linux",
+   "script": [
+    "break main",
+    "run",
+    "step",
+    "step",
+    "bt",
+    "step",
+    "step",
+    "next",
+    "bt",
+    "finish",
+    "finish",
+    "next",
+    "step",
+    "next",
+    "next",
+    "until",
+    "until",
+    "until",
+    "until",
+    "until",
+    "info locals",
+    "next",
+    "next"
+   ],
+   "drop": [
+    {
+     "match": "^15\\t    \\}$",
+     "why": "arm64 clang gives the loop body's closing brace its own line-table row; until goes forward to it (lldb next does too: lldb-until-loop)"
+    },
+    {
+     "match": "^0xA in \\?\\? \\(\\)( from .*)?$",
+     "why": "the caller of main: Linux names libc ('??' from libc.so.6), lldb names dyld`start; sniff does not symbolicate system images until S6"
+    }
+   ]
   },
   {
    "name": "step-clang-off-main-step",
@@ -111,7 +146,13 @@
   },
   {
    "name": "step-clang-off-main-next",
-   "kind": "linux"
+   "kind": "linux",
+   "drop": [
+    {
+     "match": "^0xA in \\?\\? \\(\\)( from .*)?$",
+     "why": "the caller of main: Linux names libc ('??' from libc.so.6), lldb names dyld`start; sniff does not symbolicate system images until S6"
+    }
+   ]
   },
   {
    "name": "step-clang-into-plain",
@@ -135,7 +176,26 @@
   },
   {
    "name": "step-clang-stepi",
-   "kind": "linux"
+   "kind": "linux",
+   "script": [
+    "break count",
+    "run",
+    "stepi",
+    "stepi",
+    "nexti",
+    "x/4xw $sp",
+    "x/2xg $sp",
+    "info registers pc",
+    "p $pc",
+    "p $sp",
+    "p/x $x0"
+   ],
+   "drop": [
+    {
+     "match": "^(rip|pc) ",
+     "why": "register name: arm64's pc against x86-64's rip"
+    }
+   ]
   },
   {
    "name": "step-clang-noproc",
@@ -182,16 +242,18 @@
    "kind": "linux"
   },
   {
-   "name": "value-clang-registers",
-   "kind": "linux"
-  },
-  {
    "name": "value-clang-noproc",
    "kind": "linux"
   },
   {
    "name": "odd-clang-signals",
-   "kind": "linux"
+   "kind": "linux",
+   "drop": [
+    {
+     "match": "main\\.c:1[34]$|^1[34]\\t",
+     "why": "BRK leaves pc on the instruction (line 13) where int3 leaves it after (line 14); lldb-own-trap holds line 13"
+    }
+   ]
   },
   {
    "name": "odd-clang-forks",
@@ -203,11 +265,25 @@
   },
   {
    "name": "wolf-scalars",
-   "kind": "linux"
+   "kind": "linux",
+   "drop": [
+    {
+     "line": 7,
+     "text": "s = 0",
+     "why": "reads uninitialised stack (s): its value is whatever the stack held"
+    }
+   ]
   },
   {
    "name": "wolf-nested",
-   "kind": "linux"
+   "kind": "linux",
+   "drop": [
+    {
+     "line": 14,
+     "text": "answer = 140737354125312",
+     "why": "reads uninitialised stack (answer): its value is whatever the stack held"
+    }
+   ]
   },
   {
    "name": "wolf-loops",
@@ -215,7 +291,14 @@
   },
   {
    "name": "wolf-recursion",
-   "kind": "linux"
+   "kind": "linux",
+   "drop": [
+    {
+     "line": 27,
+     "text": "total = 140737354125312",
+     "why": "reads uninitialised stack (total): its value is whatever the stack held"
+    }
+   ]
   },
   {
    "name": "wolf-recursion-next",
@@ -227,7 +310,14 @@
   },
   {
    "name": "wolf-exits-code",
-   "kind": "linux"
+   "kind": "linux",
+   "drop": [
+    {
+     "line": 9,
+     "text": "value = 4",
+     "why": "reads uninitialised stack (value): its value is whatever the stack held"
+    }
+   ]
   },
   {
    "name": "wolf-shared-name",
@@ -247,7 +337,22 @@
   },
   {
    "name": "odd-clang-stripped-addr",
-   "kind": "linux"
+   "kind": "linux",
+   "script": [
+    "break *0x100000470",
+    "run 3",
+    "info breakpoints",
+    "info registers pc",
+    "stepi",
+    "x/2xw $sp",
+    "info locals"
+   ],
+   "drop": [
+    {
+     "match": "^(rip|pc) ",
+     "why": "register name: arm64's pc against x86-64's rip"
+    }
+   ]
   },
   {
    "name": "bp-clang-ignore",
@@ -339,7 +444,13 @@
   },
   {
    "name": "wolf-break-main-two-locations",
-   "kind": "linux"
+   "kind": "linux",
+   "drop": [
+    {
+     "match": "^1\\.2 ",
+     "why": "the second location's offset inside main is arm64's prologue, not x86-64's"
+    }
+   ]
   },
   {
    "name": "lldb-break-hits",
@@ -554,13 +665,11 @@
    "prog": "c/exits/clang-O0/prog",
    "script": [
     "run fault",
-    "bt",
-    "continue"
+    "bt"
    ],
    "lldb": [
     "run fault",
-    "bt",
-    "continue"
+    "bt"
    ]
   },
   {
@@ -569,13 +678,11 @@
    "prog": "c/signals/clang-O0/prog",
    "script": [
     "run",
-    "bt",
-    "continue"
+    "bt"
    ],
    "lldb": [
     "run",
-    "bt",
-    "continue"
+    "bt"
    ]
   },
   {
@@ -623,7 +730,89 @@
     "frame info",
     "process kill"
    ]
+  },
+  {
+   "name": "lldb-registers",
+   "kind": "lldb",
+   "prog": "c/calls/clang-O0/prog",
+   "script": [
+    "break count",
+    "run",
+    "info registers pc"
+   ],
+   "lldb": [
+    "breakpoint set -n count",
+    "run",
+    "register read pc"
+   ]
+  },
+  {
+   "name": "lldb-until-loop",
+   "kind": "lldb",
+   "prog": "c/calls/clang-O0/prog",
+   "script": [
+    "break count",
+    "run",
+    "next",
+    "next",
+    "frame",
+    "until",
+    "frame",
+    "until",
+    "frame"
+   ],
+   "lldb": [
+    "breakpoint set -n count",
+    "run",
+    "next",
+    "next",
+    "frame info",
+    "next",
+    "frame info",
+    "next",
+    "frame info"
+   ]
+  },
+  {
+   "name": "hostile-unentitled",
+   "kind": "expect",
+   "prog": "c/exits/clang-O0/prog",
+   "sign": "adhoc",
+   "script": [
+    "run 0"
+   ],
+   "contains": [
+    "task_for_pid refused",
+    "get-task-allow"
+   ]
+  },
+  {
+   "name": "hostile-unsigned",
+   "kind": "expect",
+   "prog": "c/exits/clang-O0/prog",
+   "sign": "unsigned",
+   "script": [
+    "run 0"
+   ],
+   "contains": [
+    "task_for_pid refused"
+   ]
+  },
+  {
+   "name": "hostile-unmapped-break",
+   "kind": "expect",
+   "prog": "c/exits/clang-O0/prog",
+   "script": [
+    "break *0x55555555516c",
+    "run 3"
+   ],
+   "contains": [
+    "Cannot insert breakpoint 1",
+    "Cannot access memory at address 0x55555555516c"
+   ]
   }
  ],
- "excluded": {}
+ "excluded": {
+  "value-clang-registers": "x86-64 register names only; the arm64 register set is held by lldb-registers and step-clang-stepi"
+ }
 }

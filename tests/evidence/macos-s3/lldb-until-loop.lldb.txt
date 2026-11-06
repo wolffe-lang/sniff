@@ -1,0 +1,78 @@
+(lldb) target create "/Users/mfwolffe/lanes/sn03/fx/c/calls/clang-O0/prog"
+Current executable set to '/Users/mfwolffe/lanes/sn03/fx/c/calls/clang-O0/prog' (arm64).
+(lldb) command source -s 0 '/Users/mfwolffe/lanes/sn03/tmp/cap/lldb-until-loop.lldb'
+Executing commands in '/Users/mfwolffe/lanes/sn03/tmp/cap/lldb-until-loop.lldb'.
+(lldb) breakpoint set -n count
+Breakpoint 1: where = prog`count + 8 at main.c:12:9, address = 0x0000000100000388
+(lldb) run
+Process 49369 launched: '/Users/mfwolffe/lanes/sn03/fx/c/calls/clang-O0/prog' (arm64)
+Process 49369 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 1.1
+    frame #0: 0x0000000100000388 prog`count(limit=5) at main.c:12:9
+   9   	}
+   10  	
+   11  	int count(int limit) {
+-> 12  	    int total = 0;
+    	        ^
+   13  	    for (int i = 0; i < limit; i++) {
+   14  	        total += i;
+   15  	    }
+Target 0: (prog) stopped.
+(lldb) next
+Process 49369 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = step over
+    frame #0: 0x000000010000038c prog`count(limit=5) at main.c:13:14
+   10  	
+   11  	int count(int limit) {
+   12  	    int total = 0;
+-> 13  	    for (int i = 0; i < limit; i++) {
+    	             ^
+   14  	        total += i;
+   15  	    }
+   16  	    return total;
+Target 0: (prog) stopped.
+(lldb) next
+Process 49369 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = step over
+    frame #0: 0x00000001000003a8 prog`count(limit=5) at main.c:14:18
+   11  	int count(int limit) {
+   12  	    int total = 0;
+   13  	    for (int i = 0; i < limit; i++) {
+-> 14  	        total += i;
+    	                 ^
+   15  	    }
+   16  	    return total;
+   17  	}
+Target 0: (prog) stopped.
+(lldb) frame info
+frame #0: 0x00000001000003a8 prog`count(limit=5) at main.c:14:18
+(lldb) next
+Process 49369 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = step over
+    frame #0: 0x00000001000003b8 prog`count(limit=5) at main.c:15:5
+   12  	    int total = 0;
+   13  	    for (int i = 0; i < limit; i++) {
+   14  	        total += i;
+-> 15  	    }
+    	    ^
+   16  	    return total;
+   17  	}
+   18  	
+Target 0: (prog) stopped.
+(lldb) frame info
+frame #0: 0x00000001000003b8 prog`count(limit=5) at main.c:15:5
+(lldb) next
+Process 49369 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = step over
+    frame #0: 0x00000001000003bc prog`count(limit=5) at main.c:13:33
+   10  	
+   11  	int count(int limit) {
+   12  	    int total = 0;
+-> 13  	    for (int i = 0; i < limit; i++) {
+    	                                ^
+   14  	        total += i;
+   15  	    }
+   16  	    return total;
+Target 0: (prog) stopped.
+(lldb) frame info
+frame #0: 0x00000001000003bc prog`count(limit=5) at main.c:13:33

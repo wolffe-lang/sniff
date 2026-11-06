@@ -7,8 +7,8 @@ Breakpoint 1: where = prog`tick + 8 at main.c:4:12, address = 0x0000000100000330
 (lldb) breakpoint set -f main.c -l 12
 Breakpoint 2: where = prog`main + 80 at main.c:12:12, address = 0x0000000100000390
 (lldb) run
-Process 30253 launched: '/Users/mfwolffe/lanes/sn03/fx/c/hits/clang-O0/prog' (arm64)
-Process 30253 stopped
+Process 49241 launched: '/Users/mfwolffe/lanes/sn03/fx/c/hits/clang-O0/prog' (arm64)
+Process 49241 stopped
 * thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 1.1
     frame #0: 0x0000000100000330 prog`tick(n=0) at main.c:4:12
    1   	// SPDX-License-Identifier: GPL-3.0-or-later
@@ -28,8 +28,8 @@ frame #0: 0x0000000100000330 prog`tick(n=0) at main.c:4:12
     frame #1: 0x0000000100000378 prog`main at main.c:10:13
     frame #2: 0x000000018403bda4 dyld`start + 6992
 (lldb) continue
-Process 30253 resuming
-Process 30253 stopped
+Process 49241 resuming
+Process 49241 stopped
 * thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 1.1
     frame #0: 0x0000000100000330 prog`tick(n=1) at main.c:4:12
    1   	// SPDX-License-Identifier: GPL-3.0-or-later
@@ -44,7 +44,7 @@ Target 0: (prog) stopped.
 (lldb) frame info
 frame #0: 0x0000000100000330 prog`tick(n=1) at main.c:4:12
 (lldb) finish
-Process 30253 stopped
+Process 49241 stopped
 * thread #1, queue = 'com.apple.main-thread', stop reason = step out
 Return value: (int) $0 = 2
 
@@ -61,7 +61,7 @@ Target 0: (prog) stopped.
 (lldb) frame info
 frame #0: 0x0000000100000378 prog`main at main.c:10:11
 (lldb) next
-Process 30253 stopped
+Process 49241 stopped
 * thread #1, queue = 'com.apple.main-thread', stop reason = step over
     frame #0: 0x000000010000037c prog`main at main.c:11:5
    8   	    int n = 0;
@@ -75,7 +75,7 @@ Target 0: (prog) stopped.
 (lldb) frame info
 frame #0: 0x000000010000037c prog`main at main.c:11:5
 (lldb) step
-Process 30253 stopped
+Process 49241 stopped
 * thread #1, queue = 'com.apple.main-thread', stop reason = step in
     frame #0: 0x0000000100000380 prog`main at main.c:9:33
    6   	
@@ -90,4 +90,4 @@ Target 0: (prog) stopped.
 (lldb) frame info
 frame #0: 0x0000000100000380 prog`main at main.c:9:33
 (lldb) process kill
-Process 30253 exited with status = 9 (0x00000009) killed
+Process 49241 exited with status = 9 (0x00000009) killed

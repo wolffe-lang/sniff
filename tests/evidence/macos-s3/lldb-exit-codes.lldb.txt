@@ -3,5 +3,5 @@ Current executable set to '/Users/mfwolffe/lanes/sn03/fx/c/exits/clang-O0/prog' 
 (lldb) command source -s 0 '/Users/mfwolffe/lanes/sn03/tmp/cap/lldb-exit-codes.lldb'
 Executing commands in '/Users/mfwolffe/lanes/sn03/tmp/cap/lldb-exit-codes.lldb'.
 (lldb) run 3
-Process 30290 launched: '/Users/mfwolffe/lanes/sn03/fx/c/exits/clang-O0/prog' (arm64)
-Process 30290 exited with status = 3 (0x00000003)
+Process 49316 launched: '/Users/mfwolffe/lanes/sn03/fx/c/exits/clang-O0/prog' (arm64)
+Process 49316 exited with status = 3 (0x00000003)

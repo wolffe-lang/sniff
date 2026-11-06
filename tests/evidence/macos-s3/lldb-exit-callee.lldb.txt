@@ -5,8 +5,8 @@ Executing commands in '/Users/mfwolffe/lanes/sn03/tmp/cap/lldb-exit-callee.lldb'
 (lldb) breakpoint set -n code
 Breakpoint 1: where = prog`code + 16 at main.c:7:22, address = 0x0000000100000470
 (lldb) run x 7
-Process 30321 launched: '/Users/mfwolffe/lanes/sn03/fx/c/exits/clang-O0/prog' (arm64)
-Process 30321 stopped
+Process 49323 launched: '/Users/mfwolffe/lanes/sn03/fx/c/exits/clang-O0/prog' (arm64)
+Process 49323 stopped
 * thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 1.1
     frame #0: 0x0000000100000470 prog`code(text="7") at main.c:7:22
    4   	#include <string.h>
@@ -25,5 +25,5 @@ Target 0: (prog) stopped.
     frame #2: 0x0000000100000524 prog`main(argc=3, argv=0x000000016fdffb20) at main.c:21:19
     frame #3: 0x000000018403bda4 dyld`start + 6992
 (lldb) continue
-Process 30321 resuming
-Process 30321 exited with status = 7 (0x00000007)
+Process 49323 resuming
+Process 49323 exited with status = 7 (0x00000007)

@@ -94,6 +94,10 @@ def facts_sniff(text):
         if m:
             facts.append(('frame', int(m[1]), m[2], base(m[3]), int(m[4])))
             continue
+        m = re.match(r'^pc\s+(0x[0-9a-f]+)\s', line)
+        if m:
+            facts.append(('pc', hexint(m[1]) & 0xffffffffffff))
+            continue
         m = re.match(r'^Value returned is \$\d+ = (.*)$', line)
         if m:
             facts.append(('retval', m[1]))
@@ -120,21 +124,36 @@ def facts_sniff(text):
     return facts
 
 
+FRAME_CMDS = ('frame', 'bt', 'up', 'down', 'thread backtrace')
+STOP_CMDS = ('run', 'continue', 'step', 'next', 'finish', 'thread until', 'process', 'stepi', 'nexti')
+
+
 def facts_lldb(text):
-    """Facts from lldb's output."""
+    """Facts from lldb's output. lldb prints the stop location after every resume and the stop
+    reason again under bt; frame facts are taken only from frame/bt output (what sniff's `frame`
+    and `bt` print) and signal facts only from the resume that stopped."""
     facts = []
     expect_print = False
+    cur = ''
     for line in text.splitlines():
         if line.startswith('(lldb) '):
-            expect_print = line.startswith('(lldb) print ') or line.startswith('(lldb) p ')
+            cur = line[7:]
+            expect_print = cur.startswith('print ') or cur.startswith('p ')
             continue
+        in_frame_cmd = cur.startswith(FRAME_CMDS)
+        in_stop_cmd = cur.startswith(STOP_CMDS)
         m = re.match(r'^Breakpoint (\d+): where = .*? at (\S+?):(\d+)(?::\d+)?, address = (0x[0-9a-f]+)$', line)
         if m:
             facts.append(('bpset', int(m[1]), hexint(m[4]) & 0xffffffffffff, base(m[2]), int(m[3])))
             continue
         m = re.match(r'^[* ]*\s*frame #(\d+): 0x[0-9a-f]+ \S+?`([\w.$]+)(?:\(.*\))?(?: \+ \d+)? at (\S+?):(\d+)(?::\d+)?$', line)
         if m:
-            facts.append(('frame', int(m[1]), m[2], base(m[3]), int(m[4])))
+            if in_frame_cmd:
+                facts.append(('frame', int(m[1]), m[2], base(m[3]), int(m[4])))
+            continue
+        m = re.match(r'^\s+pc = (0x[0-9a-f]+)', line)
+        if m:
+            facts.append(('pc', hexint(m[1]) & 0xffffffffffff))
             continue
         m = re.match(r'^Return value: \(.+?\) \$\d+ = (.*)$', line)
         if m:
@@ -156,11 +175,13 @@ def facts_lldb(text):
             continue
         m = re.search(r'stop reason = (EXC_\w+)', line)
         if m and m[1] in SIGNAL_OF_EXC:
-            facts.append(('signal', SIGNAL_OF_EXC[m[1]]))
+            if in_stop_cmd:
+                facts.append(('signal', SIGNAL_OF_EXC[m[1]]))
             continue
         m = re.search(r'stop reason = signal (SIG\w+)', line)
         if m:
-            facts.append(('signal', m[1]))
+            if in_stop_cmd:
+                facts.append(('signal', m[1]))
             continue
         m = re.match(r'^Process \d+ exited with signal (SIG\w+)', line)
         if m:
@@ -217,14 +238,45 @@ def cmd_capture(a):
     return 0
 
 
+def prepare_target(kind, src, dst):
+    """A copy of a fixture with a hostile signature state: 'adhoc' (signed, no get-task-allow) or 'unsigned'."""
+    Path(dst).parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(['cp', src, dst], check=True)
+    if kind == 'adhoc':
+        subprocess.run(['codesign', '--force', '--sign', '-', dst], check=True, capture_output=True)
+    else:
+        subprocess.run(['codesign', '--remove-signature', dst], check=True, capture_output=True)
+
+
 def cmd_check(a):
     spec = load()
     lin = linux_rows()
     roots = [str(ROOT), '/work', str(Path(a.fixtures).parent)]
     fails = ran = 0
     for r in select(spec['rows'], a.only):
+        if r['kind'] == 'expect':
+            prog = str(Path(a.work) / 'hostile' / r['name'])
+            if 'sign' in r:
+                prepare_target(r['sign'], str(Path(a.fixtures) / r['prog']), prog)
+            else:
+                prog = str(Path(a.fixtures) / r['prog'])
+            try:
+                out, err, rc = sniff_run(a.sniff, prog, r['script'], r.get('args', []), a.work, r['name'], r.get('timeout', 60))
+            except subprocess.TimeoutExpired:
+                print('FAIL %s timeout (sniff hung)' % r['name'])
+                fails += 1
+                continue
+            ran += 1
+            both = out + err
+            miss = [x for x in r['contains'] if x not in both]
+            if miss:
+                print('FAIL %s missing %r in %r' % (r['name'], miss, both[-300:]))
+                fails += 1
+            else:
+                print('PASS %s [refusal text: %s]' % (r['name'], r['contains'][0]))
+            continue
         row_prog = r['prog'] if r['kind'] == 'lldb' else lin[r['name']]['prog'].replace('gcc-O0', 'clang-O0')
-        script = r['script'] if r['kind'] == 'lldb' else lin[r['name']]['script']
+        script = r['script'] if 'script' in r else lin[r['name']]['script']
         args = r.get('args', [])
         prog = str(Path(a.fixtures) / row_prog)
         try:
@@ -234,17 +286,36 @@ def cmd_check(a):
             fails += 1
             continue
         ran += 1
+        (Path(a.work) / (r['name'] + '.got')).write_text(out)
+        (Path(a.work) / (r['name'] + '.err')).write_text(err)
         if r['kind'] == 'linux':
             fired = set()
             want = (LINUX_GOLD / (r['name'] + '.out')).read_text()
-            got = normalize(out, roots, fired)
-            want_n = normalize(want, roots, fired)
-            if got == want_n:
-                print('PASS %s [normalised: %s]' % (r['name'], ','.join(sorted(fired))))
+            gl = normalize(out, roots, fired).splitlines()
+            wl = normalize(want, roots, fired).splitlines()
+            dropped = []
+            bad = None
+            for d in sorted(r.get('drop', []), key=lambda d: -d.get('line', 0)):
+                if 'line' in d:
+                    i = d['line'] - 1
+                    if i >= len(wl) or wl[i] != d['text']:
+                        bad = 'stale drop of line %d: %r' % (d['line'], wl[i] if i < len(wl) else '<end>')
+                        break
+                    del wl[i]
+                    if i < len(gl):
+                        del gl[i]
+                    dropped.append(d['why'])
+            for d in r.get('drop', []):
+                if 'match' in d:
+                    rx = re.compile(d['match'])
+                    gl = [x for x in gl if not rx.search(x)]
+                    wl = [x for x in wl if not rx.search(x)]
+                    dropped.append(d['why'])
+            if bad is None and gl == wl:
+                print('PASS %s [normalised: %s]%s' % (r['name'], ','.join(sorted(fired)), ' [dropped lines: %s]' % ' | '.join(dropped) if dropped else ''))
             else:
-                gl, wl = got.splitlines(), want_n.splitlines()
                 i = next((i for i in range(max(len(gl), len(wl))) if (gl[i] if i < len(gl) else '<end>') != (wl[i] if i < len(wl) else '<end>')), 0)
-                print('FAIL %s line %d: want %r got %r' % (r['name'], i + 1, wl[i] if i < len(wl) else '<end>', gl[i] if i < len(gl) else '<end>'))
+                print('FAIL %s %s' % (r['name'], bad or 'line %d: want %r got %r' % (i + 1, wl[i] if i < len(wl) else '<end>', gl[i] if i < len(gl) else '<end>')))
                 fails += 1
         else:
             want = json.loads((EVID / (r['name'] + '.facts.json')).read_text())
@@ -257,6 +328,15 @@ def cmd_check(a):
                 fails += 1
     print('SUMMARY ran=%d failed=%d' % (ran, fails))
     return 1 if fails else 0
+
+
+def cmd_reextract(a):
+    """Rewrite the stored expected facts from the stored lldb output (after an extraction change)."""
+    for r in lldb_script_rows(load()['rows']):
+        txt = EVID / (r['name'] + '.lldb.txt')
+        (EVID / (r['name'] + '.facts.json')).write_text(json.dumps(facts_lldb(txt.read_text())) + '\n')
+        print('REEXTRACT %s' % r['name'])
+    return 0
 
 
 def cmd_replay(a):
@@ -323,9 +403,10 @@ def main():
         else:
             s.add_argument('--sniff', default=str(ROOT / 'target/sniff'))
     sub.add_parser('replay')
+    sub.add_parser('reextract')
     sub.add_parser('verify')
     a = p.parse_args()
-    return {'capture': cmd_capture, 'check': cmd_check, 'replay': cmd_replay, 'verify': cmd_verify}[a.cmd](a)
+    return {'capture': cmd_capture, 'check': cmd_check, 'replay': cmd_replay, 'reextract': cmd_reextract, 'verify': cmd_verify}[a.cmd](a)
 
 
 if __name__ == '__main__':

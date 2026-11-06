@@ -9,8 +9,8 @@ Breakpoint 2: where = prog`all_ones + 4 at main.c:9:46, address = 0x000000010000
 (lldb) breakpoint set -n tenth
 Breakpoint 3: where = prog`tenth + 8 at main.c:11:37, address = 0x0000000100000528
 (lldb) run
-Process 30275 launched: '/Users/mfwolffe/lanes/sn03/fx/c/values/clang-O0/prog' (arm64)
-Process 30275 stopped
+Process 49301 launched: '/Users/mfwolffe/lanes/sn03/fx/c/values/clang-O0/prog' (arm64)
+Process 49301 stopped
 * thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 1.1
     frame #0: 0x00000001000004c4 prog`widen(v=7) at main.c:8:30
    5   	char letter(char c) { char next = c + 1; return next; }
@@ -23,7 +23,7 @@ Process 30275 stopped
    11  	double tenth(double d) { double t = d / 10; return t; }
 Target 0: (prog) stopped.
 (lldb) finish
-Process 30275 stopped
+Process 49301 stopped
 * thread #1, queue = 'com.apple.main-thread', stop reason = step out
 Return value: (long) $0 = 7000000000
 
@@ -38,8 +38,8 @@ Return value: (long) $0 = 7000000000
    32  	    double x = tenth(1.0);
 Target 0: (prog) stopped.
 (lldb) continue
-Process 30275 resuming
-Process 30275 stopped
+Process 49301 resuming
+Process 49301 stopped
 * thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 2.1
     frame #0: 0x00000001000004e8 prog`all_ones at main.c:9:46
    6   	unsigned char low_byte(unsigned value) { unsigned char low = value & 0xff; return low; }
@@ -52,7 +52,7 @@ Process 30275 stopped
    12  	bool positive(int v) { bool p = v > 0; return p; }
 Target 0: (prog) stopped.
 (lldb) finish
-Process 30275 stopped
+Process 49301 stopped
 * thread #1, queue = 'com.apple.main-thread', stop reason = step out
 Return value: (unsigned long) $1 = 18446744073709551615
 
@@ -67,8 +67,8 @@ Return value: (unsigned long) $1 = 18446744073709551615
    33  	    bool ok = positive(5);
 Target 0: (prog) stopped.
 (lldb) continue
-Process 30275 resuming
-Process 30275 stopped
+Process 49301 resuming
+Process 49301 stopped
 * thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 3.1
     frame #0: 0x0000000100000528 prog`tenth(d=1) at main.c:11:37
    8   	long widen(int v) { long w = v; return w * 1000000000L; }
@@ -81,7 +81,7 @@ Process 30275 stopped
    14  	
 Target 0: (prog) stopped.
 (lldb) finish
-Process 30275 stopped
+Process 49301 stopped
 * thread #1, queue = 'com.apple.main-thread', stop reason = step out
 Return value: (double) $2 = 0.10000000000000001
 
@@ -96,4 +96,4 @@ Return value: (double) $2 = 0.10000000000000001
    35  	    int r = inspect('z', -2, 3, -4000000000L, 5u, 6ul, 0.5f, 0.1, true, q);
 Target 0: (prog) stopped.
 (lldb) process kill
-Process 30275 exited with status = 9 (0x00000009) killed
+Process 49301 exited with status = 9 (0x00000009) killed

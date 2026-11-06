@@ -5,8 +5,8 @@ Executing commands in '/Users/mfwolffe/lanes/sn03/tmp/cap/lldb-wolf-scalars.lldb
 (lldb) breakpoint set -n helper
 Breakpoint 1: where = prog`helper + 20 at main.lu:2:5, address = 0x00000001000007dc
 (lldb) run
-Process 30357 launched: '/Users/mfwolffe/lanes/sn03/fx/wolf/scalars/wolf-debug/prog' (arm64)
-Process 30357 stopped
+Process 49354 launched: '/Users/mfwolffe/lanes/sn03/fx/wolf/scalars/wolf-debug/prog' (arm64)
+Process 49354 stopped
 * thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 1.1
     frame #0: 0x00000001000007dc prog`helper(a=3, b=4) at main.lu:2:5
    1   	fn helper(a: int, b: int) -> int {
@@ -21,7 +21,7 @@ Target 0: (prog) stopped.
 (lldb) frame info
 frame #0: 0x00000001000007dc prog`helper(a=3, b=4) at main.lu:2:5
 (lldb) next
-Process 30357 stopped
+Process 49354 stopped
 * thread #1, queue = 'com.apple.main-thread', stop reason = step over
     frame #0: 0x00000001000007f0 prog`helper(a=3, b=4) at main.lu:3:5
    1   	fn helper(a: int, b: int) -> int {
@@ -36,7 +36,7 @@ Target 0: (prog) stopped.
 (lldb) frame info
 frame #0: 0x00000001000007f0 prog`helper(a=3, b=4) at main.lu:3:5
 (lldb) finish
-Process 30357 stopped
+Process 49354 stopped
 * thread #1, queue = 'com.apple.main-thread', stop reason = step out
     frame #0: 0x000000010000088c prog`main at main.lu:9:5
    6   	fn main() -> int {
@@ -50,4 +50,4 @@ Target 0: (prog) stopped.
 (lldb) frame info
 frame #0: 0x000000010000088c prog`main at main.lu:9:5
 (lldb) process kill
-Process 30357 exited with status = 9 (0x00000009) killed
+Process 49354 exited with status = 9 (0x00000009) killed

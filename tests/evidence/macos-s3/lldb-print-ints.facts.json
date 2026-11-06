@@ -1,1 +1,1 @@
-[["frame", 0, "inspect", "main.c", 17], ["print", "3"], ["print", "-4000000000"], ["print", "5"], ["print", "6"], ["print", "'z'"], ["print", "-2"], ["exit", 9]]
+[["bpset", 1, 4294968756, "main.c", 17], ["print", "3"], ["print", "-4000000000"], ["print", "5"], ["print", "6"], ["print", "'z'"], ["print", "-2"], ["exit", 9]]
