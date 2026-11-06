@@ -36,3 +36,14 @@ oracle_dependent_step() {
   fi
   step "$@"
 }
+
+# The macOS session rows run sniff against signed children and Apple's lldb on a Mac:
+# a hosted runner has not been shown to grant task ports, and its lldb is not the pinned one.
+live_skip_reason="hosted-ci: the live macOS session rows need task ports for signed children and the pinned Apple lldb; the Mac's local gauntlet record carries this row"
+mac_live_step() {
+  if oracle_hosted; then
+    printf 'SKIP %s reason=%s\n' "$1" "$live_skip_reason"
+    return 0
+  fi
+  step "$@"
+}
