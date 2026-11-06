@@ -140,10 +140,11 @@ unwinder's non-CFI bases (`arm64.lu`; x86-64's frame-pointer fallback), signing 
 
 ## R-list
 
-- R-sn03-1 (recommend, implemented): after a fault or an own `BRK`, `continue` follows gdb (deliver the
-  signal; do not pass `SIGTRAP`); lldb re-stops at the same instruction. The rows compare up to the stop.
-- R-sn03-2 (recommend, implemented): a forked child that reaches an inherited breakpoint is detached with
-  its original instructions restored; the fixture's `waitpid` retries on `EINTR`.
+- R-sn03-1 (accepted): after a fault or the program's own `BRK`, `continue` does what gdb does: it delivers
+  the signal, and does not pass `SIGTRAP`. lldb stops again at the same instruction. The rows compare up to the stop.
+- R-sn03-2 (accepted): a forked child that reaches an inherited breakpoint is detached, with its original
+  instructions put back first. The fork fixture's `waitpid` retries on `EINTR`, because a traced parent's wait
+  is interrupted when its child exits (lldb does the same).
 
 ## Done-when
 
