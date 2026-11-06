@@ -1,0 +1,111 @@
+// DWARF expressions as text: readers.dwarf_expr_read's flat pre-order records
+// rendered in the oracle's operation syntax. Decoding only, never evaluation.
+
+use readers
+
+pub const arch_x86_64: int = 1
+pub const arch_arm64: int = 2
+
+/// The architecture a container implies: ELF readers take x86-64 only and
+/// Mach-O readers arm64 only.
+pub fn arch_of(s: readers.DebugSections) -> int {
+    if s.format == readers.object_elf { return arch_x86_64 }
+    arch_arm64
+}
+
+/// Register names: x86-64 from the psABI's DWARF mapping (Figure 3.36, 0-32),
+/// arm64 from AADWARF64's numbering in the spelling the macOS oracle prints.
+pub fn reg_name(arch: int, r: u64) -> str {
+    if arch == arch_x86_64 {
+        let names: List[str] = ["RAX", "RDX", "RCX", "RBX", "RSI", "RDI", "RBP", "RSP",
+            "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15", "RIP"]
+        if r <= 16 { return names[r as int] }
+        if r >= 17 && r <= 32 { return "XMM{r - 17}" }
+        return ""
+    }
+    if r <= 30 { return "W{r}" }
+    if r == 31 { return "WSP" }
+    ""
+}
+
+fn signed_text(v: i64) -> str {
+    if v >= 0 { return "+{v}" }
+    "{v}"
+}
+
+/// The operation's name: standard, then labelled vendor observation.
+pub fn op_name(n: Names, code: u64) -> str {
+    let s = name_in(n.operation, code)
+    if s.len > 0 { return s }
+    let v = vendor_operation(code)
+    if v.len > 0 { return v }
+    "DW_OP_unknown_{code:x}"
+}
+
+fn put_op(mut o: Out, n: Names, p: readers.DwarfExprProgram, i: int, arch: int) {
+    let code = p.ops[i].opcode
+    put(mut o, op_name(n, code))
+    let u = p.ops[i].unsigned1
+    let s1 = p.ops[i].signed1
+    if code >= 0x50 && code <= 0x6f {
+        put(mut o, " {reg_name(arch, code - 0x50)}")
+    } else if code >= 0x70 && code <= 0x8f {
+        put(mut o, " {reg_name(arch, code - 0x70)}{signed_text(s1)}")
+    } else if code == 0x03 || code == 0x08 || code == 0x0a || code == 0x0c || code == 0x0e ||
+        code == 0x10 || code == 0x23 || code == 0x93 || code == 0x94 || code == 0x95 ||
+        code == 0xa1 || code == 0xa2 || code == 0x15 {
+        put(mut o, " 0x{u:x}")
+    } else if code == 0x09 || code == 0x0b || code == 0x0d || code == 0x0f || code == 0x11 ||
+        code == 0x91 {
+        put(mut o, " {signed_text(s1)}")
+    } else if code == 0x90 {
+        put(mut o, " {reg_name(arch, u)}")
+    } else if code == 0x92 {
+        put(mut o, " {reg_name(arch, u)}{signed_text(p.ops[i].signed2)}")
+    } else if code == 0x9d {
+        put(mut o, " 0x{u:x} 0x{p.ops[i].unsigned2:x}")
+    }
+}
+
+fn put_ops(mut o: Out, n: Names, p: readers.DwarfExprProgram, first: int, end: int, arch: int) {
+    var i = first
+    var started: bool = false
+    while i < end {
+        if started { put(mut o, ", ") }
+        started = true
+        put_op(mut o, n, p, i, arch)
+        let code = p.ops[i].opcode
+        if code == 0xa3 || code == 0xf3 {
+            put(mut o, "(")
+            put_ops(mut o, n, p, i + 1, p.ops[i].subtree_end, arch)
+            put(mut o, ")")
+        }
+        i = p.ops[i].subtree_end
+    }
+}
+
+/// A unit context for expressions read outside any DIE (section dumps):
+/// address width 8, CU references checked against the whole .debug_info.
+pub fn expr_section_unit(s: readers.DebugSections) -> readers.DwarfUnit {
+    readers.DwarfUnit {
+        start: s.info.span.start, body: s.info.span.start,
+        end: s.info.span.start + s.info.span.length, version: 5, offset_size: 4,
+        address_size: 8, kind: 1, abbrev: 0, signature: 0, type_offset: 0,
+    }
+}
+
+/// Render one expression. An undecodable expression prints the oracle's
+/// marker followed by its bytes.
+pub fn put_expr(mut o: Out, n: Names, data: List[byte], span: readers.ByteSpan,
+    unit: readers.DwarfUnit, info: readers.ByteSpan, arch: int) {
+    let program = readers.dwarf_expr_read(data, span, unit, info, 1000000, 4096, 64) else {
+        put(mut o, "<decoding error>")
+        var i: int = 0
+        while i < span.length {
+            put(mut o, " {hex2(data[span.start + i] as int as u64)}")
+            i += 1
+        }
+        return
+    }
+    put_ops(mut o, n, program, 0, program.ops.len, arch)
+}
