@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "lane": "sn04",
+  "written_before_code": "2026-11-06",
+  "scope": "S4: sniff on PAX. sn02's Linux backend runs unchanged above PAX's Linux-compatible ptrace(2) (px102 at 3afcb9ce); the S2 session is typed at PAX's console under KVM and held to the Linux transcript.",
+  "platform_layer": {
+    "claim": "no new platform module. PAX answers ptrace(2), wait4(2), /proc/PID/mem, fork and execve with Linux's request numbers, status encoding and register layout (px102's note), so src/platform/linux.lu is the PAX layer. The one Linux call with no PAX counterpart in the notes is personality(ADDR_NO_RANDOMIZE); its result is ignored today and PAX has no address randomisation, so an ENOSYS answer changes nothing.",
+    "static_only": "PAX's loader refuses ET_DYN and PT_INTERP by name (kernel README, elf/). sniff itself and every inferior must be a static ET_EXEC: sniff is linked as the other org tools are (a static cc in front of wolf's link); C fixtures are built -static -no-pie; wolf fixtures take the same static link. The Linux goldens for the PAX rows are therefore recaptured from the pinned gdb on those static builds, never reused from the dynamic S2 builds (their libc frames, library paths and load addresses differ by construction).",
+    "procfs": "the S2 rows need only /proc/PID/mem (px102 has it). /proc/PID/maps is read only for a PIE load base and for the library name in a frame line (control.lu exe_base, frametext.lu solib_of); a static ET_EXEC needs neither, so maps is a witnessed gap for S5 and S6, not a blocker. auxv and task/TID/stat are likewise unread by S2."
+  },
+  "rows": {
+    "total_s2_rows": 141,
+    "run_as_they_are": "every row whose golden holds no stack, heap, thread-pointer or load address and no libc-internal register residue: all 18 noproc rows, the bp-*, step-* (but stepi and finish-types), frame-* (but fault and leave), inferior-* (but segv), odd-*-forks, odd-*-signals, odd-*-stripped, the wolf rows, and the five tty rows once the console is the tty.",
+    "need_a_named_normalisation": {
+      "pid": "the N of '(process N)' and 'child process N'; PAX's pids differ from the container's. Argued: a pid is an allocation order, not a debugger fact.",
+      "stack": "inferior-c-gcc-segv, inferior-c-clang-segv, bp-gcc-main-and-delete, step-gcc-finish-types, step-gcc-stepi, frame-gcc-fault, frame-gcc-leave, value-gcc-args-locals, value-gcc-print, value-gcc-main-locals, value-gcc-x, value-gcc-registers, bp-clang-main-and-delete, step-clang-finish-types, step-clang-stepi, frame-clang-fault, frame-clang-leave, value-clang-args-locals, value-clang-print, value-clang-main-locals, value-clang-x, value-clang-registers, odd-gcc-die-mid-step, odd-gcc-signal-continue, odd-clang-die-mid-step, odd-clang-signal-continue: hex values in the stack range (0x7ff...) and their decimal forms (14070...) become <STACK>. Argued: the top of the stack depends on the kernel's stack placement, the auxv and the environment size; sniff sets the same LINES/COLUMNS/PWD as gdb, but PAX's initial stack layout is its own.",
+      "tty": "the five tty rows: carriage returns, prompt text and echo of typed input. Argued: PAX's console is a real tty with its own echo; the S2 harness has the same normalisation for Linux ptys.",
+      "dropped_register_lines": "the two value-*-registers rows and the stepi rows: lines of registers that hold libc startup residue or the thread pointer (rbx rcx rdx rsi r8 r9 r10 r11 r12 r13 r14 r15 fs_base) are named and dropped per line; rax rdi rbp rsp rip eflags cs ss ds es fs gs are held (cs and ss because R-px102-1 translates PAX's selectors to Linux's). Per line, never per row."
+    },
+    "pie_address_rows": {
+      "rows": [
+        "odd-gcc-stripped-addr",
+        "odd-clang-stripped-addr"
+      ],
+      "claim": "these two rows name a PIE absolute address (0x5555...). A static ET_EXEC sits at 0x401000-ish; the row scripts are rewritten with the static binary's address, read from the static build, and the goldens recaptured. No exclusion."
+    },
+    "expected_gap_fills": "none known to be needed before the first run. Candidates the run can still find: the selector translation (R-px102-1) if cs/ss differ; SIGTRAP delivery to a program's own handler (rows odd-*-signals); PTRACE_O_TRACEFORK with detach (odd-*-forks); the 10,000-hit ignore loops (bp-*-ignore) under a timeout that fits QEMU's speed. Each gap found becomes a named SKIP with its owed PAX lane and a black-box witness in the gap note, never a silent pass.",
+    "not_held_on_pax": "the perf rows (QEMU timing says nothing about sniff), the lupin join (lupin is a separate tool; wolf values on PAX are held to the same gdb goldens), and the hostile reader inputs (no new reader code)."
+  },
+  "likely_wrong": [
+    "a static glibc build of the wolf fixtures may not link or may start a thread that PAX's ptrace stops differently; then wolf rows need an owed-lane SKIP.",
+    "gdb on a static binary prints a different `bt` past main or different `finish` out of main; the recaptured goldens carry that, so the check is sniff against them on Linux first.",
+    "the tty rows may need PAX's console in a mode where typed input is not echoed twice."
+  ]
+}
