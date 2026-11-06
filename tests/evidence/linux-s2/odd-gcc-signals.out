@@ -1,0 +1,6 @@
+
+Program received signal SIGTRAP, Trace/breakpoint trap.
+main () at /work/fixtures/session/c/signals/main.c:14
+14	    return seen == SIGTRAP ? 0 : 1;
+#0  main () at /work/fixtures/session/c/signals/main.c:14
+[Inferior 1 (process <PID>) exited with code 01]

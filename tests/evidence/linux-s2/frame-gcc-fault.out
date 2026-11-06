@@ -1,0 +1,6 @@
+
+Program received signal SIGSEGV, Segmentation fault.
+0x000055555555521c in main (argc=2, argv=0x7fffffffed28) at /work/fixtures/session/c/exits/main.c:19
+19	        *nowhere = 1;
+#0  0x000055555555521c in main (argc=2, argv=0x7fffffffed28) at /work/fixtures/session/c/exits/main.c:19
+nowhere = 0x0

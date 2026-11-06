@@ -1,0 +1,6 @@
+Temporary breakpoint 1 at 0x1137: file /work/fixtures/session/c/hits/main.c, line 4.
+
+Temporary breakpoint 1, tick (n=0) at /work/fixtures/session/c/hits/main.c:4
+4	    return n + 1;
+No breakpoints, watchpoints, tracepoints, or catchpoints.
+[Inferior 1 (process <PID>) exited normally]

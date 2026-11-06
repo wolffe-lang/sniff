@@ -1,0 +1,23 @@
+Breakpoint 1 at 0xa2a2: file /work/fixtures/wolf/types/main.lu, line 7.
+
+Breakpoint 1, scalars (a=3, b=4, c=-1 '\377', d=-1, e=6, f=1.25, g=2.5, flag=true) at /work/fixtures/wolf/types/main.lu:7
+7	    if enabled { 0 } else { 1 }
+a = 3
+b = 4
+c = -1 '\377'
+d = -1
+e = 6
+f = 1.25
+g = 2.5
+flag = true
+narrow = -1 '\377'
+wide = -1
+single = 1.25
+double = 2.5
+enabled = true
+$1 = -1 '\377'
+$2 = -1
+$3 = 1.25
+$4 = true
+0x000055555555e30a in main () at /work/fixtures/wolf/types/main.lu:10
+10	    let result = scalars(3, 4, 255, 18446744073709551615, 6, 1.25, 2.5, true)

@@ -148,6 +148,1077 @@
    "script": [
     "run kill"
    ]
+  },
+  {
+   "name": "bp-gcc-func-line-addr",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "break depth_sum",
+    "break main.c:13",
+    "break *count",
+    "info breakpoints",
+    "run",
+    "info breakpoints",
+    "continue",
+    "continue",
+    "info breakpoints",
+    "delete 1",
+    "info breakpoints",
+    "delete",
+    "info breakpoints",
+    "continue"
+   ]
+  },
+  {
+   "name": "bp-gcc-main-and-delete",
+   "prog": "c/exits/gcc-O0/prog",
+   "script": [
+    "break code",
+    "run 5",
+    "kill",
+    "info breakpoints",
+    "bt"
+   ]
+  },
+  {
+   "name": "bp-gcc-same-address",
+   "prog": "c/hits/gcc-O0/prog",
+   "script": [
+    "break tick",
+    "break main.c:4",
+    "break *tick",
+    "info breakpoints",
+    "run",
+    "continue",
+    "info breakpoints"
+   ]
+  },
+  {
+   "name": "bp-gcc-hits3",
+   "prog": "c/hits/gcc-O0/prog",
+   "script": [
+    "break tick",
+    "run",
+    "continue",
+    "continue",
+    "info breakpoints",
+    "delete",
+    "continue"
+   ]
+  },
+  {
+   "name": "bp-gcc-delete-current",
+   "prog": "c/hits/gcc-O0/prog",
+   "script": [
+    "break tick",
+    "run",
+    "delete 1",
+    "continue"
+   ]
+  },
+  {
+   "name": "bp-gcc-tbreak",
+   "prog": "c/hits/gcc-O0/prog",
+   "script": [
+    "tbreak tick",
+    "run",
+    "info breakpoints",
+    "continue"
+   ]
+  },
+  {
+   "name": "bp-gcc-current-pc",
+   "prog": "c/hits/gcc-O0/prog",
+   "script": [
+    "break tick",
+    "run",
+    "break main.c:4",
+    "continue",
+    "continue",
+    "info breakpoints"
+   ]
+  },
+  {
+   "name": "bp-gcc-bad-locations",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "break nosuch"
+   ]
+  },
+  {
+   "name": "bp-gcc-bad-line",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "break main.c:99"
+   ]
+  },
+  {
+   "name": "bp-gcc-bad-file",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "break nosuch.c:3"
+   ]
+  },
+  {
+   "name": "bp-gcc-bad-delete",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "delete 5"
+   ]
+  },
+  {
+   "name": "bp-gcc-info-empty",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "info breakpoints"
+   ]
+  },
+  {
+   "name": "bp-gcc-unmapped",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "break *0x10",
+    "info breakpoints",
+    "run"
+   ]
+  },
+  {
+   "name": "step-gcc-calls",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "break main",
+    "run",
+    "step",
+    "step",
+    "bt",
+    "step",
+    "step",
+    "next",
+    "bt",
+    "finish",
+    "finish",
+    "next",
+    "step",
+    "next",
+    "next",
+    "until",
+    "until",
+    "until",
+    "until",
+    "info locals",
+    "next",
+    "next"
+   ]
+  },
+  {
+   "name": "step-gcc-off-main-step",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "break main.c:23",
+    "run",
+    "step",
+    "step",
+    "step"
+   ]
+  },
+  {
+   "name": "step-gcc-off-main-next",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "break main.c:23",
+    "run",
+    "next",
+    "next",
+    "next"
+   ]
+  },
+  {
+   "name": "step-gcc-into-plain",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "break main",
+    "run",
+    "step",
+    "step"
+   ]
+  },
+  {
+   "name": "step-gcc-recursion-next",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "break depth_sum",
+    "run",
+    "next",
+    "next",
+    "next",
+    "next",
+    "bt"
+   ]
+  },
+  {
+   "name": "step-gcc-until-recursion",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "break depth_sum",
+    "run",
+    "until",
+    "until",
+    "until",
+    "until"
+   ]
+  },
+  {
+   "name": "step-gcc-finish-main",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "break main",
+    "run",
+    "finish"
+   ]
+  },
+  {
+   "name": "step-gcc-finish-types",
+   "prog": "c/values/gcc-O0/prog",
+   "script": [
+    "break letter",
+    "break low_byte",
+    "break narrow",
+    "break widen",
+    "break all_ones",
+    "break third",
+    "break tenth",
+    "break positive",
+    "break address_of",
+    "run",
+    "finish",
+    "continue",
+    "finish",
+    "continue",
+    "finish",
+    "continue",
+    "finish",
+    "continue",
+    "finish",
+    "continue",
+    "finish",
+    "continue",
+    "finish",
+    "continue",
+    "finish",
+    "continue",
+    "finish",
+    "continue"
+   ]
+  },
+  {
+   "name": "step-gcc-stepi",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "break count",
+    "run",
+    "stepi",
+    "stepi",
+    "nexti",
+    "x/4xw $sp",
+    "x/2xg $sp",
+    "info registers rip",
+    "p $pc",
+    "p $sp",
+    "p/x $rax"
+   ]
+  },
+  {
+   "name": "step-gcc-noproc",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "step"
+   ]
+  },
+  {
+   "name": "frame-gcc-bt-up-down",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "break main.c:6",
+    "run",
+    "continue",
+    "continue",
+    "continue",
+    "bt",
+    "up",
+    "down",
+    "frame 2",
+    "info locals",
+    "info args",
+    "up",
+    "up",
+    "up",
+    "up"
+   ]
+  },
+  {
+   "name": "frame-gcc-frame-errors",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "break depth_sum",
+    "run",
+    "frame 9"
+   ]
+  },
+  {
+   "name": "frame-gcc-down-bottom",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "break depth_sum",
+    "run",
+    "down"
+   ]
+  },
+  {
+   "name": "frame-gcc-bt-noproc",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "bt"
+   ]
+  },
+  {
+   "name": "frame-gcc-fault",
+   "prog": "c/exits/gcc-O0/prog",
+   "script": [
+    "run fault",
+    "bt",
+    "info locals"
+   ]
+  },
+  {
+   "name": "frame-gcc-leave",
+   "prog": "c/exits/gcc-O0/prog",
+   "script": [
+    "break leave",
+    "run 0 7",
+    "next",
+    "next",
+    "info locals"
+   ]
+  },
+  {
+   "name": "value-gcc-args-locals",
+   "prog": "c/values/gcc-O0/prog",
+   "script": [
+    "break inspect",
+    "run",
+    "info args",
+    "info locals"
+   ]
+  },
+  {
+   "name": "value-gcc-print",
+   "prog": "c/values/gcc-O0/prog",
+   "script": [
+    "break inspect",
+    "run",
+    "print c",
+    "print s",
+    "print i",
+    "print l",
+    "print u",
+    "print ul",
+    "print f",
+    "print d",
+    "print b",
+    "print p",
+    "print *p",
+    "output i",
+    "print $1",
+    "print nosuch"
+   ]
+  },
+  {
+   "name": "value-gcc-main-locals",
+   "prog": "c/values/gcc-O0/prog",
+   "script": [
+    "break main.c:37",
+    "run",
+    "info locals",
+    "print words",
+    "print cell",
+    "print &cell"
+   ]
+  },
+  {
+   "name": "value-gcc-x",
+   "prog": "c/values/gcc-O0/prog",
+   "script": [
+    "break main.c:37",
+    "run",
+    "x/4xw words",
+    "x/4dw words",
+    "x/2xg &cell",
+    "x/8xb &cell",
+    "x/2wx &cell"
+   ]
+  },
+  {
+   "name": "value-gcc-registers",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "break count",
+    "run",
+    "info registers"
+   ]
+  },
+  {
+   "name": "value-gcc-noproc",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "info locals"
+   ]
+  },
+  {
+   "name": "odd-gcc-signals",
+   "prog": "c/signals/gcc-O0/prog",
+   "script": [
+    "run",
+    "bt",
+    "continue"
+   ]
+  },
+  {
+   "name": "odd-gcc-forks",
+   "prog": "c/forks/gcc-O0/prog",
+   "script": [
+    "break child_work",
+    "run",
+    "bt",
+    "info args",
+    "continue"
+   ]
+  },
+  {
+   "name": "odd-gcc-stripped",
+   "prog": "c/exits/gcc-O0-stripped/prog",
+   "script": [
+    "break main",
+    "break code",
+    "info breakpoints",
+    "run 2"
+   ]
+  },
+  {
+   "name": "bp-clang-func-line-addr",
+   "prog": "c/calls/clang-O0/prog",
+   "script": [
+    "break depth_sum",
+    "break main.c:13",
+    "break *count",
+    "info breakpoints",
+    "run",
+    "info breakpoints",
+    "continue",
+    "continue",
+    "info breakpoints",
+    "delete 1",
+    "info breakpoints",
+    "delete",
+    "info breakpoints",
+    "continue"
+   ]
+  },
+  {
+   "name": "bp-clang-main-and-delete",
+   "prog": "c/exits/clang-O0/prog",
+   "script": [
+    "break code",
+    "run 5",
+    "kill",
+    "info breakpoints",
+    "bt"
+   ]
+  },
+  {
+   "name": "bp-clang-same-address",
+   "prog": "c/hits/clang-O0/prog",
+   "script": [
+    "break tick",
+    "break main.c:4",
+    "break *tick",
+    "info breakpoints",
+    "run",
+    "continue",
+    "info breakpoints"
+   ]
+  },
+  {
+   "name": "bp-clang-hits3",
+   "prog": "c/hits/clang-O0/prog",
+   "script": [
+    "break tick",
+    "run",
+    "continue",
+    "continue",
+    "info breakpoints",
+    "delete",
+    "continue"
+   ]
+  },
+  {
+   "name": "bp-clang-delete-current",
+   "prog": "c/hits/clang-O0/prog",
+   "script": [
+    "break tick",
+    "run",
+    "delete 1",
+    "continue"
+   ]
+  },
+  {
+   "name": "bp-clang-tbreak",
+   "prog": "c/hits/clang-O0/prog",
+   "script": [
+    "tbreak tick",
+    "run",
+    "info breakpoints",
+    "continue"
+   ]
+  },
+  {
+   "name": "bp-clang-current-pc",
+   "prog": "c/hits/clang-O0/prog",
+   "script": [
+    "break tick",
+    "run",
+    "break main.c:4",
+    "continue",
+    "continue",
+    "info breakpoints"
+   ]
+  },
+  {
+   "name": "bp-clang-bad-locations",
+   "prog": "c/calls/clang-O0/prog",
+   "script": [
+    "break nosuch"
+   ]
+  },
+  {
+   "name": "bp-clang-bad-line",
+   "prog": "c/calls/clang-O0/prog",
+   "script": [
+    "break main.c:99"
+   ]
+  },
+  {
+   "name": "bp-clang-bad-file",
+   "prog": "c/calls/clang-O0/prog",
+   "script": [
+    "break nosuch.c:3"
+   ]
+  },
+  {
+   "name": "bp-clang-bad-delete",
+   "prog": "c/calls/clang-O0/prog",
+   "script": [
+    "delete 5"
+   ]
+  },
+  {
+   "name": "bp-clang-info-empty",
+   "prog": "c/calls/clang-O0/prog",
+   "script": [
+    "info breakpoints"
+   ]
+  },
+  {
+   "name": "bp-clang-unmapped",
+   "prog": "c/calls/clang-O0/prog",
+   "script": [
+    "break *0x10",
+    "info breakpoints",
+    "run"
+   ]
+  },
+  {
+   "name": "step-clang-calls",
+   "prog": "c/calls/clang-O0/prog",
+   "script": [
+    "break main",
+    "run",
+    "step",
+    "step",
+    "bt",
+    "step",
+    "step",
+    "next",
+    "bt",
+    "finish",
+    "finish",
+    "next",
+    "step",
+    "next",
+    "next",
+    "until",
+    "until",
+    "until",
+    "until",
+    "info locals",
+    "next",
+    "next"
+   ]
+  },
+  {
+   "name": "step-clang-off-main-step",
+   "prog": "c/calls/clang-O0/prog",
+   "script": [
+    "break main.c:23",
+    "run",
+    "step",
+    "step",
+    "step"
+   ]
+  },
+  {
+   "name": "step-clang-off-main-next",
+   "prog": "c/calls/clang-O0/prog",
+   "script": [
+    "break main.c:23",
+    "run",
+    "next",
+    "next",
+    "next"
+   ]
+  },
+  {
+   "name": "step-clang-into-plain",
+   "prog": "c/calls/clang-O0/prog",
+   "script": [
+    "break main",
+    "run",
+    "step",
+    "step"
+   ]
+  },
+  {
+   "name": "step-clang-recursion-next",
+   "prog": "c/calls/clang-O0/prog",
+   "script": [
+    "break depth_sum",
+    "run",
+    "next",
+    "next",
+    "next",
+    "next",
+    "bt"
+   ]
+  },
+  {
+   "name": "step-clang-until-recursion",
+   "prog": "c/calls/clang-O0/prog",
+   "script": [
+    "break depth_sum",
+    "run",
+    "until",
+    "until",
+    "until",
+    "until"
+   ]
+  },
+  {
+   "name": "step-clang-finish-main",
+   "prog": "c/calls/clang-O0/prog",
+   "script": [
+    "break main",
+    "run",
+    "finish"
+   ]
+  },
+  {
+   "name": "step-clang-finish-types",
+   "prog": "c/values/clang-O0/prog",
+   "script": [
+    "break letter",
+    "break low_byte",
+    "break narrow",
+    "break widen",
+    "break all_ones",
+    "break third",
+    "break tenth",
+    "break positive",
+    "break address_of",
+    "run",
+    "finish",
+    "continue",
+    "finish",
+    "continue",
+    "finish",
+    "continue",
+    "finish",
+    "continue",
+    "finish",
+    "continue",
+    "finish",
+    "continue",
+    "finish",
+    "continue",
+    "finish",
+    "continue",
+    "finish",
+    "continue"
+   ]
+  },
+  {
+   "name": "step-clang-stepi",
+   "prog": "c/calls/clang-O0/prog",
+   "script": [
+    "break count",
+    "run",
+    "stepi",
+    "stepi",
+    "nexti",
+    "x/4xw $sp",
+    "x/2xg $sp",
+    "info registers rip",
+    "p $pc",
+    "p $sp",
+    "p/x $rax"
+   ]
+  },
+  {
+   "name": "step-clang-noproc",
+   "prog": "c/calls/clang-O0/prog",
+   "script": [
+    "step"
+   ]
+  },
+  {
+   "name": "frame-clang-bt-up-down",
+   "prog": "c/calls/clang-O0/prog",
+   "script": [
+    "break main.c:6",
+    "run",
+    "continue",
+    "continue",
+    "continue",
+    "bt",
+    "up",
+    "down",
+    "frame 2",
+    "info locals",
+    "info args",
+    "up",
+    "up",
+    "up",
+    "up"
+   ]
+  },
+  {
+   "name": "frame-clang-frame-errors",
+   "prog": "c/calls/clang-O0/prog",
+   "script": [
+    "break depth_sum",
+    "run",
+    "frame 9"
+   ]
+  },
+  {
+   "name": "frame-clang-down-bottom",
+   "prog": "c/calls/clang-O0/prog",
+   "script": [
+    "break depth_sum",
+    "run",
+    "down"
+   ]
+  },
+  {
+   "name": "frame-clang-bt-noproc",
+   "prog": "c/calls/clang-O0/prog",
+   "script": [
+    "bt"
+   ]
+  },
+  {
+   "name": "frame-clang-fault",
+   "prog": "c/exits/clang-O0/prog",
+   "script": [
+    "run fault",
+    "bt",
+    "info locals"
+   ]
+  },
+  {
+   "name": "frame-clang-leave",
+   "prog": "c/exits/clang-O0/prog",
+   "script": [
+    "break leave",
+    "run 0 7",
+    "next",
+    "next",
+    "info locals"
+   ]
+  },
+  {
+   "name": "value-clang-args-locals",
+   "prog": "c/values/clang-O0/prog",
+   "script": [
+    "break inspect",
+    "run",
+    "info args",
+    "info locals"
+   ]
+  },
+  {
+   "name": "value-clang-print",
+   "prog": "c/values/clang-O0/prog",
+   "script": [
+    "break inspect",
+    "run",
+    "print c",
+    "print s",
+    "print i",
+    "print l",
+    "print u",
+    "print ul",
+    "print f",
+    "print d",
+    "print b",
+    "print p",
+    "print *p",
+    "output i",
+    "print $1",
+    "print nosuch"
+   ]
+  },
+  {
+   "name": "value-clang-main-locals",
+   "prog": "c/values/clang-O0/prog",
+   "script": [
+    "break main.c:37",
+    "run",
+    "info locals",
+    "print words",
+    "print cell",
+    "print &cell"
+   ]
+  },
+  {
+   "name": "value-clang-x",
+   "prog": "c/values/clang-O0/prog",
+   "script": [
+    "break main.c:37",
+    "run",
+    "x/4xw words",
+    "x/4dw words",
+    "x/2xg &cell",
+    "x/8xb &cell",
+    "x/2wx &cell"
+   ]
+  },
+  {
+   "name": "value-clang-registers",
+   "prog": "c/calls/clang-O0/prog",
+   "script": [
+    "break count",
+    "run",
+    "info registers"
+   ]
+  },
+  {
+   "name": "value-clang-noproc",
+   "prog": "c/calls/clang-O0/prog",
+   "script": [
+    "info locals"
+   ]
+  },
+  {
+   "name": "odd-clang-signals",
+   "prog": "c/signals/clang-O0/prog",
+   "script": [
+    "run",
+    "bt",
+    "continue"
+   ]
+  },
+  {
+   "name": "odd-clang-forks",
+   "prog": "c/forks/clang-O0/prog",
+   "script": [
+    "break child_work",
+    "run",
+    "bt",
+    "info args",
+    "continue"
+   ]
+  },
+  {
+   "name": "odd-clang-stripped",
+   "prog": "c/exits/clang-O0-stripped/prog",
+   "script": [
+    "break main",
+    "break code",
+    "info breakpoints",
+    "run 2"
+   ]
+  },
+  {
+   "name": "wolf-scalars",
+   "prog": "wolf/scalars/wolf-debug/prog",
+   "script": [
+    "break helper",
+    "run",
+    "info args",
+    "info locals",
+    "bt",
+    "next",
+    "info locals",
+    "finish",
+    "next",
+    "next",
+    "next",
+    "next"
+   ]
+  },
+  {
+   "name": "wolf-nested",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "break main",
+    "run",
+    "step",
+    "step",
+    "bt",
+    "step",
+    "step",
+    "finish",
+    "step",
+    "step",
+    "up",
+    "info locals",
+    "down",
+    "finish"
+   ]
+  },
+  {
+   "name": "wolf-loops",
+   "prog": "wolf/loops/wolf-debug/prog",
+   "script": [
+    "break sum",
+    "run",
+    "next",
+    "next",
+    "next",
+    "next",
+    "next",
+    "info locals",
+    "until",
+    "until",
+    "until",
+    "until",
+    "info locals",
+    "next",
+    "next"
+   ]
+  },
+  {
+   "name": "wolf-recursion",
+   "prog": "wolf/recursion/wolf-debug/prog",
+   "script": [
+    "break depth",
+    "run",
+    "continue",
+    "continue",
+    "continue",
+    "bt",
+    "next",
+    "next",
+    "finish",
+    "next",
+    "finish",
+    "info locals",
+    "up",
+    "info locals"
+   ]
+  },
+  {
+   "name": "wolf-recursion-next",
+   "prog": "wolf/recursion/wolf-debug/prog",
+   "script": [
+    "break depth",
+    "run",
+    "next",
+    "next",
+    "next",
+    "next",
+    "bt"
+   ]
+  },
+  {
+   "name": "wolf-hits-tbreak",
+   "prog": "wolf/hits/wolf-debug/prog",
+   "script": [
+    "tbreak tick",
+    "run",
+    "info breakpoints",
+    "continue"
+   ]
+  },
+  {
+   "name": "wolf-exits-code",
+   "prog": "wolf/exits/wolf-debug/prog",
+   "script": [
+    "break code",
+    "run 4",
+    "bt",
+    "info args",
+    "info locals",
+    "finish"
+   ]
+  },
+  {
+   "name": "wolf-shared-name",
+   "prog": "wolf/shared-name/wolf-debug/prog",
+   "script": [
+    "break value",
+    "info breakpoints",
+    "run",
+    "bt",
+    "continue",
+    "bt",
+    "continue"
+   ]
+  },
+  {
+   "name": "wolf-start-stepi",
+   "prog": "wolf/scalars/wolf-debug/prog",
+   "script": [
+    "break *helper",
+    "run",
+    "bt",
+    "stepi",
+    "bt",
+    "stepi",
+    "bt",
+    "stepi",
+    "bt"
+   ]
+  },
+  {
+   "name": "wolf-types",
+   "prog": "wolf/types/wolf-debug/prog",
+   "script": [
+    "break scalars",
+    "run",
+    "info args",
+    "info locals",
+    "next",
+    "next",
+    "next",
+    "next",
+    "next",
+    "info locals",
+    "print c",
+    "print d",
+    "print f",
+    "print flag",
+    "finish"
+   ]
   }
  ]
 }

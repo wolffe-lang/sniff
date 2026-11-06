@@ -1,0 +1,64 @@
+Breakpoint 1 at 0x1156: file /work/fixtures/session/c/values/main.c, line 5.
+Breakpoint 2 at 0x1171: file /work/fixtures/session/c/values/main.c, line 6.
+Breakpoint 3 at 0x118b: file /work/fixtures/session/c/values/main.c, line 7.
+Breakpoint 4 at 0x11a6: file /work/fixtures/session/c/values/main.c, line 8.
+Breakpoint 5 at 0x11c4: file /work/fixtures/session/c/values/main.c, line 9.
+Breakpoint 6 at 0x11e3: file /work/fixtures/session/c/values/main.c, line 10.
+Breakpoint 7 at 0x120d: file /work/fixtures/session/c/values/main.c, line 11.
+Breakpoint 8 at 0x1235: file /work/fixtures/session/c/values/main.c, line 12.
+Breakpoint 9 at 0x1251: file /work/fixtures/session/c/values/main.c, line 13.
+
+Breakpoint 1, letter (c=65 'A') at /work/fixtures/session/c/values/main.c:5
+5	char letter(char c) { char next = c + 1; return next; }
+0x0000555555555340 in main () at /work/fixtures/session/c/values/main.c:26
+26	    char a = letter('A');
+Value returned is $1 = 66 'B'
+
+Breakpoint 2, low_byte (value=4660) at /work/fixtures/session/c/values/main.c:6
+6	unsigned char low_byte(unsigned value) { unsigned char low = value & 0xff; return low; }
+0x000055555555534d in main () at /work/fixtures/session/c/values/main.c:27
+27	    unsigned char lo = low_byte(0x1234);
+Value returned is $2 = 52 '4'
+
+Breakpoint 3, narrow (s=-300) at /work/fixtures/session/c/values/main.c:7
+7	short narrow(short s) { short twice = s * 2; return twice; }
+0x000055555555535a in main () at /work/fixtures/session/c/values/main.c:28
+28	    short n = narrow(-300);
+Value returned is $3 = -600
+
+Breakpoint 4, widen (v=7) at /work/fixtures/session/c/values/main.c:8
+8	long widen(int v) { long w = v; return w * 1000000000L; }
+0x0000555555555368 in main () at /work/fixtures/session/c/values/main.c:29
+29	    long w = widen(7);
+Value returned is $4 = 7000000000
+
+Breakpoint 5, all_ones () at /work/fixtures/session/c/values/main.c:9
+9	unsigned long all_ones(void) { unsigned long m = 0; return m - 1; }
+0x0000555555555371 in main () at /work/fixtures/session/c/values/main.c:30
+30	    unsigned long m = all_ones();
+Value returned is $5 = 18446744073709551615
+
+Breakpoint 6, third (f=1) at /work/fixtures/session/c/values/main.c:10
+10	float third(float f) { float t = f / 3; return t; }
+0x0000555555555384 in main () at /work/fixtures/session/c/values/main.c:31
+31	    float t = third(1.0f);
+Value returned is $6 = 0.333333343
+
+Breakpoint 7, tenth (d=1) at /work/fixtures/session/c/values/main.c:11
+11	double tenth(double d) { double t = d / 10; return t; }
+0x000055555555539c in main () at /work/fixtures/session/c/values/main.c:32
+32	    double x = tenth(1.0);
+Value returned is $7 = 0.10000000000000001
+
+Breakpoint 8, positive (v=5) at /work/fixtures/session/c/values/main.c:12
+12	bool positive(int v) { bool p = v > 0; return p; }
+0x00005555555553af in main () at /work/fixtures/session/c/values/main.c:33
+33	    bool ok = positive(5);
+Value returned is $8 = true
+
+Breakpoint 9, address_of (p=0x7fffffffebc4) at /work/fixtures/session/c/values/main.c:13
+13	int *address_of(int *p) { int *q = p; return q; }
+0x00005555555553be in main () at /work/fixtures/session/c/values/main.c:34
+34	    int *q = address_of(&cell);
+Value returned is $9 = (int *) 0x7fffffffebc4
+[Inferior 1 (process <PID>) exited normally]

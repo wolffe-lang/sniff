@@ -1,0 +1,5 @@
+Breakpoint 1 at 0x1134: file /work/fixtures/session/c/hits/main.c, line 4.
+
+Breakpoint 1, tick (n=0) at /work/fixtures/session/c/hits/main.c:4
+4	    return n + 1;
+[Inferior 1 (process <PID>) exited normally]

@@ -1,0 +1,31 @@
+Breakpoint 1 at 0x113b: file /work/fixtures/session/c/calls/main.c, line 6.
+Breakpoint 2 at 0x118e: file /work/fixtures/session/c/calls/main.c, line 13.
+Breakpoint 3 at 0x1180: file /work/fixtures/session/c/calls/main.c, line 11.
+Num     Type           Disp Enb Address            What
+1       breakpoint     keep y   0x000000000000113b in depth_sum at /work/fixtures/session/c/calls/main.c:6
+2       breakpoint     keep y   0x000000000000118e in count at /work/fixtures/session/c/calls/main.c:13
+3       breakpoint     keep y   0x0000000000001180 in count at /work/fixtures/session/c/calls/main.c:11
+
+Breakpoint 1, depth_sum (n=3) at /work/fixtures/session/c/calls/main.c:6
+6	    if (n == 0) return 0;
+Num     Type           Disp Enb Address            What
+1       breakpoint     keep y   0x000055555555513b in depth_sum at /work/fixtures/session/c/calls/main.c:6
+	breakpoint already hit 1 time
+2       breakpoint     keep y   0x000055555555518e in count at /work/fixtures/session/c/calls/main.c:13
+3       breakpoint     keep y   0x0000555555555180 in count at /work/fixtures/session/c/calls/main.c:11
+
+Breakpoint 1, depth_sum (n=2) at /work/fixtures/session/c/calls/main.c:6
+6	    if (n == 0) return 0;
+
+Breakpoint 1, depth_sum (n=1) at /work/fixtures/session/c/calls/main.c:6
+6	    if (n == 0) return 0;
+Num     Type           Disp Enb Address            What
+1       breakpoint     keep y   0x000055555555513b in depth_sum at /work/fixtures/session/c/calls/main.c:6
+	breakpoint already hit 3 times
+2       breakpoint     keep y   0x000055555555518e in count at /work/fixtures/session/c/calls/main.c:13
+3       breakpoint     keep y   0x0000555555555180 in count at /work/fixtures/session/c/calls/main.c:11
+Num     Type           Disp Enb Address            What
+2       breakpoint     keep y   0x000055555555518e in count at /work/fixtures/session/c/calls/main.c:13
+3       breakpoint     keep y   0x0000555555555180 in count at /work/fixtures/session/c/calls/main.c:11
+No breakpoints, watchpoints, tracepoints, or catchpoints.
+[Inferior 1 (process <PID>) exited normally]

@@ -1,0 +1,8 @@
+Breakpoint 1 at 0x1199: file /work/fixtures/session/c/exits/main.c, line 7.
+
+Breakpoint 1, code (text=0x7fffffffef53 "5") at /work/fixtures/session/c/exits/main.c:7
+7	    int value = atoi(text);
+[Inferior 1 (process <PID>) killed]
+Num     Type           Disp Enb Address            What
+1       breakpoint     keep y   0x0000555555555199 in code at /work/fixtures/session/c/exits/main.c:7
+	breakpoint already hit 1 time

@@ -1,0 +1,16 @@
+Breakpoint 1 at 0x12a1: file /work/fixtures/session/c/values/main.c, line 17.
+
+Breakpoint 1, inspect (c=122 'z', s=-2, i=3, l=-4000000000, u=5, ul=6, f=0.5, d=0.10000000000000001, b=true, p=0x7fffffffebf8) at /work/fixtures/session/c/values/main.c:17
+17	    int sum = c + s + i + (int)l + (int)u + (int)ul;
+$1 = 122 'z'
+$2 = -2
+$3 = 3
+$4 = -4000000000
+$5 = 5
+$6 = 6
+$7 = 0.5
+$8 = 0.10000000000000001
+$9 = true
+$10 = (int *) 0x7fffffffebf8
+$11 = -7
+3$12 = 122 'z'

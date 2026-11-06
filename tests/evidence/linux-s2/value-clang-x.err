@@ -1,0 +1,3 @@
+No line 37 in file "main.c".
+/work/target/s2/value-clang-x.cmd:3: Error in sourced command file:
+No symbol "words" in current context.

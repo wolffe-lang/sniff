@@ -1,0 +1,13 @@
+Breakpoint 1 at 0x116a: file /work/fixtures/session/c/calls/main.c, line 12.
+
+Breakpoint 1, count (limit=5) at /work/fixtures/session/c/calls/main.c:12
+12	    int total = 0;
+13	    for (int i = 0; i < limit; i++) {
+13	    for (int i = 0; i < limit; i++) {
+0x0000555555555184	13	    for (int i = 0; i < limit; i++) {
+0x7fffffffebf0:	0xffffec10	0x00007fff	0x555551c1	0x00005555
+0x7fffffffebf0:	0x00007fffffffec10	0x00005555555551c1
+rip            0x555555555184      0x555555555184 <count+37>
+$1 = (void (*)()) 0x555555555184 <count+37>
+$2 = (void *) 0x7fffffffebf0
+$3 = 0x6

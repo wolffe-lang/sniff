@@ -1,0 +1,19 @@
+Breakpoint 1 at 0xa530: file /work/fixtures/wolf/scalars/main.lu, line 2.
+
+Breakpoint 1, 0x000055555555e530 in helper (a=3, b=4) at /work/fixtures/wolf/scalars/main.lu:2
+2	    let s = a + b
+#0  0x000055555555e530 in helper (a=3, b=4) at /work/fixtures/wolf/scalars/main.lu:2
+#1  0x000055555555e5f0 in main () at /work/fixtures/wolf/scalars/main.lu:9
+#2  0x000055555555e647 in main ()
+0x000055555555e531	2	    let s = a + b
+#0  0x000055555555e531 in helper (a=3, b=4) at /work/fixtures/wolf/scalars/main.lu:2
+#1  0x000055555555e5f0 in main () at /work/fixtures/wolf/scalars/main.lu:9
+#2  0x000055555555e647 in main ()
+0x000055555555e534	2	    let s = a + b
+#0  0x000055555555e534 in helper (a=648540061696, b=32768) at /work/fixtures/wolf/scalars/main.lu:2
+#1  0x000055555555e5f0 in main () at /work/fixtures/wolf/scalars/main.lu:9
+#2  0x000055555555e647 in main ()
+0x000055555555e538	2	    let s = a + b
+#0  0x000055555555e538 in helper (a=648540061696, b=32768) at /work/fixtures/wolf/scalars/main.lu:2
+#1  0x000055555555e5f0 in main () at /work/fixtures/wolf/scalars/main.lu:9
+#2  0x000055555555e647 in main ()

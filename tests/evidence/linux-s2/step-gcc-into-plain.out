@@ -1,0 +1,7 @@
+Breakpoint 1 at 0x119d: file /work/fixtures/session/c/calls/main.c, line 20.
+
+Breakpoint 1, main () at /work/fixtures/session/c/calls/main.c:20
+20	    int a = plain_twice(4);
+21	    int b = depth_sum(3);
+depth_sum (n=3) at /work/fixtures/session/c/calls/main.c:6
+6	    if (n == 0) return 0;

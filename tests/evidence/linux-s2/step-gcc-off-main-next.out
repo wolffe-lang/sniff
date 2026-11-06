@@ -1,0 +1,6 @@
+Breakpoint 1 at 0x11c4: file /work/fixtures/session/c/calls/main.c, line 23.
+
+Breakpoint 1, main () at /work/fixtures/session/c/calls/main.c:23
+23	    return a + b + c - 24;
+24	}
+0x00007ffff7dcf1ca in ?? () from /lib/x86_64-linux-gnu/libc.so.6

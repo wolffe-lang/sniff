@@ -1,0 +1,4 @@
+Breakpoint 1 at 0x1138: file /work/fixtures/session/c/calls/main.c, line 6.
+
+Breakpoint 1, depth_sum (n=3) at /work/fixtures/session/c/calls/main.c:6
+6	    if (n == 0) return 0;

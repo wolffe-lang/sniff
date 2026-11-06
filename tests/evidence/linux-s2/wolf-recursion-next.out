@@ -1,0 +1,17 @@
+Breakpoint 1 at 0xa53a: file /work/fixtures/session/wolf/recursion/main.lu, line 2.
+
+Breakpoint 1, depth (n=3) at /work/fixtures/session/wolf/recursion/main.lu:2
+2	    if n == 0 { return 0 }
+3	    let below = depth(n - 1)
+
+Breakpoint 1, depth (n=2) at /work/fixtures/session/wolf/recursion/main.lu:2
+2	    if n == 0 { return 0 }
+3	    let below = depth(n - 1)
+
+Breakpoint 1, depth (n=1) at /work/fixtures/session/wolf/recursion/main.lu:2
+2	    if n == 0 { return 0 }
+#0  depth (n=1) at /work/fixtures/session/wolf/recursion/main.lu:2
+#1  0x000055555555e563 in depth (n=2) at /work/fixtures/session/wolf/recursion/main.lu:3
+#2  0x000055555555e563 in depth (n=3) at /work/fixtures/session/wolf/recursion/main.lu:3
+#3  0x000055555555e5fb in main () at /work/fixtures/session/wolf/recursion/main.lu:8
+#4  0x000055555555e653 in main ()

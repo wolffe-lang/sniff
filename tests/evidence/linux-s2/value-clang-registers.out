@@ -1,0 +1,30 @@
+Breakpoint 1 at 0x1187: file /work/fixtures/session/c/calls/main.c, line 12.
+
+Breakpoint 1, count (limit=5) at /work/fixtures/session/c/calls/main.c:12
+12	    int total = 0;
+rax            0x6                 6
+rbx            0x7fffffffed28      140737488350504
+rcx            0x555555557e08      93824992247304
+rdx            0x7fffffffed38      140737488350520
+rsi            0x7fffffffed28      140737488350504
+rdi            0x5                 5
+rbp            0x7fffffffebe0      0x7fffffffebe0
+rsp            0x7fffffffebe0      0x7fffffffebe0
+r8             0x0                 0
+r9             0x7ffff7fca380      140737353917312
+r10            0x7fffffffe920      140737488349472
+r11            0x203               515
+r12            0x1                 1
+r13            0x0                 0
+r14            0x555555557e08      93824992247304
+r15            0x7ffff7ffd000      140737354125312
+rip            0x555555555187      0x555555555187 <count+7>
+eflags         0x202               [ IF ]
+cs             0x33                51
+ss             0x2b                43
+ds             0x0                 0
+es             0x0                 0
+fs             0x0                 0
+gs             0x0                 0
+fs_base        0x7ffff7da2740      140737351657280
+gs_base        0x0                 0

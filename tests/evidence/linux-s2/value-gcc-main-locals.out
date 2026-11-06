@@ -1,0 +1,19 @@
+Breakpoint 1 at 0x1416: file /work/fixtures/session/c/values/main.c, line 37.
+
+Breakpoint 1, main () at /work/fixtures/session/c/values/main.c:37
+37	}
+cell = -7
+words = {1, 2, 3, 4}
+a = 66 'B'
+lo = 52 '4'
+n = -600
+w = 7000000000
+m = 18446744073709551615
+t = 0.333333343
+x = 0.10000000000000001
+ok = true
+q = 0x7fffffffebc4
+r = 294967423
+$1 = {1, 2, 3, 4}
+$2 = -7
+$3 = (int *) 0x7fffffffebc4
