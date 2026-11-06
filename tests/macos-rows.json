@@ -355,6 +355,10 @@
     {
      "match": "^(Breakpoint 1, )?0xA in (\\?\\?|_mh_execute_header) \\(\\)$",
      "why": "a stripped Mach-O keeps its exported header symbol, which sniff names a pc after; stripped ELF has none"
+    },
+    {
+     "match": "^1 +breakpoint +keep y +0xA",
+     "why": "the breakpoint's What column names the nearest Mach-O symbol (the exported header) where stripped ELF has none"
     }
    ]
   },
