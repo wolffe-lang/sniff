@@ -1,0 +1,55 @@
+request PTRACE_TRACEME 0
+request PTRACE_PEEKTEXT 1
+request PTRACE_PEEKDATA 2
+request PTRACE_PEEKUSER 3
+request PTRACE_POKETEXT 4
+request PTRACE_POKEDATA 5
+request PTRACE_POKEUSER 6
+request PTRACE_CONT 7
+request PTRACE_KILL 8
+request PTRACE_SINGLESTEP 9
+request PTRACE_GETREGS 12
+request PTRACE_SETREGS 13
+request PTRACE_SETOPTIONS 16896
+request PTRACE_O_EXITKILL 1048576
+request PTRACE_GETFPREGS 14
+request PTRACE_DETACH 17
+request PTRACE_GETEVENTMSG 16897
+request PTRACE_O_TRACEFORK 2
+request PTRACE_O_TRACEVFORK 4
+request ADDR_NO_RANDOMIZE 262144
+regs size 27
+regs r15 0
+regs r14 1
+regs r13 2
+regs r12 3
+regs rbp 4
+regs rbx 5
+regs r11 6
+regs r10 7
+regs r9 8
+regs r8 9
+regs rax 10
+regs rcx 11
+regs rdx 12
+regs rsi 13
+regs rdi 14
+regs orig_rax 15
+regs rip 16
+regs cs 17
+regs eflags 18
+regs rsp 19
+regs ss 20
+regs fs_base 21
+regs gs_base 22
+regs ds 23
+regs es 24
+regs fs 25
+regs gs 26
+wait exit0 raw=0 exited=1 exitstatus=0 signaled=0 termsig=-1 coredump=0
+wait exit3 raw=768 exited=1 exitstatus=3 signaled=0 termsig=-1 coredump=0
+wait exit255 raw=65280 exited=1 exitstatus=255 signaled=0 termsig=-1 coredump=0
+wait sigsegv raw=139 exited=0 exitstatus=-1 signaled=1 termsig=11 coredump=1
+wait sigkill raw=9 exited=0 exitstatus=-1 signaled=1 termsig=9 coredump=0
+wait sigabrt raw=134 exited=0 exitstatus=-1 signaled=1 termsig=6 coredump=1
+wait exec-stop raw=1407 stopped=1 stopsig=5

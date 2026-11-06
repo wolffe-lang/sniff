@@ -88,8 +88,8 @@ pub fn target_spawn(path: str, args: List[str], env_lines: str, env_columns: str
         argv[args.len + 1] = 0
         let pid = fork()
         if pid == 0 {
-            let _ = ptrace(0, 0, 0 as u64, 0 as u64)
-            let _ = personality(0x0040000 as u64)
+            let _ = ptrace(req_traceme as i32, 0, 0 as u64, 0 as u64)
+            let _ = personality(addr_no_randomize as u64)
             // gdb runs the program through a shell with LINES and COLUMNS set, and
             // the shell exports PWD: the same environment keeps stack addresses equal.
             if env_lines.bytes().len > 0 {
@@ -115,7 +115,7 @@ pub fn target_spawn(path: str, args: List[str], env_lines: str, env_columns: str
         let fd = open(cstr("/proc/{pid}/mem"), 0)
         // PTRACE_SETOPTIONS: EXITKILL (the child never outlives sniff), TRACEFORK and
         // TRACEVFORK (so a forked child can be detached with its breakpoints removed).
-        let _ = ptrace(0x4200, pid, 0 as u64, 0x100006 as u64)
+        let _ = ptrace(req_setoptions as i32, pid, 0 as u64, (opt_exitkill + opt_tracefork + opt_tracevfork) as u64)
         Target { pid: pid as int, memfd: fd as int, status: tgt.status, regs: tgt.regs, word: tgt.word }
     }
 }
@@ -134,13 +134,13 @@ pub fn target_wait(t: Target) -> int {
 /// PTRACE_CONT, delivering sig (0 for none).
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 pub fn target_cont(t: Target, sig: int) -> int {
-    unsafe { ptrace(7, t.pid as i32, 0 as u64, sig as u64) as int }
+    unsafe { ptrace(req_cont as i32, t.pid as i32, 0 as u64, sig as u64) as int }
 }
 
 /// PTRACE_SINGLESTEP, delivering sig (0 for none).
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 pub fn target_step(t: Target, sig: int) -> int {
-    unsafe { ptrace(9, t.pid as i32, 0 as u64, sig as u64) as int }
+    unsafe { ptrace(req_singlestep as i32, t.pid as i32, 0 as u64, sig as u64) as int }
 }
 
 /// Kill the child with SIGKILL and reap it. Returns the final raw status.
@@ -157,7 +157,7 @@ pub fn target_kill(t: Target) -> int {
             if w != t.pid as i32 { return last }
             last = status[0] as int
             if (last & 127) != 127 && (last & 255) != 127 { return last }
-            let _ = ptrace(7, t.pid as i32, 0 as u64, 9 as u64)
+            let _ = ptrace(req_cont as i32, t.pid as i32, 0 as u64, 9 as u64)
             n += 1
         }
         last
@@ -170,7 +170,7 @@ pub fn target_regs(t: Target) -> List[u64] {
     unsafe {
         var out: List[u64] = []
         let regs = t.regs as *u64
-        let r = ptrace(12, t.pid as i32, 0 as u64, t.regs)
+        let r = ptrace(req_getregs as i32, t.pid as i32, 0 as u64, t.regs)
         if r < 0 { return out }
         var i = 0
         while i < 27 {
@@ -192,7 +192,7 @@ pub fn target_set_regs(t: Target, regs: List[u64]) -> int {
             slots[i] = regs[i]
             i += 1
         }
-        ptrace(13, t.pid as i32, 0 as u64, t.regs) as int
+        ptrace(req_setregs as i32, t.pid as i32, 0 as u64, t.regs) as int
     }
 }
 
@@ -222,7 +222,7 @@ fn peek_word(t: Target, addr: u64) -> Bytes {
         var out: List[byte] = []
         let e = __errno_location()
         e[0] = 0
-        let w = ptrace(2, t.pid as i32, addr, 0 as u64)
+        let w = ptrace(req_peekdata as i32, t.pid as i32, addr, 0 as u64)
         if w == -1 && e[0] != 0 { return Bytes { ok: false, data: out } }
         let ww = w as wrapping[u64]
         let u = ww as u64
@@ -264,7 +264,7 @@ pub fn target_write(t: Target, addr: u64, data: List[byte]) -> bool {
                 w = w | ((b as u64) << (8 * j as u64))
                 j += 1
             }
-            let r = ptrace(5, t.pid as i32, start, w)
+            let r = ptrace(req_pokedata as i32, t.pid as i32, start, w)
             if r < 0 { return false }
             off += chunk
         }
@@ -279,7 +279,7 @@ pub fn target_xmm0(t: Target) -> List[byte] {
     unsafe {
         var out: List[byte] = []
         let buf = c.calloc(1, 512) as *u8
-        let r = ptrace(14, t.pid as i32, 0 as u64, buf as u64)
+        let r = ptrace(req_getfpregs as i32, t.pid as i32, 0 as u64, buf as u64)
         if r < 0 { return out }
         var i = 0
         while i < 16 {
@@ -293,7 +293,7 @@ pub fn target_xmm0(t: Target) -> List[byte] {
 /// Detach from a traced pid after restoring nothing: used for forked children.
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 pub fn target_detach(pid: int) -> int {
-    unsafe { ptrace(17, pid as i32, 0 as u64, 0 as u64) as int }
+    unsafe { ptrace(req_detach as i32, pid as i32, 0 as u64, 0 as u64) as int }
 }
 
 /// The pid of the child a fork event stopped on (PTRACE_GETEVENTMSG).
@@ -301,7 +301,7 @@ pub fn target_detach(pid: int) -> int {
 pub fn target_event_pid(t: Target) -> int {
     unsafe {
         let buf = c.calloc(1, 8) as *u64
-        let r = ptrace(16897, t.pid as i32, 0 as u64, buf as u64)
+        let r = ptrace(req_geteventmsg as i32, t.pid as i32, 0 as u64, buf as u64)
         if r < 0 { return 0 - 1 }
         buf[0] as int
     }

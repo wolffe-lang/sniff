@@ -2,6 +2,39 @@
 // (user_regs_struct order, measured by tools/abi-probe.c) and wait-status
 // decoding (wait(2)). No platform calls here.
 
+/// ptrace(2) requests, options and personality flag, as measured by tools/abi-probe.c.
+pub const req_traceme: int = 0
+/// PTRACE_PEEKDATA.
+pub const req_peekdata: int = 2
+/// PTRACE_POKEDATA.
+pub const req_pokedata: int = 5
+/// PTRACE_CONT.
+pub const req_cont: int = 7
+/// PTRACE_KILL.
+pub const req_kill: int = 8
+/// PTRACE_SINGLESTEP.
+pub const req_singlestep: int = 9
+/// PTRACE_GETREGS.
+pub const req_getregs: int = 12
+/// PTRACE_SETREGS.
+pub const req_setregs: int = 13
+/// PTRACE_GETFPREGS.
+pub const req_getfpregs: int = 14
+/// PTRACE_DETACH.
+pub const req_detach: int = 17
+/// PTRACE_SETOPTIONS.
+pub const req_setoptions: int = 16896
+/// PTRACE_GETEVENTMSG.
+pub const req_geteventmsg: int = 16897
+/// PTRACE_O_TRACEFORK.
+pub const opt_tracefork: int = 2
+/// PTRACE_O_TRACEVFORK.
+pub const opt_tracevfork: int = 4
+/// PTRACE_O_EXITKILL.
+pub const opt_exitkill: int = 1048576
+/// personality(2) ADDR_NO_RANDOMIZE.
+pub const addr_no_randomize: int = 262144
+
 /// One traced child and the scratch the calls share (addresses of C buffers
 /// are held as integers: the module boundary stays free of raw pointers).
 pub struct Target {

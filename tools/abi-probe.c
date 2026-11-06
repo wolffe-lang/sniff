@@ -2,7 +2,7 @@
 /* R-sn02-3: print the ptrace request numbers, the user_regs_struct layout
  * and the wait-status truth table by compiling against the C library and
  * running, so no header text is read. Output is committed as
- * tests/evidence/linux-session/abi.txt and checked by tools/check-abi.py. */
+ * tests/evidence/linux-s2/abi.txt and checked by tools/check-abi.py. */
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <sys/ptrace.h>
 #include <sys/personality.h>
+#include <sys/resource.h>
 #include <sys/user.h>
 #include <sys/wait.h>
 
@@ -30,10 +31,14 @@ static void status(const char *name, int code, int sig) {
 }
 
 int main(void) {
+    /* no core files: the raw status of SIGSEGV must not depend on ulimit -c */
+    struct rlimit nocore = {0, 0};
+    setrlimit(RLIMIT_CORE, &nocore);
     REQ(PTRACE_TRACEME); REQ(PTRACE_PEEKTEXT); REQ(PTRACE_PEEKDATA); REQ(PTRACE_PEEKUSER);
     REQ(PTRACE_POKETEXT); REQ(PTRACE_POKEDATA); REQ(PTRACE_POKEUSER); REQ(PTRACE_CONT);
     REQ(PTRACE_KILL); REQ(PTRACE_SINGLESTEP); REQ(PTRACE_GETREGS); REQ(PTRACE_SETREGS);
-    REQ(PTRACE_SETOPTIONS); REQ(PTRACE_O_EXITKILL);
+    REQ(PTRACE_SETOPTIONS); REQ(PTRACE_O_EXITKILL); REQ(PTRACE_GETFPREGS); REQ(PTRACE_DETACH);
+    REQ(PTRACE_GETEVENTMSG); REQ(PTRACE_O_TRACEFORK); REQ(PTRACE_O_TRACEVFORK);
     printf("request ADDR_NO_RANDOMIZE %d\n", (int)ADDR_NO_RANDOMIZE);
     printf("regs size %d\n", (int)(sizeof(struct user_regs_struct) / 8));
     OFF(r15); OFF(r14); OFF(r13); OFF(r12); OFF(rbp); OFF(rbx); OFF(r11); OFF(r10); OFF(r9); OFF(r8);
