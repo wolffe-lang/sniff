@@ -73,6 +73,17 @@ struct Prog {
     pub entry: u64,
     pub pie: bool,
     pub maps: List[SecMap],
+    /// The executable's own bytes when the DWARF lives in another file (a Mach-O image with its dSYM); empty for ELF.
+    pub img: List[byte],
+    /// The image's own sections (its __eh_frame, for Mach-O).
+    pub isecs: readers.DebugSections,
+    /// The file address of the image's text segment (what the slide is measured from).
+    pub text_addr: u64,
+    /// Where __unwind_info sits in the image: file offset and size, size 0 when absent.
+    pub ui_off: int,
+    pub ui_size: int,
+    /// The dSYM companion's path when one was paired, else "".
+    pub dsym: str,
 }
 
 /// Bytes of a span as text; invalid UTF-8 yields the empty string.
@@ -101,6 +112,11 @@ fn prog_failed(why: str) -> Prog {
         info: readers.DwarfInfo { info: copy none, abbrev: copy none, units: [], entries: [], attributes: [],
             tables: [], die_count: 0, abbreviation_tables_read: 0, fuel_remaining: 0 },
         has_info: false, units: [], files: [], lines: [], funcs: [], syms: [], entry: 0, pie: false, maps: [],
+        img: [], isecs: readers.DebugSections { format: 0, info: copy sec, abbrev: copy sec, line: copy sec, str: copy sec,
+            line_str: copy sec, str_offsets: copy sec, addr: copy sec, ranges: copy sec, rnglists: copy sec,
+            loc: copy sec, loclists: copy sec, frame: copy sec, eh_frame: copy sec, types: copy sec,
+            has_split_dwarf: false, has_compact_unwind: false },
+        text_addr: 0, ui_off: 0, ui_size: 0, dsym: "",
     }
 }
 
@@ -259,12 +275,14 @@ fn prog_load(path: str) -> Prog {
     let size = fs_size(path) else |err| { return prog_failed("cannot read {path}: {err}") }
     if size > 268435456 { return prog_failed("{path} is too large") }
     let data = fs_read_bytes(path) else |err| { return prog_failed("cannot read {path}: {err}") }
+    if data.len >= 4 && data[0] as int == 207 && data[1] as int == 250 && data[2] as int == 237 && data[3] as int == 254 {
+        return prog_load_macho(path, data)
+    }
     let elf = readers.elf_read(data, 131072, 1048576, 100000000) else |err| {
         return prog_failed("{path}: not in executable format: {err}")
     }
     var p = prog_failed("")
     p.path = path
-    p.data = copy data
     p.entry = elf.entry
     p.pie = elf.file_type == 3
     var m: int = 0
@@ -284,12 +302,20 @@ fn prog_load(path: str) -> Prog {
         }
         i += 1
     }
-    let secs = readers.object_sections(data) else |err| { return p }
+    load_dwarf(mut p, data)
+    p
+}
+
+/// Read the DWARF sections of `data` (the executable for ELF, the dSYM's DWARF file for
+/// Mach-O) into p: units, line table and subprograms. A file without DWARF leaves has_info false.
+fn load_dwarf(mut p: Prog, data: List[byte]) {
+    p.data = copy data
+    let secs = readers.object_sections(data) else |err| { return }
     p.secs = copy secs
-    if !secs.info.present || secs.info.span.length == 0 { return p }
+    if !secs.info.present || secs.info.span.length == 0 { return }
     let info = readers.dwarf_info_read(data, secs.info.span, secs.abbrev.span, readers.dwarf_info_limits()) else |err| {
         p.err = "dwarf: {err}"
-        return p
+        return
     }
     p.info = copy info
     p.has_info = true
@@ -313,7 +339,7 @@ fn prog_load(path: str) -> Prog {
                     let table = readers.dwarf_line_read(data, span, u.address_size, secs.str.span, secs.line_str.span,
                         100000000, 1048576) else |err| {
                         p.err = "line table: {err}"
-                        return p
+                        return
                     }
                     var r: int = 0
                     var prev_line: u64 = 0
@@ -378,6 +404,89 @@ fn prog_load(path: str) -> Prog {
         }
         e += 1
     }
+}
+
+
+fn path_base_name(path: str) -> str {
+    let bytes = path.bytes()
+    var cut: int = 0
+    var i: int = 0
+    while i < bytes.len {
+        if bytes[i] as int == 47 { cut = i + 1 }
+        i += 1
+    }
+    var out: List[byte] = []
+    i = cut
+    while i < bytes.len { (mut out).push(bytes[i]); i += 1 }
+    str_from_utf8(out) else { "" }
+}
+
+fn sym_order(a: Sym, b: Sym) -> bool { a.addr <= b.addr }
+
+/// A thin arm64 Mach-O executable (Apple's mach-o/loader.h) and its dSYM, paired by UUID.
+/// The image gives sections, symbols and the unwind data; the dSYM's DWARF file gives units,
+/// lines and subprograms. A dSYM whose UUID differs is refused by name (dsym_uuid_mismatch);
+/// a missing dSYM leaves the image's own debug sections, if any, and else symbols only.
+fn prog_load_macho(path: str, data: List[byte]) -> Prog {
+    let mach = readers.macho_read(data, 100000000) else |err| { return prog_failed("{path}: not in executable format: {err}") }
+    var p = prog_failed("")
+    p.path = path
+    p.pie = true
+    p.img = copy data
+    var text_index: int = 0 - 1
+    var m: int = 0
+    while m < mach.sections.len {
+        let sec = copy mach.sections[m]
+        if sec.has_file_data && sec.size > 0 {
+            (mut p.maps).push(SecMap { addr: sec.address, off: sec.file_offset, size: sec.size })
+        }
+        let nm = span_text(data, sec.name)
+        if nm == "__text" { text_index = m }
+        if nm == "__unwind_info" && sec.has_file_data { p.ui_off = sec.file_offset as int; p.ui_size = sec.size as int }
+        m += 1
+    }
+    p.text_addr = 4294967296
+    var i: int = 0
+    while i < mach.symbols.len {
+        let sy = copy mach.symbols[i]
+        let name = span_text(data, sy.name)
+        if name == "__mh_execute_header" { p.text_addr = sy.value }
+        // defined in a section (N_SECT), not a debugging entry, and in __text
+        if (sy.kind & 224) == 0 && (sy.kind & 14) == 14 && sy.section as int == text_index + 1 && sy.value != 0 {
+            if !name.starts_with("ltmp") && !name.starts_with("l_") {
+                let shown = name.strip_prefix("_") else { name }
+                (mut p.syms).push(Sym { name: shown, addr: sy.value, size: 0 })
+            }
+        }
+        i += 1
+    }
+    (mut p.syms).sort_by(sym_order)
+    // the linker records no sizes: a symbol runs to the next one, the last to the end of __text
+    var text_end: u64 = 0
+    if text_index >= 0 { text_end = mach.sections[text_index].address + mach.sections[text_index].size }
+    i = 0
+    while i < p.syms.len {
+        var next = text_end
+        var k = i + 1
+        while k < p.syms.len {
+            if p.syms[k].addr > p.syms[i].addr { next = p.syms[k].addr; break }
+            k += 1
+        }
+        if next > p.syms[i].addr { p.syms[i].size = next - p.syms[i].addr }
+        i += 1
+    }
+    let isecs = readers.object_sections(data) else |err| { return prog_failed("{path}: {err}") }
+    p.isecs = copy isecs
+    // the companion: Apple's bundle layout, Contents/Resources/DWARF/<binary-name>
+    let companion = "{path}.dSYM/Contents/Resources/DWARF/{path_base_name(path)}"
+    let dsym = fs_read_bytes(companion) else |err| {
+        if isecs.info.present && isecs.info.span.length > 0 { load_dwarf(mut p, data) }
+        return p
+    }
+    let dobj = readers.macho_read(dsym, 100000000) else |err| { return prog_failed("{companion}: not in dSYM format: {err}") }
+    readers.macho_match_uuid(data, mach, dsym, dobj) else |err| { return prog_failed("{path}: {err} ({companion})") }
+    p.dsym = companion
+    load_dwarf(mut p, dsym)
     p
 }
 
@@ -391,7 +500,9 @@ fn file_bytes_at(p: Prog, addr: u64, n: int) -> List[byte] {
             var k: u64 = 0
             while k < n as u64 && addr + k < m.addr + m.size {
                 let at = (m.off + (addr - m.addr) + k) as int
-                if at < p.data.len { (mut out).push(p.data[at]) }
+                if p.img.len > 0 {
+                    if at < p.img.len { (mut out).push(p.img[at]) }
+                } else if at < p.data.len { (mut out).push(p.data[at]) }
                 k += 1
             }
             return out
