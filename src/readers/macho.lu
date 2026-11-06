@@ -74,6 +74,9 @@ pub struct MachObject {
     pub has_uuid: bool,
     pub uuid: ByteSpan,
     pub has_compact_unwind: bool,
+    /// Dylib install names in load-command order: library ordinal N names
+    /// dylibs[N - 1] (SDK nlist.h, two-level namespace).
+    pub dylibs: List[ByteSpan],
 }
 
 fn macho_range(offset: u64, size: u64, limit: int) -> ByteSpan ! MachError {
@@ -169,6 +172,7 @@ pub fn macho_read(data: List[byte], fuel: int) -> MachObject ! MachError {
         has_uuid: false,
         uuid: ByteSpan { start: 0, length: 0 },
         has_compact_unwind: false,
+        dylibs: [],
     }
     var has_symbols = false
     var symbol_offset: u64 = 0
@@ -268,6 +272,16 @@ pub fn macho_read(data: List[byte], fuel: int) -> MachObject ! MachError {
             symbol_count = uint_le(data, mut c, 4)?
             string_offset = uint_le(data, mut c, 4)?
             string_size = uint_le(data, mut c, 4)?
+        } else if kind == 0x0c || kind == 0x20 || kind == 0x80000018 || kind == 0x8000001f ||
+            kind == 0x80000023 {
+            // dylib_command: an lc_str offset, then three version fields.
+            if command_size < 24 { return invalid_load_commands }
+            let offset = macho_u(data, mut c, command + 8, 4)?
+            if offset < 24 || offset >= command_size { return invalid_load_commands }
+            var text = cursor(command + offset as int, next, c.fuel)
+            let name = cstring(data, mut text) else { return invalid_load_commands }
+            c.fuel = text.fuel
+            (mut object.dylibs).push(name)
         } else if kind == 0x1b {
             if command_size != 24 { return invalid_load_commands }
             if object.has_uuid { return duplicate_uuid }
