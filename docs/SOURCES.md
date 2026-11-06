@@ -115,6 +115,28 @@ is stated explicitly; downloading a document was not counted as reading it.
   `Contents/Resources/DWARF/<binary-name>`; appropriate architecture UUIDs
   must match. Compact-unwind presence is independent of empty DWARF CFI.
 
+## Consulted for S1, continued (2026-11-06)
+
+| Reference | Coverage |
+|---|---|
+| LSB Core 5.0 [Symbol Versioning](https://refspecs.linuxfoundation.org/LSB_5.0.0/LSB-Core-generic/LSB-Core-generic/symversion.html) | Complete §10.7: the `.gnu.version` array (values 0 and 1 reserved, bit 15 hidden) and the `Elfxx_Verneed`/`Elfxx_Vernaux` layouts used for `.dynsym` version suffixes in `--symbols`. SHA-256 of the page read `982fe1208c76eda09d8619f3907783899e4e73b19c34f3e22314fb36cc8f7f91`. |
+| DWARF 5 chapter 7 encoding tables | `src/dump/names.lu` was generated once from the spec text's Tables 7.2-7.30, not from any other reader's tables. |
+| AMD64 psABI Figure 3.36 | DWARF register numbers 0-32 for x86-64 register names. |
+| Arm AADWARF64 register numbering | 0-31 general registers and 64-95 vector registers; the printed spellings (`W0`, `WSP`, `B8`) are the macOS oracle's, observed in recorded fixtures. |
+
+### Binary observations, not sources
+
+Output layout comes only from the pinned oracles run as binaries:
+
+- Every recorded fixture's complete oracle output, captured once per platform, is the reference for each dump mode.
+- `tests/evidence/oracle-probes/` holds synthetic Mach-O inputs and the macOS oracle's complete output on them (unknown-code spellings, string escaping).
+- `tests/evidence/vendor-names.json` lists each vendor-range name with the fixture and output line where sniff read the code and the oracle printed the name at the same position.
+- `tests/evidence/expression-encoding/` keeps the GNU operation observations.
+
+Where the two oracles print differently (for example `DW_CFA_advance_loc: 4` against `DW_CFA_advance_loc: 4 to 0x100000904`, or `[a, b)` against `(a, b)` in `.debug_loc`), the dump follows the oracle of the container's platform. ELF output follows the Linux oracle and Mach-O output the macOS oracle.
+
+The Linux oracle reads GCC's location-view numbers in `.debug_loclists` as ordinary DWARF 5 entries, because the section has no other structure. A sequential reader that follows DWARF 5 alone prints the same empty lists and fails at the same truncated entry.
+
 ## Incidental exposure
 
 On 2026-11-05, the standards-reading pass's broad web search returned a
