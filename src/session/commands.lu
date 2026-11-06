@@ -17,7 +17,7 @@ fn octal2(n: int) -> str {
 }
 
 /// The report line(s) for the end of a program.
-pub fn report_end(mut s: Session, e: Event) {
+fn report_end(mut s: Session, e: Event) {
     let pid = s.target.pid
     if e.kind == ev_exited {
         if e.code == 0 {
@@ -121,6 +121,21 @@ fn repeat_cmd(mut s: Session, rest: str, kind: int) -> str {
     ""
 }
 
+/// sniff's own maintenance commands (not gdb's): `maint frames` names, per frame,
+/// whether it was unwound through CFI or through the frame-pointer fallback.
+fn cmd_maint(mut s: Session, rest: str) -> str {
+    if rest.trim() != "frames" { return "Undefined maintenance command: \"{rest.trim()}\"." }
+    if !s.alive { return "No stack." }
+    var i = 0
+    while i < s.frames.len {
+        var how = if s.frames[i].fallback { "frame-pointer" } else { "cfi" }
+        if i + 1 == s.frames.len { how = "outermost" }
+        emit_line(mut s, "#{i} {frame_func_name(s, s.frames[i])} unwind={how}")
+        i += 1
+    }
+    ""
+}
+
 fn cmd_info(mut s: Session, rest: str) -> str {
     let parts = rest.trim().splitn(" ", 2)
     let what = parts[0]
@@ -134,7 +149,7 @@ fn cmd_info(mut s: Session, rest: str) -> str {
 }
 
 /// Execute one command line. Returns "" or the error message.
-pub fn exec_line(mut s: Session, ln: str) -> str {
+fn exec_line(mut s: Session, ln: str) -> str {
     let text = ln.trim()
     if text.len() == 0 || text.starts_with("#") { return "" }
     let parts = text.splitn(" ", 2)
@@ -179,11 +194,12 @@ fn dispatch(mut s: Session, word: str, rest: str, text: str) -> str {
     if word == "quit" || word == "q" || word == "exit" { s.quit = true; return "" }
     if word == "echo" { emit(mut s, unescape_echo(rest)); return "" }
     if word == "info" || word == "i" { return cmd_info(mut s, rest) }
+    if word == "maint" || word == "maintenance" { return cmd_maint(mut s, rest) }
     "Undefined command: \"{word}\".  Try \"help\"."
 }
 
 /// Run a command script; the first error aborts the rest, as gdb does for -x.
-pub fn run_script(mut s: Session, path: str) -> int {
+fn run_script(mut s: Session, path: str) -> int {
     let raw = fs_read_bytes(path) else { 
         eprint("{path}: No such file or directory.")
         return 1
@@ -208,7 +224,7 @@ pub fn run_script(mut s: Session, path: str) -> int {
 
 /// Terminal mode: prompt, read a command, run it. An error is printed and the
 /// loop goes on, as in an interactive gdb.
-pub fn run_interactive(mut s: Session) -> int {
+fn run_interactive(mut s: Session) -> int {
     s.tty = true
     emit_line(mut s, "Reading symbols from {s.prog.path}...")
     while !s.quit {

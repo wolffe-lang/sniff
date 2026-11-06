@@ -275,7 +275,7 @@ fn parse_expr(mut s: Session, mut p: Parser) -> Val {
 }
 
 /// Evaluate an expression in the selected frame.
-pub fn eval_expr(mut s: Session, text: str) -> Val {
+fn eval_expr(mut s: Session, text: str) -> Val {
     var p = Parser { text: text.bytes(), pos: 0 }
     let v = parse_expr(mut s, mut p)
     if v.ok {
@@ -288,7 +288,7 @@ pub fn eval_expr(mut s: Session, text: str) -> Val {
 }
 
 /// "<sym+off>" for a runtime address inside a function or symbol, else "".
-pub fn symbolize(s: Session, addr: u64) -> str {
+fn symbolize(s: Session, addr: u64) -> str {
     let file = addr - s.base
     let f = func_at(s.prog, file)
     if f >= 0 {
@@ -367,7 +367,7 @@ fn show_value(mut s: Session, v: Val, fmt: str) {
 }
 
 /// print[/f] EXPR
-pub fn cmd_print(mut s: Session, rest: str) -> str {
+fn cmd_print(mut s: Session, rest: str) -> str {
     let (fmt, expr) = split_format(rest)
     if expr.len() == 0 {
         if s.hist.len == 0 { return "" }
@@ -381,7 +381,7 @@ pub fn cmd_print(mut s: Session, rest: str) -> str {
 }
 
 /// output EXPR
-pub fn cmd_output(mut s: Session, rest: str) -> str {
+fn cmd_output(mut s: Session, rest: str) -> str {
     let (fmt, expr) = split_format(rest)
     let v = eval_expr(mut s, expr)
     if !v.ok { return v.why }
@@ -396,7 +396,7 @@ fn pad_left_zero(text: str, width: int) -> str {
 }
 
 /// x/NFU ADDR
-pub fn cmd_x(mut s: Session, rest: str) -> str {
+fn cmd_x(mut s: Session, rest: str) -> str {
     var count = 1
     var fmt = "x"
     var size = 4
@@ -510,7 +510,7 @@ fn flags_text(v: u64) -> str {
 }
 
 /// info registers [names]
-pub fn cmd_info_registers(mut s: Session, rest: str) -> str {
+fn cmd_info_registers(mut s: Session, rest: str) -> str {
     if !s.alive { return "The program has no registers now." }
     var names: List[str] = ["rax", "rbx", "rcx", "rdx", "rsi", "rdi", "rbp", "rsp", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15", "rip", "eflags", "cs", "ss", "ds", "es", "fs", "gs", "fs_base", "gs_base"]
     let want = rest.trim()

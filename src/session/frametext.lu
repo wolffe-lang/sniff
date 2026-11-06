@@ -5,7 +5,7 @@ use platform
 
 /// The source text of line `line` of global file index `file`, or "" with
 /// ok false when the file cannot be read or has no such line.
-pub fn source_line(mut s: Session, file: int, line: int) -> Val {
+fn source_line(mut s: Session, file: int, line: int) -> Val {
     var k = -1
     var i = 0
     while i < s.src_file.len {
@@ -43,7 +43,7 @@ fn pad2(n: int) -> str {
 }
 
 /// The dedicated hex form gdb uses for frame addresses: 0x + 16 digits.
-pub fn addr16(a: u64) -> str {
+fn addr16(a: u64) -> str {
     var out = ""
     var i: int = 15
     while i >= 0 {
@@ -57,7 +57,7 @@ pub fn addr16(a: u64) -> str {
 }
 
 /// Value of the variable (parameter or local) DIE in frame fr.
-pub fn var_val(s: Session, fr: Frame, die: int) -> Val {
+fn var_val(s: Session, fr: Frame, die: int) -> Val {
     let ui = copy s.prog.info.entries[die].unit
     let la = attr_at(s.prog, die, 2)
     if la < 0 { return val_fail("<optimized out>") }
@@ -108,14 +108,14 @@ pub fn var_val(s: Session, fr: Frame, die: int) -> Val {
 }
 
 /// Text of a variable's value: the formatted value or its failure text.
-pub fn var_text(s: Session, fr: Frame, die: int, top: bool) -> str {
+fn var_text(s: Session, fr: Frame, die: int, top: bool) -> str {
     let v = var_val(s, fr, die)
     if !v.ok { return v.why }
     format_bytes(s.prog, s.target, v.ty, v.bytes, top)
 }
 
 /// Direct child DIEs of `die` with the given tag.
-pub fn children_with_tag(p: Prog, die: int, tag: u64) -> List[int] {
+fn children_with_tag(p: Prog, die: int, tag: u64) -> List[int] {
     var out: List[int] = []
     var e = die + 1
     let d = p.info.entries[die].depth
@@ -136,7 +136,7 @@ fn is_scalar(p: Prog, t: int) -> bool {
 }
 
 /// "n=3, b=4" for the arguments of the function in frame fr.
-pub fn frame_args(s: Session, fr: Frame) -> str {
+fn frame_args(s: Session, fr: Frame) -> str {
     if fr.func < 0 { return "" }
     let params = children_with_tag(s.prog, s.prog.funcs[fr.func].die, tag_formal)
     var out = ""
@@ -156,7 +156,7 @@ pub fn frame_args(s: Session, fr: Frame) -> str {
 }
 
 /// The name gdb shows for the function of a frame.
-pub fn frame_func_name(s: Session, fr: Frame) -> str {
+fn frame_func_name(s: Session, fr: Frame) -> str {
     let file_pc = fr.pc - s.base
     let lookup = if fr.pc > 0 { file_pc } else { file_pc }
     if fr.func >= 0 { return s.prog.funcs[fr.func].name }
@@ -166,13 +166,13 @@ pub fn frame_func_name(s: Session, fr: Frame) -> str {
 }
 
 /// The line-lookup pc of a frame: the innermost uses its pc, callers pc - 1.
-pub fn frame_lookup_pc(s: Session, level: int) -> u64 {
+fn frame_lookup_pc(s: Session, level: int) -> u64 {
     if level == 0 { return s.frames[level].pc }
     s.frames[level].pc - 1
 }
 
 /// The shared library mapped at a runtime address, from /proc/PID/maps ("" if none).
-pub fn solib_of(s: Session, pc: u64) -> str {
+fn solib_of(s: Session, pc: u64) -> str {
     let raw = fs_read_bytes("/proc/{s.target.pid}/maps") else { return "" }
     let text = str_from_utf8(raw) else { return "" }
     for ln in text.lines() {
@@ -189,7 +189,7 @@ pub fn solib_of(s: Session, pc: u64) -> str {
 }
 
 /// "[0x... in ]func (args) at file:line" for frame `level`; print_pc forces the address.
-pub fn frame_line(s: Session, level: int, force_pc: bool) -> str {
+fn frame_line(s: Session, level: int, force_pc: bool) -> str {
     let fr = copy s.frames[level]
     let lookup = frame_lookup_pc(s, level) - s.base
     let sal = find_sal(s.prog, lookup)

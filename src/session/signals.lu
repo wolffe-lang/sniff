@@ -3,7 +3,7 @@
 // `info signals`. SIGTRAP and SIGINT are not passed to the program.
 
 /// gdb's name for a Linux signal number, or "" when gdb has none for it.
-pub fn signal_name(n: int) -> str {
+fn signal_name(n: int) -> str {
     if n == 1 { return "SIGHUP" }
     if n == 2 { return "SIGINT" }
     if n == 3 { return "SIGQUIT" }
@@ -39,7 +39,7 @@ pub fn signal_name(n: int) -> str {
 }
 
 /// gdb's description of a signal.
-pub fn signal_description(n: int) -> str {
+fn signal_description(n: int) -> str {
     if n == 1 { return "Hangup" }
     if n == 2 { return "Interrupt" }
     if n == 3 { return "Quit" }
@@ -75,11 +75,11 @@ pub fn signal_description(n: int) -> str {
 }
 
 /// Whether gdb stops the program when it receives the signal.
-pub fn signal_stops(n: int) -> bool {
+fn signal_stops(n: int) -> bool {
     !(n == 14 || n == 23 || n == 17 || n == 29 || n == 26 || n == 27 || n == 28)
 }
 
 /// Whether a stopped program is handed the signal on resume.
-pub fn signal_passes(n: int) -> bool {
+fn signal_passes(n: int) -> bool {
     !(n == 2 || n == 5)
 }

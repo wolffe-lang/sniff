@@ -6,14 +6,14 @@ use readers
 use platform
 
 /// Result classes of a location description.
-pub const loc_memory: int = 1
-pub const loc_register: int = 2
-pub const loc_value: int = 3
-pub const loc_refused: int = 4
+const loc_memory: int = 1
+const loc_register: int = 2
+const loc_value: int = 3
+const loc_refused: int = 4
 
 /// A computed location. For loc_memory, value is the address; for
 /// loc_register, the DWARF register number; for loc_value, the value.
-pub struct Loc {
+struct Loc {
     pub kind: int,
     pub value: u64,
     pub why: str,
@@ -21,7 +21,7 @@ pub struct Loc {
 
 /// Inputs to one evaluation: the frame's registers (DWARF numbering 0-16),
 /// its frame base and CFA, and the process to read memory from.
-pub struct EvalCtx {
+struct EvalCtx {
     pub regs: List[u64],
     pub frame_base: u64,
     pub has_frame_base: bool,
@@ -31,7 +31,7 @@ pub struct EvalCtx {
 }
 
 /// a + d with d signed, without wrapping (the sum must stay in range).
-pub fn add_i(a: u64, d: i64) -> u64 {
+fn add_i(a: u64, d: i64) -> u64 {
     if d >= 0 { return a + d as u64 }
     if d == 0 - 9223372036854775807 - 1 { return a - 9223372036854775808 }
     a - (0 - d) as u64
@@ -53,7 +53,7 @@ fn read_u64(t: platform.Target, addr: u64) -> u64 ! {unreadable} {
 }
 
 /// Evaluate span of data against a stopped child.
-pub fn expr_eval(data: List[byte], span: readers.ByteSpan, ctx: EvalCtx, t: platform.Target) -> Loc {
+fn expr_eval(data: List[byte], span: readers.ByteSpan, ctx: EvalCtx, t: platform.Target) -> Loc {
     var stack: List[u64] = []
     var c = readers.cursor(span.start, span.start + span.length, 100000)
     var is_reg = false

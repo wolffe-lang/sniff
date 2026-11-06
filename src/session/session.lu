@@ -4,11 +4,11 @@
 
 use platform
 
-pub const st_none: int = 0
-pub const st_stopped: int = 1
+const st_none: int = 0
+const st_stopped: int = 1
 
 /// One breakpoint (a single location; gdb's multi-location case is a list of these).
-pub struct Bp {
+struct Bp {
     pub num: int,
     pub addr: u64,
     pub hits: int,
@@ -22,23 +22,23 @@ pub struct Bp {
 }
 
 /// How a resume ended.
-pub struct Event {
+struct Event {
     pub kind: int,
     pub signal: int,
     pub code: int,
     pub bp: int,
 }
 
-pub const ev_exited: int = 1
-pub const ev_signaled: int = 2
-pub const ev_breakpoint: int = 3
-pub const ev_signal: int = 4
-pub const ev_stepped: int = 5
-pub const ev_lost: int = 6
-pub const ev_error: int = 7
+const ev_exited: int = 1
+const ev_signaled: int = 2
+const ev_breakpoint: int = 3
+const ev_signal: int = 4
+const ev_stepped: int = 5
+const ev_lost: int = 6
+const ev_error: int = 7
 
 /// All of the debugger's state.
-pub struct Session {
+struct Session {
     pub prog: Prog,
     pub target: platform.Target,
     pub alive: bool,
@@ -65,26 +65,26 @@ pub struct Session {
 
 /// Printed text goes to standard output through one buffer, flushed before
 /// the child runs and at exit so output and the child's own interleave.
-pub fn emit(mut s: Session, text: str) {
+fn emit(mut s: Session, text: str) {
     for b in text.bytes() { (mut s.out).push(b) }
     if s.out.len >= 65536 { flush_out(mut s) }
 }
 
 /// Emit text and a newline.
-pub fn emit_line(mut s: Session, text: str) {
+fn emit_line(mut s: Session, text: str) {
     emit(mut s, text)
     (mut s.out).push(10 as byte)
 }
 
 /// Write the buffered output.
-pub fn flush_out(mut s: Session) {
+fn flush_out(mut s: Session) {
     if s.out.len == 0 { return }
     fs_write_chunk(1, s.out) else |_| { }
     s.out = []
 }
 
 /// A session over a loaded program.
-pub fn session_new(take p: Prog) -> Session {
+fn session_new(take p: Prog) -> Session {
     Session {
         prog: p, target: platform.target_none(), alive: false, base: 0, args: [], out: [],
         script: "", lineno: 0, bps: [], bp_next: 1, pending_signal: 0, cfi: [], frames: [], frames_ok: false, sel: 0, src_file: [], src_lines: [], src_ok: [], hist: [], errmsg: "", tty: false, quit: false,

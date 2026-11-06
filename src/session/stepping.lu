@@ -50,7 +50,7 @@ fn drop_internal(mut s: Session) {
 }
 
 /// Report a user breakpoint stop and bump every hit count at that pc.
-pub fn report_bp_hit(mut s: Session, idx: int) {
+fn report_bp_hit(mut s: Session, idx: int) {
     let pc = bp_rt(s, idx)
     var first = -1
     var i = 0
@@ -157,7 +157,7 @@ fn print_step_stop(mut s: Session, start_func: u64, start_cfa: u64, by_frame: bo
 
 /// step, next and until. over: step over calls; until_mode: do not stop at
 /// lower addresses in the function (loop back edges).
-pub fn step_lines(mut s: Session, over: bool, until_mode: bool) -> str {
+fn step_lines(mut s: Session, over: bool, until_mode: bool) -> str {
     if !s.alive { return "The program is not being run." }
     compute_frames(mut s)
     let fr0 = copy s.frames[0]
@@ -273,7 +273,7 @@ fn is_stmt_at(s: Session, file_pc: u64) -> bool {
 }
 
 /// stepi and nexti.
-pub fn step_insns(mut s: Session, over: bool) -> str {
+fn step_insns(mut s: Session, over: bool) -> str {
     if !s.alive { return "The program is not being run." }
     compute_frames(mut s)
     let start_func = func_start(s.prog, s.frames[0].pc - s.base)
@@ -322,7 +322,7 @@ fn return_value(s: Session, ty: int) -> Val {
 }
 
 /// finish out of frame `level`. quiet true suppresses nothing today but keeps the shape for tty mode.
-pub fn finish_frame(mut s: Session, level: int, quiet: bool, tty: bool) -> str {
+fn finish_frame(mut s: Session, level: int, quiet: bool, tty: bool) -> str {
     if !s.alive { return "The program is not being run." }
     if !s.frames_ok { compute_frames(mut s) }
     if level + 1 >= s.frames.len { return "\"finish\" not meaningful in the outermost frame." }

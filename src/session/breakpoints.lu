@@ -2,7 +2,7 @@
 // commands that show and remove them.
 
 /// Where a location text resolved to.
-pub struct Resolved {
+struct Resolved {
     pub err: str,
     pub addrs: List[u64],
     pub abs: bool,
@@ -25,7 +25,7 @@ fn parse_number(text: str) -> int {
 fn all_digits(text: str) -> bool { parse_number(text) >= 0 }
 
 /// Parse a decimal or 0x-prefixed number; ok false otherwise.
-pub fn parse_uint(text: str) -> Val {
+fn parse_uint(text: str) -> Val {
     let t = text.trim()
     if t.starts_with("0x") || t.starts_with("0X") {
         var v: u64 = 0
@@ -139,7 +139,7 @@ fn contains_file(files: List[int], f: int) -> bool {
 }
 
 /// Resolve a location text: FUNC, FILE:LINE, LINE, FILE:FUNC or *ADDRESS.
-pub fn resolve_location(s: Session, spec: str) -> Resolved {
+fn resolve_location(s: Session, spec: str) -> Resolved {
     let t = spec.trim()
     if t.starts_with("*") {
         let rest = str_from(t, 1).trim()

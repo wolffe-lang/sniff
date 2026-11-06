@@ -6,7 +6,7 @@ use platform
 use numfmt
 
 /// A value read from the child (or built by the expression evaluator).
-pub struct Val {
+struct Val {
     pub ok: bool,
     pub why: str,
     pub ty: int,
@@ -16,31 +16,31 @@ pub struct Val {
     pub reg: int,
 }
 
-pub fn val_fail(why: str) -> Val {
+fn val_fail(why: str) -> Val {
     Val { ok: false, why: why, ty: -1, bytes: [], addr: 0, has_addr: false, reg: -1 }
 }
 
 /// DW_TAG values used here.
-pub const tag_array: u64 = 1
-pub const tag_enum: u64 = 4
-pub const tag_formal: u64 = 5
-pub const tag_block: u64 = 11
-pub const tag_member: u64 = 13
-pub const tag_pointer: u64 = 15
-pub const tag_struct: u64 = 19
-pub const tag_subroutine_type: u64 = 21
-pub const tag_typedef: u64 = 22
-pub const tag_union: u64 = 23
-pub const tag_subrange: u64 = 33
-pub const tag_base: u64 = 36
-pub const tag_const: u64 = 38
-pub const tag_enumerator: u64 = 40
-pub const tag_variable: u64 = 52
-pub const tag_volatile: u64 = 53
-pub const tag_restrict: u64 = 55
+const tag_array: u64 = 1
+const tag_enum: u64 = 4
+const tag_formal: u64 = 5
+const tag_block: u64 = 11
+const tag_member: u64 = 13
+const tag_pointer: u64 = 15
+const tag_struct: u64 = 19
+const tag_subroutine_type: u64 = 21
+const tag_typedef: u64 = 22
+const tag_union: u64 = 23
+const tag_subrange: u64 = 33
+const tag_base: u64 = 36
+const tag_const: u64 = 38
+const tag_enumerator: u64 = 40
+const tag_variable: u64 = 52
+const tag_volatile: u64 = 53
+const tag_restrict: u64 = 55
 
 /// Strip typedefs and qualifiers; -1 means void (no type attribute).
-pub fn ty_strip(p: Prog, t: int) -> int {
+fn ty_strip(p: Prog, t: int) -> int {
     var cur = t
     var guard = 0
     while cur >= 0 && guard < 64 {
@@ -56,7 +56,7 @@ pub fn ty_strip(p: Prog, t: int) -> int {
 }
 
 /// Byte size of a type, 0 when it has none that is known.
-pub fn ty_size(p: Prog, t: int) -> int {
+fn ty_size(p: Prog, t: int) -> int {
     if t == ty_int { return 4 }
     if t == ty_long || t == ty_ulong || t == ty_voidp || t == ty_codep || t <= 0 - 1000 { return 8 }
     let s = ty_strip(p, t)
@@ -73,7 +73,7 @@ pub fn ty_size(p: Prog, t: int) -> int {
 }
 
 /// Element count of a one-dimensional array type (0 when unbounded).
-pub fn array_count(p: Prog, arr: int) -> int {
+fn array_count(p: Prog, arr: int) -> int {
     var e = arr + 1
     while e < p.info.entries.len && p.info.entries[e].depth > p.info.entries[arr].depth {
         if !p.info.entries[e].is_null && p.info.entries[e].tag == tag_subrange && p.info.entries[e].depth == p.info.entries[arr].depth + 1 {
@@ -90,17 +90,17 @@ pub fn array_count(p: Prog, arr: int) -> int {
 
 /// Synthetic type ids for values that have no DIE: -2 int, -3 long, -4 unsigned
 /// long, -5 void *, -6 void (*)(); <= -1000 is a pointer to DIE (-1000 - id).
-pub const ty_int: int = 0 - 2
-pub const ty_long: int = 0 - 3
-pub const ty_ulong: int = 0 - 4
-pub const ty_voidp: int = 0 - 5
-pub const ty_codep: int = 0 - 6
+const ty_int: int = 0 - 2
+const ty_long: int = 0 - 3
+const ty_ulong: int = 0 - 4
+const ty_voidp: int = 0 - 5
+const ty_codep: int = 0 - 6
 
 /// The synthetic type of a pointer to DIE k.
-pub fn ty_pointer_to(k: int) -> int { 0 - 1000 - k }
+fn ty_pointer_to(k: int) -> int { 0 - 1000 - k }
 
 /// gdb's spelling of a type.
-pub fn ty_name(p: Prog, t: int) -> str {
+fn ty_name(p: Prog, t: int) -> str {
     if t == ty_int { return "int" }
     if t == ty_long { return "long" }
     if t == ty_ulong { return "unsigned long" }
@@ -156,7 +156,7 @@ fn hex_text(v: u64) -> str {
 }
 
 /// A char as gdb prints it inside quotes.
-pub fn char_escape(c: int, quote: int) -> str {
+fn char_escape(c: int, quote: int) -> str {
     if c == 92 { return "\\\\" }
     if c == quote { return "\\{quote_text(quote)}" }
     if c == 10 { return "\\n" }
@@ -210,7 +210,7 @@ fn is_char_type(p: Prog, t: int) -> bool {
 
 /// Format bytes of type t. top is true for the `print` command (pointers
 /// then carry a type prefix); frame is false for argument lists.
-pub fn format_bytes(p: Prog, tgt: platform.Target, t: int, b: List[byte], top: bool) -> str {
+fn format_bytes(p: Prog, tgt: platform.Target, t: int, b: List[byte], top: bool) -> str {
     if t == ty_int { return "{sign_extend(le_u64(b, 4), 4)}" }
     if t == ty_long { return "{sign_extend(le_u64(b, 8), 8)}" }
     if t == ty_ulong { return "{le_u64(b, 8)}" }

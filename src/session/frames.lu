@@ -5,7 +5,7 @@
 use platform
 
 /// One frame of the stack.
-pub struct Frame {
+struct Frame {
     pub pc: u64,
     pub cfa: u64,
     pub regs: List[u64],
@@ -16,13 +16,13 @@ pub struct Frame {
 
 /// DWARF register numbers for x86-64 (psABI 3.6.2): rax rdx rcx rbx rsi rdi
 /// rbp rsp r8-r15 and the return address column 16.
-pub fn dwarf_regs(r: List[u64]) -> List[u64] {
+fn dwarf_regs(r: List[u64]) -> List[u64] {
     if r.len != 27 { return [] }
     [r[10], r[12], r[11], r[5], r[13], r[14], r[4], r[19], r[9], r[8], r[7], r[6], r[3], r[2], r[1], r[0], r[16]]
 }
 
 /// Index into prog.funcs of the DWARF function containing a file address, or -1.
-pub fn func_at(p: Prog, addr: u64) -> int {
+fn func_at(p: Prog, addr: u64) -> int {
     var i = 0
     while i < p.funcs.len {
         if p.funcs[i].low <= addr && addr < p.funcs[i].high && p.funcs[i].low != 0 { return i }
@@ -32,7 +32,7 @@ pub fn func_at(p: Prog, addr: u64) -> int {
 }
 
 /// Whether an address lies inside an allocated section of the file.
-pub fn in_image(p: Prog, addr: u64) -> bool {
+fn in_image(p: Prog, addr: u64) -> bool {
     var i = 0
     while i < p.maps.len {
         if p.maps[i].addr <= addr && addr < p.maps[i].addr + p.maps[i].size { return true }
@@ -42,7 +42,7 @@ pub fn in_image(p: Prog, addr: u64) -> bool {
 }
 
 /// Index into prog.syms of the ELF function symbol containing a file address, or -1.
-pub fn sym_at(p: Prog, addr: u64) -> int {
+fn sym_at(p: Prog, addr: u64) -> int {
     if !in_image(p, addr) { return -1 }
     var best = -1
     var i = 0
@@ -57,7 +57,7 @@ pub fn sym_at(p: Prog, addr: u64) -> int {
 }
 
 /// Start (file address) of the function containing addr by DWARF, else ELF symbol; 0 if unknown.
-pub fn func_start(p: Prog, addr: u64) -> u64 {
+fn func_start(p: Prog, addr: u64) -> u64 {
     let f = func_at(p, addr)
     if f >= 0 { return p.funcs[f].low }
     let y = sym_at(p, addr)
@@ -66,7 +66,7 @@ pub fn func_start(p: Prog, addr: u64) -> u64 {
 }
 
 /// The file address of the ELF symbol named main, or 0.
-pub fn main_addr(p: Prog) -> u64 {
+fn main_addr(p: Prog) -> u64 {
     var i = 0
     while i < p.syms.len {
         if p.syms[i].name == "main" { return p.syms[i].addr }
@@ -168,7 +168,7 @@ fn unwind_cfi(s: Session, f: Frame, fi: int, lookup: u64) -> Frame ! {no_caller}
 
 /// Compute the stack of the stopped child. Stops after the frame of main
 /// (backtrace past-main off), at an undefined return address, or at 4096.
-pub fn compute_frames(mut s: Session) {
+fn compute_frames(mut s: Session) {
     s.frames = []
     s.frames_ok = true
     s.sel = 0

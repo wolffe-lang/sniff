@@ -7,7 +7,7 @@
 use readers
 
 /// One FDE with the CIE parameters its instructions need.
-pub struct CfiFde {
+struct CfiFde {
     pub begin: u64,
     pub end: u64,
     pub code_align: u64,
@@ -47,7 +47,7 @@ fn fde_index_section(data: List[byte], s: readers.ObjectSection, eh: bool, mut o
 }
 
 /// All FDEs of .eh_frame then .debug_frame.
-pub fn cfi_build(p: Prog) -> List[CfiFde] {
+fn cfi_build(p: Prog) -> List[CfiFde] {
     var out: List[CfiFde] = []
     if p.secs.format != readers.object_elf { return out }
     fde_index_section(p.data, p.secs.eh_frame, true, mut out)
@@ -56,7 +56,7 @@ pub fn cfi_build(p: Prog) -> List[CfiFde] {
 }
 
 /// Index of the FDE covering a file address, or -1.
-pub fn cfi_find(t: List[CfiFde], addr: u64) -> int {
+fn cfi_find(t: List[CfiFde], addr: u64) -> int {
     var i = 0
     while i < t.len {
         if t[i].begin <= addr && addr < t[i].end { return i }
@@ -65,16 +65,16 @@ pub fn cfi_find(t: List[CfiFde], addr: u64) -> int {
     -1
 }
 
-pub const rule_same: int = 0
-pub const rule_undefined: int = 1
-pub const rule_offset: int = 2
-pub const rule_val_offset: int = 3
-pub const rule_register: int = 4
-pub const rule_expr: int = 5
-pub const rule_val_expr: int = 6
+const rule_same: int = 0
+const rule_undefined: int = 1
+const rule_offset: int = 2
+const rule_val_offset: int = 3
+const rule_register: int = 4
+const rule_expr: int = 5
+const rule_val_expr: int = 6
 
 /// The unwind rules in force at one pc.
-pub struct Rules {
+struct Rules {
     pub cfa_reg: int,
     pub cfa_off: i64,
     pub cfa_is_expr: bool,
@@ -182,7 +182,7 @@ fn run_insns(data: List[byte], span: readers.ByteSpan, f: CfiFde, target_loc: u6
 }
 
 /// The rules at file address pc under fde.
-pub fn cfi_rules(data: List[byte], f: CfiFde, pc: u64) -> Rules {
+fn cfi_rules(data: List[byte], f: CfiFde, pc: u64) -> Rules {
     var r = rules_new()
     var loc = f.begin
     var stack: List[Rules] = []

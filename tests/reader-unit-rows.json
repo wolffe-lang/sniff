@@ -95,5 +95,10 @@
     "fmt-float-max",
     "fmt-float-two",
     "fmt-float-1e-5"
+  ],
+  "platform_test.lu": [
+    "platform-wait-statuses",
+    "platform-register-slots",
+    "platform-bit-casts"
   ]
 }

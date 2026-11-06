@@ -12,7 +12,7 @@ fn break_message(s: Session, kind: str, num: int, addr: u64, abs: bool) -> str {
 }
 
 /// break LOCATION / tbreak LOCATION
-pub fn cmd_break(mut s: Session, rest: str, temp: bool) -> str {
+fn cmd_break(mut s: Session, rest: str, temp: bool) -> str {
     let spec = rest.trim()
     if spec.len() == 0 { return "No default breakpoint location." }
     var location = spec
@@ -40,7 +40,7 @@ pub fn cmd_break(mut s: Session, rest: str, temp: bool) -> str {
 }
 
 /// ignore N COUNT: pass the next COUNT crossings of breakpoint N silently.
-pub fn cmd_ignore(mut s: Session, rest: str) -> str {
+fn cmd_ignore(mut s: Session, rest: str) -> str {
     let w = rest.words()
     if w.len < 2 { return "Argument required (a breakpoint number)." }
     let n = parse_uint(w[0])
@@ -57,7 +57,7 @@ pub fn cmd_ignore(mut s: Session, rest: str) -> str {
 }
 
 /// delete [N...]
-pub fn cmd_delete(mut s: Session, rest: str) -> str {
+fn cmd_delete(mut s: Session, rest: str) -> str {
     let t = rest.trim()
     if t.len() == 0 {
         var keep: List[Bp] = []
@@ -103,7 +103,7 @@ fn bp_what(s: Session, addr: u64) -> str {
 }
 
 /// info breakpoints
-pub fn cmd_info_breakpoints(mut s: Session) -> str {
+fn cmd_info_breakpoints(mut s: Session) -> str {
     var any = false
     var i = 0
     while i < s.bps.len {

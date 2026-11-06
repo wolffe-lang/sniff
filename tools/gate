@@ -18,6 +18,9 @@ step symbol-oracle-unit python3 -I tests/test_symbol_oracle.py
 step gate-switch-unit python3 -I tests/test_gate_switch.py
 step reader-runner-unit python3 -I tests/test_reader_runner.py
 step tier-planner python3 -I ci/tiers-test.py
+step session-harness-unit python3 -I tests/test_session.py
+step session-rows-inventory python3 -I tools/session.py verify
+step abi-constants python3 -I tools/check-abi.py check
 for platform in macos linux; do
   if [ -f "tests/evidence/$platform-session/record.json" ]; then
     step "$platform-replay" python3 -I tools/transcript.py compare "tests/evidence/$platform-session/expected.json" "tests/evidence/$platform-session/record.json"
@@ -67,3 +70,17 @@ oracle_step live-transcript python3 -I tools/transcript.py capture --spec tests/
 oracle_dependent_step live-mutations python3 -I tools/transcript.py selftest target/session/expected.json target/session/record.json
 step lupin-values python3 -I tools/lupin-values.py --lupin "$lupin" --out target/values
 oracle_dependent_step true-value-join python3 -I tools/value-join.py --session target/session/record.json --values target/values/values.json
+if [ "$mode" = linux ]; then
+  # S2: the core on Linux x86-64. Every step below needs a Linux process and the pinned gdb
+  # (the container's, not the macOS oracle that oracle_step guards).
+  step session-fixtures python3 -I tools/build-session.py --wolf "$wolf" --out "$root/target/session-fixtures"
+  step abi-probe-stable python3 -I tools/check-abi.py capture --compare
+  step platform-live bash -c "'$wolf' build src/live_platform.lu --no-cache -o '$root/target/live_platform' && '$root/target/live_platform' '$root/target/session-fixtures/c/exits/gcc-O0/prog'"
+  step session-oracle-stable python3 -I tools/session.py oracle
+  step session-rows python3 -I tools/session.py check
+  step session-lupin-join python3 -I tools/session-values.py --sniff "$root/target/sniff" --values target/values/values.json --fixtures "$root/target/session-fixtures"
+  step session-unwind-basis python3 -I tools/session-unwind.py --sniff "$root/target/sniff"
+  step session-perf python3 -I tools/session-perf.py --sniff "$root/target/sniff"
+else
+  echo 'SKIP session-live reason=linux-only (S2 runs a Linux process; S3 supplies the macOS backend)'
+fi

@@ -1,0 +1,52 @@
+//! member: false
+// The platform layer's pure parts: wait(2) status decoding against the table
+// that tools/abi-probe.c measured, the register slots, and the bit-cast helpers.
+use platform
+
+fn statuses() {
+    assert(platform.status_exited(0))
+    assert(platform.status_exit_code(0) == 0)
+    assert(platform.status_exited(768))
+    assert(platform.status_exit_code(768) == 3)
+    assert(platform.status_exit_code(65280) == 255)
+    assert(!platform.status_signaled(768))
+    assert(platform.status_signaled(11))
+    assert(platform.status_term_signal(11) == 11)
+    assert(platform.status_signaled(139))
+    assert(platform.status_term_signal(139) == 11)
+    assert(platform.status_signaled(9))
+    assert(!platform.status_stopped(9))
+    assert(platform.status_stopped(1407))
+    assert(platform.status_stop_signal(1407) == 5)
+    assert(!platform.status_exited(1407))
+    assert(!platform.status_signaled(1407))
+    // a ptrace event stop carries the event in bits 16 and up
+    assert(platform.status_stopped(66943))
+    assert(platform.status_stop_signal(66943) == 5)
+    print("PASS platform-wait-statuses")
+}
+
+fn slots() {
+    assert(platform.reg_count == 27)
+    assert(platform.reg_rip == 16)
+    assert(platform.reg_rsp == 19)
+    assert(platform.reg_rax == 10)
+    assert(platform.reg_eflags == 18)
+    assert(platform.reg_gs == 26)
+    print("PASS platform-register-slots")
+}
+
+fn casts() {
+    let minus_eight: i64 = 0 - 8
+    assert("{platform.bits_u64(minus_eight)}" == "18446744073709551608")
+    assert("{platform.bits_i64(18446744073709551615)}" == "-1")
+    assert(platform.bits_i64(platform.bits_u64(minus_eight)) == minus_eight)
+    assert(platform.bits_u64(5) == 5)
+    print("PASS platform-bit-casts")
+}
+
+fn main() {
+    statuses()
+    slots()
+    casts()
+}

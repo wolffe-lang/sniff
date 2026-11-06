@@ -260,7 +260,7 @@ def cmd_oracle(a):
 
 def cmd_verify(a):
     rows = load_rows()
-    have = {p.name for p in GOLD.glob('*') if p.is_file()}
+    have = {p.name for p in GOLD.glob('*') if p.is_file() and p.suffix in ('.out', '.err', '.rc')}
     want = {p.name for r in rows for p in golden_paths(r)}
     if want - have:
         print('FAIL session-goldens-missing: ' + ', '.join(sorted(want - have)))

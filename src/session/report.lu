@@ -2,14 +2,14 @@
 // built on the same text.
 
 /// "LINE\ttext" for a source line; "LINE\tin FILE" when the text is not available.
-pub fn source_line_text(mut s: Session, file: int, line: int) -> str {
+fn source_line_text(mut s: Session, file: int, line: int) -> str {
     let v = source_line(mut s, file, line)
     if v.ok { return "{line}\t{v.why}" }
     "{line}\tin {s.prog.files[file]}"
 }
 
 /// Print the source line of frame `level` (with the pc prefix when mid-line and wanted).
-pub fn print_frame_source(mut s: Session, level: int, pc_prefix: bool) {
+fn print_frame_source(mut s: Session, level: int, pc_prefix: bool) {
     let lookup = frame_lookup_pc(s, level) - s.base
     let sal = find_sal(s.prog, lookup)
     if !sal.ok || s.frames[level].func < 0 { return }
@@ -22,7 +22,7 @@ pub fn print_frame_source(mut s: Session, level: int, pc_prefix: bool) {
 
 /// Print the innermost frame as a stop location. header false prints only the
 /// source line, as stepping inside one function does.
-pub fn print_stop_frame(mut s: Session, header: bool, prefix: str) {
+fn print_stop_frame(mut s: Session, header: bool, prefix: str) {
     compute_frames(mut s)
     if s.frames.len == 0 {
         emit_line(mut s, "{prefix}{addr16(current_pc(s))} in ?? ()")
@@ -59,7 +59,7 @@ fn level_prefix(n: int) -> str {
 }
 
 /// bt
-pub fn cmd_bt(mut s: Session, rest: str) -> str {
+fn cmd_bt(mut s: Session, rest: str) -> str {
     let e = need_stack(s)
     if e.len() > 0 { return e }
     if !s.frames_ok { compute_frames(mut s) }
@@ -78,7 +78,7 @@ fn print_selected(mut s: Session) {
 }
 
 /// frame [N]
-pub fn cmd_frame(mut s: Session, rest: str) -> str {
+fn cmd_frame(mut s: Session, rest: str) -> str {
     let t = rest.trim()
     if !s.alive {
         if t.len() == 0 { return "No stack." }
@@ -95,7 +95,7 @@ pub fn cmd_frame(mut s: Session, rest: str) -> str {
 }
 
 /// up [N]
-pub fn cmd_up(mut s: Session, rest: str) -> str {
+fn cmd_up(mut s: Session, rest: str) -> str {
     let e = need_stack(s)
     if e.len() > 0 { return e }
     var n = 1
@@ -113,7 +113,7 @@ pub fn cmd_up(mut s: Session, rest: str) -> str {
 }
 
 /// down [N]
-pub fn cmd_down(mut s: Session, rest: str) -> str {
+fn cmd_down(mut s: Session, rest: str) -> str {
     let e = need_stack(s)
     if e.len() > 0 { return e }
     var n = 1
@@ -166,7 +166,7 @@ fn block_contains(s: Session, b: int, pc: u64) -> bool {
 }
 
 /// info locals
-pub fn cmd_info_locals(mut s: Session) -> str {
+fn cmd_info_locals(mut s: Session) -> str {
     if !s.alive { return "No frame selected." }
     let fr = copy s.frames[s.sel]
     if fr.func < 0 { emit_line(mut s, "No symbol table info available."); return "" }
@@ -182,7 +182,7 @@ pub fn cmd_info_locals(mut s: Session) -> str {
 }
 
 /// info args
-pub fn cmd_info_args(mut s: Session) -> str {
+fn cmd_info_args(mut s: Session) -> str {
     if !s.alive { return "No frame selected." }
     let fr = copy s.frames[s.sel]
     if fr.func < 0 { emit_line(mut s, "No symbol table info available."); return "" }

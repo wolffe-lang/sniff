@@ -46,10 +46,10 @@ regs ds 23
 regs es 24
 regs fs 25
 regs gs 26
-wait exit0 raw=0 exited=1 exitstatus=0 signaled=0 termsig=-1 coredump=0
-wait exit3 raw=768 exited=1 exitstatus=3 signaled=0 termsig=-1 coredump=0
-wait exit255 raw=65280 exited=1 exitstatus=255 signaled=0 termsig=-1 coredump=0
-wait sigsegv raw=139 exited=0 exitstatus=-1 signaled=1 termsig=11 coredump=1
-wait sigkill raw=9 exited=0 exitstatus=-1 signaled=1 termsig=9 coredump=0
-wait sigabrt raw=134 exited=0 exitstatus=-1 signaled=1 termsig=6 coredump=1
+wait exit0 raw=0 exited=1 exitstatus=0 signaled=0 termsig=-1
+wait exit3 raw=768 exited=1 exitstatus=3 signaled=0 termsig=-1
+wait exit255 raw=65280 exited=1 exitstatus=255 signaled=0 termsig=-1
+wait sigsegv raw=11 exited=0 exitstatus=-1 signaled=1 termsig=11
+wait sigkill raw=9 exited=0 exitstatus=-1 signaled=1 termsig=9
+wait sigabrt raw=6 exited=0 exitstatus=-1 signaled=1 termsig=6
 wait exec-stop raw=1407 stopped=1 stopsig=5

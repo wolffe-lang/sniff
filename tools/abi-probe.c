@@ -25,9 +25,10 @@ static void status(const char *name, int code, int sig) {
     }
     int st = 0;
     waitpid(p, &st, 0);
-    printf("wait %s raw=%d exited=%d exitstatus=%d signaled=%d termsig=%d coredump=%d\n", name, st,
+    /* the core-dump flag (bit 7) depends on core_pattern and limits, so it is cleared from the record */
+    printf("wait %s raw=%d exited=%d exitstatus=%d signaled=%d termsig=%d\n", name, st & ~0x80,
            WIFEXITED(st) ? 1 : 0, WIFEXITED(st) ? WEXITSTATUS(st) : -1, WIFSIGNALED(st) ? 1 : 0,
-           WIFSIGNALED(st) ? WTERMSIG(st) : -1, WIFSIGNALED(st) && WCOREDUMP(st) ? 1 : 0);
+           WIFSIGNALED(st) ? WTERMSIG(st) : -1);
 }
 
 int main(void) {

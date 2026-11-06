@@ -5,7 +5,7 @@
 use readers
 
 /// A compile unit's bases and names.
-pub struct Unit {
+struct Unit {
     pub root: int,
     pub end: int,
     pub name: str,
@@ -22,7 +22,7 @@ pub struct Unit {
 }
 
 /// One line-table row, resolved to a global file index.
-pub struct LineEnt {
+struct LineEnt {
     pub addr: u64,
     pub file: int,
     pub line: int,
@@ -33,7 +33,7 @@ pub struct LineEnt {
 }
 
 /// A subprogram with an address range.
-pub struct Func {
+struct Func {
     pub name: str,
     pub low: u64,
     pub high: u64,
@@ -44,21 +44,21 @@ pub struct Func {
 }
 
 /// An ELF function symbol, for code that has no DWARF.
-pub struct Sym {
+struct Sym {
     pub name: str,
     pub addr: u64,
     pub size: u64,
 }
 
 /// An allocated section with file bytes: where its address range lies in the file.
-pub struct SecMap {
+struct SecMap {
     pub addr: u64,
     pub off: u64,
     pub size: u64,
 }
 
 /// The loaded program.
-pub struct Prog {
+struct Prog {
     pub err: str,
     pub path: str,
     pub data: List[byte],
@@ -76,7 +76,7 @@ pub struct Prog {
 }
 
 /// Bytes of a span as text; invalid UTF-8 yields the empty string.
-pub fn span_text(data: List[byte], span: readers.ByteSpan) -> str {
+fn span_text(data: List[byte], span: readers.ByteSpan) -> str {
     var bytes: List[byte] = []
     var i: int = 0
     while i < span.length { (mut bytes).push(data[span.start + i]); i += 1 }
@@ -89,7 +89,7 @@ fn empty_table() -> readers.DwarfIndexTable {
 }
 
 /// A failed load.
-pub fn prog_failed(why: str) -> Prog {
+fn prog_failed(why: str) -> Prog {
     let none = readers.ByteSpan { start: 0, length: 0 }
     let sec = readers.ObjectSection { span: readers.ByteSpan { start: 0, length: 0 }, address: 0, present: false }
     Prog {
@@ -105,7 +105,7 @@ pub fn prog_failed(why: str) -> Prog {
 }
 
 /// Index of the attribute on entry, or -1.
-pub fn attr_at(p: Prog, e: int, attribute: u64) -> int {
+fn attr_at(p: Prog, e: int, attribute: u64) -> int {
     readers.dwarf_info_find(p.info, e, attribute)
 }
 
@@ -114,7 +114,7 @@ fn is_string_form(form: u64) -> bool {
 }
 
 /// A string attribute value through its form (inline, strp, line_strp, strx).
-pub fn value_text(p: Prog, ui: int, value: readers.DwarfValue) -> str {
+fn value_text(p: Prog, ui: int, value: readers.DwarfValue) -> str {
     let form = value.form
     if form == 8 { return span_text(p.data, value.bytes) }
     if form == 14 || form == 31 {
@@ -136,14 +136,14 @@ pub fn value_text(p: Prog, ui: int, value: readers.DwarfValue) -> str {
 }
 
 /// A string attribute of entry e, or "" when absent.
-pub fn attr_text(p: Prog, ui: int, e: int, attribute: u64) -> str {
+fn attr_text(p: Prog, ui: int, e: int, attribute: u64) -> str {
     let at = attr_at(p, e, attribute)
     if at < 0 { return "" }
     value_text(p, ui, p.info.attributes[at].value)
 }
 
 /// An address-class value: addr, or addrx through .debug_addr.
-pub fn value_addr(p: Prog, ui: int, value: readers.DwarfValue) -> u64 {
+fn value_addr(p: Prog, ui: int, value: readers.DwarfValue) -> u64 {
     if value.form == 1 { return value.raw }
     if !p.units[ui].has_addr_base { return 0 }
     var work = readers.cursor(0, 0, 100000)
@@ -153,14 +153,14 @@ pub fn value_addr(p: Prog, ui: int, value: readers.DwarfValue) -> u64 {
 }
 
 /// A constant attribute (data forms), or the default when absent.
-pub fn attr_uint(p: Prog, e: int, attribute: u64, absent: u64) -> u64 {
+fn attr_uint(p: Prog, e: int, attribute: u64, absent: u64) -> u64 {
     let at = attr_at(p, e, attribute)
     if at < 0 { return absent }
     p.info.attributes[at].value.raw
 }
 
 /// The entry an attribute of e refers to, or -1.
-pub fn attr_ref(p: Prog, e: int, attribute: u64) -> int {
+fn attr_ref(p: Prog, e: int, attribute: u64) -> int {
     let at = attr_at(p, e, attribute)
     if at < 0 { return -1 }
     var fuel: int = 1000
@@ -169,7 +169,7 @@ pub fn attr_ref(p: Prog, e: int, attribute: u64) -> int {
 }
 
 /// The unit index owning entry e.
-pub fn unit_of(p: Prog, e: int) -> int {
+fn unit_of(p: Prog, e: int) -> int {
     p.info.entries[e].unit
 }
 
@@ -255,7 +255,7 @@ fn line_order(a: LineEnt, b: LineEnt) -> bool {
 
 /// Read the ELF file at path and build the session's view of it. A program
 /// without DWARF loads with has_info false; symbols still work.
-pub fn prog_load(path: str) -> Prog {
+fn prog_load(path: str) -> Prog {
     let size = fs_size(path) else |err| { return prog_failed("cannot read {path}: {err}") }
     if size > 268435456 { return prog_failed("{path} is too large") }
     let data = fs_read_bytes(path) else |err| { return prog_failed("cannot read {path}: {err}") }
@@ -382,7 +382,7 @@ pub fn prog_load(path: str) -> Prog {
 }
 
 /// n bytes of the file image at a virtual address, or fewer when it is not mapped by a section.
-pub fn file_bytes_at(p: Prog, addr: u64, n: int) -> List[byte] {
+fn file_bytes_at(p: Prog, addr: u64, n: int) -> List[byte] {
     var out: List[byte] = []
     var i = 0
     while i < p.maps.len {
@@ -402,11 +402,11 @@ pub fn file_bytes_at(p: Prog, addr: u64, n: int) -> List[byte] {
 }
 
 /// The text of t from byte n on (empty when n is past the end).
-pub fn str_from(t: str, n: int) -> str {
+fn str_from(t: str, n: int) -> str {
     t.get(n..t.len()) else { "" }
 }
 
 /// The text of t before byte n.
-pub fn str_upto(t: str, n: int) -> str {
+fn str_upto(t: str, n: int) -> str {
     t.get(0..n) else { t }
 }

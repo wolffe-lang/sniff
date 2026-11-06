@@ -31,16 +31,16 @@ fn exe_base(pid: int, path: str) -> u64 {
 }
 
 /// The runtime address of a file address.
-pub fn rt(s: Session, a: u64) -> u64 { a + s.base }
+fn rt(s: Session, a: u64) -> u64 { a + s.base }
 
 /// The runtime address of breakpoint i: a literal address stays as typed.
-pub fn bp_rt(s: Session, i: int) -> u64 {
+fn bp_rt(s: Session, i: int) -> u64 {
     if s.bps[i].abs { return s.bps[i].addr }
     s.bps[i].addr + s.base
 }
 
 /// Start the program stopped at its exec. Returns "" or a reason.
-pub fn start_process(mut s: Session) -> str {
+fn start_process(mut s: Session) -> str {
     if s.alive { kill_process(mut s) }
     let t = platform.target_spawn(s.prog.path, s.args, "24", "80")
     if t.pid == 0 { return "Cannot start {s.prog.path}" }
@@ -53,7 +53,7 @@ pub fn start_process(mut s: Session) -> str {
 }
 
 /// Kill the child and reap it. Quiet; reports are the caller's.
-pub fn kill_process(mut s: Session) {
+fn kill_process(mut s: Session) {
     if !s.alive { return }
     let _ = platform.target_kill(s.target)
     s.alive = false
@@ -111,13 +111,13 @@ fn remove_all(mut s: Session) {
 }
 
 /// The current pc, or 0 when no registers can be read.
-pub fn current_pc(s: Session) -> u64 {
+fn current_pc(s: Session) -> u64 {
     let regs = platform.target_regs(s.target)
     if regs.len != 27 { return 0 }
     regs[platform.reg_rip]
 }
 
-fn set_pc(mut s: Session, pc: u64) {
+fn set_pc(s: Session, pc: u64) {
     var regs = platform.target_regs(s.target)
     if regs.len != 27 { return }
     regs[platform.reg_rip] = pc
@@ -182,7 +182,7 @@ fn classify(mut s: Session, st: int, stepping: bool) -> Event {
         if !stepping && pc > 0 {
             let at = bp_at(s, pc - 1)
             if at >= 0 {
-                set_pc(mut s, pc - 1)
+                set_pc(s, pc - 1)
                 return Event { kind: ev_breakpoint, signal: 5, code: 0, bp: at }
             }
         }
@@ -199,7 +199,7 @@ fn take_signal(mut s: Session) -> int {
 }
 
 /// Execute one instruction with breakpoints out of the way.
-pub fn step_insn(mut s: Session) -> Event {
+fn step_insn(mut s: Session) -> Event {
     flush_out(mut s)
     s.frames_ok = false
     let sig = take_signal(mut s)
@@ -215,7 +215,7 @@ pub fn step_insn(mut s: Session) -> Event {
 
 /// cont_event, but a user breakpoint with an ignore count passes silently
 /// (its hit still counts), as gdb's ignore does.
-pub fn cont_user(mut s: Session) -> Event {
+fn cont_user(mut s: Session) -> Event {
     loop {
         let e = cont_event(mut s)
         if e.kind != ev_breakpoint || s.bps[e.bp].internal { return e }
@@ -237,7 +237,7 @@ pub fn cont_user(mut s: Session) -> Event {
 /// Continue until a breakpoint, a stopping signal or the end of the program.
 /// A breakpoint at the current pc is stepped over first: its instruction runs
 /// with the int3 removed, then breakpoints go back in.
-pub fn cont_event(mut s: Session) -> Event {
+fn cont_event(mut s: Session) -> Event {
     s.frames_ok = false
     let pc = current_pc(s)
     if bp_at(s, pc) >= 0 {
