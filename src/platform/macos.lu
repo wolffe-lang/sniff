@@ -1,0 +1,662 @@
+// The macOS arm64 process layer: what the session needs, reached through
+// Apple's documented debugging interfaces and nothing else. The child is
+// started with posix_spawn(2) suspended (POSIX_SPAWN_START_SUSPENDED), its task
+// port comes from task_for_pid(2) (the target carries get-task-allow, or sniff
+// the debugger entitlement), exceptions arrive on a Mach port set with
+// task_set_exception_ports, and ptrace(PT_ATTACHEXC) turns Unix signals into
+// exceptions as sys/ptrace.h documents. Registers are thread_get_state with
+// ARM_THREAD_STATE64, memory is mach_vm_read_overwrite/mach_vm_write, and a
+// single step is MDSCR_EL1.SS through ARM_DEBUG_STATE64 (Arm ARM D2).
+// Constants and message layouts are those of the SDK's declarations
+// (mach/message.h, mach/mach_exc.defs, mach/arm/_structs.h, sys/ptrace.h);
+// the layout of the exception request was checked by a compiled probe.
+//
+// A Target is one traced child. pid 0 means no child; then memfd carries the
+// refusal (target_refusal). memfd of a live Target is the task port.
+//
+// Wait statuses are synthesised in wait(2)'s shape: a stop is
+// (kind << 16) | (signal << 8) | 0x7f with kind 0x101 for a BRK trap, 0x102
+// for a completed single step and 0x103 for a Unix signal, and the signal
+// numbers are the session's (gdb's, Linux's numbering): darwin_to_session maps.
+
+#[cfg(target = "aarch64-apple-darwin")]
+import c "stdlib.h"
+
+#[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn posix_spawnattr_init(attr: u64) -> i32
+#[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn posix_spawnattr_setflags(attr: u64, flags: i32) -> i32
+#[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn posix_spawn(pid: u64, path: u64, actions: u64, attr: u64, argv: u64, envp: u64) -> i32
+#[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn _NSGetEnviron() -> u64
+#[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn task_for_pid(host: u32, pid: i32, task: u64) -> i32
+#[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn mach_task_self() -> u32
+#[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn mach_port_allocate(task: u32, right: i32, name: u64) -> i32
+#[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn mach_port_insert_right(task: u32, name: u32, poly: u32, kind: i32) -> i32
+#[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn mach_port_deallocate(task: u32, name: u32) -> i32
+#[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn task_set_exception_ports(task: u32, mask: u32, port: u32, behavior: u32, flavor: i32) -> i32
+#[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn mach_msg(msg: u64, option: i32, send_size: u32, rcv_size: u32, rcv_name: u32, timeout: u32, notify: u32) -> i32
+#[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn thread_get_state(thread: u32, flavor: i32, state: u64, count: u64) -> i32
+#[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn thread_set_state(thread: u32, flavor: i32, state: u64, count: u32) -> i32
+#[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn mach_vm_read_overwrite(task: u32, addr: u64, size: u64, data: u64, outsize: u64) -> i32
+#[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn mach_vm_write(task: u32, addr: u64, data: u64, count: u32) -> i32
+#[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn mach_vm_protect(task: u32, addr: u64, size: u64, set_max: i32, prot: i32) -> i32
+#[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn mach_vm_region(task: u32, addr: u64, size: u64, flavor: i32, info: u64, count: u64, object: u64) -> i32
+#[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn ptrace(request: i32, pid: i32, addr: u64, data: i32) -> i32
+#[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn waitpid(pid: i32, status: u64, options: i32) -> i32
+#[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn kill(pid: i32, sig: i32) -> i32
+
+/// Slots of the state block every Target shares (u64 each).
+#[cfg(target = "aarch64-apple-darwin")]
+const st_exc_port: int = 0
+#[cfg(target = "aarch64-apple-darwin")]
+const st_thread: int = 1
+#[cfg(target = "aarch64-apple-darwin")]
+const st_pending: int = 2
+#[cfg(target = "aarch64-apple-darwin")]
+const st_kind: int = 3
+#[cfg(target = "aarch64-apple-darwin")]
+const st_code0: int = 4
+#[cfg(target = "aarch64-apple-darwin")]
+const st_code1: int = 5
+#[cfg(target = "aarch64-apple-darwin")]
+const st_msg: int = 6
+#[cfg(target = "aarch64-apple-darwin")]
+const st_stepping: int = 7
+#[cfg(target = "aarch64-apple-darwin")]
+const st_exit: int = 8
+#[cfg(target = "aarch64-apple-darwin")]
+const st_signal: int = 9
+#[cfg(target = "aarch64-apple-darwin")]
+const st_msg2: int = 10
+
+/// Bytes of the message buffers (an exception request is 88 bytes plus a trailer).
+#[cfg(target = "aarch64-apple-darwin")]
+const msg_bytes: int = 1024
+/// The exception kinds the layer reports.
+#[cfg(target = "aarch64-apple-darwin")]
+const kind_brk: int = 257
+#[cfg(target = "aarch64-apple-darwin")]
+const kind_step: int = 258
+#[cfg(target = "aarch64-apple-darwin")]
+const kind_signal: int = 259
+/// A hardware fault or other exception that the kernel turns into a Unix signal if replied to with failure.
+#[cfg(target = "aarch64-apple-darwin")]
+const kind_fault: int = 260
+
+/// Heap bytes holding text and a terminating zero, for the C calls.
+#[cfg(target = "aarch64-apple-darwin")]
+fn cstr(s: str) -> u64 {
+    let b = s.bytes()
+    let n = b.len
+    unsafe {
+        // # Safety: the buffer is calloc'd one byte longer than the text.
+        let p = c.calloc(1, (n + 1) as uint) as *u8
+        var i = 0
+        while i < n {
+            p[i] = b[i] as int as u8
+            i += 1
+        }
+        p as u64
+    }
+}
+
+/// darwin signal number (sys/signal.h) to the session's (gdb's) numbering.
+#[cfg(target = "aarch64-apple-darwin")]
+fn darwin_to_session(n: int) -> int {
+    if n == 10 { return 7 }
+    if n == 12 { return 31 }
+    if n == 16 { return 23 }
+    if n == 17 { return 19 }
+    if n == 18 { return 20 }
+    if n == 19 { return 18 }
+    if n == 20 { return 17 }
+    if n == 23 { return 29 }
+    if n == 30 { return 10 }
+    if n == 31 { return 12 }
+    if n == 7 || n == 29 { return 100 + n }
+    n
+}
+
+/// The session's signal number as darwin's.
+#[cfg(target = "aarch64-apple-darwin")]
+fn session_to_darwin(n: int) -> int {
+    if n == 7 { return 10 }
+    if n == 31 { return 12 }
+    if n == 23 { return 16 }
+    if n == 19 { return 17 }
+    if n == 20 { return 18 }
+    if n == 18 { return 19 }
+    if n == 17 { return 20 }
+    if n == 29 { return 23 }
+    if n == 10 { return 30 }
+    if n == 12 { return 31 }
+    if n >= 100 { return n - 100 }
+    n
+}
+
+/// A stop status for the session.
+#[cfg(target = "aarch64-apple-darwin")]
+fn stop_status(kind: int, sig: int) -> int {
+    (kind << 16) + (sig << 8) + 127
+}
+
+/// A raw darwin wait status in the session's signal numbering.
+#[cfg(target = "aarch64-apple-darwin")]
+fn translate_status(st: int) -> int {
+    if (st & 127) == 0 { return st }
+    if (st & 255) == 127 { return st }
+    let sig = darwin_to_session(st & 127)
+    (st & 128) + sig
+}
+
+/// No child.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_none() -> Target {
+    unsafe {
+        // # Safety: calloc'd blocks sized for the slots below.
+        let blk = c.calloc(16, 8) as *u64
+        blk[st_msg] = c.calloc(1, msg_bytes as uint) as u64
+        blk[st_msg2] = c.calloc(1, msg_bytes as uint) as u64
+        Target {
+            pid: 0,
+            memfd: -1,
+            status: c.calloc(1, 8) as u64,
+            regs: c.calloc(40, 8) as u64,
+            word: blk as u64,
+        }
+    }
+}
+
+/// The reason a spawn was refused (task_for_pid, usually), or "".
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_refusal(t: Target) -> str {
+    if t.memfd == -2 { return "task_for_pid refused: the target lacks the get-task-allow entitlement (sign it ad hoc with it)" }
+    if t.memfd == -3 { return "posix_spawn failed" }
+    if t.memfd == -4 { return "could not take the child's exceptions" }
+    ""
+}
+
+/// Kill and reap a child that never became a Target.
+#[cfg(target = "aarch64-apple-darwin")]
+fn reap(pid: int) {
+    unsafe {
+        // # Safety: pid is the lane's own spawned child.
+        let _ = kill(pid as i32, 9)
+        let st = c.calloc(1, 8) as u64
+        let _ = waitpid(pid as i32, st, 0)
+    }
+}
+
+/// Send the reply for the request in buffer `msg`: ret 0 lets the thread go on,
+/// 5 refuses the exception (the kernel then makes it a Unix signal).
+#[cfg(target = "aarch64-apple-darwin")]
+fn reply_to(msg: u64, ret: int) -> int {
+    unsafe {
+        // # Safety: msg is a message buffer of msg_bytes the layer owns; rp is calloc'd 40 bytes.
+        let m = msg as *u32
+        let rp = c.calloc(1, 40) as *u32
+        rp[0] = m[0] & 31
+        rp[1] = 36
+        rp[2] = m[2]
+        rp[3] = 0
+        rp[4] = 0
+        rp[5] = m[5] + 100
+        rp[6] = m[13]
+        rp[7] = m[14]
+        rp[8] = ret as u32
+        mach_msg(rp as u64, 1, 36, 0, 0, 0, 0) as int
+    }
+}
+
+/// Read the exception request in msg and record it in the state block. Returns the exception kind.
+#[cfg(target = "aarch64-apple-darwin")]
+fn decode_exception(t: Target, msg: u64) -> int {
+    unsafe {
+        // # Safety: msg is a message buffer of msg_bytes the layer owns; the state block is calloc'd.
+        let m = msg as *u32
+        let st = t.word as *u64
+        let exc = m[15] as int
+        let c0 = (m[17] as u64) | ((m[18] as u64) << 32)
+        let c1 = (m[19] as u64) | ((m[20] as u64) << 32)
+        st[st_thread] = m[7] as u64
+        st[st_code0] = c0
+        st[st_code1] = c1
+        st[st_pending] = 1
+        var kind = kind_fault
+        var sig = 11
+        if exc == 6 {
+            // EXC_BREAKPOINT: the step trap has no address; a BRK carries its own
+            if c1 == 0 && st[st_stepping] == 1 { kind = kind_step } else { kind = kind_brk }
+            sig = 5
+        } else if exc == 5 && c0 == 65539 {
+            kind = kind_signal
+            sig = darwin_to_session(c1 as int)
+        } else if exc == 1 {
+            // EXC_BAD_ACCESS: KERN_INVALID_ADDRESS is a segmentation fault; protection and alignment faults are bus errors
+            sig = 11
+        } else if exc == 2 { sig = 4 }
+        else if exc == 3 { sig = 8 }
+        else if exc == 5 { sig = 31 }
+        else { sig = 5 }
+        st[st_kind] = kind as u64
+        st[st_signal] = sig as u64
+        stop_status(kind, sig) as int
+    }
+}
+
+/// The flags of ARM_DEBUG_STATE64: MDSCR_EL1 is at byte 512 (slot 64). Set or clear the step bit.
+#[cfg(target = "aarch64-apple-darwin")]
+fn set_single_step(t: Target, on: bool) -> int {
+    unsafe {
+        // # Safety: the state buffer is calloc'd 130 words; the thread port is the stopped thread's.
+        let st = t.word as *u64
+        let ds = c.calloc(1, 520) as *u64
+        let cnt = c.calloc(1, 8) as *u32
+        cnt[0] = 130
+        let kr = thread_get_state(st[st_thread] as u32, 15, ds as u64, cnt as u64)
+        if kr != 0 { return -1 }
+        var v: u64 = ds[64]
+        if on { v = v | 1 } else { v = v & !(1 as u64) }
+        ds[64] = v
+        let kr2 = thread_set_state(st[st_thread] as u32, 15, ds as u64, 130)
+        if kr2 != 0 { return -1 }
+        st[st_stepping] = if on { 1 } else { 0 }
+        0
+    }
+}
+
+/// Wait for the next event of the child: an exception on the port or the end of
+/// the process. Returns the synthesised status, or -1.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_wait(t: Target) -> int {
+    unsafe {
+        // # Safety: buffers are calloc'd and owned by the layer; the pid is the traced child.
+        let st = t.word as *u64
+        if st[st_exit] != 0 { return (st[st_exit] - 1) as int }
+        let wst = t.status as *i32
+        var odd = 0
+        while true {
+            let msg = st[st_msg]
+            let kr = mach_msg(msg, 258, 0, msg_bytes as u32, st[st_exc_port] as u32, 5, 0)
+            if kr == 0 {
+                let m = msg as *u32
+                if m[10] as u64 != t.memfd as u64 {
+                    // another task's exception (a forked child inherited the port)
+                    handle_foreign(t)
+                    continue
+                }
+                let r = decode_exception(t, msg)
+                return r
+            }
+            let w = waitpid(t.pid as i32, t.status, 1)
+            if w == t.pid as i32 {
+                let raw = wst[0] as int
+                if (raw & 255) != 127 {
+                    st[st_exit] = (translate_status(raw) + 1) as u64
+                    return translate_status(raw)
+                }
+            }
+            if kr != 268451843 {
+                odd += 1
+                if odd > 50 { return -1 }
+            }
+        }
+        -1
+    }
+}
+
+/// An exception from a task that is not the traced one: restore nothing here
+/// (the session cannot know), refuse nothing; let the thread go on.
+#[cfg(target = "aarch64-apple-darwin")]
+fn handle_foreign(t: Target) {
+    unsafe {
+        // # Safety: the message buffer belongs to the layer.
+        let st = t.word as *u64
+        let m = st[st_msg] as *u32
+        let c0 = (m[17] as u64) | ((m[18] as u64) << 32)
+        let exc = m[15] as int
+        if exc == 6 && c0 == 1 {
+            // a BRK of ours in the child's copy: step the child past it is not possible without its
+            // original bytes; the session's detach path handles breakpoints, so just let it fail
+            let _ = reply_to(st[st_msg], 5)
+        } else {
+            let _ = reply_to(st[st_msg], 0)
+        }
+    }
+}
+
+/// Resume after the pending exception, delivering sig (the session's number; 0 for none).
+#[cfg(target = "aarch64-apple-darwin")]
+fn resume(t: Target, sig: int, step: bool) -> int {
+    unsafe {
+        // # Safety: buffers are layer-owned; the pid is the traced child.
+        let st = t.word as *u64
+        if st[st_pending] == 0 { return -1 }
+        let kind = st[st_kind] as int
+        var ret = 0
+        if kind == kind_brk {
+            // a BRK that is not ours is still in memory after the session restored its own: step past it
+            let regs = target_regs(t)
+            if regs.len == 34 {
+                let w = target_read(t, regs[32], 4)
+                if w.ok {
+                    let word = (w.data[0] as int) + ((w.data[1] as int) << 8) + ((w.data[2] as int) << 16) + ((w.data[3] as int) << 24)
+                    if (word & 4292870175) == 3558866944 {
+                        var r2 = copy regs
+                        r2[32] = regs[32] + 4
+                        let _ = target_set_regs(t, r2)
+                    }
+                }
+            }
+        }
+        if set_single_step(t, step) < 0 { return -1 }
+        if kind == kind_signal {
+            // the signal the program was about to receive: pass it (darwin's number) or drop it
+            let _ = ptrace(13, t.pid as i32, st[st_thread], session_to_darwin(sig) as i32)
+        } else if kind == kind_fault {
+            if sig != 0 { ret = 5 }
+        }
+        st[st_pending] = 0
+        reply_to(st[st_msg], ret)
+    }
+}
+
+/// Start path as a traced child, stopped before dyld has run. The returned
+/// Target has pid 0 (and memfd naming the refusal) when anything fails.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_spawn(path: str, args: List[str], env_lines: str, env_columns: str) -> Target {
+    let tgt = target_none()
+    unsafe {
+        // # Safety: buffers are calloc'd and sized for each call; the pid is the lane's own spawned child.
+        let st = tgt.word as *u64
+        let argv = c.calloc((args.len + 2) as uint, 8) as *u64
+        let cpath = cstr(path)
+        argv[0] = cpath
+        var i = 0
+        while i < args.len {
+            argv[i + 1] = cstr(args[i])
+            i += 1
+        }
+        argv[args.len + 1] = 0
+        let attr = c.calloc(1, 64) as u64
+        let _ = posix_spawnattr_init(attr)
+        let _ = posix_spawnattr_setflags(attr, 128)
+        let pidbuf = c.calloc(1, 8) as *i32
+        let envp = (_NSGetEnviron() as *u64)[0]
+        let rc = posix_spawn(pidbuf as u64, cpath, 0, attr, argv as u64, envp)
+        if rc != 0 { return Target { pid: 0, memfd: -3, status: tgt.status, regs: tgt.regs, word: tgt.word } }
+        let pid = pidbuf[0] as int
+        let tbuf = c.calloc(1, 8) as *u32
+        let kr = task_for_pid(mach_task_self(), pid as i32, tbuf as u64)
+        if kr != 0 {
+            reap(pid)
+            return Target { pid: 0, memfd: -2, status: tgt.status, regs: tgt.regs, word: tgt.word }
+        }
+        let task = tbuf[0] as int
+        let pbuf = c.calloc(1, 8) as *u32
+        let _ = mach_port_allocate(mach_task_self(), 1, pbuf as u64)
+        let port = pbuf[0]
+        let _ = mach_port_insert_right(mach_task_self(), port, port, 20)
+        st[st_exc_port] = port as u64
+        // EXC_MASK_BAD_ACCESS|BAD_INSTRUCTION|ARITHMETIC|SOFTWARE|BREAKPOINT = 2+4+8+32+64
+        // behaviour EXCEPTION_DEFAULT | MACH_EXCEPTION_CODES, flavor ARM_THREAD_STATE64
+        let kr2 = task_set_exception_ports(task as u32, 110, port, 2147483649, 6)
+        if kr2 != 0 {
+            reap(pid)
+            return Target { pid: 0, memfd: -4, status: tgt.status, regs: tgt.regs, word: tgt.word }
+        }
+        let a = ptrace(14, pid as i32, 0, 0)
+        if a != 0 {
+            reap(pid)
+            return Target { pid: 0, memfd: -4, status: tgt.status, regs: tgt.regs, word: tgt.word }
+        }
+        let t = Target { pid: pid, memfd: task, status: tgt.status, regs: tgt.regs, word: tgt.word }
+        let _ = kill(pid as i32, 19)
+        // the attach may report its own SIGSTOP as an exception first; the stop that
+        // stays pending is the SIGCONT's, at dyld's first instruction, before main's image runs
+        var rounds = 0
+        while rounds < 4 {
+            let w = target_wait(t)
+            if w < 0 || (w & 255) != 127 { reap(pid); return Target { pid: 0, memfd: -4, status: tgt.status, regs: tgt.regs, word: tgt.word } }
+            if ((w >> 8) & 255) != 19 { break }
+            let _ = resume(t, 0, false)
+            rounds += 1
+        }
+        t
+    }
+}
+
+/// Resume, delivering sig (0 for none).
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_cont(t: Target, sig: int) -> int {
+    resume(t, sig, false)
+}
+
+/// Execute one instruction, delivering sig (0 for none).
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_step(t: Target, sig: int) -> int {
+    resume(t, sig, true)
+}
+
+/// Kill the child with SIGKILL and reap it. Returns the final raw status.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_kill(t: Target) -> int {
+    unsafe {
+        // # Safety: the pid is the traced child; the status buffer is calloc'd.
+        let wst = t.status as *i32
+        let _ = kill(t.pid as i32, 9)
+        var last: int = -1
+        var n = 0
+        while n < 200 {
+            let w = waitpid(t.pid as i32, t.status, 1)
+            if w == t.pid as i32 {
+                last = wst[0] as int
+                if (last & 255) != 127 { break }
+            }
+            n += 1
+            if n > 20 {
+                let st = t.word as *u64
+                let mm = st[st_msg] as u64
+                let _ = mach_msg(mm, 258, 0, msg_bytes as u32, st[st_exc_port] as u32, 10, 0)
+            }
+        }
+        let _ = mach_port_deallocate(mach_task_self(), t.memfd as u32)
+        translate_status(last)
+    }
+}
+
+/// The 34 ARM_THREAD_STATE64 slots (x0-x28, fp, lr, sp, pc, cpsr), or an empty list.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_regs(t: Target) -> List[u64] {
+    unsafe {
+        // # Safety: the register buffer is calloc'd 40 words; the thread port is the stopped thread's.
+        var out: List[u64] = []
+        let st = t.word as *u64
+        if st[st_thread] == 0 { return out }
+        let regs = t.regs as *u64
+        let cnt = c.calloc(1, 8) as *u32
+        cnt[0] = 68
+        let kr = thread_get_state(st[st_thread] as u32, 6, t.regs, cnt as u64)
+        if kr != 0 { return out }
+        var i = 0
+        while i < 33 {
+            (mut out).push(regs[i])
+            i += 1
+        }
+        (mut out).push(regs[33] & 4294967295)
+        out
+    }
+}
+
+/// Write the 34 slots back. Returns 0 or -1.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_set_regs(t: Target, regs: List[u64]) -> int {
+    unsafe {
+        // # Safety: the register buffer is calloc'd 40 words; the thread port is the stopped thread's.
+        if regs.len != 34 { return -1 }
+        let st = t.word as *u64
+        let slots = t.regs as *u64
+        var i = 0
+        while i < 34 {
+            slots[i] = regs[i]
+            i += 1
+        }
+        let kr = thread_set_state(st[st_thread] as u32, 6, t.regs, 68)
+        if kr != 0 { return -1 }
+        0
+    }
+}
+
+/// Read n bytes at addr. ok is false when any of them is unreadable.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_read(t: Target, addr: u64, n: int) -> Bytes {
+    unsafe {
+        // # Safety: buf is calloc'd n bytes; the task port is the traced child's.
+        var out: List[byte] = []
+        if n <= 0 { return Bytes { ok: true, data: out } }
+        let buf = c.calloc(1, n as uint) as *u8
+        let got = c.calloc(1, 8) as *u64
+        let kr = mach_vm_read_overwrite(t.memfd as u32, addr, n as u64, buf as u64, got as u64)
+        if kr != 0 || got[0] != n as u64 { return Bytes { ok: false, data: out } }
+        var i = 0
+        while i < n {
+            (mut out).push(buf[i] as int as byte)
+            i += 1
+        }
+        Bytes { ok: true, data: out }
+    }
+}
+
+/// The protection of the region holding addr, or -1.
+#[cfg(target = "aarch64-apple-darwin")]
+fn region_prot(t: Target, addr: u64) -> int {
+    unsafe {
+        // # Safety: buffers are calloc'd and sized for mach_vm_region's basic info (36 bytes).
+        let a = c.calloc(1, 8) as *u64
+        a[0] = addr
+        let sz = c.calloc(1, 8) as *u64
+        let info = c.calloc(1, 64) as *u32
+        let cnt = c.calloc(1, 8) as *u32
+        cnt[0] = 9
+        let obj = c.calloc(1, 8) as *u32
+        let kr = mach_vm_region(t.memfd as u32, a as u64, sz as u64, 9, info as u64, cnt as u64, obj as u64)
+        if kr != 0 { return -1 }
+        if a[0] > addr { return -1 }
+        info[0] as int
+    }
+}
+
+/// Write bytes at addr. Text is read-only and shared: the page is made copy-on-write
+/// writable (never writable and executable together), written, and restored.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_write(t: Target, addr: u64, data: List[byte]) -> bool {
+    unsafe {
+        // # Safety: buf is calloc'd with the data's length; the task port is the traced child's.
+        let n = data.len
+        if n == 0 { return true }
+        let buf = c.calloc(1, n as uint) as *u8
+        var i = 0
+        while i < n {
+            buf[i] = data[i] as int as u8
+            i += 1
+        }
+        let prot = region_prot(t, addr)
+        if prot < 0 { return false }
+        if (prot & 2) != 0 {
+            return mach_vm_write(t.memfd as u32, addr, buf as u64, n as u32) == 0
+        }
+        let first = addr & !(16383 as u64)
+        let last = (addr + n as u64 - 1) & !(16383 as u64)
+        let len = last + 16384 - first
+        if mach_vm_protect(t.memfd as u32, first, len, 0, 3 + 16) != 0 { return false }
+        let ok = mach_vm_write(t.memfd as u32, addr, buf as u64, n as u32) == 0
+        let _ = mach_vm_protect(t.memfd as u32, first, len, 0, prot as i32)
+        ok
+    }
+}
+
+/// The 16 bytes of the return-value floating register (v0 of ARM_NEON_STATE64), or none.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_xmm0(t: Target) -> List[byte] {
+    unsafe {
+        // # Safety: buf is calloc'd 544 bytes; the thread port is the stopped thread's.
+        var out: List[byte] = []
+        let st = t.word as *u64
+        let buf = c.calloc(1, 544) as *u8
+        let cnt = c.calloc(1, 8) as *u32
+        cnt[0] = 136
+        let kr = thread_get_state(st[st_thread] as u32, 17, buf as u64, cnt as u64)
+        if kr != 0 { return out }
+        var i = 0
+        while i < 16 {
+            (mut out).push(buf[i] as int as byte)
+            i += 1
+        }
+        out
+    }
+}
+
+/// Mach-O header magic and file type scan: the runtime address of the main image's first byte
+/// (the slide is this minus the file's text address), or 0.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_image_base(t: Target) -> u64 {
+    unsafe {
+        // # Safety: buffers are calloc'd and sized for mach_vm_region's basic info.
+        let a = c.calloc(1, 8) as *u64
+        let sz = c.calloc(1, 8) as *u64
+        let info = c.calloc(1, 64) as *u32
+        let cnt = c.calloc(1, 8) as *u32
+        let obj = c.calloc(1, 8) as *u32
+        var n = 0
+        while n < 64 {
+            cnt[0] = 9
+            let kr = mach_vm_region(t.memfd as u32, a as u64, sz as u64, 9, info as u64, cnt as u64, obj as u64)
+            if kr != 0 { return 0 }
+            let hdr = target_read(t, a[0], 16)
+            if hdr.ok {
+                let magic = (hdr.data[0] as int) + ((hdr.data[1] as int) << 8) + ((hdr.data[2] as int) << 16) + ((hdr.data[3] as int) << 24)
+                let ftype = (hdr.data[12] as int)
+                if magic == 4277009103 && ftype == 2 { return a[0] }
+            }
+            a[0] = a[0] + sz[0]
+            n += 1
+        }
+        0
+    }
+}
+
+/// A forked child is not observable until it traps; nothing to detach.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_detach(pid: int) -> int { -1 }
+
+/// No fork events on this platform.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_event_pid(t: Target) -> int { -1 }
+
+/// No fork events on this platform.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_wait_pid(t: Target, pid: int) -> int { -1 }
+
+/// A handle for another pid sharing this one's scratch space.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_with_pid(t: Target, pid: int) -> Target {
+    Target { pid: pid, memfd: -1, status: t.status, regs: t.regs, word: t.word }
+}

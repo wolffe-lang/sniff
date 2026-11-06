@@ -1,0 +1,114 @@
+// What differs between the machine architectures the session runs on: the
+// breakpoint instruction, where the trap leaves the pc, the register file's
+// slots and their DWARF columns, call detection and return values. The
+// session asks these questions only through this file.
+
+/// The software breakpoint instruction: int3 (Intel SDM) on x86-64.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn arch_bp_insn() -> List[byte] { [204 as byte] }
+/// BRK #0xf000 (Arm ARM C6.2.40: 0xd4200000 | imm16 << 5), four bytes little endian.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn arch_bp_insn() -> List[byte] { [0 as byte, 0 as byte, 62 as byte, 212 as byte] }
+
+/// Bytes the pc is past a trap: int3 leaves rip after itself; BRK reports its own address.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn arch_trap_adjust() -> u64 { 1 }
+/// BRK reports the address of the BRK itself.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn arch_trap_adjust() -> u64 { 0 }
+
+/// Count of slots in the register list the platform returns.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn arch_nregs() -> int { 27 }
+/// x0-x28, fp, lr, sp, pc, cpsr (ARM_THREAD_STATE64's order).
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn arch_nregs() -> int { 34 }
+
+/// Slot of the program counter.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn arch_pc_slot() -> int { 16 }
+/// Slot of the program counter.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn arch_pc_slot() -> int { 32 }
+
+/// Slot of the stack pointer.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn arch_sp_slot() -> int { 19 }
+/// Slot of the stack pointer.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn arch_sp_slot() -> int { 31 }
+
+/// Slot of the frame pointer.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn arch_fp_slot() -> int { 4 }
+/// Slot of the frame pointer (x29).
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn arch_fp_slot() -> int { 29 }
+
+/// DWARF column of the stack pointer.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn arch_sp_col() -> int { 7 }
+/// DWARF column of sp (AArch64 DWARF ABI).
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn arch_sp_col() -> int { 31 }
+
+/// DWARF column of the frame pointer.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn arch_fp_col() -> int { 6 }
+/// DWARF column of x29.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn arch_fp_col() -> int { 29 }
+
+/// DWARF column holding the return address (the pc, after unwinding).
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn arch_ra_col() -> int { 16 }
+/// DWARF column of lr; the pc of frame 0 rides in column 32.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn arch_ra_col() -> int { 30 }
+
+/// Count of DWARF columns a frame carries (the pc included).
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn arch_ncols() -> int { 17 }
+/// x0-x30, sp, and the pc of the frame in column 32.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn arch_ncols() -> int { 33 }
+
+/// The register list in DWARF column order (psABI 3.6.2: rax rdx rcx rbx rsi rdi rbp rsp r8-r15 and the return address column 16).
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn arch_dwarf_regs(r: List[u64]) -> List[u64] {
+    if r.len != 27 { return [] }
+    [r[10], r[12], r[11], r[5], r[13], r[14], r[4], r[19], r[9], r[8], r[7], r[6], r[3], r[2], r[1], r[0], r[16]]
+}
+/// x0-x28, x29, x30, sp, then the pc in column 32 (AArch64 DWARF ABI numbers x0-x30 as 0-30 and sp as 31).
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn arch_dwarf_regs(r: List[u64]) -> List[u64] {
+    if r.len != 34 { return [] }
+    var out: List[u64] = []
+    var i = 0
+    while i < 32 {
+        (mut out).push(r[i])
+        i += 1
+    }
+    (mut out).push(r[32])
+    out
+}
+
+/// The pc a frame's register columns hold (frame 0's column, or an unwound return address).
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn arch_frame_pc(cols: List[u64]) -> u64 { cols[16] }
+/// Frame 0 carries its pc in column 32; callers' pcs are lr after unwinding.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn arch_frame_pc(cols: List[u64]) -> u64 { cols[32] }
+
+/// The integer return-value register (rax / x0), a slot of the register list.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn arch_ret_slot() -> int { 10 }
+/// x0.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn arch_ret_slot() -> int { 0 }
+
+/// Whether the 32-bit instruction word is a call (BL, or BLR/BLRAA...: 0xd63f0000 under the register mask).
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn arch_word_is_call(word: u64) -> bool {
+    (word & 4227858432) == 2483027968 || (word & 4294966303) == 3594452992
+}
