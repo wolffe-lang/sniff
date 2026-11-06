@@ -1,0 +1,49 @@
+// Vendor-range names (DWARF 5 section 7.1). Each entry is a labelled binary
+// observation: the code read from a recorded fixture's own bytes, aligned with
+// the name the pinned oracle printed for that same byte position. The
+// fixture and line of each observation are in tests/evidence/vendor-names.json.
+
+pub fn vendor_tag(code: u64) -> str {
+    ""
+}
+
+pub fn vendor_attribute(code: u64) -> str {
+    if code == 0x2136 { return "DW_AT_GNU_discriminator" }
+    if code == 0x2137 { return "DW_AT_GNU_locviews" }
+    if code == 0x2138 { return "DW_AT_GNU_entry_view" }
+    if code == 0x3e02 { return "DW_AT_LLVM_sysroot" }
+    if code == 0x3fe1 { return "DW_AT_APPLE_optimized" }
+    if code == 0x3fe7 { return "DW_AT_APPLE_omit_frame_ptr" }
+    if code == 0x3fef { return "DW_AT_APPLE_sdk" }
+    ""
+}
+
+pub fn vendor_form(code: u64) -> str {
+    ""
+}
+
+/// Names for every code, standard first, then labelled vendor observations,
+/// then the oracle's own unknown spelling (tests/evidence/oracle-probes/names.json).
+pub fn tag_name(n: Names, code: u64) -> str {
+    let s = name_in(n.tag, code)
+    if s.len > 0 { return s }
+    let v = vendor_tag(code)
+    if v.len > 0 { return v }
+    "DW_TAG_unknown_{code:x}"
+}
+
+pub fn attribute_name(n: Names, code: u64) -> str {
+    let s = name_in(n.attribute, code)
+    if s.len > 0 { return s }
+    let v = vendor_attribute(code)
+    if v.len > 0 { return v }
+    "DW_AT_unknown_{code:x}"
+}
+
+pub fn form_name(n: Names, code: u64) -> str {
+    let s = name_in(n.form, code)
+    if s.len > 0 { return s }
+    let v = vendor_form(code)
+    if v.len > 0 { return v }
+    "DW_FORM_unknown_{code:x}"
+}

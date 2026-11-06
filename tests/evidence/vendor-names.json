@@ -1,0 +1,36 @@
+{
+ "families": {
+  "AT": {
+   "0x2136": {
+    "evidence": "linux/wolf/loops/wolf-debug debug-abbrev line 418",
+    "name": "DW_AT_GNU_discriminator"
+   },
+   "0x2137": {
+    "evidence": "linux/c/aggregates/gcc-O2 debug-abbrev line 85",
+    "name": "DW_AT_GNU_locviews"
+   },
+   "0x2138": {
+    "evidence": "linux/c/inlining/gcc-O2 debug-abbrev line 78",
+    "name": "DW_AT_GNU_entry_view"
+   },
+   "0x3e02": {
+    "evidence": "mac/c/aggregates/clang-O0 debug-abbrev line 9",
+    "name": "DW_AT_LLVM_sysroot"
+   },
+   "0x3fe1": {
+    "evidence": "mac/c/aggregates/clang-O2 debug-abbrev line 14",
+    "name": "DW_AT_APPLE_optimized"
+   },
+   "0x3fe7": {
+    "evidence": "mac/c/aggregates/clang-O0 debug-abbrev line 26",
+    "name": "DW_AT_APPLE_omit_frame_ptr"
+   },
+   "0x3fef": {
+    "evidence": "mac/c/aggregates/clang-O0 debug-abbrev line 10",
+    "name": "DW_AT_APPLE_sdk"
+   }
+  }
+ },
+ "method": "Each code was read by sniff from the named fixture at the named output line; the name is the token the pinned oracle printed at the same position of the same line. No implementation source was consulted.",
+ "schema": 1
+}
