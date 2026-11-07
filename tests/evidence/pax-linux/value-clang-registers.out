@@ -7,7 +7,6 @@ rdi            0x5                 5
 rbp            <STACK>      <STACK>
 rsp            <STACK>      <STACK>
 rip            0x401847            0x401847 <count+7>
-eflags         0x206               [ PF IF ]
 cs             0x33                51
 ss             0x2b                43
 ds             0x0                 0
