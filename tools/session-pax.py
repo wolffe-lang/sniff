@@ -252,6 +252,65 @@ def cmd_run(a):
     return 1 if total_fail else 0
 
 
+def tty_boot(a, sess, pax, kernel, row, work):
+    """One terminal row: sniff is init, the commands are typed key by key at its prompt."""
+    work.mkdir(parents=True, exist_ok=True)
+    prog = '/work/target/pax-fixtures/' + row['prog']
+    files = [('/bin/sniff', a.sniff, 755), (prog, Path(a.fixtures) / row['prog'], 755)]
+    for dest, src in sources_for([row]).items():
+        files.append((dest, src, 644))
+    pr = work / 'pax-run'
+    pr.write_text('/bin/sniff %s\n' % prog)
+    files.append(('/etc/pax-run', pr, 644))
+    cpio, iso, keys = work / 'tty.cpio', work / 'tty.iso', work / 'tty.keys'
+    args = ['/tmp/:1777'] + ['%s=%s:%s' % (d, s_, m) for d, s_, m in files]
+    r = run([pax / 'tools/mkinitramfs', cpio] + args, capture_output=True, text=True)
+    r2 = run([pax / 'tools/mkimage', '--conf', pax / 'boot/limine-initramfs-quiet.conf', '--add', cpio, 'initramfs.cpio', kernel, iso],
+             capture_output=True, text=True)
+    if r.returncode or r2.returncode:
+        raise SystemExit('FAIL session-pax-image tty ' + row['name'])
+    keys.write_text('\n'.join(row['script'] + ['quit']) + '\n')
+    serial = work / 'tty.serial'
+    cmd = [pax / 'tools/qemu-halt', '--firmware', 'bios', '--serial', serial, '--timeout', str(a.timeout), '--qemu', '-m', '--qemu', a.memory,
+           '--elf', kernel, '--marker', 'halt|PANIC .*', '--type', keys, '--prompt', '(sniff) ', iso]
+    rc = run(cmd, capture_output=True, text=True).returncode
+    return rc, serial.read_text(errors='replace') if serial.exists() else ''
+
+
+def tty_extract(text, row):
+    """The session's text: from sniff's first line to its exit, typed echo removed."""
+    t = serial_norm(text)
+    i = t.find('Reading symbols from')
+    j = t.find('PAX: init ')
+    t = t[i:j if j > i else len(t)] if i >= 0 else ''
+    for k in row['script'] + ['quit']:
+        t = t.replace('(sniff) ' + k + '\n', '(sniff) ', 1)
+    return t
+
+
+def cmd_tty(a):
+    sess = load_session()
+    rows = [r for r in sess.load_rows(a.only) if r.get('tty')]
+    out = Path(a.out)
+    fails = 0
+    for row in rows:
+        if row.get('skip'):
+            print('SKIP %s reason=%s' % (row['name'], row['skip']))
+            continue
+        rc, text = tty_boot(a, sess, Path(a.pax), Path(a.kernel), row, out / row['name'])
+        print('END %s-qemu-halt exit=%d' % (row['name'], rc), flush=True)
+        fired = set()
+        got = sess.normalize(sess.normalize_tty(tty_extract(text, row), fired), fired, row)
+        want = sess.golden_paths(row)[0].read_text()
+        if got != want:
+            print('FAIL %s stdout %s' % (row['name'], sess.first_diff(want, got)))
+            fails += 1
+        else:
+            print('PASS %s%s' % (row['name'], (' [normalised: ' + ','.join(sorted(fired)) + ']') if fired else ''))
+    print('SUMMARY tty failed=%d' % fails)
+    return 1 if fails else 0
+
+
 def cmd_selftest(a):
     sample = ('noise\r\n@@BEGIN r1\r\n@@RC 3\r\n@@OUT\r\nhello\r\nno-nl\r\n@@ERR\r\nwarn\r\n\r\n@@END\r\n'
               '@@BEGIN r2\r\n@@RC 0\r\n@@OUT\r\n\r\n@@ERR\r\n\r\n@@END\r\n@@BEGIN r3\r\n@@RC 1\r\n@@OUT\r\nx\r\n')
@@ -271,10 +330,16 @@ def main():
         r.add_argument('--' + k, required=True)
     r.add_argument('--only')
     r.add_argument('--timeout', type=int, default=1800)
-    r.add_argument('--memory', default='1536M')
+    r.add_argument('--memory', default='4096M')
+    t = sub.add_parser('tty')
+    for k in ('pax', 'kernel', 'sniff', 'fixtures', 'out'):
+        t.add_argument('--' + k, required=True)
+    t.add_argument('--only')
+    t.add_argument('--timeout', type=int, default=600)
+    t.add_argument('--memory', default='4096M')
     sub.add_parser('selftest')
     a = p.parse_args()
-    return {'run': cmd_run, 'selftest': cmd_selftest}[a.cmd](a)
+    return {'run': cmd_run, 'tty': cmd_tty, 'selftest': cmd_selftest}[a.cmd](a)
 
 
 if __name__ == '__main__':
