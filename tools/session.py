@@ -72,14 +72,14 @@ def normalize(text, fired, row=None):
     out = []
     drops = [re.compile(d) for d in (row or {}).get('drop', [])] if PAX_MODE else []
     for line in text.splitlines(keepends=True):
-        if any(d.search(line) for d in drops):
-            fired.add('drop')
-            continue
         if PAX_MODE:
             m = STACK_DEC.sub('<STACK>', STACK_HEX.sub('<STACK>', line))
             if m != line:
                 fired.add('stack')
                 line = m
+        if any(d.search(line) for d in drops):
+            fired.add('drop')
+            continue
         if line.startswith('[Thread debugging using libthread_db enabled]') or \
            line.startswith('Using host libthread_db library'):
             fired.add('banner')
