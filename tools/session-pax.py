@@ -50,7 +50,10 @@ def serial_norm(text):
     text = re.sub(r'\x1b\[[0-9;?=<>]*[A-Za-z]', '', text)
     text = re.sub(r'\x1b[()][A-Za-z0-9]', '', text)
     text = re.sub(r'\x1b[c78DEHM=>]', '', text)
-    return text.replace('\r', '')
+    text = text.replace('\r', '')
+    # the kernel's own console line for a program that a signal killed (it prints even when quiet):
+    # a fact about the machine, not debugger output, and on a line of its own
+    return re.sub(r'(?m)^user: [^\n]*\n', '', text)
 
 
 def guest_script(rows, scripts_dir, fx_guest):
