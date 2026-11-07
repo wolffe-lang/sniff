@@ -20,6 +20,8 @@ step reader-runner-unit python3 -I tests/test_reader_runner.py
 step tier-planner python3 -I ci/tiers-test.py
 step session-harness-unit python3 -I tests/test_session.py
 step session-rows-inventory python3 -I tools/session.py verify
+step pax-rows-inventory python3 -I tools/session.py --set pax verify
+step pax-harness-unit python3 -I tools/session-pax.py selftest
 step abi-constants python3 -I tools/check-abi.py check
 for platform in macos linux; do
   if [ -f "tests/evidence/$platform-session/record.json" ]; then
@@ -81,6 +83,12 @@ if [ "$mode" = linux ]; then
   step session-lupin-join python3 -I tools/session-values.py --sniff "$root/target/sniff" --values target/values/values.json --fixtures "$root/target/session-fixtures"
   step session-unwind-basis python3 -I tools/session-unwind.py --sniff "$root/target/sniff"
   step session-perf python3 -I tools/session-perf.py --sniff "$root/target/sniff"
+  # S4: the same rows on the static builds PAX loads, held to the pinned gdb on those builds. Here sniff runs on
+  # Linux; tools/gate-pax runs it on PAX under KVM (it needs the PAX tree, a kernel and QEMU, not this image).
+  step pax-fixtures python3 -I tools/build-session.py --wolf "$wolf" --out "$root/target/pax-fixtures" --static
+  find "$root/target/pax-fixtures" -type f -exec touch {} +
+  step pax-rows-linux python3 -I tools/session.py --set pax check --sniff "$root/target/sniff" --fixtures "$root/target/pax-fixtures" --work "$root"
+  step pax-sniff-static bash tools/build-static-sniff.sh "$wolf" "$root/target/sniff-static"
 else
   # S3: the macOS arm64 backend. The rows need a task port and, for the oracle rows, the pinned lldb.
   step session-fixtures python3 -I tools/build-session.py --wolf "$wolf" --out "$root/target/session-fixtures"

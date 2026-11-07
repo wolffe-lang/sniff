@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# The S4 legs: sniff on PAX's console under KVM, held to the Linux goldens. Needs a PAX tree at px102's kernel
+# (read-only), its kernel ELF, pelt and boreutils built as the PAX harness builds them, the static sniff and the
+# static fixtures (tools/gate linux builds the last two). Every END is a real child exit.
+#   tools/gate-pax PAXTREE KERNEL.elf INPUTS SNIFF-STATIC FIXTURES OUTDIR
+set -uo pipefail
+[ $# -eq 6 ] || { echo 'usage: gate-pax PAXTREE KERNEL INPUTS SNIFF FIXTURES OUTDIR'; exit 2; }
+root=$(cd "$(dirname "$0")/.." && pwd)
+pax=$1 kernel=$2 inputs=$3 sniff=$4 fixtures=$5 out=$6
+mkdir -p "$out"
+rc=0
+step() { # name cmd...
+  local name=$1 start=$SECONDS r=0; shift
+  printf 'START %s\n' "$name"
+  "$@" > "$out/$name.log" 2>&1 || r=$?
+  grep -E '^(PASS|FAIL|SKIP|SUMMARY|END|KERNEL|SNIFF|START)' "$out/$name.log"
+  printf 'END %s exit=%s secs=%s\n' "$name" "$r" "$((SECONDS-start))"
+  [ "$r" = 0 ] || rc=1
+}
+step pax-session-rows python3 -I "$root/tools/session-pax.py" run --pax "$pax" --kernel "$kernel" --inputs "$inputs" --sniff "$sniff" --fixtures "$fixtures" --out "$out/rows"
+step pax-session-tty python3 -I "$root/tools/session-pax.py" tty --pax "$pax" --kernel "$kernel" --sniff "$sniff" --fixtures "$fixtures" --out "$out/tty"
+exit "$rc"
