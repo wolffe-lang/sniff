@@ -196,3 +196,16 @@ with reasons) and rows held to lldb facts (a named extraction per fact kind). Bo
 symbolication of system images (dyld, the shared cache) until S6, and no `fork` follow mode (a forked
 child is detached when it first traps on an inherited breakpoint, after its original instructions are
 written back).
+
+### S4 as implemented
+
+PAX answers ptrace(2), wait4(2), `/proc/PID/mem`, `fork` and `execve` with Linux's request numbers, wait
+statuses and register layout, so `src/platform/linux.lu` is also the PAX layer and no new platform module
+exists. PAX loads only static `ET_EXEC` files, so sniff for PAX is built static (`tools/build-static-sniff.sh`)
+and the session runs on static fixtures (`tools/build-session.py --static`). Their gdb goldens are
+`tests/evidence/pax-linux`, taken from the pinned gdb on those builds; `tests/pax-rows.json` names the few
+per-line drops. `tools/session-pax.py` boots an image under KVM (pelt as init, boreutils' `cat`, the static
+sniff, the fixtures and their sources at the paths the line tables name), types one command line at the
+console, splits the console by marker, and compares each row with its golden. The five terminal rows are typed
+key by key at sniff's own prompt. The same rows also run on Linux (`pax-rows-linux`). Boundaries that remain:
+no `/proc/PID/maps`, `auxv` or `task/TID/stat` on PAX, and `personality` answers ENOSYS (`notes/sn04-sniff-on-pax.md`).

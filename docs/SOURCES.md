@@ -198,3 +198,10 @@ by SIGCHLD) come from compiled probes of the lane's own children.
 
 Apple's lldb ran as a binary (`lldb -b -s`); its output is the oracle in `tests/evidence/macos-s3`, with the
 extraction named in `tools/session-mac.py`.
+
+## Consulted for S4 (2026-11-06)
+
+Linux man pages `ptrace(2)`, `wait(2)`, `proc(5)` and `personality(2)` for the calls the probe in
+`tests/pax-probe/probe.c` makes. PAX's kernel and its own notes on its ptrace support are org code, read as
+documentation of what PAX answers. The behaviour of the pinned gdb is the oracle, run only as a binary on the
+static builds. No debugger's, kernel's or DWARF library's source was read.
