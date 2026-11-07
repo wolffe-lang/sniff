@@ -1,0 +1,6 @@
+Temporary breakpoint 1 at 0x406c37: file /work/fixtures/session/wolf/hits/main.lu, line 2.
+
+Temporary breakpoint 1, tick (n=0) at /work/fixtures/session/wolf/hits/main.lu:2
+2	    n + 1
+No breakpoints, watchpoints, tracepoints, or catchpoints.
+[Inferior 1 (process <PID>) exited normally]

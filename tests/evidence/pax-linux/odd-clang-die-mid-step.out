@@ -1,0 +1,6 @@
+Breakpoint 1 at 0x40182c: file /work/fixtures/session/c/exits/main.c, line 12.
+
+Breakpoint 1, leave (text=<STACK> "7") at /work/fixtures/session/c/exits/main.c:12
+12	    int value = code(text);
+13	    exit(value);
+[Inferior 1 (process <PID>) exited with code 07]

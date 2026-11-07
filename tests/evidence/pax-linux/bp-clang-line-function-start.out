@@ -1,0 +1,8 @@
+Breakpoint 1 at 0x4017fb: file /work/fixtures/session/c/calls/main.c, line 6.
+Breakpoint 2 at 0x40188f: file /work/fixtures/session/c/calls/main.c, line 20.
+Num     Type           Disp Enb Address            What
+1       breakpoint     keep y   0x00000000004017fb in depth_sum at /work/fixtures/session/c/calls/main.c:6
+2       breakpoint     keep y   0x000000000040188f in main at /work/fixtures/session/c/calls/main.c:20
+
+Breakpoint 2, main () at /work/fixtures/session/c/calls/main.c:20
+20	    int a = plain_twice(4);

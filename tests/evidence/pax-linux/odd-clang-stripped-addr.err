@@ -1,0 +1,5 @@
+/work/target/s2/odd-clang-stripped-addr.cmd:2: Error in sourced command file:
+Warning:
+Cannot insert breakpoint 1.
+Cannot access memory at address 0x55555555516c
+

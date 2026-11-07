@@ -1,0 +1,8 @@
+Breakpoint 1 at 0x401b32: file /work/fixtures/session/c/values/main.c, line 37.
+
+Breakpoint 1, main () at /work/fixtures/session/c/values/main.c:37
+37	}
+<STACK>:	0x00000001	0x00000002	0x00000003	0x00000004
+<STACK>:	1	2	3	4
+<STACK>:	0xf9	0xff	0xff	0xff	0xab	0xaa	0xaa	0x3e
+<STACK>:	0xfffffff9	0x3eaaaaab

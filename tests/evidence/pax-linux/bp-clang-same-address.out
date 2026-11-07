@@ -1,0 +1,20 @@
+Breakpoint 1 at 0x4017f7: file /work/fixtures/session/c/hits/main.c, line 4.
+Breakpoint 2 at 0x4017f7: file /work/fixtures/session/c/hits/main.c, line 4.
+Breakpoint 3 at 0x4017f0: file /work/fixtures/session/c/hits/main.c, line 3.
+Num     Type           Disp Enb Address            What
+1       breakpoint     keep y   0x00000000004017f7 in tick at /work/fixtures/session/c/hits/main.c:4
+2       breakpoint     keep y   0x00000000004017f7 in tick at /work/fixtures/session/c/hits/main.c:4
+3       breakpoint     keep y   0x00000000004017f0 in tick at /work/fixtures/session/c/hits/main.c:3
+
+Breakpoint 3, tick (n=0) at /work/fixtures/session/c/hits/main.c:3
+3	int tick(int n) {
+
+Breakpoint 1, tick (n=0) at /work/fixtures/session/c/hits/main.c:4
+4	    return n + 1;
+Num     Type           Disp Enb Address            What
+1       breakpoint     keep y   0x00000000004017f7 in tick at /work/fixtures/session/c/hits/main.c:4
+	breakpoint already hit 1 time
+2       breakpoint     keep y   0x00000000004017f7 in tick at /work/fixtures/session/c/hits/main.c:4
+	breakpoint already hit 1 time
+3       breakpoint     keep y   0x00000000004017f0 in tick at /work/fixtures/session/c/hits/main.c:3
+	breakpoint already hit 1 time

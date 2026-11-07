@@ -1,0 +1,16 @@
+Breakpoint 1 at 0x401874: file /work/fixtures/session/c/calls/main.c, line 6.
+
+Breakpoint 1, depth_sum (n=3) at /work/fixtures/session/c/calls/main.c:6
+6	    if (n == 0) return 0;
+7	    int below = depth_sum(n - 1);
+
+Breakpoint 1, depth_sum (n=2) at /work/fixtures/session/c/calls/main.c:6
+6	    if (n == 0) return 0;
+7	    int below = depth_sum(n - 1);
+
+Breakpoint 1, depth_sum (n=1) at /work/fixtures/session/c/calls/main.c:6
+6	    if (n == 0) return 0;
+#0  depth_sum (n=1) at /work/fixtures/session/c/calls/main.c:6
+#1  0x000000000040188e in depth_sum (n=2) at /work/fixtures/session/c/calls/main.c:7
+#2  0x000000000040188e in depth_sum (n=3) at /work/fixtures/session/c/calls/main.c:7
+#3  0x00000000004018f0 in main () at /work/fixtures/session/c/calls/main.c:21

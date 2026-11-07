@@ -258,9 +258,10 @@ fn step_lines(mut s: Session, over: bool, until_mode: bool) -> str {
         if now_func != cur_func || func_at(s.prog, file_pc) < 0 {
             let nf = func_at(s.prog, file_pc)
             if nf < 0 || !find_sal(s.prog, file_pc).ok {
-                // returned into code with no line information: next stops there,
-                // step runs on, as gdb does
-                if over {
+                // returned into code with no line information: next stops there; step stops
+                // when an ELF symbol names the code (a static libc), and runs on over code no
+                // symbol names (a stripped shared library), as gdb does
+                if over || func_start(s.prog, file_pc) != 0 {
                     print_stop_frame(mut s, true, "")
                     return ""
                 }

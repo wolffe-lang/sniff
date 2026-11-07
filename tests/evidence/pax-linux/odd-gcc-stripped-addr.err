@@ -1,0 +1,5 @@
+/work/target/s2/odd-gcc-stripped-addr.cmd:2: Error in sourced command file:
+Warning:
+Cannot insert breakpoint 1.
+Cannot access memory at address 0x555555555199
+

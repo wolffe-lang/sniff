@@ -1,0 +1,15 @@
+Breakpoint 1 at 0x406c28: file /work/fixtures/wolf/scalars/main.lu, line 2.
+
+Breakpoint 1, 0x0000000000406c28 in helper (a=3, b=4) at /work/fixtures/wolf/scalars/main.lu:2
+2	    let s = a + b
+#1  0x0000000000406ce8 in main () at /work/fixtures/wolf/scalars/main.lu:9
+9	    let z = helper(x, y)
+0x0000000000406c29	2	    let s = a + b
+#1  0x0000000000406ce8 in main () at /work/fixtures/wolf/scalars/main.lu:9
+9	    let z = helper(x, y)
+0x0000000000406c2c	2	    let s = a + b
+#1  0x0000000000406ce8 in main () at /work/fixtures/wolf/scalars/main.lu:9
+9	    let z = helper(x, y)
+0x0000000000406c30	2	    let s = a + b
+#1  0x0000000000406ce8 in main () at /work/fixtures/wolf/scalars/main.lu:9
+9	    let z = helper(x, y)

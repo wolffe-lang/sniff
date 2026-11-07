@@ -1,0 +1,2 @@
+/work/target/s2/value-clang-print.cmd:16: Error in sourced command file:
+No symbol "nosuch" in current context.

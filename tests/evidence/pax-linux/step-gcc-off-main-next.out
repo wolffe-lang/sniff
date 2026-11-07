@@ -1,0 +1,9 @@
+Breakpoint 1 at 0x401900: file /work/fixtures/session/c/calls/main.c, line 23.
+
+Breakpoint 1, main () at /work/fixtures/session/c/calls/main.c:23
+23	    return a + b + c - 24;
+24	}
+0x0000000000401e58 in __libc_start_call_main ()
+Single stepping until exit from function __libc_start_call_main,
+which has no line number information.
+[Inferior 1 (process <PID>) exited normally]

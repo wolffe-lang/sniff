@@ -1,0 +1,17 @@
+Breakpoint 1 at 0x4019bf: file /work/fixtures/session/c/values/main.c, line 20.
+
+Breakpoint 1, inspect (c=122 'z', s=-2, i=3, l=-4000000000, u=5, ul=6, f=0.5, d=0.10000000000000001, b=true, p=<STACK>) at /work/fixtures/session/c/values/main.c:20
+20	    return sum + flag + (int)scaled;
+c = 122 'z'
+s = -2
+i = 3
+l = -4000000000
+u = 5
+ul = 6
+f = 0.5
+d = 0.10000000000000001
+b = true
+p = <STACK>
+sum = 294967430
+scaled = 0.050000000000000003
+flag = -7

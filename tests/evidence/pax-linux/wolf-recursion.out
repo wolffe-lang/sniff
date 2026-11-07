@@ -1,0 +1,29 @@
+Breakpoint 1 at 0x406c36: file /work/fixtures/session/wolf/recursion/main.lu, line 2.
+
+Breakpoint 1, depth (n=3) at /work/fixtures/session/wolf/recursion/main.lu:2
+2	    if n == 0 { return 0 }
+
+Breakpoint 1, depth (n=2) at /work/fixtures/session/wolf/recursion/main.lu:2
+2	    if n == 0 { return 0 }
+
+Breakpoint 1, depth (n=1) at /work/fixtures/session/wolf/recursion/main.lu:2
+2	    if n == 0 { return 0 }
+
+Breakpoint 1, depth (n=0) at /work/fixtures/session/wolf/recursion/main.lu:2
+2	    if n == 0 { return 0 }
+#0  depth (n=0) at /work/fixtures/session/wolf/recursion/main.lu:2
+#1  0x0000000000406c5f in depth (n=1) at /work/fixtures/session/wolf/recursion/main.lu:3
+#2  0x0000000000406c5f in depth (n=2) at /work/fixtures/session/wolf/recursion/main.lu:3
+#3  0x0000000000406c5f in depth (n=3) at /work/fixtures/session/wolf/recursion/main.lu:3
+#4  0x0000000000406cf7 in main () at /work/fixtures/session/wolf/recursion/main.lu:8
+#5  0x0000000000406d4f in main ()
+4	    n + below
+4	    n + below
+0x0000000000406c5f in depth (n=3) at /work/fixtures/session/wolf/recursion/main.lu:3
+3	    let below = depth(n - 1)
+4	    n + below
+0x0000000000406cf7 in main () at /work/fixtures/session/wolf/recursion/main.lu:8
+8	    let total = depth(3)
+total = 2
+#1  0x0000000000406d4f in main ()
+No symbol table info available.

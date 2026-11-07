@@ -1,0 +1,4 @@
+Breakpoint 1 at 0x4018d9: file /work/fixtures/session/c/calls/main.c, line 20.
+
+Breakpoint 1, main () at /work/fixtures/session/c/calls/main.c:20
+20	    int a = plain_twice(4);
