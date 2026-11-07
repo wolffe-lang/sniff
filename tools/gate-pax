@@ -13,10 +13,11 @@ step() { # name cmd...
   local name=$1 start=$SECONDS r=0; shift
   printf 'START %s\n' "$name"
   "$@" > "$out/$name.log" 2>&1 || r=$?
-  grep -E '^(PASS|FAIL|SKIP|SUMMARY|END|KERNEL|SNIFF|START)' "$out/$name.log"
+  grep -E '^(PASS|FAIL|SKIP|SUMMARY|KERNEL|SNIFF)' "$out/$name.log"
   printf 'END %s exit=%s secs=%s\n' "$name" "$r" "$((SECONDS-start))"
   [ "$r" = 0 ] || rc=1
 }
+step pax-identity bash -c 'echo "PASS pax-identity head=$(git -c safe.directory=* -C "$0" rev-parse HEAD) kernel_sha256=$(sha256sum "$1" | cut -c1-64)"' "$pax" "$kernel"
 step pax-session-rows python3 -I "$root/tools/session-pax.py" run --pax "$pax" --kernel "$kernel" --inputs "$inputs" --sniff "$sniff" --fixtures "$fixtures" --out "$out/rows"
 step pax-session-tty python3 -I "$root/tools/session-pax.py" tty --pax "$pax" --kernel "$kernel" --sniff "$sniff" --fixtures "$fixtures" --out "$out/tty"
 exit "$rc"
