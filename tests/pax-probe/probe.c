@@ -38,7 +38,8 @@ int main(int argc, char **argv) {
     /* fork with a resident set of N MiB: PAX copies the address space (no copy-on-write) */
     size_t mib = argc > 1 ? (size_t)atoi(argv[1]) : 64;
     char *big = malloc(mib << 20);
-    if (big) memset(big, 1, mib << 20);
+    if (!big) { printf("malloc of %zu MiB -> failed\n", mib); return 0; }
+    memset(big, 1, mib << 20);
     pid_t c = fork();
     if (c == 0) _exit(0);
     int st = 0;
