@@ -281,7 +281,8 @@ def tty_extract(text, row):
     """The session's text: from sniff's first line to its exit, typed echo removed."""
     t = serial_norm(text)
     i = t.find('Reading symbols from')
-    j = t.find('PAX: init ')
+    cuts = [k for k in (t.find('\nrun: ', max(i, 0)), t.find('PAX: init ', max(i, 0))) if k >= 0]
+    j = min(cuts) + 1 if cuts else -1
     t = t[i:j if j > i else len(t)] if i >= 0 else ''
     for k in row['script'] + ['quit']:
         t = t.replace('(sniff) ' + k + '\n', '(sniff) ', 1)
