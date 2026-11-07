@@ -202,8 +202,9 @@ fn resolve_function(s: Session, name: str) -> Resolved {
         i += 1
     }
     if out.len > 0 { return Resolved { err: "", addrs: out, abs: false } }
-    // a fully stripped static program has no symbol of any kind (a dynamic one keeps its dynamic symbols)
-    if s.prog.funcs.len == 0 && s.prog.syms.len == 0 { return resolved_err("No symbol table is loaded.  Use the \"file\" command.") }
+    // a fully stripped static program has no symbol of any kind; a stripped PIE (the dynamic builds measured so
+    // far) keeps its dynamic symbols, so gdb says the function is not defined there. A non-PIE dynamic program is unmeasured.
+    if !s.prog.pie && s.prog.funcs.len == 0 && s.prog.syms.len == 0 { return resolved_err("No symbol table is loaded.  Use the \"file\" command.") }
     resolved_err("Function \"{name}\" not defined.")
 }
 
