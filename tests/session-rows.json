@@ -1893,10 +1893,9 @@
    "name": "watch-wolf-local",
    "prog": "wolf/loops/wolf-debug/prog",
    "script": [
-    "break sum",
+    "tbreak main.lu:4",
     "run",
     "watch total",
-    "continue",
     "continue",
     "continue",
     "continue",
