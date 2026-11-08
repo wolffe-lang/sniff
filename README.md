@@ -6,7 +6,7 @@ a Debug Adapter Protocol server is planned for editor integration.
 
 **Status: S4, sniff on PAX beside the S2 Linux core and the S3 macOS backend.** `sniff -batch -x SCRIPT PROG` starts PROG
 (under `ptrace(2)` on Linux; as a suspended child with its task port and exception port on macOS) and debugs it with gdb's command language (breakpoints,
-stepping, frames, values, registers, watchpoints, `list` and `help`), held to transcripts of the pinned gdb
+stepping, frames, values, registers, watchpoints, threads (all-stop) and signals, `list` and `help`), held to transcripts of the pinned gdb
 and, on macOS, to Apple's lldb (facts) and to lupin's values; `sniff dump` still prints the S1 reader views.
 On PAX it is a static program of the dev image and debugs static programs with PAX's ptrace (see notes/sn04-sniff-on-pax.md). [MAP](docs/MAP.md) separates planned
 capabilities from measured ones.
