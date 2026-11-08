@@ -1,8 +1,8 @@
 Breakpoint 1 at 0x401847: file /work/fixtures/session/c/workers/main.c, line 50.
-[New Thread <STACK> (LWP <L1>)]
-[New Thread <STACK> (LWP <L2>)]
-[New Thread <STACK> (LWP <L3>)]
-[Switching to Thread <STACK> (LWP <L3>)]
+[New Thread <T1> (LWP <L1>)]
+[New Thread <T2> (LWP <L2>)]
+[New Thread <T3> (LWP <L3>)]
+[Switching to Thread <T3> (LWP <L3>)]
 
 Thread 4 "prog" hit Breakpoint 1, work (n=4) at /work/fixtures/session/c/workers/main.c:50
 50	    int total = 0;
@@ -16,7 +16,7 @@ Thread 4 "prog" hit Breakpoint 1, work (n=4) at /work/fixtures/session/c/workers
 0x0000000000401b23 in worker (arg=<STACK>) at /work/fixtures/session/c/workers/main.c:60
 60	    worked = work(n);
 Value returned is $1 = 10
-[Thread <STACK> (LWP <L3>) exited]
-[Thread <STACK> (LWP <L1>) exited]
-[Thread <STACK> (LWP <L2>) exited]
+[Thread <T3> (LWP <L3>) exited]
+[Thread <T1> (LWP <L1>) exited]
+[Thread <T2> (LWP <L2>) exited]
 [Inferior 1 (process <PID>) exited normally]

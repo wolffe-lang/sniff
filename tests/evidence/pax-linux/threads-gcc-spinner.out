@@ -1,12 +1,12 @@
 Breakpoint 1 at 0x401a5d: file /work/fixtures/session/c/workers/main.c, line 50.
-[New Thread <STACK> (LWP <L1>)]
-[New Thread <STACK> (LWP <L2>)]
-[New Thread <STACK> (LWP <L3>)]
-[Switching to Thread <STACK> (LWP <L3>)]
+[New Thread <T1> (LWP <L1>)]
+[New Thread <T2> (LWP <L2>)]
+[New Thread <T3> (LWP <L3>)]
+[Switching to Thread <T3> (LWP <L3>)]
 
 Thread 4 "prog" hit Breakpoint 1, work (n=4) at /work/fixtures/session/c/workers/main.c:50
 50	    int total = 0;
-[Switching to thread 2 (Thread <STACK> (LWP <L1>))]
+[Switching to thread 2 (Thread <T1> (LWP <L1>))]
 #0  spin (flag=0x4c8b34 <released>, want=1, slot=1) at /work/fixtures/session/c/workers/main.c:35
 35	    while (*flag < want) seen[slot] = 1;
 #0  spin (flag=0x4c8b34 <released>, want=1, slot=1) at /work/fixtures/session/c/workers/main.c:35
@@ -17,8 +17,8 @@ Thread 4 "prog" hit Breakpoint 1, work (n=4) at /work/fixtures/session/c/workers
 45	    spin(&released, id, id);
 $1 = 1
 id = 1
-[Current thread is 2 (Thread <STACK> (LWP <L1>))]
-[Thread <STACK> (LWP <L3>) exited]
-[Thread <STACK> (LWP <L1>) exited]
-[Thread <STACK> (LWP <L2>) exited]
+[Current thread is 2 (Thread <T1> (LWP <L1>))]
+[Thread <T3> (LWP <L3>) exited]
+[Thread <T1> (LWP <L1>) exited]
+[Thread <T2> (LWP <L2>) exited]
 [Inferior 1 (process <PID>) exited normally]
