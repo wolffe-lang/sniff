@@ -919,9 +919,484 @@
   {
    "name": "wolf-mut-reference",
    "kind": "linux"
+  },
+  {
+   "name": "list-wolf-nested-bare",
+   "kind": "linux"
+  },
+  {
+   "name": "list-wolf-loops-bare",
+   "kind": "linux"
+  },
+  {
+   "name": "list-wolf-nested-plus",
+   "kind": "linux"
+  },
+  {
+   "name": "list-wolf-nested-stop",
+   "kind": "linux"
+  },
+  {
+   "name": "list-wolf-loops-stop",
+   "kind": "linux"
+  },
+  {
+   "name": "list-wolf-nested-frames",
+   "kind": "linux"
+  },
+  {
+   "name": "list-wolf-nested-finish",
+   "kind": "linux"
+  },
+  {
+   "name": "list-wolf-loops-exited",
+   "kind": "linux"
+  },
+  {
+   "name": "list-wolf-nested-dot",
+   "kind": "linux"
+  },
+  {
+   "name": "list-wolf-nested-n",
+   "kind": "linux"
+  },
+  {
+   "name": "list-wolf-loops-n",
+   "kind": "linux"
+  },
+  {
+   "name": "list-wolf-nested-func",
+   "kind": "linux"
+  },
+  {
+   "name": "list-wolf-loops-func",
+   "kind": "linux"
+  },
+  {
+   "name": "list-wolf-nested-file",
+   "kind": "linux"
+  },
+  {
+   "name": "list-wolf-loops-file",
+   "kind": "linux"
+  },
+  {
+   "name": "list-wolf-nested-star",
+   "kind": "linux"
+  },
+  {
+   "name": "list-wolf-nested-alias",
+   "kind": "linux"
+  },
+  {
+   "name": "list-wolf-nested-range",
+   "kind": "linux"
+  },
+  {
+   "name": "list-wolf-loops-range",
+   "kind": "linux"
+  },
+  {
+   "name": "list-wolf-loops-minus",
+   "kind": "linux"
+  },
+  {
+   "name": "list-wolf-nested-minus",
+   "kind": "linux"
+  },
+  {
+   "name": "list-wolf-nested-past-end",
+   "kind": "linux"
+  },
+  {
+   "name": "list-wolf-nested-past-end-file",
+   "kind": "linux"
+  },
+  {
+   "name": "list-wolf-loops-range-past",
+   "kind": "linux"
+  },
+  {
+   "name": "list-wolf-loops-to-past",
+   "kind": "linux"
+  },
+  {
+   "name": "list-wolf-nested-no-func",
+   "kind": "linux"
+  },
+  {
+   "name": "list-wolf-nested-no-file",
+   "kind": "linux"
+  },
+  {
+   "name": "list-wolf-nested-no-file-func",
+   "kind": "linux"
+  },
+  {
+   "name": "list-wolf-nested-junk",
+   "kind": "linux"
+  },
+  {
+   "name": "list-c-clang-recursion-bare",
+   "kind": "linux"
+  },
+  {
+   "name": "list-c-clang-recursion-stop",
+   "kind": "linux"
+  },
+  {
+   "name": "list-c-clang-recursion-n",
+   "kind": "linux"
+  },
+  {
+   "name": "list-c-clang-recursion-func",
+   "kind": "linux"
+  },
+  {
+   "name": "list-c-clang-recursion-file",
+   "kind": "linux"
+  },
+  {
+   "name": "list-c-clang-recursion-range",
+   "kind": "linux"
+  },
+  {
+   "name": "list-c-clang-recursion-minus",
+   "kind": "linux"
+  },
+  {
+   "name": "list-c-clang-recursion-star",
+   "kind": "linux"
+  },
+  {
+   "name": "list-c-clang-recursion-past-end",
+   "kind": "linux"
+  },
+  {
+   "name": "list-c-clang-calls-noline",
+   "kind": "linux"
+  },
+  {
+   "name": "list-c-clang-gone",
+   "kind": "linux"
+  },
+  {
+   "name": "list-c-clang-gone-stop",
+   "kind": "linux"
+  },
+  {
+   "name": "help-bare",
+   "kind": "linux"
+  },
+  {
+   "name": "help-h",
+   "kind": "linux"
+  },
+  {
+   "name": "help-all",
+   "kind": "linux"
+  },
+  {
+   "name": "help-class-running",
+   "kind": "linux"
+  },
+  {
+   "name": "help-class-breakpoints",
+   "kind": "linux"
+  },
+  {
+   "name": "help-class-data",
+   "kind": "linux"
+  },
+  {
+   "name": "help-class-stack",
+   "kind": "linux"
+  },
+  {
+   "name": "help-class-status",
+   "kind": "linux"
+  },
+  {
+   "name": "help-class-files",
+   "kind": "linux"
+  },
+  {
+   "name": "help-class-support",
+   "kind": "linux"
+  },
+  {
+   "name": "help-class-internals",
+   "kind": "linux"
+  },
+  {
+   "name": "help-info",
+   "kind": "linux"
+  },
+  {
+   "name": "help-i",
+   "kind": "linux"
+  },
+  {
+   "name": "help-bytes-running",
+   "kind": "linux"
+  },
+  {
+   "name": "help-bytes-stack",
+   "kind": "linux"
+  },
+  {
+   "name": "help-bytes-support",
+   "kind": "linux"
+  },
+  {
+   "name": "help-list",
+   "kind": "linux"
+  },
+  {
+   "name": "help-l",
+   "kind": "linux"
+  },
+  {
+   "name": "help-run",
+   "kind": "linux"
+  },
+  {
+   "name": "help-continue",
+   "kind": "linux"
+  },
+  {
+   "name": "help-c",
+   "kind": "linux"
+  },
+  {
+   "name": "help-kill",
+   "kind": "linux"
+  },
+  {
+   "name": "help-k",
+   "kind": "linux"
+  },
+  {
+   "name": "help-break",
+   "kind": "linux"
+  },
+  {
+   "name": "help-b",
+   "kind": "linux"
+  },
+  {
+   "name": "help-tbreak",
+   "kind": "linux"
+  },
+  {
+   "name": "help-delete",
+   "kind": "linux"
+  },
+  {
+   "name": "help-watch",
+   "kind": "linux"
+  },
+  {
+   "name": "help-rwatch",
+   "kind": "linux"
+  },
+  {
+   "name": "help-awatch",
+   "kind": "linux"
+  },
+  {
+   "name": "help-condition",
+   "kind": "linux"
+  },
+  {
+   "name": "help-display",
+   "kind": "linux"
+  },
+  {
+   "name": "help-undisplay",
+   "kind": "linux"
+  },
+  {
+   "name": "help-backtrace",
+   "kind": "linux"
+  },
+  {
+   "name": "help-bt",
+   "kind": "linux"
+  },
+  {
+   "name": "help-frame",
+   "kind": "linux"
+  },
+  {
+   "name": "help-until",
+   "kind": "linux"
+  },
+  {
+   "name": "help-print",
+   "kind": "linux"
+  },
+  {
+   "name": "help-p",
+   "kind": "linux"
+  },
+  {
+   "name": "help-call",
+   "kind": "linux"
+  },
+  {
+   "name": "help-x",
+   "kind": "linux"
+  },
+  {
+   "name": "help-quit",
+   "kind": "linux"
+  },
+  {
+   "name": "help-maintenance",
+   "kind": "linux"
+  },
+  {
+   "name": "help-mt",
+   "kind": "linux"
+  },
+  {
+   "name": "help-info-breakpoints",
+   "kind": "linux"
+  },
+  {
+   "name": "help-info-b",
+   "kind": "linux"
+  },
+  {
+   "name": "help-info-watchpoints",
+   "kind": "linux"
+  },
+  {
+   "name": "help-info-locals",
+   "kind": "linux"
+  },
+  {
+   "name": "help-info-args",
+   "kind": "linux"
+  },
+  {
+   "name": "help-info-registers",
+   "kind": "linux"
+  },
+  {
+   "name": "help-info-all-registers",
+   "kind": "linux"
+  },
+  {
+   "name": "help-lacking-catch",
+   "kind": "linux"
+  },
+  {
+   "name": "help-lacking-tui",
+   "kind": "linux"
+  },
+  {
+   "name": "help-lacking-set",
+   "kind": "linux"
+  },
+  {
+   "name": "help-lacking-j",
+   "kind": "linux"
+  },
+  {
+   "name": "help-lacking-info-frame",
+   "kind": "linux"
+  },
+  {
+   "name": "help-lacking-info-source",
+   "kind": "linux"
+  },
+  {
+   "name": "help-maint-frames",
+   "kind": "linux"
+  },
+  {
+   "name": "help-undefined",
+   "kind": "linux"
+  },
+  {
+   "name": "help-undefined-info",
+   "kind": "linux"
+  },
+  {
+   "name": "undefined-command",
+   "kind": "linux"
+  },
+  {
+   "name": "undefined-info",
+   "kind": "linux"
+  },
+  {
+   "name": "undefined-maint",
+   "kind": "linux"
+  },
+  {
+   "name": "lacking-command-catch",
+   "kind": "linux"
+  },
+  {
+   "name": "echo-leading-space",
+   "kind": "linux"
+  },
+  {
+   "name": "tty-wolf-loops-repeat-next",
+   "kind": "linux"
+  },
+  {
+   "name": "tty-wolf-nested-repeat-step",
+   "kind": "linux"
+  },
+  {
+   "name": "tty-wolf-nested-repeat-list",
+   "kind": "linux"
+  },
+  {
+   "name": "tty-wolf-loops-repeat-list-minus",
+   "kind": "linux"
+  },
+  {
+   "name": "tty-wolf-nested-repeat-frames",
+   "kind": "linux"
+  },
+  {
+   "name": "tty-wolf-loops-repeat-data",
+   "kind": "linux"
+  },
+  {
+   "name": "tty-wolf-loops-repeat-not",
+   "kind": "linux"
+  },
+  {
+   "name": "tty-wolf-nested-repeat-first",
+   "kind": "linux"
+  },
+  {
+   "name": "tty-wolf-nested-help-errors",
+   "kind": "linux"
+  },
+  {
+   "name": "tty-c-clang-recursion-repeat-list",
+   "kind": "linux"
+  },
+  {
+   "name": "tty-c-clang-recursion-repeat-continue",
+   "kind": "linux"
+  },
+  {
+   "name": "tty-c-clang-gone-repeat",
+   "kind": "linux"
   }
  ],
  "excluded": {
-  "value-clang-registers": "x86-64 register names only; the arm64 register set is held by lldb-registers and step-clang-stepi"
+  "value-clang-registers": "x86-64 register names only; the arm64 register set is held by lldb-registers and step-clang-stepi",
+  "list-wolf-nested-noline": "a Mach-O image has no _start symbol; list-c-clang-calls-noline holds a function with no line information on macOS",
+  "list-c-clang-recursion-noline": "a Mach-O image has no _start symbol; list-c-clang-calls-noline holds a function with no line information on macOS",
+  "tty-wolf-loops-repeat-x": "the words at the stack pointer are the arm64 frame's; the repeat itself is held on Linux and PAX"
  }
 }
