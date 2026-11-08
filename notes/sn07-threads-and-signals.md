@@ -23,7 +23,7 @@ branch's gauntlet-green head, with their own rows, gauntlet and plant.
 | harness | `tools/session.py`: the pid normalisation covers every `process N`; LWP ids are numbered by first appearance; the spin loop's pc prefix and the threads table's padding are normalised by name; tick counts only where a row names them; on the PAX set a thread's address, which is where the kernel mapped its stack, is `<STACK>` after the heap's rule. `tools/session-mac.py`: thread facts, the stopping thread, lldb's restarted-signal line, and a thread's status block is no frame fact on either side. The attach runner (the sleeper started as the harness's child, `{pid}` substituted, its end appended) is here for the attach rows that follow |
 | ABI | S6's ptrace requests, events and `siginfo_t` offsets, checked against the oracle by `tools/abi-probe.c` (`tests/evidence/linux-s2/abi.txt`) |
 
-Rows: 25 threads rows, 33 signals rows (three at a terminal), 6 library-frame rows and 7 help rows on the session set, the same
+Rows: 26 threads rows, 33 signals rows (three at a terminal), 6 library-frame rows and 7 help rows on the session set, the same
 on the PAX set, where they also run at PAX's console under KVM. On macOS, 12 lldb fact and expect rows, 11 of
 the Linux rows as they are (the refusals and the signal table), and the rest excluded by name with the row that
 holds them. Every new row was red at trunk on all three sets but the guards `signals-gcc-run`,
@@ -41,7 +41,7 @@ holds them. Every new row was red at trunk on all three sets but the guards `sig
   - macOS learns of threads from `task_threads` at each stop, as planned.
 - Wrong or missed, each now named:
   - the switch line's baseline is the thread selected when the command started, not the thread resumed last
-    (`threads-*-signal-nostop`);
+    (`threads-*-signal-nostop`, and `threads-gcc-again` for a second stop in the same thread);
   - `continue` after `thread 2` hit the same breakpoint again until the reporting thread stepped past it
     first (`threads-*-spinner`);
   - the static C library's aliases (`__clone3` and `clone3`) and its clone suffixes (`.part.0`), both now
