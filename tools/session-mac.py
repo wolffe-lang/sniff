@@ -27,6 +27,13 @@ Two kinds of row (tests/macos-rows.json):
          every stop). lldb's text differs from
          gdb's; only these facts are compared.
 
+Attach rows (an lldb or expect row with "attach": {"ticks": N, "form": "script" or "dash-p"}) start the row's
+program, the sleeper, as this harness's own child, read its 'ready PID' line, put the pid in both scripts for
+{pid}, and append how the sleeper ended to the output, '[sleeper exited with code N: LAST LINE]' or
+'[sleeper killed by signal N]', which both extractions read as a sleeper fact. An expect row's "sign":
+"hardened" runs a copy signed with the hardened runtime and no get-task-allow: macOS refuses its task port
+to every debugger.
+
 `capture` runs lldb on the lldb rows and stores its raw output in
 tests/evidence/macos-s3, so extraction can be replayed without lldb. `check` runs sniff
 on every row. `replay` re-extracts facts from the stored lldb output and checks them
@@ -95,6 +102,9 @@ def hexint(text):
     return int(text, 16)
 
 
+SLEEPER = re.compile(r'^\[sleeper (exited with code \d+: .*|killed by signal \d+)\]$')
+
+
 def facts_sniff(text):
     """Facts from sniff's (gdb-language) output. The frame `thread N` prints under its switch line is the
     thread's status, not a frame fact: lldb prints `thread select`'s status when it pleases (see facts_lldb)."""
@@ -104,6 +114,10 @@ def facts_sniff(text):
               if re.match(r'^\[Switching to thread \d+ \(', ln) and re.match(r'^#\d+\s', lines[i + 1])}
     for i, line in enumerate(lines):
         if i in status:
+            continue
+        m = SLEEPER.match(line)
+        if m:
+            facts.append(('sleeper', m[1]))
             continue
         m = re.match(r'^Breakpoint (\d+) at (0x[0-9a-f]+): file (.*), line (\d+)\.$', line)
         if m:
@@ -175,6 +189,10 @@ def facts_lldb(text):
               and not re.match(r'^[* ]*\s*frame #\d+: ', lines[i + 2])}
     for i, line in enumerate(lines):
         if i in status:
+            continue
+        m = SLEEPER.match(line)
+        if m:
+            facts.append(('sleeper', m[1]))
             continue
         if line.startswith('(lldb) '):
             cur = line[7:]
@@ -251,12 +269,12 @@ def run(argv, cwd, timeout, env=None):
     return p.stdout, p.stderr, p.returncode
 
 
-def sniff_run(sniff, prog, script, args, work, name, timeout=120):
+def sniff_run(sniff, prog, script, args, work, name, timeout=120, pre=()):
     d = Path(work)
     d.mkdir(parents=True, exist_ok=True)
     path = d / (name + '.cmd')
     path.write_text('\n'.join(script) + '\n')
-    argv = [sniff, '-batch', '-x', str(path), prog] + (['--args'] + args if args else [])
+    argv = [sniff, '-batch', '-x', str(path)] + list(pre) + [prog] + (['--args'] + args if args else [])
     return run(argv, work, timeout)
 
 
@@ -284,12 +302,47 @@ def tty_run(sniff, prog, script, args, work):
     return s2.normalize_tty(out, set()), err, rc
 
 
-def lldb_run(lldb, prog, script, work, name, timeout=120):
+def lldb_run(lldb, prog, script, work, name, timeout=120, pre=()):
     d = Path(work)
     d.mkdir(parents=True, exist_ok=True)
     path = d / (name + '.lldb')
     path.write_text('\n'.join(script) + '\n')
-    return run([lldb, '-b', '-s', str(path), prog], work, timeout)
+    return run([lldb, '-b', '-s', str(path)] + list(pre) + [prog], work, timeout)
+
+
+def sleeper_start(prog, ticks):
+    s = subprocess.Popen([prog, str(ticks)], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, env=dict(ENV_BASE))
+    m = re.match(r'ready (\d+)$', s.stdout.readline().strip())
+    if not m:
+        s.kill()
+        s.communicate()
+        raise SystemExit('FAIL the sleeper %s did not say ready' % prog)
+    return s, m.group(1)
+
+
+def sleeper_line(s, timeout=60):
+    try:
+        out, _ = s.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        s.kill()
+        s.communicate()
+        return '[sleeper did not end in %d s]\n' % timeout
+    if s.returncode < 0:
+        return '[sleeper killed by signal %d]\n' % -s.returncode
+    return '[sleeper exited with code %d: %s]\n' % (s.returncode, (out.strip().splitlines() or [''])[-1])
+
+
+def with_sleeper(r, prog, run_one):
+    """Run run_one(script_substitution, extra_argv) for an attach row with its sleeper; else run it plainly."""
+    a = r.get('attach')
+    if not a:
+        return run_one(lambda lines: lines, [])
+    s, pid = sleeper_start(prog, a.get('ticks', 100))
+    try:
+        out, err, rc = run_one(lambda lines: [x.replace('{pid}', pid) for x in lines], ['-p', pid] if a.get('form') == 'dash-p' else [])
+    finally:
+        tail = sleeper_line(s)
+    return out + tail, err, rc
 
 
 def lldb_script_rows(rows):
@@ -305,8 +358,7 @@ def cmd_capture(a):
     EVID.mkdir(parents=True, exist_ok=True)
     for r in select(lldb_script_rows(spec['rows']), a.only):
         prog = str(Path(a.fixtures) / r['prog'])
-        out, err, rc = lldb_run(a.lldb, prog, r['lldb'], a.work, r['name'])
-        text = re.sub(r'\bProcess \d+\b', 'Process N', out)
+        out, err, rc = with_sleeper(r, prog, lambda sub, pre: lldb_run(a.lldb, prog, sub(r['lldb']), a.work, r['name'], pre=pre))
         (EVID / (r['name'] + '.lldb.txt')).write_text(out)
         facts = facts_lldb(out)
         (EVID / (r['name'] + '.facts.json')).write_text(json.dumps(facts) + '\n')
@@ -340,11 +392,14 @@ def stderr_verdict(row, err, rc, roots, fired):
 
 
 def prepare_target(kind, src, dst):
-    """A copy of a fixture with a hostile signature state: 'adhoc' (signed, no get-task-allow) or 'unsigned'."""
+    """A copy of a fixture with a hostile signature state: 'adhoc' (signed, no get-task-allow), 'hardened' (signed with
+    the hardened runtime, no get-task-allow) or 'unsigned'."""
     Path(dst).parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(['cp', src, dst], check=True)
     if kind == 'adhoc':
         subprocess.run(['codesign', '--force', '--sign', '-', dst], check=True, capture_output=True)
+    elif kind == 'hardened':
+        subprocess.run(['codesign', '--force', '--sign', '-', '-o', 'runtime', dst], check=True, capture_output=True)
     else:
         subprocess.run(['codesign', '--remove-signature', dst], check=True, capture_output=True)
 
@@ -362,7 +417,8 @@ def cmd_check(a):
             else:
                 prog = str(Path(a.fixtures) / r['prog'])
             try:
-                out, err, rc = sniff_run(a.sniff, prog, r['script'], r.get('args', []), a.work, r['name'], r.get('timeout', 60))
+                out, err, rc = with_sleeper(r, prog, lambda sub, pre: sniff_run(a.sniff, prog, sub(r['script']), r.get('args', []), a.work,
+                                                                                r['name'], r.get('timeout', 60), pre))
             except subprocess.TimeoutExpired:
                 print('FAIL %s timeout (sniff hung)' % r['name'])
                 fails += 1
@@ -384,7 +440,8 @@ def cmd_check(a):
             if r['kind'] == 'linux' and lin[r['name']].get('tty'):
                 out, err, rc = tty_run(a.sniff, prog, script, args, a.work)
             else:
-                out, err, rc = sniff_run(a.sniff, prog, script, args, a.work, r['name'], r.get('timeout', 120))
+                out, err, rc = with_sleeper(r, prog, lambda sub, pre: sniff_run(a.sniff, prog, sub(script), args, a.work, r['name'],
+                                                                                r.get('timeout', 120), pre))
         except subprocess.TimeoutExpired:
             print('FAIL %s timeout' % r['name'])
             fails += 1
