@@ -1,0 +1,255 @@
+// `list`: source lines from the reader `step` and `frame` use, in the forms and with the refusals of
+// the GDB manual's "Printing Source Lines", held to the pinned gdb's transcripts. Ten lines at a time.
+//
+// The state is the last listing (its file, first and last lines) or, when a frame's source line was
+// printed since (a stop, `frame`, `up`, `down`), that solitary line: a bare `list` then centres on it.
+// With neither, a bare `list` lists around main.
+
+/// One end of a listing, resolved: a file and a line, or why not.
+struct ListAt {
+    pub file: int,
+    pub line: int,
+    /// The text names a function or address with no line information: gdb lists nothing.
+    pub noline: bool,
+    pub err: str,
+}
+
+fn list_err(why: str) -> ListAt { ListAt { file: -1, line: 0, noline: false, err: why } }
+fn list_at(file: int, line: int) -> ListAt { ListAt { file: file, line: line, noline: false, err: "" } }
+fn list_noline() -> ListAt { ListAt { file: -1, line: 0, noline: true, err: "" } }
+
+/// The cache slot of file `file`'s lines, or -1 when it cannot be read at the path the line table names.
+fn source_slot(mut s: Session, file: int) -> int {
+    var i = 0
+    while i < s.src_file.len {
+        if s.src_file[i] == file {
+            if s.src_ok[i] { return i }
+            return -1
+        }
+        i += 1
+    }
+    let got = fs_read_bytes(s.prog.files[file]) else |_| { return -1 }
+    let text = str_from_utf8(got) else { "" }
+    (mut s.src_file).push(file)
+    (mut s.src_lines).push(text.lines())
+    (mut s.src_ok).push(true)
+    s.src_file.len - 1
+}
+
+/// What gdb prints for line `line` of a file it cannot read: the first time, a warning on standard
+/// error and nothing else (returns ""); every later time, "LINE<TAB>in PATH".
+fn missing_source_text(mut s: Session, file: int, line: int) -> str {
+    var i = 0
+    while i < s.src_warned.len {
+        if s.src_warned[i] == file { return "{line}\tin {s.prog.files[file]}" }
+        i += 1
+    }
+    (mut s.src_warned).push(file)
+    flush_out(mut s)
+    eprint("warning: {line}\t{s.prog.files[file]}: No such file or directory")
+    ""
+}
+
+/// Print lines first..last of a file (cut at its end) and make them the last listing.
+fn list_lines(mut s: Session, file: int, first_in: int, last: int) -> str {
+    var first = first_in
+    if first < 1 { first = 1 }
+    if first > last { return "" }
+    let k = source_slot(mut s, file)
+    if k < 0 {
+        // gdb names only the range's first line, and the next bare `list` is past the end
+        let text = missing_source_text(mut s, file, first)
+        if text.len() > 0 { emit_line(mut s, text) }
+        s.lst_file = file
+        s.lst_first = first
+        s.lst_last = first
+        s.lst_at_end = true
+        s.lst_solitary = 0
+        return ""
+    }
+    let n = s.src_lines[k].len
+    if first > n { return "Line number {first} out of range; {s.prog.files[file]} has {n} lines." }
+    var stop = last
+    if stop > n { stop = n }
+    var l = first
+    while l <= stop {
+        emit_line(mut s, "{l}\t{s.src_lines[k][l - 1]}")
+        l += 1
+    }
+    s.lst_file = file
+    s.lst_first = first
+    s.lst_last = stop
+    s.lst_at_end = false
+    s.lst_solitary = 0
+    ""
+}
+
+/// Ten lines centred on `line`: from five before it (never before line 1).
+fn list_centred(mut s: Session, file: int, line: int) -> str {
+    var first = line - 5
+    if first < 1 { first = 1 }
+    list_lines(mut s, file, first, first + 9)
+}
+
+/// The line of a function's entry row, where gdb centres `list FUNCTION`.
+fn func_entry_line(p: Prog, f: int) -> ListAt {
+    let sal = find_sal(p, p.funcs[f].low)
+    if !sal.ok { return list_noline() }
+    list_at(sal.file, sal.line)
+}
+
+/// FUNCTION, or FUNCTION in the files `in_files` when that list is not empty.
+fn list_function(s: Session, name: str, in_files: List[int], file_text: str) -> ListAt {
+    var known = false
+    var i = 0
+    while i < s.prog.funcs.len {
+        if s.prog.funcs[i].name == name && s.prog.funcs[i].low != 0 {
+            known = true
+            let at = func_entry_line(s.prog, i)
+            if !at.noline && (in_files.len == 0 || contains_file(in_files, at.file)) { return at }
+        }
+        i += 1
+    }
+    if file_text.len() > 0 { return list_err("Function \"{name}\" not defined in \"{file_text}\".") }
+    if known { return list_noline() }
+    i = 0
+    while i < s.prog.syms.len {
+        if s.prog.syms[i].name == name { return list_noline() }
+        i += 1
+    }
+    list_err("Function \"{name}\" not defined.")
+}
+
+/// The current source file: the last listing's or solitary line's, else the selected frame's or main's.
+fn list_current_file(s: Session) -> int {
+    if s.lst_file >= 0 { return s.lst_file }
+    default_file(s)
+}
+
+/// Resolve one linespec of a `list` command: LINENUM, FILE:LINENUM, FUNCTION or FILE:FUNCTION.
+fn list_resolve(s: Session, spec: str) -> ListAt {
+    let t = spec.trim()
+    if t.contains(":") {
+        let parts = t.splitn(":", 2)
+        let fname = parts[0]
+        let tail = parts[1]
+        let files = files_matching(s.prog, fname)
+        if files.len == 0 { return list_err("No source file named {fname}.") }
+        if all_digits(tail) { return list_at(files[0], parse_number(tail)) }
+        return list_function(s, tail, files, fname)
+    }
+    if all_digits(t) {
+        let f = list_current_file(s)
+        if f < 0 { return list_err("No symbol table is loaded.  Use the \"file\" command.") }
+        return list_at(f, parse_number(t))
+    }
+    list_function(s, t, [], "")
+}
+
+/// Where gdb lists before anything else: main's breakpoint line less fourteen, then ten lines.
+fn list_around_main(mut s: Session) -> str {
+    let r = resolve_function(s, "main")
+    var i = 0
+    while i < r.addrs.len {
+        let sal = find_sal(s.prog, r.addrs[i])
+        if sal.ok {
+            var first = sal.line - 14
+            if first < 1 { first = 1 }
+            return list_lines(mut s, sal.file, first, first + 9)
+        }
+        i += 1
+    }
+    "No symbol table is loaded.  Use the \"file\" command."
+}
+
+/// `list` with no argument (and `list +`).
+fn list_more(mut s: Session) -> str {
+    if s.lst_solitary > 0 { return list_centred(mut s, s.lst_file, s.lst_solitary) }
+    if s.lst_file < 0 { return list_around_main(mut s) }
+    let past = "End of the file was already reached, use \"list .\" to list the current location again"
+    if s.lst_at_end { return past }
+    let k = source_slot(mut s, s.lst_file)
+    if k < 0 || s.lst_last + 1 > s.src_lines[k].len { return past }
+    list_lines(mut s, s.lst_file, s.lst_last + 1, s.lst_last + 10)
+}
+
+/// `list -`: the ten lines before the last listing.
+fn list_before(mut s: Session) -> str {
+    if s.lst_solitary > 0 || s.lst_file < 0 { return list_more(mut s) }
+    if s.lst_first <= 1 { return "Already at the start of {s.prog.files[s.lst_file]}." }
+    var first = s.lst_first - 10
+    if first < 1 { first = 1 }
+    list_lines(mut s, s.lst_file, first, s.lst_first - 1)
+}
+
+/// `list .`: around the selected frame's line, or around main with no process.
+fn list_here(mut s: Session) -> str {
+    if s.alive {
+        if !s.frames_ok { compute_frames(mut s) }
+        if s.frames.len > s.sel {
+            let sal = find_sal(s.prog, frame_lookup_pc(s, s.sel) - s.base)
+            if sal.ok { return list_centred(mut s, sal.file, sal.line) }
+        }
+    }
+    list_around_main(mut s)
+}
+
+/// `list *ADDRESS`: "0xADDR is in FUNCTION (FILE:LINE)." and ten lines around it.
+fn list_address(mut s: Session, spec: str) -> str {
+    let r = resolve_location(s, spec)
+    if r.err.len() > 0 { return r.err }
+    if r.addrs.len == 0 { return "" }
+    var file_addr = r.addrs[0]
+    var shown = r.addrs[0]
+    if r.abs { file_addr = to_file_address(s, shown) }
+    else if s.alive { shown = file_addr + s.base }
+    let sal = find_sal(s.prog, file_addr)
+    if !sal.ok { return "" }
+    let f = func_at(s.prog, file_addr)
+    var name = "??"
+    if f >= 0 { name = s.prog.funcs[f].name }
+    emit_line(mut s, "0x{shown:x} is in {name} ({s.prog.files[sal.file]}:{sal.line}).")
+    list_centred(mut s, sal.file, sal.line)
+}
+
+/// The list command.
+fn cmd_list(mut s: Session, rest: str) -> str {
+    let arg = rest.trim()
+    if arg.len() == 0 || arg == "+" { return list_more(mut s) }
+    if arg == "-" { return list_before(mut s) }
+    if arg == "." { return list_here(mut s) }
+    if arg.starts_with("*") { return list_address(mut s, arg) }
+    if arg.contains(",") {
+        let parts = arg.splitn(",", 2)
+        let a = parts[0].trim()
+        let b = parts[1].trim()
+        if a.len() == 0 {
+            // ,LAST: the ten lines ending at LAST
+            let last = list_resolve(s, b)
+            if last.err.len() > 0 { return last.err }
+            if last.noline { return "" }
+            return list_lines(mut s, last.file, last.line - 9, last.line)
+        }
+        let first = list_resolve(s, a)
+        if first.err.len() > 0 { return first.err }
+        if first.noline { return "" }
+        if b.len() == 0 { return list_lines(mut s, first.file, first.line, first.line + 9) }
+        if b.starts_with("+") && all_digits(str_from(b, 1)) {
+            return list_lines(mut s, first.file, first.line, first.line + parse_number(str_from(b, 1)))
+        }
+        // a bare line number after the comma is in the first one's file
+        var last = list_resolve(s, b)
+        if all_digits(b) { last = list_at(first.file, parse_number(b)) }
+        if last.err.len() > 0 { return last.err }
+        if last.noline { return "" }
+        return list_lines(mut s, first.file, first.line, last.line)
+    }
+    let words = arg.words()
+    if words.len > 1 && all_digits(words[1]) {
+        return "malformed linespec error: unexpected number, \"{words[1]}\""
+    }
+    let at = list_resolve(s, arg)
+    if at.err.len() > 0 { return at.err }
+    if at.noline { return "" }
+    list_centred(mut s, at.file, at.line)
+}
