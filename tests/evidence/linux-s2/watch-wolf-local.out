@@ -1,7 +1,7 @@
-Breakpoint 1 at 0xa535: file /work/fixtures/wolf/loops/main.lu, line 2.
+Temporary breakpoint 1 at 0xa54d: file /work/fixtures/wolf/loops/main.lu, line 4.
 
-Breakpoint 1, sum (n=4) at /work/fixtures/wolf/loops/main.lu:2
-2	    var i = 0
+Temporary breakpoint 1, sum (n=4) at /work/fixtures/wolf/loops/main.lu:4
+4	    while i < n {
 Hardware watchpoint 2: total
 
 Hardware watchpoint 2: total
