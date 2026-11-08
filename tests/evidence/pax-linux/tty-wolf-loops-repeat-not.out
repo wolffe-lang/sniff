@@ -9,12 +9,6 @@ Auto-display expressions now in effect:
 Num Enb Expression
 1:   y  n
 There are no auto-display expressions now.
-Num     Type           Disp Enb Address            What
-1       breakpoint     keep y   0x0000000000406c31 in sum 
-                                                   at /work/fixtures/wolf/loops/main.lu:2
-	stop only if n > 9
-	breakpoint already hit 1 time
-No breakpoints, watchpoints, tracepoints, or catchpoints.
 [Inferior 1 (process <PID>) killed]
 The program is not being run.
 Starting program: /work/target/pax-fixtures/wolf/loops/wolf-debug/prog 
