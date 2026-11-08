@@ -17,14 +17,17 @@ import sys
 ENV = {'PATH': '/usr/local/bin:/usr/bin:/bin', 'HOME': '/work/target/home', 'LC_ALL': 'C', 'TZ': 'UTC', 'TERM': 'dumb'}
 
 # fixture, the stop (file:line), lupin's row whose state is the stop's (the statement just before),
-# the function, and derived expressions with how their value follows from the places' values
+# the function, and derived expressions with how their value follows from the places' values.
+# The stop is inside bump, whose `mut p: Point` is a reference: wolf 0.2.38 places main's own struct
+# local at a frame slot that does not hold it (gdb and lldb read the same wrong bytes there), so the
+# struct is reached where its location is right (notes/sn05-the-repin-and-s5.md).
 CASES = [
-    ('wolf/aggregates', 'main.lu:18', '17:', 'main', [
-        ('p.x + count', lambda v: str(int(v['p.x']) + int(v['count']))),
+    ('wolf/aggregates', 'main.lu:10', '9:', 'bump', [
+        ('p.x + by', lambda v: str(int(v['p.x']) + int(v['by']))),
         ('p.hist[2] * 2 - p.y', lambda v: str(int(v['p.hist[2]']) * 2 - int(v['p.y']))),
-        ('(p.x + p.y) % 3', lambda v: str((int(v['p.x']) + int(v['p.y'])) % 3)),
+        ('(p.x + p.y) % by', lambda v: str((int(v['p.x']) + int(v['p.y'])) % int(v['by']))),
         ('p.x == 4', lambda v: 'true' if int(v['p.x']) == 4 else 'false'),
-        ('p.hist[2] > count && p.y < 10', lambda v: 'true' if int(v['p.hist[2]']) > int(v['count']) and int(v['p.y']) < 10 else 'false'),
+        ('p.hist[2] > by && p.y < 10', lambda v: 'true' if int(v['p.hist[2]']) > int(v['by']) and int(v['p.y']) < 10 else 'false'),
     ]),
 ]
 
