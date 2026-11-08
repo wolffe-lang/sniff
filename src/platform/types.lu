@@ -8,6 +8,10 @@ pub const req_traceme: int = 0
 pub const req_peekdata: int = 2
 /// PTRACE_POKEDATA.
 pub const req_pokedata: int = 5
+/// PTRACE_PEEKUSER.
+pub const req_peekuser: int = 3
+/// PTRACE_POKEUSER.
+pub const req_pokeuser: int = 6
 /// PTRACE_CONT.
 pub const req_cont: int = 7
 /// PTRACE_KILL.
@@ -44,6 +48,16 @@ pub struct Target {
     regs: u64,
     word: u64,
 }
+
+/// Byte offset of struct user's u_debugreg, and the size of one debug register (S5's watchpoints).
+pub const user_debugreg_offset: int = 0
+/// Size of one u_debugreg slot.
+pub const user_debugreg_size: int = 0
+
+/// A watch slot's condition: data writes only, or data reads and writes.
+pub const watch_write: int = 1
+/// Data reads or writes (x86 has no read-only data breakpoint; an rwatch is one of these).
+pub const watch_access: int = 3
 
 /// Count of user_regs_struct slots.
 pub const reg_count: int = 27

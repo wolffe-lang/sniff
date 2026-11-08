@@ -353,3 +353,76 @@ pub fn target_refusal(t: Target) -> str { "" }
 /// fpsr and fpcr exist as registers on arm64 only.
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 pub fn target_fp_status(t: Target) -> List[u64] { [] }
+
+/// PTRACE_PEEKUSER of debug register n (0-7), at the byte offset of struct user's u_debugreg that
+/// tools/abi-probe.c measured. ptrace(2): the word is the return value, so errno tells a failure
+/// from a register that holds -1. ok is false on failure.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_debugreg(t: Target, n: int) -> Bytes {
+    unsafe {
+        // # Safety: the pid is the traced child; errno is this thread's.
+        let e = __errno_location()
+        e[0] = 0
+        let v = ptrace(req_peekuser as i32, t.pid as i32, (user_debugreg_offset + n * user_debugreg_size) as u64, 0 as u64)
+        if v == -1 && e[0] != 0 { return Bytes { ok: false, data: [] } }
+        var out: List[byte] = []
+        let w = bits_u64(v as i64)
+        var i = 0
+        while i < 8 { (mut out).push(((w >> (8 * i) as u64) & 255) as int as byte); i += 1 }
+        Bytes { ok: true, data: out }
+    }
+}
+
+/// PTRACE_POKEUSER of debug register n. The kernel checks DR7 and the addresses, so a refused
+/// value is -1 here, never a fault.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_set_debugreg(t: Target, n: int, v: u64) -> int {
+    unsafe {
+        // # Safety: the pid is the traced child.
+        ptrace(req_pokeuser as i32, t.pid as i32, (user_debugreg_offset + n * user_debugreg_size) as u64, v) as int
+    }
+}
+
+/// Hardware watch slots on x86-64: DR0-DR3 (Intel SDM vol. 3, 18.2).
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_watch_slots(t: Target) -> int { 4 }
+
+/// Program the watch slots: addrs[i] watched for lens[i] bytes (1, 2, 4 or 8, aligned to itself),
+/// kinds[i] watch_write or watch_access. Slots past the list are disabled. DR7 per slot i: the local
+/// enable bit 2i, R/W at bits 16+4i (01 data writes, 11 data reads or writes; x86 has no read-only
+/// data breakpoint) and LEN at bits 18+4i (00 one byte, 01 two, 11 four, 10 eight). Returns "" or why.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_set_watches(t: Target, addrs: List[u64], lens: List[int], kinds: List[int]) -> str {
+    if addrs.len > 4 { return "too many hardware watch slots" }
+    // DR7 off first, so no half-written slot can fire
+    if target_set_debugreg(t, 7, 0) < 0 { return "cannot write DR7" }
+    var dr7: u64 = 0
+    var i = 0
+    while i < addrs.len {
+        var len_bits: u64 = 0
+        if lens[i] == 2 { len_bits = 1 } else if lens[i] == 4 { len_bits = 3 } else if lens[i] == 8 { len_bits = 2 }
+        else if lens[i] != 1 { return "a hardware watch covers 1, 2, 4 or 8 bytes" }
+        let rw: u64 = if kinds[i] == watch_write { 1 } else { 3 }
+        if target_set_debugreg(t, i, addrs[i]) < 0 { return "cannot write DR{i}" }
+        dr7 = dr7 | ((1 as u64) << (2 * i) as u64) | (rw << (16 + 4 * i) as u64) | (len_bits << (18 + 4 * i) as u64)
+        i += 1
+    }
+    if dr7 != 0 && target_set_debugreg(t, 7, dr7) < 0 { return "the kernel refused DR7" }
+    ""
+}
+
+/// The slot whose condition fired at the last stop (DR6 B0-B3), or -1. DR6 is cleared after the
+/// read, since the processor never clears it (Intel SDM vol. 3, 18.2.3).
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_watch_hit(t: Target) -> int {
+    let r = target_debugreg(t, 6)
+    if !r.ok { return 0 - 1 }
+    let b = r.data[0] as int
+    let _ = target_set_debugreg(t, 6, 0)
+    var i = 0
+    while i < 4 {
+        if (b >> i) & 1 == 1 { return i }
+        i += 1
+    }
+    0 - 1
+}
