@@ -1650,14 +1650,14 @@
     "run signal",
     "bt",
     "info threads",
-    "continue"
+    "kill"
    ],
    "lldb": [
     "settings set -- target.run-args signal",
     "run",
     "bt",
     "thread list",
-    "continue"
+    "process kill"
    ]
   },
   {
