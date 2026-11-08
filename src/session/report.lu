@@ -1,19 +1,25 @@
 // What gdb prints when the program stops, and the frame inspection commands
 // built on the same text.
 
-/// "LINE\ttext" for a source line; "LINE\tin FILE" when the text is not available.
+/// "LINE\ttext" for a source line; "LINE\tin FILE" when the line is not in the file. A file that
+/// cannot be read is warned about the first time (and "" returned), as gdb does.
 fn source_line_text(mut s: Session, file: int, line: int) -> str {
+    if source_slot(mut s, file) < 0 { return missing_source_text(mut s, file, line) }
     let v = source_line(mut s, file, line)
     if v.ok { return "{line}\t{v.why}" }
     "{line}\tin {s.prog.files[file]}"
 }
 
-/// Print the source line of frame `level` (with the pc prefix when mid-line and wanted).
+/// Print the source line of frame `level` (with the pc prefix when mid-line and wanted). It is the
+/// solitary line a following bare `list` centres on.
 fn print_frame_source(mut s: Session, level: int, pc_prefix: bool) {
     let lookup = frame_lookup_pc(s, level) - s.base
     let sal = find_sal(s.prog, lookup)
     if !sal.ok || s.frames[level].func < 0 { return }
+    s.lst_file = sal.file
+    s.lst_solitary = sal.line
     var text = source_line_text(mut s, sal.file, sal.line)
+    if text.len() == 0 { return }
     if pc_prefix && level == 0 && !(sal.start == s.frames[level].pc - s.base && stmt_start(s.prog, sal.start)) {
         text = "{addr16(s.frames[level].pc)}\t{text}"
     }
