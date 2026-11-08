@@ -302,30 +302,32 @@ fn prog_load(path: str) -> Prog {
         }
         i += 1
     }
-    load_dwarf(mut p, data)
+    load_dwarf(mut p, take data)
     p
 }
 
 /// Read the DWARF sections of `data` (the executable for ELF, the dSYM's DWARF file for
 /// Mach-O) into p: units, line table and subprograms. A file without DWARF leaves has_info false.
-fn load_dwarf(mut p: Prog, data: List[byte]) {
-    p.data = copy data
-    let secs = readers.object_sections(data) else |err| { return }
+/// The bytes and the DIE tree are moved into p, not copied (each copy was a page-faulted
+/// duplicate of tens of megabytes on a large runtime's DWARF).
+fn load_dwarf(mut p: Prog, take data: List[byte]) {
+    p.data = data
+    let secs = readers.object_sections(p.data) else |err| { return }
     p.secs = copy secs
     if !secs.info.present || secs.info.span.length == 0 { return }
-    let info = readers.dwarf_info_read(data, secs.info.span, secs.abbrev.span, readers.dwarf_info_limits()) else |err| {
+    let info = readers.dwarf_info_read(p.data, secs.info.span, secs.abbrev.span, readers.dwarf_info_limits()) else |err| {
         p.err = "dwarf: {err}"
         return
     }
-    p.info = copy info
+    p.info = info
     p.has_info = true
     var ui: int = 0
     while ui < p.info.units.len {
         let root = p.info.units[ui].first_entry
         if root >= p.info.units[ui].end_entry || p.info.entries[root].is_null {
-            (mut p.units).push(unit_bases(data, p, ui, root))
+            (mut p.units).push(unit_bases(p.data, p, ui, root))
         } else {
-            var u = unit_bases(data, p, ui, root)
+            var u = unit_bases(p.data, p, ui, root)
             (mut p.units).push(copy u)
             u.name = attr_text(p, ui, root, 3)
             u.comp_dir = attr_text(p, ui, root, 27)
@@ -336,7 +338,7 @@ fn load_dwarf(mut p: Prog, data: List[byte]) {
                 if offset < secs.line.span.length as u64 {
                     let start = secs.line.span.start + offset as int
                     let span = readers.ByteSpan { start: start, length: secs.line.span.start + secs.line.span.length - start }
-                    let table = readers.dwarf_line_read(data, span, u.address_size, secs.str.span, secs.line_str.span,
+                    let table = readers.dwarf_line_read(p.data, span, u.address_size, secs.str.span, secs.line_str.span,
                         100000000, 1048576) else |err| {
                         p.err = "line table: {err}"
                         return
@@ -352,7 +354,7 @@ fn load_dwarf(mut p: Prog, data: List[byte]) {
                         // each file of the table is named and interned once
                         while fmap.len <= row.file as int { (mut fmap).push(0 - 1) }
                         if fmap[row.file as int] < 0 {
-                            let fname = line_file_name(data, table, p.units[ui], row.file as int)
+                            let fname = line_file_name(p.data, table, p.units[ui], row.file as int)
                             fmap[row.file as int] = intern_file(mut p.files, fname)
                         }
                         let fi = fmap[row.file as int]
@@ -496,13 +498,13 @@ fn prog_load_macho(path: str, data: List[byte]) -> Prog {
     // the companion: Apple's bundle layout, Contents/Resources/DWARF/<binary-name>
     let companion = "{path}.dSYM/Contents/Resources/DWARF/{path_base_name(path)}"
     let dsym = fs_read_bytes(companion) else |err| {
-        if isecs.info.present && isecs.info.span.length > 0 { load_dwarf(mut p, data) }
+        if isecs.info.present && isecs.info.span.length > 0 { load_dwarf(mut p, copy data) }
         return p
     }
     let dobj = readers.macho_read(dsym, 100000000) else |err| { return prog_failed("{companion}: not in dSYM format: {err}") }
     readers.macho_match_uuid(data, mach, dsym, dobj) else |err| { return prog_failed("{path}: {err} ({companion})") }
     p.dsym = companion
-    load_dwarf(mut p, dsym)
+    load_dwarf(mut p, take dsym)
     p
 }
 
