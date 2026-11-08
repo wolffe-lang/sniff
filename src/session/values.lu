@@ -27,6 +27,7 @@ const tag_formal: u64 = 5
 const tag_block: u64 = 11
 const tag_member: u64 = 13
 const tag_pointer: u64 = 15
+const tag_reference: u64 = 16
 const tag_struct: u64 = 19
 const tag_subroutine_type: u64 = 21
 const tag_typedef: u64 = 22
@@ -38,6 +39,7 @@ const tag_enumerator: u64 = 40
 const tag_variable: u64 = 52
 const tag_volatile: u64 = 53
 const tag_restrict: u64 = 55
+const tag_rvalue_reference: u64 = 66
 
 /// Strip typedefs and qualifiers; -1 means void (no type attribute).
 fn ty_strip(p: Prog, t: int) -> int {
@@ -67,13 +69,16 @@ fn ty_size(p: Prog, t: int) -> int {
     let tag = p.info.entries[s].tag
     let bs = attr_at(p, s, 11)
     if bs >= 0 { return p.info.attributes[bs].value.raw as int }
-    if tag == tag_pointer { return 8 }
+    if tag == tag_pointer || is_reference_tag(tag) { return 8 }
     if tag == tag_array {
         let elem = ty_size(p, attr_ref(p, s, 73))
         return elem * array_count(p, s)
     }
     0
 }
+
+/// DW_TAG_reference_type or DW_TAG_rvalue_reference_type (wolf's `mut T` parameter is the first).
+fn is_reference_tag(tag: u64) -> bool { tag == tag_reference || tag == tag_rvalue_reference }
 
 /// Element count of a one-dimensional array type (0 when unbounded).
 fn array_count(p: Prog, arr: int) -> int {
@@ -155,6 +160,10 @@ fn ty_name(p: Prog, t: int) -> str {
     }
     if tag == tag_array {
         return "{ty_name(p, attr_ref(p, t, 73))} [{array_count(p, t)}]"
+    }
+    if is_reference_tag(tag) {
+        let amp = if tag == tag_reference { "&" } else { "&&" }
+        return "{ty_name(p, attr_ref(p, t, 73))} {amp}"
     }
     "<type>"
 }
@@ -345,6 +354,15 @@ fn format_bytes(p: Prog, tgt: platform.Target, t: int, b: List[byte], top: bool)
             }
         }
         return "{out}}}"
+    }
+    if is_reference_tag(tag) {
+        // a reference prints where it refers, then the value there
+        let at = le_u64(b, 8)
+        let inner = attr_ref(p, st, 73)
+        let r = platform.target_read(tgt, at, ty_size(p, inner))
+        let body = if r.ok { format_bytes(p, tgt, inner, r.data, false) } else { "<error: Cannot access memory at address {hex_text(at)}>" }
+        if top { return "({ty_name(p, t)}) @{hex_text(at)}: {body}" }
+        return "@{hex_text(at)}: {body}"
     }
     if tag == tag_struct || tag == tag_union {
         var out = "{{"

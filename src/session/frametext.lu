@@ -129,8 +129,13 @@ fn children_with_tag(p: Prog, die: int, tag: u64) -> List[int] {
 }
 
 fn is_scalar(p: Prog, t: int) -> bool {
-    let st = ty_strip(p, t)
+    var st = ty_strip(p, t)
     if st < 0 { return true }
+    // a reference is as scalar as what it refers to
+    if is_reference_tag(p.info.entries[st].tag) {
+        st = ty_strip(p, attr_ref(p, st, 73))
+        if st < 0 { return true }
+    }
     let tag = p.info.entries[st].tag
     tag == tag_base || tag == tag_pointer || tag == tag_enum
 }

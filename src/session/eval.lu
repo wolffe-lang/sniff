@@ -350,8 +350,11 @@ fn ev_unary(s: Session, mut x: Ex) -> Val {
             let _ = ex_next(mut x)
             let v = ev_unary(s, mut x)
             if !v.ok { return v }
-            if !v.has_addr { return val_fail("Attempt to take address of value not located in memory.") }
-            return Val { ok: true, why: "", ty: pointer_type(v.ty), bytes: bytes_of(v.addr, 8), addr: 0, has_addr: false, reg: -1 }
+            // the address of a reference is the address of what it refers to
+            let o = coerce_ref(s, v)
+            if !o.ok { return o }
+            if !o.has_addr { return val_fail("Attempt to take address of value not located in memory.") }
+            return Val { ok: true, why: "", ty: pointer_type(o.ty), bytes: bytes_of(o.addr, 8), addr: 0, has_addr: false, reg: -1 }
         }
         if t.text == "(" && !x.wolf {
             // a C cast: '(' type-name ')' operand
@@ -533,7 +536,8 @@ fn truth_val(s: Session, x: Ex, b: bool) -> Val {
     val_of(ty_int, if b { 1 } else { 0 })
 }
 
-fn is_true(s: Session, v: Val) -> bool {
+fn is_true(s: Session, v_in: Val) -> bool {
+    let v = coerce_ref(s, v_in)
     let (k, _) = num_class(s, v.ty)
     if k == 3 { return as_double(s, v) != 0.0 }
     int_bits(s, v) != 0
@@ -575,7 +579,8 @@ fn char_val(text: str) -> Val {
 }
 
 /// C's integer promotion of one operand: anything narrower than int is int; a bool is int.
-fn promote(s: Session, v: Val) -> Val {
+fn promote(s: Session, v_in: Val) -> Val {
+    let v = coerce_ref(s, v_in)
     let (k, size) = num_class(s, v.ty)
     if (k == 1 || k == 2 || k == 4) && size < 4 { return val_of(ty_int, int_bits(s, v)) }
     copy v
@@ -620,7 +625,9 @@ fn int_result(s: Session, ty: int, bits: u64) -> Val {
     val_of(ty, v)
 }
 
-fn arith(s: Session, x: Ex, op: str, a: Val, b: Val) -> Val {
+fn arith(s: Session, x: Ex, op: str, a_in: Val, b_in: Val) -> Val {
+    let a = coerce_ref(s, a_in)
+    let b = coerce_ref(s, b_in)
     let (ka, _) = num_class(s, a.ty)
     let (kb, _) = num_class(s, b.ty)
     if !x.wolf && (ka == 5 || kb == 5) { return pointer_arith(s, op, a, b) }
@@ -684,7 +691,9 @@ fn pointer_arith(s: Session, op: str, a: Val, b: Val) -> Val {
     val_of(pv.ty, platform.bits_u64(r))
 }
 
-fn int_binop(s: Session, x: Ex, op: str, a: Val, b: Val) -> Val {
+fn int_binop(s: Session, x: Ex, op: str, a_in: Val, b_in: Val) -> Val {
+    let a = coerce_ref(s, a_in)
+    let b = coerce_ref(s, b_in)
     if !is_integer(s, a.ty) && !(is_bool_type(s, a.ty) && !x.wolf) && a.ty != ty_lit_int {
         return val_fail("Integer only operation.")
     }
@@ -705,13 +714,15 @@ fn int_binop(s: Session, x: Ex, op: str, a: Val, b: Val) -> Val {
     int_result(s, ty, r)
 }
 
-fn int_unop(s: Session, v: Val, op: str) -> Val {
+fn int_unop(s: Session, v_in: Val, op: str) -> Val {
+    let v = coerce_ref(s, v_in)
     if !is_integer(s, v.ty) && v.ty != ty_lit_int { return val_fail("Argument to complement operation not an integer, boolean.") }
     let pv = promote(s, v)
     int_result(s, pv.ty, !int_bits(s, pv))
 }
 
-fn negate(s: Session, x: Ex, v: Val) -> Val {
+fn negate(s: Session, x: Ex, v_in: Val) -> Val {
+    let v = coerce_ref(s, v_in)
     let (k, _) = num_class(s, v.ty)
     if k == 3 { return val_of(if v.ty == ty_lit_float { ty_lit_float } else { v.ty }, double_bits(-as_double(s, v))) }
     if k != 1 && k != 2 && !(k == 4 && !x.wolf) { return val_fail("Argument to arithmetic operation not a number or boolean.") }
@@ -719,7 +730,9 @@ fn negate(s: Session, x: Ex, v: Val) -> Val {
     int_result(s, pv.ty, platform.bits_u64(0 - platform.bits_i64(int_bits(s, pv))))
 }
 
-fn compare(s: Session, x: Ex, op: str, a: Val, b: Val) -> Val {
+fn compare(s: Session, x: Ex, op: str, a_in: Val, b_in: Val) -> Val {
+    let a = coerce_ref(s, a_in)
+    let b = coerce_ref(s, b_in)
     let (ka, _) = num_class(s, a.ty)
     let (kb, _) = num_class(s, b.ty)
     if ka == 0 || kb == 0 { return val_fail("Argument to comparison operation not a number, pointer or boolean.") }
@@ -746,7 +759,8 @@ fn compare(s: Session, x: Ex, op: str, a: Val, b: Val) -> Val {
 }
 
 /// A value converted to type ty (a cast): integers truncate or extend, floats convert both ways.
-fn convert(s: Session, v: Val, ty: int) -> Val {
+fn convert(s: Session, v_in: Val, ty: int) -> Val {
+    let v = coerce_ref(s, v_in)
     let (kt, st) = num_class(s, ty)
     let (kv, _) = num_class(s, v.ty)
     if kt == 0 || kv == 0 { return val_fail("Invalid cast.") }
@@ -786,7 +800,8 @@ fn pointee_size(s: Session, ty: int) -> int {
     ty_size(s.prog, t)
 }
 
-fn deref(s: Session, v: Val) -> Val {
+fn deref(s: Session, v_in: Val) -> Val {
+    let v = coerce_ref(s, v_in)
     let (k, _) = num_class(s, v.ty)
     if k != 5 { return val_fail("Attempt to take contents of a non-pointer value.") }
     let target = pointee(s, v.ty)
@@ -799,7 +814,8 @@ fn deref(s: Session, v: Val) -> Val {
 }
 
 /// The member `name` of a struct or union value (by name, or by position for a wolf tuple's `.0`).
-fn member(s: Session, v: Val, name: str) -> Val {
+fn member(s: Session, v_in: Val, name: str) -> Val {
+    let v = coerce_ref(s, v_in)
     let st = if v.ty >= 0 { ty_strip(s.prog, v.ty) } else { 0 - 1 }
     if st < 0 { return val_fail("Attempt to extract a component of a value that is not a structure.") }
     let tag = s.prog.info.entries[st].tag
@@ -826,7 +842,9 @@ fn member(s: Session, v: Val, name: str) -> Val {
 
 /// v[i]: an array element, or the element a pointer reaches; in wolf, a List's element through its
 /// header, bounds-checked as the language checks it.
-fn index(s: Session, x: Ex, v: Val, i: Val) -> Val {
+fn index(s: Session, x: Ex, v_in: Val, i_in: Val) -> Val {
+    let v = coerce_ref(s, v_in)
+    let i = coerce_ref(s, i_in)
     if !is_integer(s, i.ty) && i.ty != ty_lit_int { return val_fail("Argument to arithmetic operation not a number or boolean.") }
     let n = platform.bits_i64(int_bits(s, i))
     if x.wolf {
@@ -857,6 +875,19 @@ fn index(s: Session, x: Ex, v: Val, i: Val) -> Val {
         return deref(s, p)
     }
     val_fail("cannot subscript something of type `{ty_name(s.prog, v.ty)}'")
+}
+
+/// A reference is read through wherever its value is used: the object it refers to, at its address.
+/// Only a reference printed whole keeps its own form (`(T &) @addr: value`).
+fn coerce_ref(s: Session, v: Val) -> Val {
+    if !v.ok || v.ty < 0 { return copy v }
+    let st = ty_strip(s.prog, v.ty)
+    if st < 0 || !is_reference_tag(s.prog.info.entries[st].tag) { return copy v }
+    let target = attr_ref(s.prog, st, 73)
+    let at = as_u64(v.bytes)
+    let r = platform.target_read(s.target, at, ty_size(s.prog, target))
+    if !r.ok { return val_fail("Cannot access memory at address 0x{at:x}") }
+    Val { ok: true, why: "", ty: target, bytes: r.data, addr: at, has_addr: true, reg: -1 }
 }
 
 /// In wolf, a reference to a struct is the struct: a pointer whose target is a structure is read.
