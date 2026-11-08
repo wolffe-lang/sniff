@@ -7,6 +7,7 @@
 
 use platform
 use std.math.float
+use std.fmt.decimal
 
 const tk_end: int = 0
 const tk_num: int = 1
@@ -212,7 +213,7 @@ fn ev_bitor(mut s: Session, mut x: Ex) -> Val {
         let _ = ex_next(mut x)
         let right = ev_bitxor(mut s, mut x)
         if !right.ok { return right }
-        left = int_binop(mut s, x, "|", left, right)
+        left = int_binop(s, x, "|", left, right)
     }
     left
 }
@@ -223,7 +224,7 @@ fn ev_bitxor(mut s: Session, mut x: Ex) -> Val {
         let _ = ex_next(mut x)
         let right = ev_bitand(mut s, mut x)
         if !right.ok { return right }
-        left = int_binop(mut s, x, "^", left, right)
+        left = int_binop(s, x, "^", left, right)
     }
     left
 }
@@ -234,7 +235,7 @@ fn ev_bitand(mut s: Session, mut x: Ex) -> Val {
         let _ = ex_next(mut x)
         let right = if x.wolf { ev_shift(mut s, mut x) } else { ev_equality(mut s, mut x) }
         if !right.ok { return right }
-        left = int_binop(mut s, x, "&", left, right)
+        left = int_binop(s, x, "&", left, right)
     }
     left
 }
@@ -267,7 +268,7 @@ fn ev_shift(mut s: Session, mut x: Ex) -> Val {
         let op = ex_next(mut x).text
         let right = ev_additive(mut s, mut x)
         if !right.ok { return right }
-        left = int_binop(mut s, x, op, left, right)
+        left = int_binop(s, x, op, left, right)
     }
     left
 }
@@ -557,7 +558,7 @@ fn number_val(s: Session, x: Ex, text: str) -> Val {
 }
 
 fn double_val(text: str) -> Val {
-    let d = text.to_float() else { return val_fail("Invalid number \"{text}\".") }
+    let d = decimal.parse_float(text) else { return val_fail("Invalid number \"{text}\".") }
     val_of(ty_lit_float, double_bits(d))
 }
 
@@ -620,7 +621,7 @@ fn int_result(s: Session, ty: int, bits: u64) -> Val {
 fn arith(mut s: Session, x: Ex, op: str, a: Val, b: Val) -> Val {
     let (ka, _) = num_class(s, a.ty)
     let (kb, _) = num_class(s, b.ty)
-    if !x.wolf && (ka == 5 || kb == 5) { return pointer_arith(mut s, op, a, b) }
+    if !x.wolf && (ka == 5 || kb == 5) { return pointer_arith(s, op, a, b) }
     if ka == 0 || kb == 0 || ka == 5 || kb == 5 { return val_fail("Argument to arithmetic operation not a number or boolean.") }
     let ty = if x.wolf { common_wolf(s, a, b) } else { common_c(s, a, b) }
     if ty == ty_none { return val_fail("mismatched types {ty_name(s.prog, a.ty)} and {ty_name(s.prog, b.ty)}") }
@@ -662,7 +663,7 @@ fn arith(mut s: Session, x: Ex, op: str, a: Val, b: Val) -> Val {
 }
 
 /// Pointer plus or minus an integer (scaled by the pointed-to size), and pointer minus pointer.
-fn pointer_arith(mut s: Session, op: str, a: Val, b: Val) -> Val {
+fn pointer_arith(s: Session, op: str, a: Val, b: Val) -> Val {
     let (ka, _) = num_class(s, a.ty)
     let (kb, _) = num_class(s, b.ty)
     if ka == 5 && kb == 5 {
@@ -681,7 +682,7 @@ fn pointer_arith(mut s: Session, op: str, a: Val, b: Val) -> Val {
     val_of(pv.ty, platform.bits_u64(r))
 }
 
-fn int_binop(mut s: Session, x: Ex, op: str, a: Val, b: Val) -> Val {
+fn int_binop(s: Session, x: Ex, op: str, a: Val, b: Val) -> Val {
     if !is_integer(s, a.ty) && !(is_bool_type(s, a.ty) && !x.wolf) && a.ty != ty_lit_int {
         return val_fail("Integer only operation.")
     }
@@ -694,7 +695,7 @@ fn int_binop(mut s: Session, x: Ex, op: str, a: Val, b: Val) -> Val {
     let q = int_bits(s, b)
     var r: u64 = 0
     if op == "|" { r = p | q } else if op == "^" { r = p ^ q } else if op == "&" { r = p & q }
-    else if op == "<<" { r = if q >= 64 { 0 } else { (p as wrapping[u64] << q) as u64 } }
+    else if op == "<<" { r = if q >= 64 { 0 } else { ((p as wrapping[u64]) << (q as wrapping[u64])) as u64 } }
     else {
         let (k, _) = num_class(s, ty)
         if q >= 64 { r = 0 } else if k == 1 { r = platform.bits_u64(platform.bits_i64(p) >> q) } else { r = p >> q }
@@ -844,7 +845,7 @@ fn index(mut s: Session, x: Ex, v: Val, i: Val) -> Val {
     }
     let (k, _) = num_class(s, v.ty)
     if k == 5 {
-        let p = pointer_arith(mut s, "+", v, i)
+        let p = pointer_arith(s, "+", v, i)
         if !p.ok { return p }
         return deref(mut s, p)
     }
