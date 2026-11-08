@@ -3158,9 +3158,7 @@
     "run",
     "print n",
     "",
-    "output n",
-    "",
-    "echo \\n",
+    "print $",
     "next",
     "info locals",
     "",
@@ -3169,7 +3167,7 @@
     "next",
     "   ",
     "",
-    "ignore 1 2",
+    "info args",
     ""
    ],
    "tty": true
