@@ -13,6 +13,11 @@ compiled without -g: a callee with no line information. c/exits also gets a
 stripped link. Wolf programs (the session tree's and the S1 corpus's) are
 built by the pinned wolf with -g: the default tier's DWARF (source types
 since 0.2.38) plus a non-allocated .debug_frame.
+
+C programs of the S1 corpus named in CORPUS_C are session fixtures too (the
+`list` rows run C recursion). Each one named in GONE is built a second time,
+as c/NAME-gone, from a copy of its sources inside the build directory that the
+build then removes: its line table names a source file that cannot be read.
 """
 import argparse
 import hashlib
@@ -25,6 +30,8 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 STRIPPED = ('exits',)
+CORPUS_C = ('recursion',)
+GONE = ('recursion',)
 
 
 def sha(path):
@@ -104,6 +111,20 @@ def main():
                 ident = 'c/' + source_dir.name + '/' + cc + '-O0' + ('-stripped' if strip else '')
                 exe = c_build(cc, source_dir, out / ident, env, strip, args.static)
                 rows.append({'id': ident, 'producer': cc, 'binary': str(exe.relative_to(out)), 'sha256': sha(exe)})
+        for name in CORPUS_C:
+            ident = 'c/' + name + '/' + cc + '-O0'
+            exe = c_build(cc, ROOT / 'fixtures/c' / name, out / ident, env, False, args.static)
+            rows.append({'id': ident, 'producer': cc, 'binary': str(exe.relative_to(out)), 'sha256': sha(exe)})
+        for name in GONE:
+            ident = 'c/' + name + '-gone/' + cc + '-O0'
+            copy = out / ident / 'src'
+            copy.mkdir(parents=True)
+            for source in sorted((ROOT / 'fixtures/c' / name).glob('*.c')):
+                shutil.copy(source, copy / source.name)
+            exe = c_build(cc, copy, out / ident, env, False, args.static)
+            shutil.rmtree(copy)
+            rows.append({'id': ident, 'producer': cc, 'binary': str(exe.relative_to(out)), 'sha256': sha(exe),
+                         'source_removed': str(copy)})
     wolf_sources = sorted((ROOT / 'fixtures/session/wolf').glob('*/main.lu'))
     wolf_sources += sorted((ROOT / 'fixtures/wolf').glob('*/main.lu'))
     for source in wolf_sources:
