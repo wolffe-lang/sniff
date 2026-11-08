@@ -164,8 +164,9 @@ fn symbolize(s: Session, addr: u64) -> str {
     let y = sym_at(s.prog, file)
     if y >= 0 {
         let off = file - s.prog.syms[y].addr
-        if off == 0 { return "<{s.prog.syms[y].name}>" }
-        return "<{s.prog.syms[y].name}+{off}>"
+        let name = sym_print_name(s.prog.syms[y].name)
+        if off == 0 { return "<{name}>" }
+        return "<{name}+{off}>"
     }
     ""
 }

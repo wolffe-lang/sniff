@@ -178,7 +178,9 @@ fn frame_func_name(s: Session, fr: Frame) -> str {
     let lookup = if fr.pc > 0 { file_pc } else { file_pc }
     if fr.func >= 0 { return s.prog.funcs[fr.func].name }
     let y = sym_at(s.prog, lookup)
-    if y >= 0 { return s.prog.syms[y].name }
+    if y >= 0 { return sym_print_name(s.prog.syms[y].name) }
+    let n = lib_func_name(s, fr.pc)
+    if n.len() > 0 { return n }
     "??"
 }
 

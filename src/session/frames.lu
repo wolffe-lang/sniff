@@ -51,6 +51,26 @@ fn name_after(a: str, b: str) -> bool {
     x.len > y.len
 }
 
+/// How gdb prints an ELF function symbol's name, measured with `info symbol` on the 175 names with a dot in
+/// two static C library programs: a name that starts with `_` as it is; another without a compiler's final
+/// clone number (`msort_with_tmp.part.0` is `msort_with_tmp.part`) and with a `.cold` part as `[cold]`
+/// (`add_fdes.isra.0.cold` is `add_fdes.isra[cold]`).
+fn sym_print_name(name: str) -> str {
+    if name.len() == 0 || name.starts_with("_") { return name }
+    var t = name
+    var cold = false
+    if t.ends_with(".cold") {
+        t = str_upto(t, t.len() - 5)
+        cold = true
+    }
+    let b = t.bytes()
+    var i = b.len - 1
+    while i >= 0 && (b[i] as int) >= 48 && (b[i] as int) <= 57 { i -= 1 }
+    if i >= 0 && i < b.len - 1 && (b[i] as int) == 46 { t = str_upto(t, i) }
+    if cold { t = "{t}[cold]" }
+    t
+}
+
 /// Index into prog.syms of the ELF function symbol containing a file address, or -1. Of several symbols
 /// at one address (a C library's aliases: `__clone3` and `clone3`), the name that sorts last byte by
 /// byte: the pinned gdb's choice in each of the 240 alias groups of a static glibc program, measured
@@ -155,13 +175,24 @@ fn unwind_fp(s: Session, f: Frame, level: int) -> Frame ! {no_caller} { unwind_a
 /// Unwind through the CFI rules of fde. The CFA of frame f is filled in.
 fn unwind_cfi(s: Session, f: Frame, fi: int, lookup: u64) -> Frame ! {no_caller} {
     let fdata = if s.cfi[fi].img { copy s.prog.img } else { copy s.prog.data }
-    let r = cfi_rules(fdata, s.cfi[fi], lookup - s.base)
+    unwind_rules(s, f, fdata, s.cfi[fi], lookup - s.base, s.base)
+}
+
+/// Unwind through the CFI rules of a shared library's fde (libs.lu).
+fn unwind_lib(s: Session, f: Frame, li: int, fi: int, lookup: u64) -> Frame ! {no_caller} {
+    let base = s.libs[li].base
+    unwind_rules(s, f, s.libs[li].prog.data, s.libs[li].cfi[fi], lookup - base, base)
+}
+
+/// Unwind frame f by the rules fde gives at file address file_pc, in a file whose load bias is base.
+fn unwind_rules(s: Session, f: Frame, fdata: List[byte], fde: CfiFde, file_pc: u64, base: u64) -> Frame ! {no_caller} {
+    let r = cfi_rules(fdata, fde, file_pc)
     let cols = platform.arch_cfi_cols()
     let ra = platform.arch_ra_col()
     let sp_col = platform.arch_sp_col()
     var cfa: u64 = 0
     if r.cfa_is_expr {
-        let ctx = EvalCtx { regs: copy f.regs, frame_base: 0, has_frame_base: false, cfa: 0, has_cfa: false, base: s.base }
+        let ctx = EvalCtx { regs: copy f.regs, frame_base: 0, has_frame_base: false, cfa: 0, has_cfa: false, base: base }
         let l = expr_eval(fdata, r.cfa_expr, ctx, s.target)
         if l.kind != loc_memory { return no_caller }
         cfa = l.value
@@ -220,9 +251,18 @@ fn compute_frames(mut s: Session) {
             f.basis = "cfi"
             caller = unwind_cfi(s, f, fi, lookup) else { next_ok = false; copy f }
         } else {
-            caller = unwind_fp(s, f, level) else { next_ok = false; copy f }
-            f.fallback = caller.fallback
-            f.basis = caller.basis
+            // a pc in a shared library: the library's own CFI, else the frame-pointer fallback
+            let li = if in_image(s.prog, file_pc) { 0 - 1 } else { lib_at(mut s, lookup) }
+            let lfi = if li >= 0 { cfi_find(s.libs[li].cfi, lookup - s.libs[li].base) } else { 0 - 1 }
+            if lfi >= 0 {
+                f.fallback = false
+                f.basis = "cfi"
+                caller = unwind_lib(s, f, li, lfi, lookup) else { next_ok = false; copy f }
+            } else {
+                caller = unwind_fp(s, f, level) else { next_ok = false; copy f }
+                f.fallback = caller.fallback
+                f.basis = caller.basis
+            }
         }
         if next_ok { f.cfa = caller.cfa; f.cfa_ok = true }
         (mut s.frames).push(copy f)

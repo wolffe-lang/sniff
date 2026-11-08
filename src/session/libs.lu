@@ -1,0 +1,112 @@
+// Shared libraries of a dynamic program (Linux). A frame whose pc is in a library is unwound by the
+// library's own .eh_frame and named from the library's symbols (a distribution's C library keeps only its
+// dynamic ones): `0x... in NAME () from LIB`, or `?? () from LIB` where no symbol covers the pc, as gdb
+// prints a backtrace through a library without debugging information. The library is the file that
+// /proc/PID/maps names for the pc (proc(5)), read at first sight; its load bias is the lowest start of that
+// file's mappings, the address its first byte is mapped at.
+
+struct Lib {
+    pub path: str,
+    pub base: u64,
+    pub prog: Prog,
+    pub cfi: List[CfiFde],
+}
+
+/// The file mapped at a runtime address and the lowest start of that file's mappings; path "" for none.
+struct Mapped {
+    pub path: str,
+    pub base: u64,
+}
+
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+fn mapped_at(pid: int, addr: u64) -> Mapped {
+    let none = Mapped { path: "", base: 0 }
+    let raw = fs_read_bytes("/proc/{pid}/maps") else { return none }
+    let text = str_from_utf8(raw) else { return none }
+    var path = ""
+    for ln in text.lines() {
+        let cols = ln.words()
+        if cols.len < 6 { continue }
+        let range = cols[0].split("-")
+        if range.len < 2 { continue }
+        if parse_hex(range[0]) <= addr && addr < parse_hex(range[1]) && cols[5].starts_with("/") { path = cols[5] }
+    }
+    if path.len() == 0 { return none }
+    var base: u64 = 0
+    var found = false
+    for ln in text.lines() {
+        let cols = ln.words()
+        if cols.len < 6 || cols[5] != path { continue }
+        let range = cols[0].split("-")
+        let lo = parse_hex(range[0])
+        if !found || lo < base {
+            base = lo
+            found = true
+        }
+    }
+    Mapped { path: path, base: base }
+}
+
+/// Whether library l holds runtime address addr in one of its sections.
+fn lib_covers(l: Lib, addr: u64) -> bool { addr >= l.base && in_image(l.prog, addr - l.base) }
+
+/// Index in s.libs of the library holding runtime address addr, read at first sight; -1 for an address in
+/// no file, in the program, or in a file sniff cannot read as ELF.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+fn lib_at(mut s: Session, addr: u64) -> int {
+    var i = 0
+    while i < s.libs.len {
+        if lib_covers(s.libs[i], addr) { return i }
+        i += 1
+    }
+    let m = mapped_at(s.inferior.pid, addr)
+    if m.path.len() == 0 { return 0 - 1 }
+    i = 0
+    while i < s.libs.len {
+        // read already, and the address is in none of its sections
+        if s.libs[i].path == m.path { return 0 - 1 }
+        i += 1
+    }
+    let p = prog_load(m.path)
+    if p.err.len() > 0 { return 0 - 1 }
+    let t = cfi_build(p)
+    (mut s.libs).push(Lib { path: m.path, base: m.base, prog: p, cfi: t })
+    let k = s.libs.len - 1
+    if lib_covers(s.libs[k], addr) { return k }
+    0 - 1
+}
+
+/// macOS's system libraries are in the dyld shared cache, with no file to read: none.
+#[cfg(target = "aarch64-apple-darwin")]
+fn lib_at(mut s: Session, addr: u64) -> int { 0 - 1 }
+
+/// Index into p.syms of the function symbol whose extent holds file address addr, or -1. Of aliases, the
+/// name that sorts last (as sym_at). A symbol of no size covers nothing: gdb prints `??` past a library's
+/// last sized symbol.
+fn lib_sym_at(p: Prog, addr: u64) -> int {
+    var best = 0 - 1
+    var i = 0
+    while i < p.syms.len {
+        let a = p.syms[i].addr
+        if a <= addr && addr < a + p.syms[i].size {
+            if best < 0 || p.syms[best].addr < a { best = i }
+            else if p.syms[best].addr == a && name_after(p.syms[i].name, p.syms[best].name) { best = i }
+        }
+        i += 1
+    }
+    best
+}
+
+/// The name of the library function holding runtime address addr, or "" (a library read already).
+fn lib_func_name(s: Session, addr: u64) -> str {
+    var i = 0
+    while i < s.libs.len {
+        if lib_covers(s.libs[i], addr) {
+            let y = lib_sym_at(s.libs[i].prog, addr - s.libs[i].base)
+            if y >= 0 { return sym_print_name(s.libs[i].prog.syms[y].name) }
+            return ""
+        }
+        i += 1
+    }
+    ""
+}

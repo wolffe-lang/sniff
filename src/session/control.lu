@@ -91,6 +91,7 @@ fn start_process(mut s: Session) -> str {
     s.target = copy t
     s.inferior = copy t
     thr_reset(mut s)
+    s.libs = []
     s.alive = true
     s.watch_armed = false
     s.pending_signal = 0
