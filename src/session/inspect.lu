@@ -298,10 +298,16 @@ fn pad_left_zero(text: str, width: int) -> str {
 
 /// x/NFU ADDR
 fn cmd_x(mut s: Session, rest: str) -> str {
+    // gdb's defaults: the format and size last used; a bare `x` also keeps the count
     var count = 1
     var fmt = "x"
     var size = 4
+    if s.x_ok {
+        fmt = s.x_fmt
+        size = s.x_size
+    }
     var addr_text = rest.trim()
+    if addr_text.len() == 0 && s.x_ok { count = s.x_count }
     if addr_text.starts_with("/") {
         let parts = addr_text.splitn(" ", 2)
         let spec = str_from(parts[0], 1)
@@ -317,15 +323,25 @@ fn cmd_x(mut s: Session, rest: str) -> str {
         if digits.len() > 0 { count = parse_uint(digits).addr as int }
     }
     if fmt == "i" { return "x/i is not implemented: sniff has no disassembler" }
-    if addr_text.len() == 0 { return "Argument required (starting display address)." }
-    let v = eval_expr(s, addr_text)
-    if !v.ok { return v.why }
-    var addr = as_u64(v.bytes)
-    if v.has_addr && v.ty >= 0 {
-        let st = ty_strip(s.prog, v.ty)
-        if st >= 0 && s.prog.info.entries[st].tag == tag_array { addr = v.addr }
+    var addr: u64 = 0
+    if addr_text.len() == 0 {
+        // no address: the memory after the last thing x examined
+        if !s.x_ok { return "Argument required (starting display address)." }
+        addr = s.x_next
+    } else {
+        let v = eval_expr(s, addr_text)
+        if !v.ok { return v.why }
+        addr = as_u64(v.bytes)
+        if v.has_addr && v.ty >= 0 {
+            let st = ty_strip(s.prog, v.ty)
+            if st >= 0 && s.prog.info.entries[st].tag == tag_array { addr = v.addr }
+        }
     }
     if fmt == "c" { size = 1 }
+    s.x_ok = true
+    s.x_count = count
+    s.x_fmt = fmt
+    s.x_size = size
     if fmt == "s" {
         var n = 0
         while n < count {
@@ -334,6 +350,7 @@ fn cmd_x(mut s: Session, rest: str) -> str {
             addr += sv.1 as u64
             n += 1
         }
+        s.x_next = addr
         return ""
     }
     let per_line = if size == 8 { 2 } else if size == 4 { 4 } else { 8 }
@@ -359,6 +376,7 @@ fn cmd_x(mut s: Session, rest: str) -> str {
             else { item = "0x{pad_left_zero("{raw:x}", size * 2)}" }
             line = "{line}\t{item}"
             addr += size as u64
+            s.x_next = addr
             k += 1
             i += 1
         }
