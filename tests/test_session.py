@@ -83,10 +83,15 @@ class Inventory(unittest.TestCase):
     def test_programs_exist_in_the_fixture_builder(self):
         # every fixture program a row names is one build-session.py builds
         builder = (ROOT / 'tools/build-session.py').read_text()
+        spec = importlib.util.spec_from_file_location('build_session', ROOT / 'tools/build-session.py')
+        build = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(build)
         for r in session.load_rows():
             case = r['prog'].split('/')
             if case[0] == 'c':
-                self.assertTrue((ROOT / 'fixtures/session/c' / case[1]).is_dir(), r['name'])
+                gone = case[1].endswith('-gone') and case[1][:-5] in build.GONE
+                corpus = case[1] in build.CORPUS_C and (ROOT / 'fixtures/c' / case[1]).is_dir()
+                self.assertTrue((ROOT / 'fixtures/session/c' / case[1]).is_dir() or corpus or gone, r['name'])
             else:
                 ok = (ROOT / 'fixtures/session/wolf' / case[1]).is_dir() or (ROOT / 'fixtures/wolf' / case[1]).is_dir()
                 self.assertTrue(ok, r['name'])
@@ -188,6 +193,9 @@ class CompareModes(unittest.TestCase):
         self.assertEqual(session.judge(row, good, '', 0, 'Text User Interface commands.\n', '', '0\n'), [])
         self.assertTrue(session.judge(row, 'Undefined command: "tui".\n', '', 0, 'Text User Interface commands.\n', '', '0\n'))
         self.assertTrue(session.judge(row, good, '', 0, '', 'Undefined command: "tui".\n', '1\n'))
+        mine = dict(row, gdb='lacks')
+        self.assertEqual(session.judge(mine, good, '', 0, '', '', '1\n'), [])
+        self.assertTrue(session.judge(mine, good, '', 0, 'Text User Interface commands.\n', '', '0\n'))
 
     def test_stderr_and_status_are_always_compared(self):
         row = {'compare': 'head', 'head': 1, 'why': 'x'}
@@ -203,6 +211,8 @@ class CompareModes(unittest.TestCase):
         self.assertTrue(session.row_form({'name': 'r', 'compare': 'subset', 'why': 'w', 'tty': True}))
         self.assertTrue(session.row_form({'name': 'r', 'compare': 'sideways', 'why': 'w'}))
         self.assertEqual(session.row_form({'name': 'r', 'compare': 'subset', 'why': 'w', 'own': ['x']}), '')
+        self.assertTrue(session.row_form({'name': 'r', 'compare': 'own', 'why': 'w', 'expect': ['x'], 'gdb': 'maybe'}))
+        self.assertEqual(session.row_form({'name': 'r', 'compare': 'own', 'why': 'w', 'expect': [], 'expect_err': ['e']}), '')
 
 
 if __name__ == '__main__':
