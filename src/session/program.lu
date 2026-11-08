@@ -22,7 +22,7 @@ struct Unit {
 }
 
 /// One line-table row, resolved to a global file index.
-struct LineEnt {
+pub struct LineEnt {
     pub addr: u64,
     pub file: int,
     pub line: int,
@@ -287,7 +287,7 @@ fn run_order(a: LineRun, b: LineRun) -> bool {
 /// first row and laid end to end; when that is sorted, it is the answer, because (addr, ord)
 /// is a total order with ord unique and the sorted list is therefore unique. Runs that
 /// overlap fall back to the full sort.
-fn sort_lines(mut lines: List[LineEnt]) {
+pub fn sort_lines(mut lines: List[LineEnt]) {
     let n = lines.len
     if n < 2 { return }
     var runs: List[LineRun] = []

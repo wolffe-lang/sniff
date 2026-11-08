@@ -100,5 +100,9 @@
     "platform-wait-statuses",
     "platform-register-slots",
     "platform-bit-casts"
+  ],
+  "sort_test.lu": [
+    "line-sort-runs",
+    "line-sort-overlap"
   ]
 }

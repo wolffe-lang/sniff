@@ -1,0 +1,74 @@
+//! member: false
+// The line-row sort (session.sort_lines): ascending runs laid end to end in the order of
+// their first rows, or the full sort when runs overlap. Either way the answer is the one
+// list sorted by (addr, ord), checked here against an insertion sort.
+use session
+
+fn row(addr: u64, ord: int) -> session.LineEnt {
+    session.LineEnt { addr: addr, file: 0, line: ord, stmt: true, prologue_end: false, end_seq: false, ord: ord }
+}
+
+fn before(a: session.LineEnt, b: session.LineEnt) -> bool {
+    if a.addr != b.addr { return a.addr < b.addr }
+    a.ord <= b.ord
+}
+
+/// The reference answer: an insertion sort by (addr, ord).
+fn reference(xs: List[session.LineEnt]) -> List[session.LineEnt] {
+    var out: List[session.LineEnt] = []
+    for x in xs {
+        (mut out).push(copy x)
+        var j = out.len - 1
+        while j > 0 && !before(out[j - 1], out[j]) {
+            let t = copy out[j]
+            out[j] = copy out[j - 1]
+            out[j - 1] = t
+            j -= 1
+        }
+    }
+    out
+}
+
+fn same(a: List[session.LineEnt], b: List[session.LineEnt]) -> bool {
+    if a.len != b.len { return false }
+    var i = 0
+    while i < a.len {
+        if a[i].addr != b[i].addr || a[i].ord != b[i].ord { return false }
+        i += 1
+    }
+    true
+}
+
+fn check(addrs: List[u64]) -> bool {
+    var xs: List[session.LineEnt] = []
+    var i = 0
+    while i < addrs.len { (mut xs).push(row(addrs[i], i)); i += 1 }
+    let want = reference(xs)
+    session.sort_lines(mut xs)
+    same(xs, want)
+}
+
+fn runs() {
+    // one run, already sorted
+    assert(check([16, 32, 32, 48]))
+    // three sequences emitted out of address order, an end row sharing the next one's start
+    assert(check([300, 310, 320, 100, 110, 120, 200, 210, 300]))
+    // a later sequence that starts where an earlier one ends: the earlier ord comes first
+    assert(check([200, 210, 220, 100, 110, 200]))
+    // a single row and an empty table
+    assert(check([7]))
+    assert(check([]))
+    print("PASS line-sort-runs")
+}
+
+fn overlap() {
+    // runs whose ranges interleave cannot be laid end to end: the full sort answers
+    assert(check([100, 300, 500, 200, 400, 600]))
+    assert(check([50, 40, 30, 20, 10]))
+    print("PASS line-sort-overlap")
+}
+
+fn main() {
+    runs()
+    overlap()
+}
