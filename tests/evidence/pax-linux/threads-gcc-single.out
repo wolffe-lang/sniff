@@ -1,0 +1,11 @@
+Breakpoint 1 at 0x4018dc: file /work/fixtures/session/c/sigusr/main.c, line 29.
+
+Breakpoint 1, main () at /work/fixtures/session/c/sigusr/main.c:29
+29	    signal(SIGUSR1, on_usr1);
+  Id Target Id Frame
+* 1 process <PID> "prog" main () at /work/fixtures/session/c/sigusr/main.c:29
+[Current thread is 1 (process <PID>)]
+[Switching to thread 1 (process <PID>)]
+#0  main () at /work/fixtures/session/c/sigusr/main.c:29
+29	    signal(SIGUSR1, on_usr1);
+[Inferior 1 (process <PID>) killed]

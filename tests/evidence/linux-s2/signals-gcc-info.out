@@ -1,0 +1,8 @@
+Signal        Stop	Print	Pass to program	Description
+SIGUSR1       Yes	Yes	Yes		User defined signal 1
+Signal        Stop	Print	Pass to program	Description
+SIGSEGV       Yes	Yes	Yes		Segmentation fault
+Signal        Stop	Print	Pass to program	Description
+SIGALRM       No	No	Yes		Alarm clock
+Signal        Stop	Print	Pass to program	Description
+SIGALRM       No	No	Yes		Alarm clock

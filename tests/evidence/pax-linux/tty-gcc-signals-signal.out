@@ -1,0 +1,19 @@
+Reading symbols from /work/target/pax-fixtures/c/sigusr/gcc-O0/prog...
+Starting program: /work/target/pax-fixtures/c/sigusr/gcc-O0/prog 
+
+Program received signal SIGUSR1, User defined signal 1.
+0x00000000004018cd in deliver (sig=10) at /work/fixtures/session/c/sigusr/main.c:18
+18	    __asm__ volatile("syscall" : "=a"(ret) : "a"(62L), "D"(pid), "S"((long)sig) : "rcx", "r11", "memory");
+Continuing with signal SIGUSR2.
+
+Program received signal SIGUSR2, User defined signal 2.
+0x00000000004018cd in deliver (sig=12) at /work/fixtures/session/c/sigusr/main.c:18
+18	    __asm__ volatile("syscall" : "=a"(ret) : "a"(62L), "D"(pid), "S"((long)sig) : "rcx", "r11", "memory");
+Continuing.
+
+Program received signal SIGUSR1, User defined signal 1.
+0x00000000004018cd in deliver (sig=10) at /work/fixtures/session/c/sigusr/main.c:18
+18	    __asm__ volatile("syscall" : "=a"(ret) : "a"(62L), "D"(pid), "S"((long)sig) : "rcx", "r11", "memory");
+Continuing with no signal.
+[Inferior 1 (process <PID>) exited with code 02]
+The program is not being run.

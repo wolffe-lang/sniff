@@ -1,0 +1,21 @@
+[New Thread <STACK> (LWP <L1>)]
+[New Thread <STACK> (LWP <L2>)]
+[New Thread <STACK> (LWP <L3>)]
+
+Thread 4 "prog" received signal SIGUSR1, User defined signal 1.
+[Switching to Thread <STACK> (LWP <L3>)]
+0x0000000000401988 in deliver_here () at /work/fixtures/session/c/workers/main.c:27
+27	    __asm__ volatile("syscall" : "=a"(ret) : "a"(234L), "D"(pid), "S"(tid), "d"(10L) : "rcx", "r11", "memory");
+#0  0x0000000000401988 in deliver_here () at /work/fixtures/session/c/workers/main.c:27
+#1  0x0000000000401acb in worker (arg=<STACK>) at /work/fixtures/session/c/workers/main.c:59
+#2  0x0000000000405ecc in start_thread ()
+#3  0x00000000004196fc in clone3 ()
+  Id Target Id Frame
+  1    Thread <HEAP> (LWP <L4>) "prog"       spin (flag=0x4c8b30 <worked>, want=1, slot=0) at /work/fixtures/session/c/workers/main.c:35
+  2 Thread <STACK> (LWP <L1>) "prog" spin (flag=0x4c8b34 <released>, want=1, slot=1) at /work/fixtures/session/c/workers/main.c:35
+  3 Thread <STACK> (LWP <L2>) "prog" spin (flag=0x4c8b34 <released>, want=2, slot=2) at /work/fixtures/session/c/workers/main.c:35
+* 4 Thread <STACK> (LWP <L3>) "prog" 0x0000000000401988 in deliver_here () at /work/fixtures/session/c/workers/main.c:27
+[Thread <STACK> (LWP <L3>) exited]
+[Thread <STACK> (LWP <L1>) exited]
+[Thread <STACK> (LWP <L2>) exited]
+[Inferior 1 (process <PID>) exited normally]

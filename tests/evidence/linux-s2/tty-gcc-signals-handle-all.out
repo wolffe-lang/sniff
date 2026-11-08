@@ -1,0 +1,155 @@
+Reading symbols from /work/target/session-fixtures/c/sigusr/gcc-O0/prog...
+Signal        Stop	Print	Pass to program	Description
+SIGINT        No	Yes	No		Interrupt
+Signal        Stop	Print	Pass to program	Description
+SIGTRAP       Yes	Yes	No		Trace/breakpoint trap
+Signal        Stop	Print	Pass to program	Description
+SIGKILL       No	Yes	Yes		Killed
+Signal        Stop	Print	Pass to program	Description
+SIGHUP        No	Yes	Yes		Hangup
+SIGQUIT       No	Yes	Yes		Quit
+SIGILL        No	Yes	Yes		Illegal instruction
+SIGABRT       No	Yes	Yes		Aborted
+SIGEMT        No	Yes	Yes		Emulation trap
+SIGFPE        No	Yes	Yes		Arithmetic exception
+SIGKILL       No	Yes	Yes		Killed
+SIGBUS        No	Yes	Yes		Bus error
+SIGSEGV       No	Yes	Yes		Segmentation fault
+SIGSYS        No	Yes	Yes		Bad system call
+SIGPIPE       No	Yes	Yes		Broken pipe
+SIGALRM       No	No	Yes		Alarm clock
+SIGTERM       No	Yes	Yes		Terminated
+SIGURG        No	No	Yes		Urgent I/O condition
+SIGSTOP       No	Yes	Yes		Stopped (signal)
+SIGTSTP       No	Yes	Yes		Stopped (user)
+SIGCONT       No	Yes	Yes		Continued
+SIGCHLD       No	No	Yes		Child status changed
+SIGTTIN       No	Yes	Yes		Stopped (tty input)
+SIGTTOU       No	Yes	Yes		Stopped (tty output)
+SIGIO         No	No	Yes		I/O possible
+SIGXCPU       No	Yes	Yes		CPU time limit exceeded
+SIGXFSZ       No	Yes	Yes		File size limit exceeded
+SIGVTALRM     No	No	Yes		Virtual timer expired
+SIGPROF       No	No	Yes		Profiling timer expired
+SIGWINCH      No	No	Yes		Window size changed
+SIGLOST       No	Yes	Yes		Resource lost
+SIGUSR1       No	Yes	Yes		User defined signal 1
+SIGUSR2       No	Yes	Yes		User defined signal 2
+SIGPWR        No	Yes	Yes		Power fail/restart
+SIGPOLL       No	No	Yes		Pollable event occurred
+SIGWIND       No	Yes	Yes		SIGWIND
+SIGPHONE      No	Yes	Yes		SIGPHONE
+SIGWAITING    No	No	Yes		Process's LWPs are blocked
+SIGLWP        No	No	Yes		Signal LWP
+SIGDANGER     No	Yes	Yes		Swap space dangerously low
+SIGGRANT      No	Yes	Yes		Monitor mode granted
+SIGRETRACT    No	Yes	Yes		Need to relinquish monitor mode
+SIGMSG        No	Yes	Yes		Monitor mode data available
+SIGSOUND      No	Yes	Yes		Sound completed
+SIGSAK        No	Yes	Yes		Secure attention
+SIGPRIO       No	No	Yes		SIGPRIO
+SIG33         No	Yes	Yes		Real-time event 33
+SIG34         No	Yes	Yes		Real-time event 34
+SIG35         No	Yes	Yes		Real-time event 35
+SIG36         No	Yes	Yes		Real-time event 36
+SIG37         No	Yes	Yes		Real-time event 37
+SIG38         No	Yes	Yes		Real-time event 38
+SIG39         No	Yes	Yes		Real-time event 39
+SIG40         No	Yes	Yes		Real-time event 40
+SIG41         No	Yes	Yes		Real-time event 41
+SIG42         No	Yes	Yes		Real-time event 42
+SIG43         No	Yes	Yes		Real-time event 43
+SIG44         No	Yes	Yes		Real-time event 44
+SIG45         No	Yes	Yes		Real-time event 45
+SIG46         No	Yes	Yes		Real-time event 46
+SIG47         No	Yes	Yes		Real-time event 47
+SIG48         No	Yes	Yes		Real-time event 48
+SIG49         No	Yes	Yes		Real-time event 49
+SIG50         No	Yes	Yes		Real-time event 50
+SIG51         No	Yes	Yes		Real-time event 51
+SIG52         No	Yes	Yes		Real-time event 52
+SIG53         No	Yes	Yes		Real-time event 53
+SIG54         No	Yes	Yes		Real-time event 54
+SIG55         No	Yes	Yes		Real-time event 55
+SIG56         No	Yes	Yes		Real-time event 56
+SIG57         No	Yes	Yes		Real-time event 57
+SIG58         No	Yes	Yes		Real-time event 58
+SIG59         No	Yes	Yes		Real-time event 59
+SIG60         No	Yes	Yes		Real-time event 60
+SIG61         No	Yes	Yes		Real-time event 61
+SIG62         No	Yes	Yes		Real-time event 62
+SIG63         No	Yes	Yes		Real-time event 63
+SIGCANCEL     No	No	Yes		LWP internal signal
+SIG32         No	Yes	Yes		Real-time event 32
+SIG64         No	Yes	Yes		Real-time event 64
+SIG65         No	Yes	Yes		Real-time event 65
+SIG66         No	Yes	Yes		Real-time event 66
+SIG67         No	Yes	Yes		Real-time event 67
+SIG68         No	Yes	Yes		Real-time event 68
+SIG69         No	Yes	Yes		Real-time event 69
+SIG70         No	Yes	Yes		Real-time event 70
+SIG71         No	Yes	Yes		Real-time event 71
+SIG72         No	Yes	Yes		Real-time event 72
+SIG73         No	Yes	Yes		Real-time event 73
+SIG74         No	Yes	Yes		Real-time event 74
+SIG75         No	Yes	Yes		Real-time event 75
+SIG76         No	Yes	Yes		Real-time event 76
+SIG77         No	Yes	Yes		Real-time event 77
+SIG78         No	Yes	Yes		Real-time event 78
+SIG79         No	Yes	Yes		Real-time event 79
+SIG80         No	Yes	Yes		Real-time event 80
+SIG81         No	Yes	Yes		Real-time event 81
+SIG82         No	Yes	Yes		Real-time event 82
+SIG83         No	Yes	Yes		Real-time event 83
+SIG84         No	Yes	Yes		Real-time event 84
+SIG85         No	Yes	Yes		Real-time event 85
+SIG86         No	Yes	Yes		Real-time event 86
+SIG87         No	Yes	Yes		Real-time event 87
+SIG88         No	Yes	Yes		Real-time event 88
+SIG89         No	Yes	Yes		Real-time event 89
+SIG90         No	Yes	Yes		Real-time event 90
+SIG91         No	Yes	Yes		Real-time event 91
+SIG92         No	Yes	Yes		Real-time event 92
+SIG93         No	Yes	Yes		Real-time event 93
+SIG94         No	Yes	Yes		Real-time event 94
+SIG95         No	Yes	Yes		Real-time event 95
+SIG96         No	Yes	Yes		Real-time event 96
+SIG97         No	Yes	Yes		Real-time event 97
+SIG98         No	Yes	Yes		Real-time event 98
+SIG99         No	Yes	Yes		Real-time event 99
+SIG100        No	Yes	Yes		Real-time event 100
+SIG101        No	Yes	Yes		Real-time event 101
+SIG102        No	Yes	Yes		Real-time event 102
+SIG103        No	Yes	Yes		Real-time event 103
+SIG104        No	Yes	Yes		Real-time event 104
+SIG105        No	Yes	Yes		Real-time event 105
+SIG106        No	Yes	Yes		Real-time event 106
+SIG107        No	Yes	Yes		Real-time event 107
+SIG108        No	Yes	Yes		Real-time event 108
+SIG109        No	Yes	Yes		Real-time event 109
+SIG110        No	Yes	Yes		Real-time event 110
+SIG111        No	Yes	Yes		Real-time event 111
+SIG112        No	Yes	Yes		Real-time event 112
+SIG113        No	Yes	Yes		Real-time event 113
+SIG114        No	Yes	Yes		Real-time event 114
+SIG115        No	Yes	Yes		Real-time event 115
+SIG116        No	Yes	Yes		Real-time event 116
+SIG117        No	Yes	Yes		Real-time event 117
+SIG118        No	Yes	Yes		Real-time event 118
+SIG119        No	Yes	Yes		Real-time event 119
+SIG120        No	Yes	Yes		Real-time event 120
+SIG121        No	Yes	Yes		Real-time event 121
+SIG122        No	Yes	Yes		Real-time event 122
+SIG123        No	Yes	Yes		Real-time event 123
+SIG124        No	Yes	Yes		Real-time event 124
+SIG125        No	Yes	Yes		Real-time event 125
+SIG126        No	Yes	Yes		Real-time event 126
+SIG127        No	Yes	Yes		Real-time event 127
+SIGINFO       No	Yes	Yes		Information request
+EXC_BAD_ACCESS No	Yes	Yes		Could not access memory
+EXC_BAD_INSTRUCTION No	Yes	Yes		Illegal instruction/operand
+EXC_ARITHMETIC No	Yes	Yes		Arithmetic exception
+EXC_EMULATION No	Yes	Yes		Emulation instruction
+EXC_SOFTWARE  No	Yes	Yes		Software generated exception
+EXC_BREAKPOINT No	Yes	Yes		Breakpoint
+SIGLIBRT      No	No	Yes		librt internal signal

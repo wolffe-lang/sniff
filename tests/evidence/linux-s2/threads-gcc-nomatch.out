@@ -1,0 +1,9 @@
+Breakpoint 1 at 0x1341: file /work/fixtures/session/c/workers/main.c, line 50.
+[New Thread 0x7ffff7da16c0 (LWP <L1>)]
+[New Thread 0x7ffff75a06c0 (LWP <L2>)]
+[New Thread 0x7ffff6d9f6c0 (LWP <L3>)]
+[Switching to Thread 0x7ffff6d9f6c0 (LWP <L3>)]
+
+Thread 4 "prog" hit Breakpoint 1, work (n=4) at /work/fixtures/session/c/workers/main.c:50
+50	    int total = 0;
+No threads match '9'.

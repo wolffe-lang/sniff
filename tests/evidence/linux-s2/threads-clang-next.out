@@ -1,0 +1,22 @@
+Breakpoint 1 at 0x1197: file /work/fixtures/session/c/workers/main.c, line 50.
+[New Thread 0x7ffff7da16c0 (LWP <L1>)]
+[New Thread 0x7ffff75a06c0 (LWP <L2>)]
+[New Thread 0x7ffff6d9f6c0 (LWP <L3>)]
+[Switching to Thread 0x7ffff6d9f6c0 (LWP <L3>)]
+
+Thread 4 "prog" hit Breakpoint 1, work (n=4) at /work/fixtures/session/c/workers/main.c:50
+50	    int total = 0;
+51	    for (int i = 1; i <= n; i++)
+52	        total += i;
+51	    for (int i = 1; i <= n; i++)
+#0  work (n=4) at /work/fixtures/session/c/workers/main.c:51
+#1  0x000055555555544f in worker (arg=0x7fffffffebcc) at /work/fixtures/session/c/workers/main.c:60
+#2  0x00007ffff7e41b84 in ?? () from /lib/x86_64-linux-gnu/libc.so.6
+#3  0x00007ffff7eceecc in ?? () from /lib/x86_64-linux-gnu/libc.so.6
+0x000055555555544f in worker (arg=0x7fffffffebcc) at /work/fixtures/session/c/workers/main.c:60
+60	    worked = work(n);
+Value returned is $1 = 10
+[Thread 0x7ffff6d9f6c0 (LWP <L3>) exited]
+[Thread 0x7ffff7da16c0 (LWP <L1>) exited]
+[Thread 0x7ffff75a06c0 (LWP <L2>) exited]
+[Inferior 1 (process <PID>) exited normally]

@@ -1,0 +1,3 @@
+/work/target/s2/signals-gcc-handle-num16.cmd:1: Error in sourced command file:
+Only signals 1-15 are valid as numeric signals.
+Use "info signals" for a list of symbolic signals.

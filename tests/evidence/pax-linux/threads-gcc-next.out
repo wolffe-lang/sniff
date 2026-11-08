@@ -1,0 +1,22 @@
+Breakpoint 1 at 0x401a5d: file /work/fixtures/session/c/workers/main.c, line 50.
+[New Thread <STACK> (LWP <L1>)]
+[New Thread <STACK> (LWP <L2>)]
+[New Thread <STACK> (LWP <L3>)]
+[Switching to Thread <STACK> (LWP <L3>)]
+
+Thread 4 "prog" hit Breakpoint 1, work (n=4) at /work/fixtures/session/c/workers/main.c:50
+50	    int total = 0;
+51	    for (int i = 1; i <= n; i++)
+52	        total += i;
+51	    for (int i = 1; i <= n; i++)
+#0  work (n=4) at /work/fixtures/session/c/workers/main.c:51
+#1  0x0000000000401ad5 in worker (arg=<STACK>) at /work/fixtures/session/c/workers/main.c:60
+#2  0x0000000000405ecc in start_thread ()
+#3  0x00000000004196fc in clone3 ()
+0x0000000000401ad5 in worker (arg=<STACK>) at /work/fixtures/session/c/workers/main.c:60
+60	    worked = work(n);
+Value returned is $1 = 10
+[Thread <STACK> (LWP <L3>) exited]
+[Thread <STACK> (LWP <L1>) exited]
+[Thread <STACK> (LWP <L2>) exited]
+[Inferior 1 (process <PID>) exited normally]

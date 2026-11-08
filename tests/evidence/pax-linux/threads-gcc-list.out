@@ -1,0 +1,17 @@
+Breakpoint 1 at 0x401a5d: file /work/fixtures/session/c/workers/main.c, line 50.
+[New Thread <STACK> (LWP <L1>)]
+[New Thread <STACK> (LWP <L2>)]
+[New Thread <STACK> (LWP <L3>)]
+[Switching to Thread <STACK> (LWP <L3>)]
+
+Thread 4 "prog" hit Breakpoint 1, work (n=4) at /work/fixtures/session/c/workers/main.c:50
+50	    int total = 0;
+  Id Target Id Frame
+  2 Thread <STACK> (LWP <L1>) "prog" spin (flag=0x4c8b34 <released>, want=1, slot=1) at /work/fixtures/session/c/workers/main.c:35
+  3 Thread <STACK> (LWP <L2>) "prog" spin (flag=0x4c8b34 <released>, want=2, slot=2) at /work/fixtures/session/c/workers/main.c:35
+  Id Target Id Frame
+* 4 Thread <STACK> (LWP <L3>) "prog" work (n=4) at /work/fixtures/session/c/workers/main.c:50
+[Thread <STACK> (LWP <L3>) exited]
+[Thread <STACK> (LWP <L1>) exited]
+[Thread <STACK> (LWP <L2>) exited]
+[Inferior 1 (process <PID>) exited normally]

@@ -1,0 +1,2 @@
+/work/target/s2/signals-gcc-signal-bad.cmd:2: Error in sourced command file:
+No symbol "SIGFOO" in current context.

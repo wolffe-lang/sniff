@@ -1,0 +1,36 @@
+Reading symbols from /work/target/pax-fixtures/c/sigusr/gcc-O0/prog...
+Signal        Stop	Print	Pass to program	Description
+SIGUSR1       No	Yes	Yes		User defined signal 1
+Signal        Stop	Print	Pass to program	Description
+SIGUSR1       No	Yes	Yes		User defined signal 1
+Signal        Stop	Print	Pass to program	Description
+SIGUSR2       No	No	No		User defined signal 2
+Signal        Stop	Print	Pass to program	Description
+SIGALRM       Yes	Yes	Yes		Alarm clock
+Signal        Stop	Print	Pass to program	Description
+SIGALRM       Yes	Yes	No		Alarm clock
+SIGWINCH      No	No	No		Window size changed
+Signal        Stop	Print	Pass to program	Description
+SIGHUP        No	Yes	Yes		Hangup
+SIGINT        No	Yes	No		Interrupt
+SIGQUIT       No	Yes	Yes		Quit
+Signal        Stop	Print	Pass to program	Description
+SIGUSR1       Yes	Yes	Yes		User defined signal 1
+Signal        Stop	Print	Pass to program	Description
+SIGUSR1       Yes	Yes	Yes		User defined signal 1
+Signal        Stop	Print	Pass to program	Description
+SIGUSR2       No	Yes	No		User defined signal 2
+Starting program: /work/target/pax-fixtures/c/sigusr/gcc-O0/prog 
+
+Program received signal SIGUSR1, User defined signal 1.
+0x00000000004018cd in deliver (sig=10) at /work/fixtures/session/c/sigusr/main.c:18
+18	    __asm__ volatile("syscall" : "=a"(ret) : "a"(62L), "D"(pid), "S"((long)sig) : "rcx", "r11", "memory");
+Continuing.
+
+Program received signal SIGUSR2, User defined signal 2.
+
+Program received signal SIGUSR1, User defined signal 1.
+0x00000000004018cd in deliver (sig=10) at /work/fixtures/session/c/sigusr/main.c:18
+18	    __asm__ volatile("syscall" : "=a"(ret) : "a"(62L), "D"(pid), "S"((long)sig) : "rcx", "r11", "memory");
+Continuing.
+[Inferior 1 (process <PID>) exited with code 024]

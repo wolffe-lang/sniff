@@ -1,0 +1,21 @@
+[New Thread 0x7ffff7da16c0 (LWP <L1>)]
+[New Thread 0x7ffff75a06c0 (LWP <L2>)]
+[New Thread 0x7ffff6d9f6c0 (LWP <L3>)]
+
+Thread 4 "prog" received signal SIGUSR1, User defined signal 1.
+[Switching to Thread 0x7ffff6d9f6c0 (LWP <L3>)]
+0x0000555555555512 in deliver_here () at /work/fixtures/session/c/workers/main.c:27
+27	    __asm__ volatile("syscall" : "=a"(ret) : "a"(234L), "D"(pid), "S"(tid), "d"(10L) : "rcx", "r11", "memory");
+#0  0x0000555555555512 in deliver_here () at /work/fixtures/session/c/workers/main.c:27
+#1  0x0000555555555447 in worker (arg=0x7fffffffebcc) at /work/fixtures/session/c/workers/main.c:59
+#2  0x00007ffff7e41b84 in ?? () from /lib/x86_64-linux-gnu/libc.so.6
+#3  0x00007ffff7eceecc in ?? () from /lib/x86_64-linux-gnu/libc.so.6
+  Id Target Id Frame
+  1 Thread 0x7ffff7da2740 (LWP <L4>) "prog" spin (flag=0x555555558048 <worked>, want=1, slot=0) at /work/fixtures/session/c/workers/main.c:35
+  2 Thread 0x7ffff7da16c0 (LWP <L1>) "prog" spin (flag=0x55555555804c <released>, want=1, slot=1) at /work/fixtures/session/c/workers/main.c:35
+  3 Thread 0x7ffff75a06c0 (LWP <L2>) "prog" spin (flag=0x55555555804c <released>, want=2, slot=2) at /work/fixtures/session/c/workers/main.c:35
+* 4 Thread 0x7ffff6d9f6c0 (LWP <L3>) "prog" 0x0000555555555512 in deliver_here () at /work/fixtures/session/c/workers/main.c:27
+[Thread 0x7ffff6d9f6c0 (LWP <L3>) exited]
+[Thread 0x7ffff7da16c0 (LWP <L1>) exited]
+[Thread 0x7ffff75a06c0 (LWP <L2>) exited]
+[Inferior 1 (process <PID>) exited normally]

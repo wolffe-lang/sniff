@@ -1,0 +1,13 @@
+
+Program received signal SIGUSR1, User defined signal 1.
+0x00005555555551d1 in deliver (sig=10) at /work/fixtures/session/c/sigusr/main.c:18
+18	    __asm__ volatile("syscall" : "=a"(ret) : "a"(62L), "D"(pid), "S"((long)sig) : "rcx", "r11", "memory");
+
+Program received signal SIGUSR2, User defined signal 2.
+0x00005555555551d1 in deliver (sig=12) at /work/fixtures/session/c/sigusr/main.c:18
+18	    __asm__ volatile("syscall" : "=a"(ret) : "a"(62L), "D"(pid), "S"((long)sig) : "rcx", "r11", "memory");
+
+Program received signal SIGUSR1, User defined signal 1.
+0x00005555555551d1 in deliver (sig=10) at /work/fixtures/session/c/sigusr/main.c:18
+18	    __asm__ volatile("syscall" : "=a"(ret) : "a"(62L), "D"(pid), "S"((long)sig) : "rcx", "r11", "memory");
+[Inferior 1 (process <PID>) exited with code 013]

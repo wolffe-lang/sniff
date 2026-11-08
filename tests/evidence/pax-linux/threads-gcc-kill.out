@@ -1,0 +1,10 @@
+Breakpoint 1 at 0x401a5d: file /work/fixtures/session/c/workers/main.c, line 50.
+[New Thread <STACK> (LWP <L1>)]
+[New Thread <STACK> (LWP <L2>)]
+[New Thread <STACK> (LWP <L3>)]
+[Switching to Thread <STACK> (LWP <L3>)]
+
+Thread 4 "prog" hit Breakpoint 1, work (n=4) at /work/fixtures/session/c/workers/main.c:50
+50	    int total = 0;
+[Inferior 1 (process <PID>) killed]
+No threads.

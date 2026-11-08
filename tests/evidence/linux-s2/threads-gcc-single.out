@@ -1,0 +1,11 @@
+Breakpoint 1 at 0x11e0: file /work/fixtures/session/c/sigusr/main.c, line 29.
+
+Breakpoint 1, main () at /work/fixtures/session/c/sigusr/main.c:29
+29	    signal(SIGUSR1, on_usr1);
+  Id Target Id Frame
+* 1 Thread 0x7ffff7da2740 (LWP <L1>) "prog" main () at /work/fixtures/session/c/sigusr/main.c:29
+[Current thread is 1 (Thread 0x7ffff7da2740 (LWP <L1>))]
+[Switching to thread 1 (Thread 0x7ffff7da2740 (LWP <L1>))]
+#0  main () at /work/fixtures/session/c/sigusr/main.c:29
+29	    signal(SIGUSR1, on_usr1);
+[Inferior 1 (process <PID>) killed]

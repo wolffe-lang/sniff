@@ -1,0 +1,7 @@
+[New Thread 0x7ffff7da16c0 (LWP <L1>)]
+[New Thread 0x7ffff75a06c0 (LWP <L2>)]
+[New Thread 0x7ffff6d9f6c0 (LWP <L3>)]
+[Thread 0x7ffff6d9f6c0 (LWP <L3>) exited]
+[Thread 0x7ffff7da16c0 (LWP <L1>) exited]
+[Thread 0x7ffff75a06c0 (LWP <L2>) exited]
+[Inferior 1 (process <PID>) exited normally]

@@ -1,0 +1,7 @@
+[New Thread <STACK> (LWP <L1>)]
+[New Thread <STACK> (LWP <L2>)]
+[New Thread <STACK> (LWP <L3>)]
+[Thread <STACK> (LWP <L3>) exited]
+[Thread <STACK> (LWP <L1>) exited]
+[Thread <STACK> (LWP <L2>) exited]
+[Inferior 1 (process <PID>) exited normally]
