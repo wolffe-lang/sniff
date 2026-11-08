@@ -245,9 +245,14 @@ fn classify(mut s: Session, st: int, stepping: bool) -> Event {
     Event { kind: ev_signal, signal: sig, code: 0, bp: -1 }
 }
 
+/// The signal the program resumes with: the one it stopped with if `handle` passes it (read now, so a
+/// `handle` after the stop decides), or the one `signal` gave.
 fn take_signal(mut s: Session) -> int {
     let sig = s.pending_signal
+    let given = s.signal_given
     s.pending_signal = 0
+    s.signal_given = false
+    if sig != 0 && !given && !sig_passes(s, sig) { return 0 }
     sig
 }
 
@@ -357,11 +362,13 @@ fn cont_event(mut s: Session) -> Event {
             return cont_event(mut s)
         }
         if e.kind == ev_signal && e.signal != 5 {
-            if !signal_stops(e.signal) {
-                if signal_passes(e.signal) { s.pending_signal = e.signal }
+            s.pending_signal = e.signal
+            s.signal_given = false
+            if !sig_stops(s, e.signal) {
+                // nostop: mentioned if print, and the program goes on
+                if sig_prints(s, e.signal) { report_signal_line(mut s, e.signal) }
                 continue
             }
-            if signal_passes(e.signal) { s.pending_signal = e.signal }
         }
         return e
     }

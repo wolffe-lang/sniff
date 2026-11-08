@@ -1,8 +1,10 @@
-// Linux x86-64 signal numbers (signal(7)) with gdb's names, descriptions and
-// default handling (stop, print, pass), as recorded from the pinned gdb's
-// `info signals`. SIGTRAP and SIGINT are not passed to the program.
+// Signals: the session's numbering is Linux's (signal(7)); macOS's layer maps darwin's numbers into it. Each
+// signal has gdb's name and description from gdb's table (sigtable.lu), and the session keeps `handle`'s
+// three settings for each: whether a stop is made, whether it is mentioned, and whether the program is given
+// the signal when it resumes. The pass setting is read at the resume, so `handle SIG nopass` after a stop
+// decides what continue does (the GDB manual's Signals).
 
-/// gdb's name for a Linux signal number, or "" when gdb has none for it.
+/// gdb's name for a signal number of the session's numbering, or "" when gdb has none for it.
 fn signal_name(n: int) -> str {
     if n == 1 { return "SIGHUP" }
     if n == 2 { return "SIGINT" }
@@ -34,52 +36,240 @@ fn signal_name(n: int) -> str {
     if n == 29 { return "SIGIO" }
     if n == 30 { return "SIGPWR" }
     if n == 31 { return "SIGSYS" }
-    if n >= 34 && n <= 64 { return "SIG{n}" }
+    if n >= 32 && n <= 64 { return "SIG{n}" }
     ""
+}
+
+/// The index in gdb's table of a signal name, or -1.
+fn sig_index_of_name(name: str) -> int {
+    let names = sig_names()
+    var i = 0
+    while i < names.len {
+        if names[i] == name { return i }
+        i += 1
+    }
+    0 - 1
+}
+
+/// The index in gdb's table of a signal of the session's numbering, or -1.
+fn sig_index(n: int) -> int {
+    let name = signal_name(n)
+    if name.len() == 0 { return 0 - 1 }
+    sig_index_of_name(name)
+}
+
+/// The session's number for the signal at index i of gdb's table, or 0 where this host has none.
+fn sig_host(i: int) -> int {
+    let name = sig_names()[i]
+    var n = 1
+    while n <= 64 {
+        if signal_name(n) == name { return n }
+        n += 1
+    }
+    0
 }
 
 /// gdb's description of a signal.
 fn signal_description(n: int) -> str {
-    if n == 1 { return "Hangup" }
-    if n == 2 { return "Interrupt" }
-    if n == 3 { return "Quit" }
-    if n == 4 { return "Illegal instruction" }
-    if n == 5 { return "Trace/breakpoint trap" }
-    if n == 6 { return "Aborted" }
-    if n == 7 { return "Bus error" }
-    if n == 8 { return "Arithmetic exception" }
-    if n == 9 { return "Killed" }
-    if n == 10 { return "User defined signal 1" }
-    if n == 11 { return "Segmentation fault" }
-    if n == 12 { return "User defined signal 2" }
-    if n == 13 { return "Broken pipe" }
-    if n == 14 { return "Alarm clock" }
-    if n == 15 { return "Terminated" }
-    if n == 17 { return "Child status changed" }
-    if n == 18 { return "Continued" }
-    if n == 19 { return "Stopped (signal)" }
-    if n == 20 { return "Stopped (user)" }
-    if n == 21 { return "Stopped (tty input)" }
-    if n == 22 { return "Stopped (tty output)" }
-    if n == 23 { return "Urgent I/O condition" }
-    if n == 24 { return "CPU time limit exceeded" }
-    if n == 25 { return "File size limit exceeded" }
-    if n == 26 { return "Virtual timer expired" }
-    if n == 27 { return "Profiling timer expired" }
-    if n == 28 { return "Window size changed" }
-    if n == 29 { return "I/O possible" }
-    if n == 30 { return "Power fail/restart" }
-    if n == 31 { return "Bad system call" }
-    if n >= 34 && n <= 64 { return "Real-time event {n}" }
+    let i = sig_index(n)
+    if i >= 0 { return sig_descriptions()[i] }
     "Unknown signal {n}"
 }
 
-/// Whether gdb stops the program when it receives the signal.
-fn signal_stops(n: int) -> bool {
-    !(n == 14 || n == 23 || n == 17 || n == 29 || n == 26 || n == 27 || n == 28)
+/// Whether the session stops the program when it receives the signal (a signal gdb has no name for stops).
+fn sig_stops(s: Session, n: int) -> bool {
+    let i = sig_index(n)
+    if i < 0 { return true }
+    s.sig_stop[i]
 }
 
-/// Whether a stopped program is handed the signal on resume.
-fn signal_passes(n: int) -> bool {
-    !(n == 2 || n == 5)
+/// Whether the session mentions the signal.
+fn sig_prints(s: Session, n: int) -> bool {
+    let i = sig_index(n)
+    if i < 0 { return true }
+    s.sig_print[i]
+}
+
+/// Whether the program is given the signal when it resumes.
+fn sig_passes(s: Session, n: int) -> bool {
+    let i = sig_index(n)
+    if i < 0 { return true }
+    s.sig_pass[i]
+}
+
+fn yes_no(b: bool) -> str { if b { "Yes" } else { "No" } }
+
+/// The table's header line.
+fn sig_header() -> str { "Signal        Stop\tPrint\tPass to program\tDescription" }
+
+/// One row of the table: the name padded to 13 columns, the three settings, the description.
+fn sig_row(s: Session, i: int) -> str {
+    var name = sig_names()[i]
+    while name.len() < 13 { name = "{name} " }
+    "{name} {yes_no(s.sig_stop[i])}\t{yes_no(s.sig_print[i])}\t{yes_no(s.sig_pass[i])}\t\t{sig_descriptions()[i]}"
+}
+
+/// A signal named by one of gdb's numbers 1-15 (index n - 1), or why not.
+struct SigSpec {
+    pub index: int,
+    pub why: str,
+}
+
+fn sig_spec_number(t: str) -> SigSpec {
+    let v = parse_uint(t)
+    if !v.ok { return SigSpec { index: 0 - 1, why: "" } }
+    if v.addr < 1 || v.addr > 15 {
+        return SigSpec { index: 0 - 1, why: "Only signals 1-15 are valid as numeric signals.\nUse \"info signals\" for a list of symbolic signals." }
+    }
+    SigSpec { index: v.addr as int - 1, why: "" }
+}
+
+/// handle's keyword a word abbreviates (any unambiguous prefix), or "".
+fn handle_keyword(w: str) -> str {
+    let words = ["stop", "nostop", "print", "noprint", "pass", "nopass", "ignore", "noignore"]
+    var found = ""
+    var n = 0
+    for k in words {
+        if k == w { return k }
+        if k.starts_with(w) {
+            found = k
+            n += 1
+        }
+    }
+    if n == 1 { return found }
+    ""
+}
+
+/// The signal a word of `info signals` or `signal` names: gdb's number 1-15 or gdb's name. index -1 with
+/// why "" when it names none.
+fn sig_word(t: str) -> SigSpec {
+    if all_digits(t) { return sig_spec_number(t) }
+    SigSpec { index: sig_index_of_name(t), why: "" }
+}
+
+/// handle SIGNAL... [KEYWORD...]: each keyword changes the signals named before it in the command.
+fn cmd_handle(mut s: Session, rest: str) -> str {
+    let args = rest.trim().words()
+    if args.len == 0 { return "Argument required (signal to handle)." }
+    let names = sig_names()
+    var chosen: List[bool] = []
+    var i = 0
+    while i < names.len { (mut chosen).push(false); i += 1 }
+    for a in args {
+        let k = handle_keyword(a)
+        if k.len() > 0 {
+            i = 0
+            while i < names.len {
+                if chosen[i] {
+                    if k == "stop" { s.sig_stop[i] = true; s.sig_print[i] = true }
+                    else if k == "nostop" { s.sig_stop[i] = false }
+                    else if k == "print" { s.sig_print[i] = true }
+                    else if k == "noprint" { s.sig_print[i] = false; s.sig_stop[i] = false }
+                    else if k == "pass" || k == "noignore" { s.sig_pass[i] = true }
+                    else { s.sig_pass[i] = false }
+                }
+                i += 1
+            }
+            continue
+        }
+        if a == "all" {
+            // every signal but the two the debugger itself uses
+            i = 0
+            while i < names.len {
+                if names[i] != "SIGINT" && names[i] != "SIGTRAP" { chosen[i] = true }
+                i += 1
+            }
+            continue
+        }
+        let dash = a.splitn("-", 2)
+        if dash.len == 2 && all_digits(dash[0]) && all_digits(dash[1]) {
+            let lo = sig_spec_number(dash[0])
+            if lo.why.len() > 0 { return lo.why }
+            let hi = sig_spec_number(dash[1])
+            if hi.why.len() > 0 { return hi.why }
+            i = lo.index
+            while i <= hi.index { chosen[i] = true; i += 1 }
+            continue
+        }
+        let w = sig_word(a)
+        if w.why.len() > 0 { return w.why }
+        if w.index < 0 { return "Unrecognized or ambiguous flag word: \"{a}\"." }
+        chosen[w.index] = true
+    }
+    // gdb prints the table of the signals named at a terminal only
+    if s.tty {
+        emit_line(mut s, sig_header())
+        i = 0
+        while i < names.len {
+            if chosen[i] {
+                let row = sig_row(s, i)
+                emit_line(mut s, row)
+            }
+            i += 1
+        }
+    }
+    ""
+}
+
+/// info signals [SIGNAL] (and info handle)
+fn cmd_info_signals(mut s: Session, rest: str) -> str {
+    let t = rest.trim()
+    emit_line(mut s, sig_header())
+    if t.len() > 0 {
+        let w = sig_word(t)
+        if w.why.len() > 0 { return w.why }
+        // gdb reads any other word as an expression, which names no symbol here
+        if w.index < 0 { return "No symbol \"{t}\" in current context." }
+        let row = sig_row(s, w.index)
+        emit_line(mut s, row)
+        return ""
+    }
+    emit_line(mut s, "")
+    var i = 0
+    while i < s.sig_stop.len {
+        let row = sig_row(s, i)
+        emit_line(mut s, row)
+        i += 1
+    }
+    emit_line(mut s, "")
+    emit_line(mut s, "Use the \"handle\" command to change these tables.")
+    ""
+}
+
+/// signal SIGNAL: resume the program with that signal (0 for none) in place of the one it stopped with.
+fn cmd_signal(mut s: Session, rest: str) -> str {
+    let t = rest.trim()
+    if t.len() == 0 { return "Argument required (signal number)." }
+    if !s.alive { return "The program is not being run." }
+    var host = 0
+    if t != "0" {
+        let w = sig_word(t)
+        if w.why.len() > 0 { return w.why }
+        if w.index < 0 { return "No symbol \"{t}\" in current context." }
+        host = sig_host(w.index)
+        if host == 0 { return "Signal {sig_names()[w.index]} does not exist on this system." }
+    }
+    if s.tty {
+        if host == 0 { emit_line(mut s, "Continuing with no signal.") }
+        else { emit_line(mut s, "Continuing with signal {signal_name(host)}.") }
+    }
+    s.pending_signal = host
+    s.signal_given = true
+    s.frames = []
+    s.frames_ok = false
+    let e = cont_user(mut s)
+    report_event(mut s, e)
+    ""
+}
+
+/// A blank line and `Program received signal SIG, Description.`, or in a multi-threaded program
+/// `Thread N "name" received signal ...`.
+fn report_signal_line(mut s: Session, n: int) {
+    emit_line(mut s, "")
+    if s.thr_multi {
+        let who = stop_thread_prefix(s)
+        emit_line(mut s, "{who}received signal {signal_name(n)}, {signal_description(n)}.")
+    } else {
+        emit_line(mut s, "Program received signal {signal_name(n)}, {signal_description(n)}.")
+    }
 }
