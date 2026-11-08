@@ -1767,6 +1767,41 @@
    "contains": [
     "Program terminated with signal SIGSYS, Bad system call."
    ]
+  },
+  {
+   "name": "help-handle",
+   "kind": "linux",
+   "stderr": true
+  },
+  {
+   "name": "help-signal",
+   "kind": "linux",
+   "stderr": true
+  },
+  {
+   "name": "help-thread",
+   "kind": "linux",
+   "stderr": true
+  },
+  {
+   "name": "help-t",
+   "kind": "linux",
+   "stderr": true
+  },
+  {
+   "name": "help-info-threads",
+   "kind": "linux",
+   "stderr": true
+  },
+  {
+   "name": "help-info-signals",
+   "kind": "linux",
+   "stderr": true
+  },
+  {
+   "name": "help-info-handle",
+   "kind": "linux",
+   "stderr": true
   }
  ],
  "excluded": {

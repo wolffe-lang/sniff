@@ -3038,6 +3038,69 @@
    ]
   },
   {
+   "name": "help-handle",
+   "prog": "c/sigusr/gcc-O0/prog",
+   "script": [
+    "help handle"
+   ],
+   "compare": "head",
+   "head": 2
+  },
+  {
+   "name": "help-signal",
+   "prog": "c/sigusr/gcc-O0/prog",
+   "script": [
+    "help signal"
+   ],
+   "compare": "head",
+   "head": 2
+  },
+  {
+   "name": "help-thread",
+   "prog": "c/sigusr/gcc-O0/prog",
+   "script": [
+    "help thread"
+   ],
+   "compare": "head",
+   "head": 2
+  },
+  {
+   "name": "help-t",
+   "prog": "c/sigusr/gcc-O0/prog",
+   "script": [
+    "help t"
+   ],
+   "compare": "head",
+   "head": 2
+  },
+  {
+   "name": "help-info-threads",
+   "prog": "c/sigusr/gcc-O0/prog",
+   "script": [
+    "help info threads"
+   ],
+   "compare": "head",
+   "head": 2
+  },
+  {
+   "name": "help-info-signals",
+   "prog": "c/sigusr/gcc-O0/prog",
+   "script": [
+    "help info signals"
+   ],
+   "compare": "head",
+   "head": 2
+  },
+  {
+   "name": "help-info-handle",
+   "prog": "c/sigusr/gcc-O0/prog",
+   "script": [
+    "help info handle"
+   ],
+   "compare": "head",
+   "head": 2
+  },
+  {
    "name": "undefined-command",
    "prog": "wolf/nested/wolf-debug/prog",
    "script": [
@@ -3575,6 +3638,17 @@
     "break work",
     "run",
     "info threads 9"
+   ]
+  },
+  {
+   "name": "threads-gcc-t",
+   "prog": "c/workers/gcc-O0/prog",
+   "script": [
+    "break work",
+    "run",
+    "t 2",
+    "t",
+    "kill"
    ]
   },
   {
