@@ -1,0 +1,32 @@
+Breakpoint 1 at 0xa535: file /work/fixtures/wolf/loops/main.lu, line 2.
+
+Breakpoint 1, sum (n=4) at /work/fixtures/wolf/loops/main.lu:2
+2	    var i = 0
+Hardware watchpoint 2: total
+
+Hardware watchpoint 2: total
+
+Old value = 0
+New value = 1
+sum (n=4) at /work/fixtures/wolf/loops/main.lu:6
+6	        i += 1
+
+Hardware watchpoint 2: total
+
+Old value = 1
+New value = 3
+sum (n=4) at /work/fixtures/wolf/loops/main.lu:6
+6	        i += 1
+
+Hardware watchpoint 2: total
+
+Old value = 3
+New value = 6
+sum (n=4) at /work/fixtures/wolf/loops/main.lu:6
+6	        i += 1
+
+Watchpoint 2 deleted because the program has left the block in
+which its expression is valid.
+0x000055555555e5ee in main () at /work/fixtures/wolf/loops/main.lu:11
+11	    let answer = sum(4)
+[Inferior 1 (process <PID>) exited normally]
