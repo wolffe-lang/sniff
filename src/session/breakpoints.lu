@@ -183,7 +183,11 @@ fn resolve_function(s: Session, name: str) -> Resolved {
     var i = 0
     while i < s.prog.funcs.len {
         if s.prog.funcs[i].name == name && s.prog.funcs[i].low != 0 {
-            (mut out).push(skip_prologue(s.prog, s.prog.funcs[i].low))
+            let low = s.prog.funcs[i].low
+            // A function no line-table row covers (wolf 0.2.38's artificial entry shim) gets
+            // the prologue analysis an ELF symbol without DWARF gets, as gdb does.
+            if find_sal(s.prog, low).ok { (mut out).push(skip_prologue(s.prog, low)) }
+            else { (mut out).push(skip_prologue_no_debug(s, low)) }
         }
         i += 1
     }
