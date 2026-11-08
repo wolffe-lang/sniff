@@ -1497,12 +1497,297 @@
   {
    "name": "tty-c-clang-gone-repeat",
    "kind": "linux"
+  },
+  {
+   "name": "signals-clang-segv-nopass",
+   "kind": "linux"
+  },
+  {
+   "name": "signals-gcc-info",
+   "kind": "linux",
+   "stderr": true
+  },
+  {
+   "name": "signals-gcc-info-all",
+   "kind": "linux",
+   "stderr": true
+  },
+  {
+   "name": "signals-gcc-info-bad",
+   "kind": "linux",
+   "stderr": true
+  },
+  {
+   "name": "signals-gcc-handle-bad",
+   "kind": "linux",
+   "stderr": true
+  },
+  {
+   "name": "signals-gcc-handle-word",
+   "kind": "linux",
+   "stderr": true
+  },
+  {
+   "name": "signals-gcc-handle-noarg",
+   "kind": "linux",
+   "stderr": true
+  },
+  {
+   "name": "signals-gcc-handle-num16",
+   "kind": "linux",
+   "stderr": true
+  },
+  {
+   "name": "signals-gcc-signal-norun",
+   "kind": "linux",
+   "stderr": true
+  },
+  {
+   "name": "threads-gcc-norun-info",
+   "kind": "linux",
+   "stderr": true
+  },
+  {
+   "name": "threads-gcc-norun-thread",
+   "kind": "linux",
+   "stderr": true
+  },
+  {
+   "name": "lldb-threads-info",
+   "kind": "lldb",
+   "prog": "c/workers/clang-O0/prog",
+   "script": [
+    "break work",
+    "run",
+    "info threads",
+    "continue"
+   ],
+   "lldb": [
+    "breakpoint set -n work",
+    "run",
+    "thread list",
+    "continue"
+   ]
+  },
+  {
+   "name": "lldb-threads-switch",
+   "kind": "lldb",
+   "prog": "c/workers/clang-O0/prog",
+   "script": [
+    "break work",
+    "run",
+    "thread 1",
+    "bt",
+    "thread 4",
+    "bt",
+    "print n",
+    "continue"
+   ],
+   "lldb": [
+    "breakpoint set -n work",
+    "run",
+    "thread select 1",
+    "bt",
+    "thread select 4",
+    "bt",
+    "print n",
+    "continue"
+   ]
+  },
+  {
+   "name": "lldb-threads-spinner",
+   "kind": "lldb",
+   "prog": "c/workers/clang-O0/prog",
+   "script": [
+    "break work",
+    "run",
+    "thread 2",
+    "bt",
+    "frame 1",
+    "print id",
+    "continue"
+   ],
+   "lldb": [
+    "breakpoint set -n work",
+    "run",
+    "thread select 2",
+    "bt",
+    "frame select 1",
+    "print id",
+    "continue"
+   ]
+  },
+  {
+   "name": "lldb-threads-next",
+   "kind": "lldb",
+   "prog": "c/workers/clang-O0/prog",
+   "script": [
+    "break work",
+    "run",
+    "next",
+    "next",
+    "next",
+    "bt",
+    "finish",
+    "continue"
+   ],
+   "lldb": [
+    "breakpoint set -n work",
+    "run",
+    "next",
+    "next",
+    "next",
+    "bt",
+    "finish",
+    "continue"
+   ]
+  },
+  {
+   "name": "lldb-threads-signal",
+   "kind": "lldb",
+   "prog": "c/workers/clang-O0/prog",
+   "script": [
+    "run signal",
+    "bt",
+    "info threads",
+    "continue"
+   ],
+   "lldb": [
+    "settings set -- target.run-args signal",
+    "run",
+    "bt",
+    "thread list",
+    "continue"
+   ]
+  },
+  {
+   "name": "lldb-signals-run",
+   "kind": "lldb",
+   "prog": "c/sigusr/clang-O0/prog",
+   "script": [
+    "run",
+    "bt",
+    "continue",
+    "continue",
+    "continue"
+   ],
+   "lldb": [
+    "run",
+    "bt",
+    "continue",
+    "continue",
+    "continue"
+   ]
+  },
+  {
+   "name": "lldb-signals-nostop",
+   "kind": "lldb",
+   "prog": "c/sigusr/clang-O0/prog",
+   "script": [
+    "handle SIGUSR1 nostop noprint",
+    "run",
+    "continue"
+   ],
+   "lldb": [
+    "process handle SIGUSR1 -s false -n false -p true",
+    "run",
+    "continue"
+   ]
+  },
+  {
+   "name": "lldb-signals-nostop-print",
+   "kind": "lldb",
+   "prog": "c/sigusr/clang-O0/prog",
+   "script": [
+    "handle SIGUSR1 nostop",
+    "run",
+    "continue"
+   ],
+   "lldb": [
+    "process handle SIGUSR1 -s false -n true -p true",
+    "run",
+    "continue"
+   ]
+  },
+  {
+   "name": "lldb-signals-nopass",
+   "kind": "lldb",
+   "prog": "c/sigusr/clang-O0/prog",
+   "script": [
+    "handle SIGUSR1 nopass",
+    "run",
+    "continue",
+    "continue",
+    "continue"
+   ],
+   "lldb": [
+    "process handle SIGUSR1 -p false",
+    "run",
+    "continue",
+    "continue",
+    "continue"
+   ]
+  },
+  {
+   "name": "signals-mac-signal0",
+   "kind": "expect",
+   "prog": "c/sigusr/clang-O0/prog",
+   "script": [
+    "run",
+    "signal 0",
+    "continue",
+    "continue"
+   ],
+   "contains": [
+    "exited with code 013]"
+   ]
+  },
+  {
+   "name": "signals-mac-replace",
+   "kind": "expect",
+   "prog": "c/sigusr/clang-O0/prog",
+   "script": [
+    "run",
+    "signal SIGUSR2",
+    "continue",
+    "continue"
+   ],
+   "contains": [
+    "exited with code 014]"
+   ]
+  },
+  {
+   "name": "signals-mac-sigsys",
+   "kind": "expect",
+   "prog": "c/sigusr/clang-O0/prog",
+   "script": [
+    "run",
+    "signal 12"
+   ],
+   "contains": [
+    "Program terminated with signal SIGSYS, Bad system call."
+   ]
   }
  ],
  "excluded": {
   "value-clang-registers": "x86-64 register names only; the arm64 register set is held by lldb-registers and step-clang-stepi",
   "list-wolf-nested-noline": "a Mach-O image has no _start symbol; list-c-clang-calls-noline holds a function with no line information on macOS",
   "list-c-clang-recursion-noline": "a Mach-O image has no _start symbol; list-c-clang-calls-noline holds a function with no line information on macOS",
-  "tty-wolf-loops-repeat-x": "the words at the stack pointer are the arm64 frame's; the repeat itself is held on Linux and PAX"
+  "tty-wolf-loops-repeat-x": "the words at the stack pointer are the arm64 frame's; the repeat itself is held on Linux and PAX",
+  "threads-clang-run": "a thread's Target Id is the platform's own, and lldb, macOS's oracle, prints its own thread list: the lldb-threads-* rows hold each thread's function, file and line and the thread that stopped",
+  "threads-clang-info": "a thread's Target Id is the platform's own, and lldb, macOS's oracle, prints its own thread list: the lldb-threads-* rows hold each thread's function, file and line and the thread that stopped",
+  "threads-clang-switch": "a thread's Target Id is the platform's own, and lldb, macOS's oracle, prints its own thread list: the lldb-threads-* rows hold each thread's function, file and line and the thread that stopped",
+  "threads-clang-spinner": "a thread's Target Id is the platform's own, and lldb, macOS's oracle, prints its own thread list: the lldb-threads-* rows hold each thread's function, file and line and the thread that stopped",
+  "threads-clang-next": "a thread's Target Id is the platform's own, and lldb, macOS's oracle, prints its own thread list: the lldb-threads-* rows hold each thread's function, file and line and the thread that stopped",
+  "threads-clang-list": "a thread's Target Id is the platform's own, and lldb, macOS's oracle, prints its own thread list: the lldb-threads-* rows hold each thread's function, file and line and the thread that stopped",
+  "threads-clang-kill": "a thread's Target Id is the platform's own, and lldb, macOS's oracle, prints its own thread list: the lldb-threads-* rows hold each thread's function, file and line and the thread that stopped",
+  "threads-clang-signal": "a thread's Target Id is the platform's own, and lldb, macOS's oracle, prints its own thread list: the lldb-threads-* rows hold each thread's function, file and line and the thread that stopped",
+  "threads-clang-signal-nostop": "a thread's Target Id is the platform's own, and lldb, macOS's oracle, prints its own thread list: the lldb-threads-* rows hold each thread's function, file and line and the thread that stopped",
+  "signals-clang-run": "darwin numbers its signals its own way (the handler's sig is 30, not 10) and the system call that sends one is arm64's (svc, at line 24): the lldb-signals-* rows hold the stops and the exit code, and the signals-mac-* rows the exit code where lldb has no continue-with-a-signal",
+  "signals-clang-nostop": "darwin numbers its signals its own way (the handler's sig is 30, not 10) and the system call that sends one is arm64's (svc, at line 24): the lldb-signals-* rows hold the stops and the exit code, and the signals-mac-* rows the exit code where lldb has no continue-with-a-signal",
+  "signals-clang-nostop-noprint": "darwin numbers its signals its own way (the handler's sig is 30, not 10) and the system call that sends one is arm64's (svc, at line 24): the lldb-signals-* rows hold the stops and the exit code, and the signals-mac-* rows the exit code where lldb has no continue-with-a-signal",
+  "signals-clang-nopass": "darwin numbers its signals its own way (the handler's sig is 30, not 10) and the system call that sends one is arm64's (svc, at line 24): the lldb-signals-* rows hold the stops and the exit code, and the signals-mac-* rows the exit code where lldb has no continue-with-a-signal",
+  "signals-clang-signal0": "darwin numbers its signals its own way (the handler's sig is 30, not 10) and the system call that sends one is arm64's (svc, at line 24): the lldb-signals-* rows hold the stops and the exit code, and the signals-mac-* rows the exit code where lldb has no continue-with-a-signal",
+  "signals-clang-replace": "darwin numbers its signals its own way (the handler's sig is 30, not 10) and the system call that sends one is arm64's (svc, at line 24): the lldb-signals-* rows hold the stops and the exit code, and the signals-mac-* rows the exit code where lldb has no continue-with-a-signal"
  }
 }
