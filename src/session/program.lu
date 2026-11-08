@@ -302,16 +302,16 @@ fn prog_load(path: str) -> Prog {
         }
         i += 1
     }
-    load_dwarf(mut p, take data)
+    load_dwarf(mut p, data)
     p
 }
 
 /// Read the DWARF sections of `data` (the executable for ELF, the dSYM's DWARF file for
 /// Mach-O) into p: units, line table and subprograms. A file without DWARF leaves has_info false.
-/// The bytes and the DIE tree are moved into p, not copied (each copy was a page-faulted
-/// duplicate of tens of megabytes on a large runtime's DWARF).
-fn load_dwarf(mut p: Prog, take data: List[byte]) {
-    p.data = data
+/// The DIE tree is moved into p, not copied: a copy duplicated every entry and attribute,
+/// over 100 MB of page-faulted memory on a large runtime's DWARF.
+fn load_dwarf(mut p: Prog, data: List[byte]) {
+    p.data = copy data
     let secs = readers.object_sections(p.data) else |err| { return }
     p.secs = copy secs
     if !secs.info.present || secs.info.span.length == 0 { return }
@@ -498,13 +498,13 @@ fn prog_load_macho(path: str, data: List[byte]) -> Prog {
     // the companion: Apple's bundle layout, Contents/Resources/DWARF/<binary-name>
     let companion = "{path}.dSYM/Contents/Resources/DWARF/{path_base_name(path)}"
     let dsym = fs_read_bytes(companion) else |err| {
-        if isecs.info.present && isecs.info.span.length > 0 { load_dwarf(mut p, copy data) }
+        if isecs.info.present && isecs.info.span.length > 0 { load_dwarf(mut p, data) }
         return p
     }
     let dobj = readers.macho_read(dsym, 100000000) else |err| { return prog_failed("{companion}: not in dSYM format: {err}") }
     readers.macho_match_uuid(data, mach, dsym, dobj) else |err| { return prog_failed("{path}: {err} ({companion})") }
     p.dsym = companion
-    load_dwarf(mut p, take dsym)
+    load_dwarf(mut p, dsym)
     p
 }
 
