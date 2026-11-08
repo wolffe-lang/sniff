@@ -830,6 +830,58 @@
     "Cannot insert breakpoint 1",
     "Cannot access memory at address 0x55555555516c"
    ]
+  },
+  {
+   "name": "watch-clang-global",
+   "kind": "linux"
+  },
+  {
+   "name": "watch-clang-local-scope",
+   "kind": "linux"
+  },
+  {
+   "name": "watch-clang-members",
+   "kind": "linux"
+  },
+  {
+   "name": "watch-clang-delete",
+   "kind": "linux"
+  },
+  {
+   "name": "rwatch-clang-global",
+   "kind": "linux"
+  },
+  {
+   "name": "awatch-clang-global",
+   "kind": "linux"
+  },
+  {
+   "name": "print-clang-expressions",
+   "kind": "linux"
+  },
+  {
+   "name": "print-clang-no-member",
+   "kind": "linux"
+  },
+  {
+   "name": "print-clang-subscript-scalar",
+   "kind": "linux"
+  },
+  {
+   "name": "print-clang-division-by-zero",
+   "kind": "linux"
+  },
+  {
+   "name": "break-clang-condition",
+   "kind": "linux"
+  },
+  {
+   "name": "break-clang-condition-command",
+   "kind": "linux"
+  },
+  {
+   "name": "display-clang-stops",
+   "kind": "linux"
   }
  ],
  "excluded": {
