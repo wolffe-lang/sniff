@@ -123,8 +123,8 @@ As measured at gdb's terminal:
 
 The clean room held. These were read: the GDB manual's Printing Source Lines, Linespec Locations, Location
 Specifications, Command Syntax, Command Files, Getting Help and Examining Source Files sections, staged as
-digest-checked inputs. gdb ran only as the pinned binary in the oracle image, and lldb not at all. No
-debugger's source was read.
+digest-checked inputs. gdb ran only as the pinned binary in the oracle image, and lldb only as the system
+binary, in the macOS gate's existing rows. No debugger's source was read.
 
 ## Done-when
 
