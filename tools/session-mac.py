@@ -11,6 +11,9 @@ Two kinds of row (tests/macos-rows.json):
            addr   every 0x... number is one name (the load addresses and the code differ)
            off    <fn+N> offsets are one name (arm64 and x86-64 prologues differ)
            pid    process ids
+         A row with "stderr": true compares standard error and the exit status as well (the
+         list and help refusals are on standard error), after one more:
+           script the command file's path in gdb's `FILE:N: Error in sourced command file:`
          Rows whose text legitimately differs on arm64 are not run through this
          comparison; each appears under "excluded" with its reason.
   lldb   a script for sniff and one for Apple's lldb. Each output is reduced to a list of
@@ -267,6 +270,31 @@ def cmd_capture(a):
     return 0
 
 
+SCRIPT = re.compile(r'(?m)^\S*/([\w.-]+)\.cmd:(\d+): Error in sourced command file:$')
+
+
+def stderr_verdict(row, err, rc, roots, fired):
+    """'' when sniff's stderr and status match the golden's (or an own row's), after the normalisation."""
+    if row.get('compare') == 'own':
+        want_e = ''.join(x + '\n' for x in row.get('expect_err', []))
+        want_rc = str(row.get('expect_rc', 0))
+    else:
+        want_e = (LINUX_GOLD / (row['name'] + '.err')).read_text()
+        want_rc = (LINUX_GOLD / (row['name'] + '.rc')).read_text().strip()
+    got = SCRIPT.sub(r'<SCRIPT>:\2: Error in sourced command file:', err)
+    want = SCRIPT.sub(r'<SCRIPT>:\2: Error in sourced command file:', want_e)
+    if got != err:
+        fired.add('script')
+    got, want = normalize(got, roots, fired), normalize(want, roots, fired)
+    if got != want:
+        gl, wl = got.splitlines(), want.splitlines()
+        i = next((i for i in range(max(len(gl), len(wl))) if (gl[i] if i < len(gl) else '<end>') != (wl[i] if i < len(wl) else '<end>')), 0)
+        return 'stderr line %d: want %r got %r' % (i + 1, wl[i] if i < len(wl) else '<end>', gl[i] if i < len(gl) else '<end>')
+    if str(rc) != want_rc:
+        return 'exit want %s got %s' % (want_rc, rc)
+    return ''
+
+
 def prepare_target(kind, src, dst):
     """A copy of a fixture with a hostile signature state: 'adhoc' (signed, no get-task-allow) or 'unsigned'."""
     Path(dst).parent.mkdir(parents=True, exist_ok=True)
@@ -349,6 +377,8 @@ def cmd_check(a):
                 wl = normalize(''.join(x + '\n' for x in mode_row['expect']), roots, fired).splitlines()
                 mode_row = {}
             why = '' if bad is None and gl == wl else (bad or s2mod().lines_verdict(mode_row, wl, gl))
+            if not why and r.get('stderr'):
+                why = stderr_verdict(lin[r['name']], err, rc, roots, fired)
             if not why:
                 print('PASS %s [normalised: %s]%s' % (r['name'], ','.join(sorted(fired)), ' [dropped lines: %s]' % ' | '.join(dropped) if dropped else ''))
             else:
