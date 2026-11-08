@@ -1917,6 +1917,1408 @@
     "print p.x + by",
     "finish"
    ]
+  },
+  {
+   "name": "list-wolf-nested-bare",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "list",
+    "list",
+    "list"
+   ]
+  },
+  {
+   "name": "list-wolf-loops-bare",
+   "prog": "wolf/loops/wolf-debug/prog",
+   "script": [
+    "list",
+    "list"
+   ]
+  },
+  {
+   "name": "list-wolf-nested-plus",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "list +",
+    "list +"
+   ]
+  },
+  {
+   "name": "list-wolf-nested-stop",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "break inner",
+    "run",
+    "list",
+    "list",
+    "list -"
+   ]
+  },
+  {
+   "name": "list-wolf-loops-stop",
+   "prog": "wolf/loops/wolf-debug/prog",
+   "script": [
+    "break sum",
+    "run",
+    "next",
+    "next",
+    "list",
+    "next",
+    "list"
+   ]
+  },
+  {
+   "name": "list-wolf-nested-frames",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "break inner",
+    "run",
+    "frame 2",
+    "list",
+    "down",
+    "list",
+    "up",
+    "list -"
+   ]
+  },
+  {
+   "name": "list-wolf-nested-finish",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "break inner",
+    "run",
+    "finish",
+    "list"
+   ]
+  },
+  {
+   "name": "list-wolf-loops-exited",
+   "prog": "wolf/loops/wolf-debug/prog",
+   "script": [
+    "run",
+    "list"
+   ]
+  },
+  {
+   "name": "list-wolf-nested-dot",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "list .",
+    "list",
+    "break inner",
+    "run",
+    "list 9",
+    "list ."
+   ]
+  },
+  {
+   "name": "list-wolf-nested-n",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "list 5",
+    "list 11",
+    "list 0",
+    "list 1"
+   ]
+  },
+  {
+   "name": "list-wolf-loops-n",
+   "prog": "wolf/loops/wolf-debug/prog",
+   "script": [
+    "list 7",
+    "list 13"
+   ]
+  },
+  {
+   "name": "list-wolf-nested-func",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "list inner",
+    "list outer",
+    "list main"
+   ]
+  },
+  {
+   "name": "list-wolf-loops-func",
+   "prog": "wolf/loops/wolf-debug/prog",
+   "script": [
+    "list sum",
+    "list main"
+   ]
+  },
+  {
+   "name": "list-wolf-nested-file",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "list main.lu:7",
+    "list nested/main.lu:3",
+    "list main.lu:outer"
+   ]
+  },
+  {
+   "name": "list-wolf-loops-file",
+   "prog": "wolf/loops/wolf-debug/prog",
+   "script": [
+    "list main.lu:12",
+    "list loops/main.lu:sum"
+   ]
+  },
+  {
+   "name": "list-wolf-nested-star",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "list *inner"
+   ]
+  },
+  {
+   "name": "list-wolf-nested-alias",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "l 4"
+   ]
+  },
+  {
+   "name": "list-wolf-nested-range",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "list 2,4",
+    "list 3,",
+    "list ,6",
+    "list ,3",
+    "list inner,outer",
+    "list main.lu:2,main.lu:5",
+    "list 8,30",
+    "list 5,3",
+    "list 3,+2"
+   ]
+  },
+  {
+   "name": "list-wolf-loops-range",
+   "prog": "wolf/loops/wolf-debug/prog",
+   "script": [
+    "list 2,",
+    "list",
+    "list 12,13",
+    "list -"
+   ]
+  },
+  {
+   "name": "list-wolf-loops-minus",
+   "prog": "wolf/loops/wolf-debug/prog",
+   "script": [
+    "list 13",
+    "list -",
+    "list",
+    "list -",
+    "list -"
+   ]
+  },
+  {
+   "name": "list-wolf-nested-minus",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "list main",
+    "list -",
+    "list -"
+   ]
+  },
+  {
+   "name": "list-wolf-nested-past-end",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "list 20"
+   ]
+  },
+  {
+   "name": "list-wolf-nested-past-end-file",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "list main.lu:40"
+   ]
+  },
+  {
+   "name": "list-wolf-loops-range-past",
+   "prog": "wolf/loops/wolf-debug/prog",
+   "script": [
+    "list 40,50"
+   ]
+  },
+  {
+   "name": "list-wolf-loops-to-past",
+   "prog": "wolf/loops/wolf-debug/prog",
+   "script": [
+    "list ,60"
+   ]
+  },
+  {
+   "name": "list-wolf-nested-no-func",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "list nosuch"
+   ]
+  },
+  {
+   "name": "list-wolf-nested-no-file",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "list nosuch.lu:3"
+   ]
+  },
+  {
+   "name": "list-wolf-nested-no-file-func",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "list main.lu:nosuch"
+   ]
+  },
+  {
+   "name": "list-wolf-nested-junk",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "list 3 4"
+   ]
+  },
+  {
+   "name": "list-wolf-nested-noline",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "list _start",
+    "list"
+   ]
+  },
+  {
+   "name": "list-c-gcc-recursion-bare",
+   "prog": "c/recursion/gcc-O0/prog",
+   "script": [
+    "list",
+    "list"
+   ]
+  },
+  {
+   "name": "list-c-gcc-recursion-stop",
+   "prog": "c/recursion/gcc-O0/prog",
+   "script": [
+    "break factorial",
+    "run",
+    "list",
+    "continue",
+    "list"
+   ]
+  },
+  {
+   "name": "list-c-gcc-recursion-n",
+   "prog": "c/recursion/gcc-O0/prog",
+   "script": [
+    "list 3",
+    "list 7"
+   ]
+  },
+  {
+   "name": "list-c-gcc-recursion-func",
+   "prog": "c/recursion/gcc-O0/prog",
+   "script": [
+    "list factorial",
+    "list main"
+   ]
+  },
+  {
+   "name": "list-c-gcc-recursion-file",
+   "prog": "c/recursion/gcc-O0/prog",
+   "script": [
+    "list main.c:factorial",
+    "list main.c:5"
+   ]
+  },
+  {
+   "name": "list-c-gcc-recursion-range",
+   "prog": "c/recursion/gcc-O0/prog",
+   "script": [
+    "list 2,5",
+    "list 4,",
+    "list ,3",
+    "list factorial,main"
+   ]
+  },
+  {
+   "name": "list-c-gcc-recursion-minus",
+   "prog": "c/recursion/gcc-O0/prog",
+   "script": [
+    "list -",
+    "list -"
+   ]
+  },
+  {
+   "name": "list-c-gcc-recursion-star",
+   "prog": "c/recursion/gcc-O0/prog",
+   "script": [
+    "list *factorial"
+   ]
+  },
+  {
+   "name": "list-c-gcc-recursion-past-end",
+   "prog": "c/recursion/gcc-O0/prog",
+   "script": [
+    "list 30"
+   ]
+  },
+  {
+   "name": "list-c-gcc-recursion-noline",
+   "prog": "c/recursion/gcc-O0/prog",
+   "script": [
+    "list _start",
+    "list *_start",
+    "list"
+   ]
+  },
+  {
+   "name": "list-c-gcc-calls-noline",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "list plain_twice",
+    "list plain_twice,"
+   ]
+  },
+  {
+   "name": "list-c-gcc-gone",
+   "prog": "c/recursion-gone/gcc-O0/prog",
+   "script": [
+    "list",
+    "list factorial",
+    "list 3",
+    "list"
+   ]
+  },
+  {
+   "name": "list-c-gcc-gone-stop",
+   "prog": "c/recursion-gone/gcc-O0/prog",
+   "script": [
+    "break factorial",
+    "run",
+    "list",
+    "next",
+    "list",
+    "frame",
+    "up"
+   ]
+  },
+  {
+   "name": "list-c-clang-recursion-bare",
+   "prog": "c/recursion/clang-O0/prog",
+   "script": [
+    "list",
+    "list"
+   ]
+  },
+  {
+   "name": "list-c-clang-recursion-stop",
+   "prog": "c/recursion/clang-O0/prog",
+   "script": [
+    "break factorial",
+    "run",
+    "list",
+    "continue",
+    "list"
+   ]
+  },
+  {
+   "name": "list-c-clang-recursion-n",
+   "prog": "c/recursion/clang-O0/prog",
+   "script": [
+    "list 3",
+    "list 7"
+   ]
+  },
+  {
+   "name": "list-c-clang-recursion-func",
+   "prog": "c/recursion/clang-O0/prog",
+   "script": [
+    "list factorial",
+    "list main"
+   ]
+  },
+  {
+   "name": "list-c-clang-recursion-file",
+   "prog": "c/recursion/clang-O0/prog",
+   "script": [
+    "list main.c:factorial",
+    "list main.c:5"
+   ]
+  },
+  {
+   "name": "list-c-clang-recursion-range",
+   "prog": "c/recursion/clang-O0/prog",
+   "script": [
+    "list 2,5",
+    "list 4,",
+    "list ,3",
+    "list factorial,main"
+   ]
+  },
+  {
+   "name": "list-c-clang-recursion-minus",
+   "prog": "c/recursion/clang-O0/prog",
+   "script": [
+    "list -",
+    "list -"
+   ]
+  },
+  {
+   "name": "list-c-clang-recursion-star",
+   "prog": "c/recursion/clang-O0/prog",
+   "script": [
+    "list *factorial"
+   ]
+  },
+  {
+   "name": "list-c-clang-recursion-past-end",
+   "prog": "c/recursion/clang-O0/prog",
+   "script": [
+    "list 30"
+   ]
+  },
+  {
+   "name": "list-c-clang-recursion-noline",
+   "prog": "c/recursion/clang-O0/prog",
+   "script": [
+    "list _start",
+    "list *_start",
+    "list"
+   ]
+  },
+  {
+   "name": "list-c-clang-calls-noline",
+   "prog": "c/calls/clang-O0/prog",
+   "script": [
+    "list plain_twice",
+    "list plain_twice,"
+   ]
+  },
+  {
+   "name": "list-c-clang-gone",
+   "prog": "c/recursion-gone/clang-O0/prog",
+   "script": [
+    "list",
+    "list factorial",
+    "list 3",
+    "list"
+   ]
+  },
+  {
+   "name": "list-c-clang-gone-stop",
+   "prog": "c/recursion-gone/clang-O0/prog",
+   "script": [
+    "break factorial",
+    "run",
+    "list",
+    "next",
+    "list",
+    "frame",
+    "up"
+   ]
+  },
+  {
+   "name": "help-bare",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help"
+   ],
+   "compare": "subset",
+   "why": "the listing holds only the classes, commands and footer lines of what sniff implements"
+  },
+  {
+   "name": "help-h",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "h"
+   ],
+   "compare": "subset",
+   "why": "the listing holds only the classes, commands and footer lines of what sniff implements"
+  },
+  {
+   "name": "help-all",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help all"
+   ],
+   "compare": "subset",
+   "why": "the listing holds only the classes, commands and footer lines of what sniff implements",
+   "own": [
+    "quit, exit, q -- Exit sniff.",
+    "maintenance, mt -- sniff's own maintenance commands."
+   ]
+  },
+  {
+   "name": "help-class-running",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help running"
+   ],
+   "compare": "subset",
+   "why": "the listing holds only the classes, commands and footer lines of what sniff implements"
+  },
+  {
+   "name": "help-class-breakpoints",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help breakpoints"
+   ],
+   "compare": "subset",
+   "why": "the listing holds only the classes, commands and footer lines of what sniff implements"
+  },
+  {
+   "name": "help-class-data",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help data"
+   ],
+   "compare": "subset",
+   "why": "the listing holds only the classes, commands and footer lines of what sniff implements"
+  },
+  {
+   "name": "help-class-stack",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help stack"
+   ],
+   "compare": "subset",
+   "why": "the listing holds only the classes, commands and footer lines of what sniff implements"
+  },
+  {
+   "name": "help-class-status",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help status"
+   ],
+   "compare": "subset",
+   "why": "the listing holds only the classes, commands and footer lines of what sniff implements"
+  },
+  {
+   "name": "help-class-files",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help files"
+   ],
+   "compare": "subset",
+   "why": "the listing holds only the classes, commands and footer lines of what sniff implements"
+  },
+  {
+   "name": "help-class-support",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help support"
+   ],
+   "compare": "subset",
+   "why": "the listing holds only the classes, commands and footer lines of what sniff implements",
+   "own": [
+    "quit, exit, q -- Exit sniff."
+   ]
+  },
+  {
+   "name": "help-class-internals",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help internals"
+   ],
+   "compare": "subset",
+   "why": "the listing holds only the classes, commands and footer lines of what sniff implements; sniff's maintenance commands are its own",
+   "own": [
+    "sniff's maintenance commands are its own, not gdb's.",
+    "maintenance, mt -- sniff's own maintenance commands.",
+    "maintenance frames -- Name how each frame of the stack was unwound."
+   ]
+  },
+  {
+   "name": "help-info",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help info"
+   ],
+   "compare": "subset",
+   "why": "the info subcommands sniff implements"
+  },
+  {
+   "name": "help-i",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help i"
+   ],
+   "compare": "subset",
+   "why": "the info subcommands sniff implements"
+  },
+  {
+   "name": "help-bytes-running",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help step",
+    "help s",
+    "help next",
+    "help n",
+    "help stepi",
+    "help si",
+    "help nexti",
+    "help ni",
+    "help finish",
+    "help fin"
+   ]
+  },
+  {
+   "name": "help-bytes-stack",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help up",
+    "help down",
+    "help dow",
+    "help do"
+   ]
+  },
+  {
+   "name": "help-bytes-support",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help help",
+    "help h",
+    "help echo",
+    "help output",
+    "help ignore",
+    "help info display"
+   ]
+  },
+  {
+   "name": "help-list",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help list"
+   ],
+   "compare": "head",
+   "head": 2,
+   "why": "gdb's text describes \"set listsize\" and \"show listsize\"; sniff always lists ten lines"
+  },
+  {
+   "name": "help-l",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help l"
+   ],
+   "compare": "head",
+   "head": 2,
+   "why": "gdb's text describes \"set listsize\" and \"show listsize\"; sniff always lists ten lines"
+  },
+  {
+   "name": "help-run",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help run"
+   ],
+   "compare": "head",
+   "head": 2,
+   "why": "gdb's text describes a shell between run and the program (expansion, redirection, \"set args\", \"set startup-with-shell\")"
+  },
+  {
+   "name": "help-continue",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help continue"
+   ],
+   "compare": "head",
+   "head": 2,
+   "why": "gdb's text describes continue's ignore count N, non-stop mode and -a"
+  },
+  {
+   "name": "help-c",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help c"
+   ],
+   "compare": "head",
+   "head": 2,
+   "why": "gdb's text describes continue's ignore count N, non-stop mode and -a"
+  },
+  {
+   "name": "help-kill",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help kill"
+   ],
+   "compare": "head",
+   "head": 1,
+   "why": "gdb's text describes \"kill inferiors\""
+  },
+  {
+   "name": "help-k",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help k"
+   ],
+   "compare": "head",
+   "head": 1,
+   "why": "gdb's text describes \"kill inferiors\""
+  },
+  {
+   "name": "help-break",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help break"
+   ],
+   "compare": "head",
+   "head": 2,
+   "why": "gdb's text describes probe points, threads, -force-condition, explicit locations, -qualified and a break with no location"
+  },
+  {
+   "name": "help-b",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help b"
+   ],
+   "compare": "head",
+   "head": 2,
+   "why": "gdb's text describes probe points, threads, -force-condition, explicit locations, -qualified and a break with no location"
+  },
+  {
+   "name": "help-tbreak",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help tbreak"
+   ],
+   "compare": "head",
+   "head": 1,
+   "why": "gdb's text describes \"enable delete\", and break's probe points, threads and explicit locations"
+  },
+  {
+   "name": "help-delete",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help delete"
+   ],
+   "compare": "head",
+   "head": 2,
+   "why": "gdb's text describes delete's subcommands (delete display and the others)"
+  },
+  {
+   "name": "help-watch",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help watch"
+   ],
+   "compare": "head",
+   "head": 1,
+   "why": "gdb's text describes watch -location"
+  },
+  {
+   "name": "help-rwatch",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help rwatch"
+   ],
+   "compare": "head",
+   "head": 1,
+   "why": "gdb's text describes rwatch -location"
+  },
+  {
+   "name": "help-awatch",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help awatch"
+   ],
+   "compare": "head",
+   "head": 1,
+   "why": "gdb's text describes awatch -location"
+  },
+  {
+   "name": "help-condition",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help condition"
+   ],
+   "compare": "head",
+   "head": 1,
+   "why": "gdb's text describes condition -force"
+  },
+  {
+   "name": "help-display",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help display"
+   ],
+   "compare": "head",
+   "head": 1,
+   "why": "gdb's text describes display/i, display/s and a size letter (the x command's formats)"
+  },
+  {
+   "name": "help-undisplay",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help undisplay"
+   ],
+   "compare": "head",
+   "head": 1,
+   "why": "gdb's text describes \"delete display\""
+  },
+  {
+   "name": "help-backtrace",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help backtrace"
+   ],
+   "compare": "head",
+   "head": 2,
+   "why": "gdb's text describes backtrace's options, qualifiers and COUNT"
+  },
+  {
+   "name": "help-bt",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help bt"
+   ],
+   "compare": "head",
+   "head": 2,
+   "why": "gdb's text describes backtrace's options, qualifiers and COUNT"
+  },
+  {
+   "name": "help-frame",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help frame"
+   ],
+   "compare": "head",
+   "head": 2,
+   "why": "gdb's text describes frame's subcommands and \"info frame\""
+  },
+  {
+   "name": "help-until",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help until"
+   ],
+   "compare": "head",
+   "head": 2,
+   "why": "gdb's text describes until LOCATION"
+  },
+  {
+   "name": "help-print",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help print"
+   ],
+   "compare": "head",
+   "head": 2,
+   "why": "gdb's text describes print's options, $$, convenience variables, assignment, {TYPE}ADREXP and @"
+  },
+  {
+   "name": "help-p",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help p"
+   ],
+   "compare": "head",
+   "head": 2,
+   "why": "gdb's text describes print's options, $$, convenience variables, assignment, {TYPE}ADREXP and @"
+  },
+  {
+   "name": "help-call",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help call"
+   ],
+   "compare": "head",
+   "head": 1,
+   "why": "gdb's text describes calling the program's functions"
+  },
+  {
+   "name": "help-x",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help x"
+   ],
+   "compare": "head",
+   "head": 1,
+   "why": "gdb's text describes x's f, i and z formats and negative counts"
+  },
+  {
+   "name": "help-quit",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help quit"
+   ],
+   "compare": "head",
+   "head": 1,
+   "why": "gdb's text describes an exit code EXPR, and its summary names gdb"
+  },
+  {
+   "name": "help-maintenance",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help maintenance"
+   ],
+   "compare": "head",
+   "head": 1,
+   "why": "gdb's text describes gdb's maintenance commands; sniff's are its own"
+  },
+  {
+   "name": "help-mt",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help mt"
+   ],
+   "compare": "head",
+   "head": 1,
+   "why": "gdb's text describes gdb's maintenance commands; sniff's are its own"
+  },
+  {
+   "name": "help-info-breakpoints",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help info breakpoints"
+   ],
+   "compare": "head",
+   "head": 2,
+   "why": "gdb's text describes a breakpoint number argument, and the Type and Disp values sniff does not have"
+  },
+  {
+   "name": "help-info-b",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help info b"
+   ],
+   "compare": "head",
+   "head": 2,
+   "why": "gdb's text describes a breakpoint number argument, and the Type and Disp values sniff does not have"
+  },
+  {
+   "name": "help-info-watchpoints",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help info watchpoints"
+   ],
+   "compare": "head",
+   "head": 1,
+   "why": "gdb's text describes a watchpoint number argument"
+  },
+  {
+   "name": "help-info-locals",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help info locals"
+   ],
+   "compare": "head",
+   "head": 1,
+   "why": "gdb's text describes the -q and -t TYPEREGEXP options and NAMEREGEXP"
+  },
+  {
+   "name": "help-info-args",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help info args"
+   ],
+   "compare": "head",
+   "head": 1,
+   "why": "gdb's text describes the -q and -t TYPEREGEXP options and NAMEREGEXP"
+  },
+  {
+   "name": "help-info-registers",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help info registers"
+   ],
+   "compare": "head",
+   "head": 2,
+   "why": "gdb's text describes register groups"
+  },
+  {
+   "name": "help-info-all-registers",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help info all-registers"
+   ],
+   "compare": "head",
+   "head": 1,
+   "why": "gdb's text describes the floating point and vector registers"
+  },
+  {
+   "name": "help-lacking-catch",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help catch"
+   ],
+   "compare": "own",
+   "why": "a gdb command sniff lacks",
+   "expect": [
+    "\"catch\" is a gdb command that sniff does not implement yet."
+   ]
+  },
+  {
+   "name": "help-lacking-tui",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help tui"
+   ],
+   "compare": "own",
+   "why": "a gdb command sniff lacks",
+   "expect": [
+    "\"tui\" is a gdb command that sniff does not implement yet."
+   ]
+  },
+  {
+   "name": "help-lacking-set",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help set"
+   ],
+   "compare": "own",
+   "why": "a gdb command sniff lacks",
+   "expect": [
+    "\"set\" is a gdb command that sniff does not implement yet."
+   ]
+  },
+  {
+   "name": "help-lacking-j",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help j"
+   ],
+   "compare": "own",
+   "why": "a gdb command sniff lacks",
+   "expect": [
+    "\"j\" is a gdb command that sniff does not implement yet."
+   ]
+  },
+  {
+   "name": "help-lacking-info-frame",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help info frame"
+   ],
+   "compare": "own",
+   "why": "a gdb command sniff lacks",
+   "expect": [
+    "\"info frame\" is a gdb command that sniff does not implement yet."
+   ]
+  },
+  {
+   "name": "help-lacking-info-source",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help info source"
+   ],
+   "compare": "own",
+   "why": "a gdb command sniff lacks",
+   "expect": [
+    "\"info source\" is a gdb command that sniff does not implement yet."
+   ]
+  },
+  {
+   "name": "help-maint-frames",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help maint frames"
+   ],
+   "compare": "own",
+   "gdb": "lacks",
+   "why": "sniff's own maintenance command",
+   "expect": [
+    "Name how each frame of the stack was unwound.",
+    "Usage: maintenance frames",
+    "Each frame is named with unwind=cfi (its call frame information),",
+    "unwind=frame-pointer (the frame-pointer fallback) or, for the last frame, unwind=outermost.",
+    "This is sniff's own command; gdb has no maintenance command of this name."
+   ]
+  },
+  {
+   "name": "help-undefined",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help nosuch"
+   ]
+  },
+  {
+   "name": "help-undefined-info",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help info nosuch"
+   ]
+  },
+  {
+   "name": "undefined-command",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "nosuch"
+   ]
+  },
+  {
+   "name": "undefined-info",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "info nosuch"
+   ]
+  },
+  {
+   "name": "undefined-maint",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "maint nosuch"
+   ]
+  },
+  {
+   "name": "lacking-command-catch",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "catch fork"
+   ],
+   "compare": "own",
+   "why": "a gdb command sniff lacks, typed as a command",
+   "expect": [],
+   "expect_err": [
+    "/work/target/s2/lacking-command-catch.cmd:1: Error in sourced command file:",
+    "\"catch\" is a gdb command that sniff does not implement yet."
+   ],
+   "expect_rc": 1
+  },
+  {
+   "name": "echo-leading-space",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "echo   a\\n",
+    "echo \\ b\\n"
+   ]
+  },
+  {
+   "name": "tty-wolf-loops-repeat-next",
+   "prog": "wolf/loops/wolf-debug/prog",
+   "script": [
+    "break sum",
+    "run",
+    "next",
+    "",
+    "",
+    "info locals"
+   ],
+   "tty": true
+  },
+  {
+   "name": "tty-wolf-nested-repeat-step",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "break outer",
+    "run",
+    "step",
+    "",
+    "",
+    ""
+   ],
+   "tty": true
+  },
+  {
+   "name": "tty-wolf-nested-repeat-list",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "list 1",
+    "",
+    "",
+    "list 40",
+    "",
+    "list 2,4",
+    ""
+   ],
+   "tty": true
+  },
+  {
+   "name": "tty-wolf-loops-repeat-list-minus",
+   "prog": "wolf/loops/wolf-debug/prog",
+   "script": [
+    "list 13",
+    "list -",
+    "",
+    ""
+   ],
+   "tty": true
+  },
+  {
+   "name": "tty-wolf-nested-repeat-frames",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "break inner",
+    "run",
+    "up",
+    "",
+    "",
+    "down",
+    "",
+    "frame 1",
+    "",
+    "bt",
+    ""
+   ],
+   "tty": true
+  },
+  {
+   "name": "tty-wolf-loops-repeat-data",
+   "prog": "wolf/loops/wolf-debug/prog",
+   "script": [
+    "break sum",
+    "run",
+    "print n",
+    "",
+    "output n",
+    "",
+    "echo \\n",
+    "info locals",
+    "",
+    "# a comment",
+    "",
+    "next",
+    "   ",
+    "",
+    "ignore 1 2",
+    ""
+   ],
+   "tty": true
+  },
+  {
+   "name": "tty-wolf-loops-repeat-x",
+   "prog": "wolf/loops/wolf-debug/prog",
+   "script": [
+    "break sum",
+    "run",
+    "x/2xw $sp",
+    "",
+    "x/2xg",
+    "x"
+   ],
+   "tty": true
+  },
+  {
+   "name": "tty-wolf-loops-repeat-not",
+   "prog": "wolf/loops/wolf-debug/prog",
+   "script": [
+    "break sum",
+    "run",
+    "display n",
+    "",
+    "info display",
+    "undisplay 1",
+    "",
+    "info display",
+    "condition 1 n > 9",
+    "",
+    "info breakpoints",
+    "delete 1",
+    "",
+    "info breakpoints",
+    "kill",
+    "",
+    "run",
+    ""
+   ],
+   "tty": true
+  },
+  {
+   "name": "tty-wolf-nested-repeat-first",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "",
+    "list 1"
+   ],
+   "tty": true
+  },
+  {
+   "name": "tty-wolf-nested-help-errors",
+   "prog": "wolf/nested/wolf-debug/prog",
+   "script": [
+    "help",
+    "help list",
+    "nosuch",
+    "",
+    "help nosuch",
+    "list 40",
+    "list nosuch",
+    "list 3",
+    "help catch",
+    "catch fork"
+   ],
+   "tty": true
+  },
+  {
+   "name": "tty-c-gcc-recursion-repeat-list",
+   "prog": "c/recursion/gcc-O0/prog",
+   "script": [
+    "list",
+    "",
+    "",
+    "list -",
+    ""
+   ],
+   "tty": true
+  },
+  {
+   "name": "tty-c-gcc-recursion-repeat-continue",
+   "prog": "c/recursion/gcc-O0/prog",
+   "script": [
+    "break factorial",
+    "run",
+    "continue",
+    "",
+    "",
+    "finish",
+    ""
+   ],
+   "tty": true
+  },
+  {
+   "name": "tty-c-gcc-gone-repeat",
+   "prog": "c/recursion-gone/gcc-O0/prog",
+   "script": [
+    "break factorial",
+    "run",
+    "list",
+    "list",
+    "next",
+    "",
+    "list",
+    "frame",
+    "up"
+   ],
+   "tty": true
+  },
+  {
+   "name": "tty-c-clang-recursion-repeat-list",
+   "prog": "c/recursion/clang-O0/prog",
+   "script": [
+    "list",
+    "",
+    "",
+    "list -",
+    ""
+   ],
+   "tty": true
+  },
+  {
+   "name": "tty-c-clang-recursion-repeat-continue",
+   "prog": "c/recursion/clang-O0/prog",
+   "script": [
+    "break factorial",
+    "run",
+    "continue",
+    "",
+    "",
+    "finish",
+    ""
+   ],
+   "tty": true
+  },
+  {
+   "name": "tty-c-clang-gone-repeat",
+   "prog": "c/recursion-gone/clang-O0/prog",
+   "script": [
+    "break factorial",
+    "run",
+    "list",
+    "list",
+    "next",
+    "",
+    "list",
+    "frame",
+    "up"
+   ],
+   "tty": true
   }
  ]
 }
