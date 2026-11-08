@@ -382,6 +382,8 @@ fn load_dwarf(mut p: Prog, data: List[byte]) {
     }
     p.info = info
     p.has_info = true
+    // a row for every four bytes of the line section, as dwarf_line_read reserves its own
+    (mut p.lines).reserve(secs.line.span.length / 4)
     var ui: int = 0
     while ui < p.info.units.len {
         let root = p.info.units[ui].first_entry

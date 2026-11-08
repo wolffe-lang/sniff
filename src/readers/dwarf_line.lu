@@ -495,6 +495,12 @@ pub fn dwarf_line_read(
     c.end = end
     let initial_file_count = files.len
     var rows: List[DwarfLineRow] = []
+    // About eight program bytes a row on the measured producers: a row is reserved for
+    // every four bytes (capped by the row limit) rather than grown by doubling, which on
+    // the DIE lists held about twice the final size in memory (dwarf_info_read).
+    var want_rows = (end - program) / 4
+    if want_rows > cap { want_rows = cap }
+    if want_rows > 0 { (mut rows).reserve(want_rows) }
     var state = dwarf_line_initial(default_stmt == 1)
     var active: bool = false
     let address_limit: u64 = if address_size == 8 {
