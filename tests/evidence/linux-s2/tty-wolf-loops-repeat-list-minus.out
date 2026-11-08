@@ -1,0 +1,16 @@
+Reading symbols from /work/target/session-fixtures/wolf/loops/wolf-debug/prog...
+8	    total
+9	}
+10	fn main() -> int {
+11	    let answer = sum(4)
+12	    answer - 6
+13	}
+1	fn sum(n: int) -> int {
+2	    var i = 0
+3	    var total = 0
+4	    while i < n {
+5	        total += i
+6	        i += 1
+7	    }
+Already at the start of /work/fixtures/wolf/loops/main.lu.
+Already at the start of /work/fixtures/wolf/loops/main.lu.

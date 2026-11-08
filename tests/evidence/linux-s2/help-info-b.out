@@ -1,0 +1,16 @@
+info breakpoints, info b
+Status of specified breakpoints (all user-settable breakpoints if no argument).
+The "Type" column indicates one of:
+	breakpoint     - normal breakpoint
+	watchpoint     - watchpoint
+The "Disp" column contains one of "keep", "del", or "dis" to indicate
+the disposition of the breakpoint after it gets hit.  "dis" means that the
+breakpoint will be disabled.  The "Address" and "What" columns indicate the
+address and file/line number respectively.
+
+Convenience variable "$_" and default examine address for "x"
+are set to the address of the last breakpoint listed unless the command
+is prefixed with "server ".
+
+Convenience variable "$bpnum" contains the number of the last
+breakpoint set.

@@ -1,0 +1,7 @@
+Specify breakpoint number N to break only if COND is true.
+Usage is `condition [OPTION] N COND', where N is an integer and COND
+is an expression to be evaluated whenever breakpoint N is reached.
+
+Options:
+  -force
+    Set the condition even if it is invalid for all current locations.

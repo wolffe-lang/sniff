@@ -1,0 +1,2 @@
+/work/target/s2/undefined-maint.cmd:1: Error in sourced command file:
+Undefined maintenance command: "nosuch".  Try "help maintenance".

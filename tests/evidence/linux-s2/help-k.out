@@ -1,0 +1,10 @@
+Kill execution of program being debugged.
+
+List of kill subcommands:
+
+kill inferiors -- Kill inferior ID (or list of IDs).
+
+Type "help kill" followed by kill subcommand name for full documentation.
+Type "apropos word" to search for commands related to "word".
+Type "apropos -v word" for full documentation of commands related to "word".
+Command name abbreviations are allowed if unambiguous.

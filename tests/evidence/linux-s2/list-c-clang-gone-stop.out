@@ -1,0 +1,10 @@
+Breakpoint 1 at 0x113b: file /work/target/session-fixtures/c/recursion-gone/clang-O0/src/main.c, line 3.
+
+Breakpoint 1, factorial (n=5) at /work/target/session-fixtures/c/recursion-gone/clang-O0/src/main.c:3
+1	in /work/target/session-fixtures/c/recursion-gone/clang-O0/src/main.c
+4	in /work/target/session-fixtures/c/recursion-gone/clang-O0/src/main.c
+1	in /work/target/session-fixtures/c/recursion-gone/clang-O0/src/main.c
+#0  factorial (n=5) at /work/target/session-fixtures/c/recursion-gone/clang-O0/src/main.c:4
+4	in /work/target/session-fixtures/c/recursion-gone/clang-O0/src/main.c
+#1  0x0000555555555199 in main () at /work/target/session-fixtures/c/recursion-gone/clang-O0/src/main.c:7
+7	in /work/target/session-fixtures/c/recursion-gone/clang-O0/src/main.c

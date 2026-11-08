@@ -1,0 +1,2 @@
+/work/target/s2/list-c-gcc-recursion-past-end.cmd:1: Error in sourced command file:
+Line number 25 out of range; /work/fixtures/c/recursion/main.c has 7 lines.

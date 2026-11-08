@@ -1,0 +1,27 @@
+Breakpoint 1 at 0xa535: file /work/fixtures/wolf/loops/main.lu, line 2.
+
+Breakpoint 1, sum (n=4) at /work/fixtures/wolf/loops/main.lu:2
+2	    var i = 0
+4	    while i < n {
+5	        total += i
+1	fn sum(n: int) -> int {
+2	    var i = 0
+3	    var total = 0
+4	    while i < n {
+5	        total += i
+6	        i += 1
+7	    }
+8	    total
+9	}
+10	fn main() -> int {
+6	        i += 1
+1	fn sum(n: int) -> int {
+2	    var i = 0
+3	    var total = 0
+4	    while i < n {
+5	        total += i
+6	        i += 1
+7	    }
+8	    total
+9	}
+10	fn main() -> int {

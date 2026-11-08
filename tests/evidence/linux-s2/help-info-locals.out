@@ -1,0 +1,11 @@
+All local variables of current stack frame or those matching REGEXPs.
+Usage: info locals [-q] [-t TYPEREGEXP] [NAMEREGEXP]
+Prints the local variables of the current stack frame.
+If NAMEREGEXP is provided, only prints the local variables whose name
+matches NAMEREGEXP.
+If -t TYPEREGEXP is provided, only prints the local variables whose type
+matches TYPEREGEXP.  Note that the matching is done with the type
+printed by the 'whatis' command.
+By default, the command might produce headers and/or messages indicating
+why no local variables can be printed.
+The flag -q disables the production of these headers and messages.

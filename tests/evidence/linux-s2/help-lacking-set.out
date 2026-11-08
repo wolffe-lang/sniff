@@ -1,0 +1,167 @@
+Evaluate expression EXP and assign result to variable VAR.
+Usage: set VAR = EXP
+This uses assignment syntax appropriate for the current language
+(VAR = EXP or VAR := EXP for example).
+VAR may be a debugger "convenience" variable (names starting
+with $), a register (a few standard names starting with $), or an actual
+variable in the program being debugged.  EXP is any valid expression.
+Use "set variable" for variables with names identical to set subcommands.
+
+With a subcommand, this command modifies parts of the gdb environment.
+You can see these environment settings with the "show" command.
+
+List of set subcommands:
+
+set ada -- Prefix command for changing Ada-specific settings.
+set agent -- Set debugger's willingness to use agent as a helper.
+set always-read-ctf -- Set whether CTF is always read.
+set annotate -- Set annotation_level.
+set architecture, set processor -- Set architecture of target.
+set args -- Set argument list to give program being debugged when it is started.
+set auto-connect-native-target -- Set whether GDB may automatically connect to the native target.
+set auto-load -- Auto-loading specific settings.
+set auto-solib-add -- Set autoloading of shared library symbols.
+set backtrace -- Set backtrace specific variables.
+set basenames-may-differ -- Set whether a source file may have multiple base names.
+set breakpoint -- Breakpoint specific settings.
+set can-use-hw-watchpoints -- Set debugger's willingness to use watchpoint hardware.
+set case-sensitive -- Set case sensitivity in name search (on/off/auto).
+set charset -- Set the host and target character sets.
+set check, set ch, set c -- Set the status of the type/range checker.
+set circular-trace-buffer -- Set target's use of circular trace buffer.
+set code-cache -- Set cache use for code segment access.
+set coerce-float-to-double -- Set coercion of floats to doubles when calling functions.
+set compile-args -- Set compile command GCC command-line arguments.
+set compile-gcc -- Set compile command GCC driver filename.
+set complaints -- Set max number of complaints about incorrect symbols.
+set confirm -- Set whether to confirm potentially dangerous operations.
+set cp-abi -- Set the ABI used for inspecting C++ objects.
+set cwd -- Set the current working directory to be used when the inferior is started.
+set data-directory -- Set GDB's data directory.
+set dcache -- Use this command to set number of lines in dcache and line-size.
+set debug -- Generic command for setting gdb debugging flags.
+set debug-file-directory -- Set the directories where separate debug symbols are searched for.
+set debuginfod -- Set debuginfod options.
+set default-collect -- Set the list of expressions to collect by default.
+set demangle-style -- Set the current C++ demangling style.
+set detach-on-fork -- Set whether gdb will detach the child of a fork.
+set direct-call-timeout -- Set the timeout, for direct calls to inferior function calls.
+set directories -- Set the search path for finding source files.
+set disable-randomization -- Set disabling of debuggee's virtual address space randomization.
+set disassemble-next-line -- Set whether to disassemble next source line or insn when execution stops.
+set disassembler-options -- Set the disassembler options.
+set disassembly-flavor -- Set the disassembly flavor.
+set disconnected-dprintf -- Set whether dprintf continues after GDB disconnects.
+set disconnected-tracing -- Set whether tracing continues after GDB disconnects.
+set displaced-stepping -- Set debugger's willingness to use displaced stepping.
+set dprintf-channel -- Set the channel to use for dynamic printf.
+set dprintf-function -- Set the function to use for dynamic printf.
+set dprintf-style -- Set the style of usage for dynamic printf.
+set dump-excluded-mappings -- Set whether gcore should dump mappings marked with the VM_DONTDUMP flag.
+set editing -- Set editing of command lines as they are typed.
+set endian -- Set endianness of target.
+set environment -- Set environment variable value to give the program.
+set exec-direction -- Set direction of execution.
+set exec-done-display -- Set notification of completion for asynchronous execution commands.
+set exec-file-mismatch -- Set exec-file-mismatch handling (ask|warn|off).
+set exec-wrapper -- Set a wrapper for running programs.
+set extended-prompt -- Set the extended prompt.
+set extension-language -- Set mapping between filename extension and source language.
+set filename-display -- Set how to display filenames.
+set follow-exec-mode -- Set debugger response to a program call of exec.
+set follow-fork-mode -- Set debugger response to a program call of fork or vfork.
+set fortran -- Prefix command for changing Fortran-specific settings.
+set frame-filter -- Prefix command for 'set' frame-filter related operations.
+set gnutarget, set g -- Set the current BFD target.
+set guile, set gu -- Prefix command for Guile preference settings.
+set height -- Set number of lines in a page for GDB output pagination.
+set history -- Generic command for setting command history parameters.
+set host-charset -- Set the host character set.
+set index-cache -- Set index-cache options.
+set indirect-call-timeout -- Set the timeout, for indirect calls to inferior function calls.
+set inferior-tty, tty -- Set terminal for future runs of program being debugged.
+set input-radix -- Set default input radix for entering numbers.
+set interactive-mode -- Set whether GDB's standard input is a terminal.
+set language -- Set the current source language.
+set libthread-db-search-path -- Set search path for libthread_db.
+set listsize -- Set number of source lines gdb will list by default.
+set logging -- Set logging options.
+set max-completions -- Set maximum number of completion candidates.
+set max-user-call-depth -- Set the max call depth for non-python/scheme user-defined commands.
+set max-value-size -- Set maximum sized value gdb will load from the inferior.
+set may-call-functions -- Set permission to call functions in the program.
+set may-insert-breakpoints -- Set permission to insert breakpoints in the target.
+set may-insert-fast-tracepoints -- Set permission to insert fast tracepoints in the target.
+set may-insert-tracepoints -- Set permission to insert tracepoints in the target.
+set may-interrupt -- Set permission to interrupt or signal the target.
+set may-write-memory -- Set permission to write into target memory.
+set may-write-registers -- Set permission to write into registers.
+set mem -- Memory regions settings.
+set mi-async -- Set whether MI asynchronous mode is enabled.
+set mpx -- Set Intel Memory Protection Extensions specific variables.
+set multiple-symbols -- Set how the debugger handles ambiguities in expressions.
+set non-stop -- Set whether gdb controls the inferior in non-stop mode.
+set observer -- Set whether gdb controls the inferior in observer mode.
+set opaque-type-resolution -- Set resolution of opaque struct/class/union types (if set before loading symbols).
+set osabi -- Set OS ABI of target.
+set output-radix -- Set default output radix for printing of values.
+set overload-resolution -- Set overload resolution in evaluating C++ functions.
+set pagination -- Set state of GDB output pagination.
+set print, set pr, set p -- Generic command for setting how things print.
+set prompt -- Set gdb's prompt.
+set python -- Prefix command for python preference settings.
+set radix -- Set default input and output number radices.
+set range-stepping -- Enable or disable range stepping.
+set ravenscar -- Prefix command for changing Ravenscar-specific settings.
+set record, set rec -- Set record options.
+set remote -- Remote protocol specific variables.
+set remoteaddresssize -- Set the maximum size of the address (in bits) in a memory packet.
+set remotecache -- Set cache use for remote targets.
+set remoteflow -- Set use of hardware flow control for remote serial I/O.
+set remotelogbase -- Set numerical base for remote session logging.
+set remotelogfile -- Set filename for remote session recording.
+set remotetimeout -- Set timeout limit to wait for target to respond.
+set remotewritesize -- Set the maximum number of bytes per memory write packet (deprecated).
+set schedule-multiple -- Set mode for resuming threads of all processes.
+set scheduler-locking -- Set mode for locking scheduler during execution.
+set script-extension -- Set mode for script filename extension recognition.
+set serial -- Set default serial/parallel port configuration.
+set solib-search-path -- Set the search path for loading non-absolute shared library symbol files.
+set source -- Generic command for setting how sources are handled.
+set stack-cache -- Set cache use for stack access.
+set startup-quietly -- Set whether GDB should start up quietly.
+set startup-with-shell -- Set use of shell to start subprocesses.  The default is on.
+set step-mode -- Set mode of the step operation.
+set stop-on-solib-events -- Set stopping for shared library events.
+set struct-convention -- Set the convention for returning small structs.
+set style -- Style-specific settings.
+set substitute-path -- Add a substitution rule to rewrite the source directories.
+set suppress-cli-notifications -- Set whether printing notifications on CLI is suppressed.
+set sysroot, set solib-absolute-prefix -- Set an alternate system root.
+set target-charset -- Set the target character set.
+set target-file-system-kind -- Set assumed file system kind for target reported file names.
+set target-wide-charset -- Set the target wide character set.
+set tcp -- TCP protocol specific variables.
+set tdesc -- Set target description specific variables.
+set trace-buffer-size -- Set requested size of trace buffer.
+set trace-commands -- Set tracing of GDB CLI commands.
+set trace-notes -- Set notes string to use for current and future trace runs.
+set trace-stop-notes -- Set notes string to use for future tstop commands.
+set trace-user -- Set the user name to use for current and future trace runs.
+set trust-readonly-sections -- Set mode for reading from readonly sections.
+set tui -- TUI configuration variables.
+set unwind-on-signal, set unwindonsignal -- Set unwinding of stack if a signal is received while in a call dummy.
+set unwind-on-terminating-exception -- Set unwinding of stack if std::terminate is called while in call dummy.
+set unwind-on-timeout -- Set unwinding of stack if a timeout occurs while in a call dummy.
+set use-coredump-filter -- Set whether gcore should consider /proc/PID/coredump_filter.
+set use-deprecated-index-sections -- Set whether to use deprecated gdb_index sections.
+set variable, set var -- Evaluate expression EXP and assign result to variable VAR.
+set verbose -- Set verbosity.
+set watchdog -- Set watchdog timer.
+set width -- Set number of characters where GDB should wrap lines of its output.
+set write -- Set writing into executable and core files.
+
+Type "help set" followed by set subcommand name for full documentation.
+Type "apropos word" to search for commands related to "word".
+Type "apropos -v word" for full documentation of commands related to "word".
+Command name abbreviations are allowed if unambiguous.

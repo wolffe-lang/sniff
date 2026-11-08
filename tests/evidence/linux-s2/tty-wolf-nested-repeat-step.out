@@ -1,0 +1,13 @@
+Reading symbols from /work/target/session-fixtures/wolf/nested/wolf-debug/prog...
+Breakpoint 1 at 0xa5d4: file /work/fixtures/wolf/nested/main.lu, line 6.
+Starting program: /work/target/session-fixtures/wolf/nested/wolf-debug/prog 
+
+Breakpoint 1, outer (a=7) at /work/fixtures/wolf/nested/main.lu:6
+6	    let result = inner(a)
+inner (n=7) at /work/fixtures/wolf/nested/main.lu:2
+2	    let doubled = n * 2
+3	    doubled + 1
+outer (a=7) at /work/fixtures/wolf/nested/main.lu:7
+7	    result - 1
+main () at /work/fixtures/wolf/nested/main.lu:11
+11	    answer - 14

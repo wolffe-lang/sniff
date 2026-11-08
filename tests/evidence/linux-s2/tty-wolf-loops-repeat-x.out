@@ -1,0 +1,10 @@
+Reading symbols from /work/target/session-fixtures/wolf/loops/wolf-debug/prog...
+Breakpoint 1 at 0xa535: file /work/fixtures/wolf/loops/main.lu, line 2.
+Starting program: /work/target/session-fixtures/wolf/loops/wolf-debug/prog 
+
+Breakpoint 1, sum (n=4) at /work/fixtures/wolf/loops/main.lu:2
+2	    var i = 0
+0x7fffffffebb0:	0x00000004	0x00000000
+0x7fffffffebb8:	0x00000002	0x00000000
+0x7fffffffebc0:	0x0000000000000000	0x0000000000000000
+0x7fffffffebd0:	0x00007fffffffebf0	0x000055555555e5ee

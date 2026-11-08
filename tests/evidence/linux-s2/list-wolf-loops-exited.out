@@ -1,0 +1,11 @@
+[Inferior 1 (process <PID>) exited normally]
+1	fn sum(n: int) -> int {
+2	    var i = 0
+3	    var total = 0
+4	    while i < n {
+5	        total += i
+6	        i += 1
+7	    }
+8	    total
+9	}
+10	fn main() -> int {

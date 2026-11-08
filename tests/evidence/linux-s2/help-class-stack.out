@@ -1,0 +1,34 @@
+Examining the stack.
+The stack is made up of stack frames.  Gdb assigns numbers to stack frames
+counting from zero for the innermost (currently executing) frame.
+
+At any time gdb identifies one frame as the "selected" frame.
+Variable lookups are done with respect to the selected frame.
+When the program being debugged stops, gdb selects the innermost frame.
+The commands below can be used to select other frames by number or address.
+
+List of commands:
+
+backtrace, where, bt -- Print backtrace of all stack frames, or innermost COUNT frames.
+down, dow, do -- Select and print stack frame called by this one.
+faas -- Apply a command to all frames (ignoring errors and empty output).
+frame, f -- Select and print a stack frame.
+frame address -- Select and print a stack frame by stack address.
+frame apply -- Apply a command to a number of frames.
+frame apply all -- Apply a command to all frames.
+frame apply level -- Apply a command to a list of frames.
+frame function -- Select and print a stack frame by function name.
+frame level -- Select and print a stack frame by level.
+frame view -- View a stack frame that might be outside the current backtrace.
+return -- Make selected stack frame return to its caller.
+select-frame -- Select a stack frame without printing anything.
+select-frame address -- Select a stack frame by stack address.
+select-frame function -- Select a stack frame by function name.
+select-frame level -- Select a stack frame by level.
+select-frame view -- Select a stack frame that might be outside the current backtrace.
+up -- Select and print stack frame that called this one.
+
+Type "help" followed by command name for full documentation.
+Type "apropos word" to search for commands related to "word".
+Type "apropos -v word" for full documentation of commands related to "word".
+Command name abbreviations are allowed if unambiguous.

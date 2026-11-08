@@ -1,0 +1,515 @@
+Examining data.
+
+List of commands:
+
+agent-printf -- Target agent only formatted printing, like the C "printf" function.
+append -- Append target code/data to a local file.
+append binary -- Append target code/data to a raw binary file.
+append binary memory -- Append contents of memory to a raw binary file.
+append binary value -- Append the value of an expression to a raw binary file.
+append memory -- Append contents of memory to a raw binary file.
+append value -- Append the value of an expression to a raw binary file.
+call -- Call a function in the program.
+disassemble -- Disassemble a specified section of memory.
+display -- Print value of expression EXP each time the program stops.
+dump -- Dump target code/data to a local file.
+dump binary -- Write target code/data to a raw binary file.
+dump binary memory -- Write contents of memory to a raw binary file.
+dump binary value -- Write the value of an expression to a raw binary file.
+dump ihex -- Write target code/data to an intel hex file.
+dump ihex memory -- Write contents of memory to an ihex file.
+dump ihex value -- Write the value of an expression to an ihex file.
+dump memory -- Write contents of memory to a raw binary file.
+dump srec -- Write target code/data to an srec file.
+dump srec memory -- Write contents of memory to an srec file.
+dump srec value -- Write the value of an expression to an srec file.
+dump tekhex -- Write target code/data to a tekhex file.
+dump tekhex memory -- Write contents of memory to a tekhex file.
+dump tekhex value -- Write the value of an expression to a tekhex file.
+dump value -- Write the value of an expression to a raw binary file.
+dump verilog -- Write target code/data to a verilog hex file.
+dump verilog memory -- Write contents of memory to a verilog hex file.
+dump verilog value -- Write the value of an expression to a verilog hex file.
+explore -- Explore a value or a type valid in the current context.
+explore type -- Explore a type or the type of an expression.
+explore value -- Explore value of an expression valid in the current context.
+find -- Search memory for a sequence of bytes.
+init-if-undefined -- Initialize a convenience variable if necessary.
+mem -- Define attributes for memory region or reset memory region handling to target-based.
+memory-tag -- Generic command for printing and manipulating memory tag properties.
+memory-tag check -- Validate a pointer's logical tag against the allocation tag.
+memory-tag print-allocation-tag -- Print the allocation tag for ADDRESS.
+memory-tag print-logical-tag -- Print the logical tag from POINTER.
+memory-tag set-allocation-tag -- Set the allocation tag(s) for a memory range.
+memory-tag with-logical-tag -- Print a POINTER with a specific logical TAG.
+output -- Like "print" but don't put in value history and don't print newline.
+print, inspect, p -- Print value of expression EXP.
+print-object, po -- Ask an Objective-C object to print itself.
+printf -- Formatted printing, like the C "printf" function.
+ptype -- Print definition of type TYPE.
+restore -- Restore the contents of FILE to target memory.
+set -- Evaluate expression EXP and assign result to variable VAR.
+set ada -- Prefix command for changing Ada-specific settings.
+set ada print-signatures -- Enable or disable the output of formal and return types for functions in the overloads selection menu.
+set ada source-charset -- Set the Ada source character set.
+set ada trust-PAD-over-XVS -- Enable or disable an optimization trusting PAD types over XVS types.
+set agent -- Set debugger's willingness to use agent as a helper.
+set always-read-ctf -- Set whether CTF is always read.
+set annotate -- Set annotation_level.
+set architecture, set processor -- Set architecture of target.
+set args -- Set argument list to give program being debugged when it is started.
+set auto-connect-native-target -- Set whether GDB may automatically connect to the native target.
+set auto-load -- Auto-loading specific settings.
+set auto-load gdb-scripts -- Enable or disable auto-loading of canned sequences of commands scripts.
+set auto-load libthread-db -- Enable or disable auto-loading of inferior specific libthread_db.
+set auto-load local-gdbinit -- Enable or disable auto-loading of .gdbinit script in current directory.
+set auto-load python-scripts -- Set the debugger's behaviour regarding auto-loaded Python scripts.
+set auto-load safe-path -- Set the list of files and directories that are safe for auto-loading.
+set auto-load scripts-directory -- Set the list of directories from which to load auto-loaded scripts.
+set auto-solib-add -- Set autoloading of shared library symbols.
+set backtrace -- Set backtrace specific variables.
+set backtrace limit -- Set an upper bound on the number of backtrace levels.
+set backtrace past-entry -- Set whether backtraces should continue past the entry point of a program.
+set backtrace past-main -- Set whether backtraces should continue past "main".
+set basenames-may-differ -- Set whether a source file may have multiple base names.
+set breakpoint -- Breakpoint specific settings.
+set breakpoint always-inserted -- Set mode for inserting breakpoints.
+set breakpoint auto-hw -- Set automatic usage of hardware breakpoints.
+set breakpoint condition-evaluation -- Set mode of breakpoint condition evaluation.
+set breakpoint pending -- Set debugger's behavior regarding pending breakpoints.
+set can-use-hw-watchpoints -- Set debugger's willingness to use watchpoint hardware.
+set case-sensitive -- Set case sensitivity in name search (on/off/auto).
+set charset -- Set the host and target character sets.
+set check, set ch, set c -- Set the status of the type/range checker.
+set check range -- Set range checking (on/warn/off/auto).
+set check type -- Set strict type checking.
+set circular-trace-buffer -- Set target's use of circular trace buffer.
+set code-cache -- Set cache use for code segment access.
+set coerce-float-to-double -- Set coercion of floats to doubles when calling functions.
+set compile-args -- Set compile command GCC command-line arguments.
+set compile-gcc -- Set compile command GCC driver filename.
+set complaints -- Set max number of complaints about incorrect symbols.
+set confirm -- Set whether to confirm potentially dangerous operations.
+set cp-abi -- Set the ABI used for inspecting C++ objects.
+set cwd -- Set the current working directory to be used when the inferior is started.
+set data-directory -- Set GDB's data directory.
+set dcache -- Use this command to set number of lines in dcache and line-size.
+set dcache line-size -- Set dcache line size in bytes (must be power of 2).
+set dcache size -- Set number of dcache lines.
+set debug -- Generic command for setting gdb debugging flags.
+set debug arch -- Set architecture debugging.
+set debug auto-load -- Set auto-load verifications debugging.
+set debug bfd-cache -- Set bfd cache debugging.
+set debug breakpoint -- Set breakpoint location debugging.
+set debug check-physname -- Set cross-checking of "physname" code against demangler.
+set debug coff-pe-read -- Set coff PE read debugging.
+set debug compile -- Set compile command debugging.
+set debug compile-cplus-scopes -- Set debugging of C++ compile scopes.
+set debug compile-cplus-types -- Set debugging of C++ compile type conversion.
+set debug displaced -- Set displaced stepping debugging.
+set debug dwarf-die -- Set debugging of the DWARF DIE reader.
+set debug dwarf-line -- Set debugging of the dwarf line reader.
+set debug dwarf-read -- Set debugging of the DWARF reader.
+set debug entry-values -- Set entry values and tail call frames debugging.
+set debug event-loop -- Set event-loop debugging.
+set debug expression -- Set expression debugging.
+set debug fortran-array-slicing -- Set debugging of Fortran array slicing.
+set debug frame -- Set frame debugging.
+set debug index-cache -- Set display of index-cache debug messages.
+set debug infcall -- Set inferior call debugging.
+set debug infrun -- Set inferior debugging.
+set debug jit -- Set JIT debugging.
+set debug libthread-db -- Set libthread-db debugging.
+set debug linux-namespaces -- Set debugging of GNU/Linux namespaces module.
+set debug linux-nat -- Set debugging of GNU/Linux native target.
+set debug notification -- Set debugging of async remote notification.
+set debug observer -- Set observer debugging.
+set debug overload -- Set debugging of C++ overloading.
+set debug parser -- Set parser debugging.
+set debug py-breakpoint -- Set Python breakpoint debugging.
+set debug py-micmd -- Set Python micmd debugging.
+set debug py-unwind -- Set Python unwinder debugging.
+set debug record -- Set debugging of record/replay feature.
+set debug remote -- Set debugging of remote protocol.
+set debug remote-packet-max-chars -- Set the maximum number of characters to display for each remote packet.
+set debug separate-debug-file -- Set printing of separate debug info file search debug.
+set debug serial -- Set serial debugging.
+set debug skip -- Set whether to print the debug output about skipping files and functions.
+set debug solib -- Set solib debugging.
+set debug stap-expression -- Set SystemTap expression debugging.
+set debug symbol-lookup -- Set debugging of symbol lookup.
+set debug symfile -- Set debugging of the symfile functions.
+set debug symtab-create -- Set debugging of symbol table creation.
+set debug target -- Set target debugging.
+set debug threads -- Set thread debugging.
+set debug timestamp -- Set timestamping of debugging messages.
+set debug tui -- Set tui debugging.
+set debug varobj -- Set varobj debugging.
+set debug xml -- Set XML parser debugging.
+set debug-file-directory -- Set the directories where separate debug symbols are searched for.
+set debuginfod -- Set debuginfod options.
+set debuginfod enabled -- Set whether to use debuginfod.
+set debuginfod urls -- Set the list of debuginfod server URLs.
+set debuginfod verbose -- Set verbosity of debuginfod output.
+set default-collect -- Set the list of expressions to collect by default.
+set demangle-style -- Set the current C++ demangling style.
+set detach-on-fork -- Set whether gdb will detach the child of a fork.
+set direct-call-timeout -- Set the timeout, for direct calls to inferior function calls.
+set directories -- Set the search path for finding source files.
+set disable-randomization -- Set disabling of debuggee's virtual address space randomization.
+set disassemble-next-line -- Set whether to disassemble next source line or insn when execution stops.
+set disassembler-options -- Set the disassembler options.
+set disassembly-flavor -- Set the disassembly flavor.
+set disconnected-dprintf -- Set whether dprintf continues after GDB disconnects.
+set disconnected-tracing -- Set whether tracing continues after GDB disconnects.
+set displaced-stepping -- Set debugger's willingness to use displaced stepping.
+set dprintf-channel -- Set the channel to use for dynamic printf.
+set dprintf-function -- Set the function to use for dynamic printf.
+set dprintf-style -- Set the style of usage for dynamic printf.
+set dump-excluded-mappings -- Set whether gcore should dump mappings marked with the VM_DONTDUMP flag.
+set editing -- Set editing of command lines as they are typed.
+set endian -- Set endianness of target.
+set environment -- Set environment variable value to give the program.
+set exec-direction -- Set direction of execution.
+set exec-done-display -- Set notification of completion for asynchronous execution commands.
+set exec-file-mismatch -- Set exec-file-mismatch handling (ask|warn|off).
+set exec-wrapper -- Set a wrapper for running programs.
+set extended-prompt -- Set the extended prompt.
+set extension-language -- Set mapping between filename extension and source language.
+set filename-display -- Set how to display filenames.
+set follow-exec-mode -- Set debugger response to a program call of exec.
+set follow-fork-mode -- Set debugger response to a program call of fork or vfork.
+set fortran -- Prefix command for changing Fortran-specific settings.
+set fortran repack-array-slices -- Enable or disable repacking of non-contiguous array slices.
+set frame-filter -- Prefix command for 'set' frame-filter related operations.
+set frame-filter priority -- GDB command to set the priority of the specified frame-filter.
+set gnutarget, set g -- Set the current BFD target.
+set guile, set gu -- Prefix command for Guile preference settings.
+set guile print-stack -- Set mode for Guile exception printing on error.
+set height -- Set number of lines in a page for GDB output pagination.
+set history -- Generic command for setting command history parameters.
+set history expansion -- Set history expansion on command input.
+set history filename -- Set the filename in which to record the command history.
+set history remove-duplicates -- Set how far back in history to look for and remove duplicate entries.
+set history save -- Set saving of the history record on exit.
+set history size -- Set the size of the command history.
+set host-charset -- Set the host character set.
+set index-cache -- Set index-cache options.
+set index-cache directory -- Set the directory of the index cache.
+set index-cache enabled -- Enable the index cache.
+set indirect-call-timeout -- Set the timeout, for indirect calls to inferior function calls.
+set inferior-tty, tty -- Set terminal for future runs of program being debugged.
+set input-radix -- Set default input radix for entering numbers.
+set interactive-mode -- Set whether GDB's standard input is a terminal.
+set language -- Set the current source language.
+set libthread-db-search-path -- Set search path for libthread_db.
+set listsize -- Set number of source lines gdb will list by default.
+set logging -- Set logging options.
+set logging debugredirect -- Set the logging debug output mode.
+set logging enabled -- Enable logging.
+set logging file -- Set the current logfile.
+set logging overwrite -- Set whether logging overwrites or appends to the log file.
+set logging redirect -- Set the logging output mode.
+set max-completions -- Set maximum number of completion candidates.
+set max-user-call-depth -- Set the max call depth for non-python/scheme user-defined commands.
+set max-value-size -- Set maximum sized value gdb will load from the inferior.
+set may-call-functions -- Set permission to call functions in the program.
+set may-insert-breakpoints -- Set permission to insert breakpoints in the target.
+set may-insert-fast-tracepoints -- Set permission to insert fast tracepoints in the target.
+set may-insert-tracepoints -- Set permission to insert tracepoints in the target.
+set may-interrupt -- Set permission to interrupt or signal the target.
+set may-write-memory -- Set permission to write into target memory.
+set may-write-registers -- Set permission to write into registers.
+set mem -- Memory regions settings.
+set mem inaccessible-by-default -- Set handling of unknown memory regions.
+set mi-async -- Set whether MI asynchronous mode is enabled.
+set mpx -- Set Intel Memory Protection Extensions specific variables.
+set multiple-symbols -- Set how the debugger handles ambiguities in expressions.
+set non-stop -- Set whether gdb controls the inferior in non-stop mode.
+set observer -- Set whether gdb controls the inferior in observer mode.
+set opaque-type-resolution -- Set resolution of opaque struct/class/union types (if set before loading symbols).
+set osabi -- Set OS ABI of target.
+set output-radix -- Set default output radix for printing of values.
+set overload-resolution -- Set overload resolution in evaluating C++ functions.
+set pagination -- Set state of GDB output pagination.
+set print, set pr, set p -- Generic command for setting how things print.
+set print address -- Set printing of addresses.
+set print array -- Set pretty formatting of arrays.
+set print array-indexes -- Set printing of array indexes.
+set print asm-demangle -- Set demangling of C++/ObjC names in disassembly listings.
+set print characters -- Set limit on string chars to print.
+set print demangle -- Set demangling of encoded C++/ObjC names when displaying symbols.
+set print elements -- Set limit on array elements to print.
+set print entry-values -- Set printing of function arguments at function entry.
+set print finish -- Set whether `finish' prints the return value.
+set print frame-arguments -- Set printing of non-scalar frame arguments.
+set print frame-info -- Set printing of frame information.
+set print inferior-events -- Set printing of inferior events (such as inferior start and exit).
+set print max-depth -- Set maximum print depth for nested structures, unions and arrays.
+set print max-symbolic-offset -- Set the largest offset that will be printed in <SYMBOL+1234> form.
+set print memory-tag-violations -- Set printing of memory tag violations for pointers.
+set print nibbles -- Set whether to print binary values in groups of four bits.
+set print null-stop -- Set printing of char arrays to stop at first null char.
+set print object -- Set printing of C++ virtual function tables.
+set print pascal_static-members -- Set printing of pascal static members.
+set print pretty -- Set pretty formatting of structures.
+set print raw-frame-arguments -- Set whether to print frame arguments in raw form.
+set print raw-values -- Set whether to print values in raw form.
+set print repeats -- Set threshold for repeated print elements.
+set print sevenbit-strings -- Set printing of 8-bit characters in strings as \nnn.
+set print static-members -- Set printing of C++ static members.
+set print symbol -- Set printing of symbol names when printing pointers.
+set print symbol-filename -- Set printing of source filename and line number with <SYMBOL>.
+set print symbol-loading -- Set printing of symbol loading messages.
+set print thread-events -- Set printing of thread events (such as thread start and exit).
+set print type -- Generic command for showing type-printing settings.
+set print type hex -- Set printing of struct members sizes and offsets using hex notation.
+set print type methods -- Set printing of methods defined in classes.
+set print type nested-type-limit -- Set the number of recursive nested type definitions to print ("unlimited" or -1 to show all).
+set print type typedefs -- Set printing of typedefs defined in classes.
+set print union -- Set printing of unions interior to structures.
+set print vtbl -- Set printing of C++ virtual function tables.
+set prompt -- Set gdb's prompt.
+set python -- Prefix command for python preference settings.
+set python dont-write-bytecode -- Set whether the Python interpreter should avoid byte-compiling python modules.
+set python ignore-environment -- Set whether the Python interpreter should ignore environment variables.
+set python print-stack -- Set mode for Python stack dump on error.
+set radix -- Set default input and output number radices.
+set range-stepping -- Enable or disable range stepping.
+set ravenscar -- Prefix command for changing Ravenscar-specific settings.
+set ravenscar task-switching -- Enable or disable support for GNAT Ravenscar tasks.
+set record, set rec -- Set record options.
+set record btrace -- Set record options.
+set record btrace bts -- Set record btrace bts options.
+set record btrace bts buffer-size -- Set the record/replay bts buffer size.
+set record btrace cpu -- Set the cpu to be used for trace decode.
+set record btrace cpu auto -- Automatically determine the cpu to be used for trace decode.
+set record btrace cpu none -- Do not enable errata workarounds for trace decode.
+set record btrace pt -- Set record btrace pt options.
+set record btrace pt buffer-size -- Set the record/replay pt buffer size.
+set record btrace replay-memory-access -- Set what memory accesses are allowed during replay.
+set record full -- Set record options.
+set record full insn-number-max -- Set record/replay buffer limit.
+set record full memory-query -- Set whether query if PREC cannot record memory change of next instruction.
+set record full stop-at-limit -- Set whether record/replay stops when record/replay buffer becomes full.
+set record function-call-history-size -- Set number of function to print in "record function-call-history".
+set record instruction-history-size -- Set number of instructions to print in "record instruction-history".
+set remote -- Remote protocol specific variables.
+set remote TracepointSource-packet -- Set use of remote protocol `TracepointSource' (TracepointSource) packet.
+set remote Z-packet -- Set use of remote protocol `Z' packets.
+set remote access-watchpoint-packet -- Set use of remote protocol `Z4' (access-watchpoint) packet.
+set remote agent-packet -- Set use of remote protocol `QAgent' (agent) packet.
+set remote allow-packet -- Set use of remote protocol `QAllow' (allow) packet.
+set remote attach-packet -- Set use of remote protocol `vAttach' (attach) packet.
+set remote binary-download-packet, set remote X-packet -- Set use of remote protocol `X' (binary-download) packet.
+set remote breakpoint-commands-packet -- Set use of remote protocol `BreakpointCommands' (breakpoint-commands) packet.
+set remote btrace-conf-bts-size-packet -- Set use of remote protocol `Qbtrace-conf:bts:size' (btrace-conf-bts-size) packet.
+set remote btrace-conf-pt-size-packet -- Set use of remote protocol `Qbtrace-conf:pt:size' (btrace-conf-pt-size) packet.
+set remote catch-syscalls-packet -- Set use of remote protocol `QCatchSyscalls' (catch-syscalls) packet.
+set remote conditional-breakpoints-packet -- Set use of remote protocol `ConditionalBreakpoints' (conditional-breakpoints) packet.
+set remote conditional-tracepoints-packet -- Set use of remote protocol `ConditionalTracepoints' (conditional-tracepoints) packet.
+set remote ctrl-c-packet -- Set use of remote protocol `vCtrlC' (ctrl-c) packet.
+set remote disable-btrace-packet -- Set use of remote protocol `Qbtrace:off' (disable-btrace) packet.
+set remote disable-randomization-packet -- Set use of remote protocol `QDisableRandomization' (disable-randomization) packet.
+set remote enable-btrace-bts-packet -- Set use of remote protocol `Qbtrace:bts' (enable-btrace-bts) packet.
+set remote enable-btrace-pt-packet -- Set use of remote protocol `Qbtrace:pt' (enable-btrace-pt) packet.
+set remote environment-hex-encoded-packet -- Set use of remote protocol `QEnvironmentHexEncoded' (environment-hex-encoded) packet.
+set remote environment-reset-packet -- Set use of remote protocol `QEnvironmentReset' (environment-reset) packet.
+set remote environment-unset-packet -- Set use of remote protocol `QEnvironmentUnset' (environment-unset) packet.
+set remote exec-event-feature-packet -- Set use of remote protocol `exec-event-feature' (exec-event-feature) packet.
+set remote exec-file -- Set the remote pathname for "run".
+set remote fast-tracepoints-packet -- Set use of remote protocol `FastTracepoints' (fast-tracepoints) packet.
+set remote fetch-register-packet, set remote p-packet -- Set use of remote protocol `p' (fetch-register) packet.
+set remote fork-event-feature-packet -- Set use of remote protocol `fork-event-feature' (fork-event-feature) packet.
+set remote get-thread-information-block-address-packet -- Set use of remote protocol `qGetTIBAddr' (get-thread-information-block-address) packet.
+set remote get-thread-local-storage-address-packet -- Set use of remote protocol `qGetTLSAddr' (get-thread-local-storage-address) packet.
+set remote hardware-breakpoint-limit -- Set the maximum number of target hardware breakpoints.
+set remote hardware-breakpoint-packet -- Set use of remote protocol `Z1' (hardware-breakpoint) packet.
+set remote hardware-watchpoint-length-limit -- Set the maximum length (in bytes) of a target hardware watchpoint.
+set remote hardware-watchpoint-limit -- Set the maximum number of target hardware watchpoints.
+set remote hostio-close-packet -- Set use of remote protocol `vFile:close' (hostio-close) packet.
+set remote hostio-fstat-packet -- Set use of remote protocol `vFile:fstat' (hostio-fstat) packet.
+set remote hostio-open-packet -- Set use of remote protocol `vFile:open' (hostio-open) packet.
+set remote hostio-pread-packet -- Set use of remote protocol `vFile:pread' (hostio-pread) packet.
+set remote hostio-pwrite-packet -- Set use of remote protocol `vFile:pwrite' (hostio-pwrite) packet.
+set remote hostio-readlink-packet -- Set use of remote protocol `vFile:readlink' (hostio-readlink) packet.
+set remote hostio-setfs-packet -- Set use of remote protocol `vFile:setfs' (hostio-setfs) packet.
+set remote hostio-unlink-packet -- Set use of remote protocol `vFile:unlink' (hostio-unlink) packet.
+set remote hwbreak-feature-packet -- Set use of remote protocol `hwbreak-feature' (hwbreak-feature) packet.
+set remote install-in-trace-packet -- Set use of remote protocol `InstallInTrace' (install-in-trace) packet.
+set remote interrupt-on-connect -- Set whether interrupt-sequence is sent to remote target when gdb connects to.
+set remote interrupt-sequence -- Set interrupt sequence to remote target.
+set remote kill-packet -- Set use of remote protocol `vKill' (kill) packet.
+set remote library-info-packet -- Set use of remote protocol `qXfer:libraries:read' (library-info) packet.
+set remote library-info-svr4-packet -- Set use of remote protocol `qXfer:libraries-svr4:read' (library-info-svr4) packet.
+set remote memory-map-packet -- Set use of remote protocol `qXfer:memory-map:read' (memory-map) packet.
+set remote memory-read-packet-size -- Set the maximum number of bytes per memory-read packet.
+set remote memory-tagging-address-check-packet -- Set use of remote protocol `qIsAddressTagged' (memory-tagging-address-check) packet.
+set remote memory-tagging-feature-packet -- Set use of remote protocol `memory-tagging-feature' (memory-tagging-feature) packet.
+set remote memory-write-packet-size -- Set the maximum number of bytes per memory-write packet.
+set remote multiprocess-feature-packet -- Set use of remote protocol `multiprocess-feature' (multiprocess-feature) packet.
+set remote no-resumed-stop-reply-packet -- Set use of remote protocol `N stop reply' (no-resumed-stop-reply) packet.
+set remote noack-packet -- Set use of remote protocol `QStartNoAckMode' (noack) packet.
+set remote osdata-packet -- Set use of remote protocol `qXfer:osdata:read' (osdata) packet.
+set remote pass-signals-packet -- Set use of remote protocol `QPassSignals' (pass-signals) packet.
+set remote pid-to-exec-file-packet -- Set use of remote protocol `qXfer:exec-file:read' (pid-to-exec-file) packet.
+set remote program-signals-packet -- Set use of remote protocol `QProgramSignals' (program-signals) packet.
+set remote query-attached-packet -- Set use of remote protocol `qAttached' (query-attached) packet.
+set remote read-aux-vector-packet -- Set use of remote protocol `qXfer:auxv:read' (read-aux-vector) packet.
+set remote read-btrace-conf-packet -- Set use of remote protocol `qXfer:btrace-conf' (read-btrace-conf) packet.
+set remote read-btrace-packet -- Set use of remote protocol `qXfer:btrace' (read-btrace) packet.
+set remote read-fdpic-loadmap-packet -- Set use of remote protocol `qXfer:fdpic:read' (read-fdpic-loadmap) packet.
+set remote read-sdata-object-packet -- Set use of remote protocol `qXfer:statictrace:read' (read-sdata-object) packet.
+set remote read-siginfo-object-packet -- Set use of remote protocol `qXfer:siginfo:read' (read-siginfo-object) packet.
+set remote read-watchpoint-packet -- Set use of remote protocol `Z3' (read-watchpoint) packet.
+set remote reverse-continue-packet -- Set use of remote protocol `bc' (reverse-continue) packet.
+set remote reverse-step-packet -- Set use of remote protocol `bs' (reverse-step) packet.
+set remote run-packet -- Set use of remote protocol `vRun' (run) packet.
+set remote search-memory-packet -- Set use of remote protocol `qSearch:memory' (search-memory) packet.
+set remote set-register-packet, set remote P-packet -- Set use of remote protocol `P' (set-register) packet.
+set remote set-working-dir-packet -- Set use of remote protocol `QSetWorkingDir' (set-working-dir) packet.
+set remote software-breakpoint-packet -- Set use of remote protocol `Z0' (software-breakpoint) packet.
+set remote startup-with-shell-packet -- Set use of remote protocol `QStartupWithShell' (startup-with-shell) packet.
+set remote static-tracepoints-packet -- Set use of remote protocol `StaticTracepoints' (static-tracepoints) packet.
+set remote supported-packets-packet -- Set use of remote protocol `qSupported' (supported-packets) packet.
+set remote swbreak-feature-packet -- Set use of remote protocol `swbreak-feature' (swbreak-feature) packet.
+set remote symbol-lookup-packet -- Set use of remote protocol `qSymbol' (symbol-lookup) packet.
+set remote system-call-allowed -- Set if the host system(3) call is allowed for the target.
+set remote target-features-packet -- Set use of remote protocol `qXfer:features:read' (target-features) packet.
+set remote thread-events-packet -- Set use of remote protocol `QThreadEvents' (thread-events) packet.
+set remote thread-options-packet -- Set use of remote protocol `QThreadOptions' (thread-options) packet.
+set remote threads-packet -- Set use of remote protocol `qXfer:threads:read' (threads) packet.
+set remote trace-buffer-size-packet -- Set use of remote protocol `QTBuffer:size' (trace-buffer-size) packet.
+set remote trace-status-packet -- Set use of remote protocol `qTStatus' (trace-status) packet.
+set remote traceframe-info-packet -- Set use of remote protocol `qXfer:traceframe-info:read' (traceframe-info) packet.
+set remote unwind-info-block-packet -- Set use of remote protocol `qXfer:uib:read' (unwind-info-block) packet.
+set remote verbose-resume-packet -- Set use of remote protocol `vCont' (verbose-resume) packet.
+set remote verbose-resume-supported-packet -- Set use of remote protocol `vContSupported' (verbose-resume-supported) packet.
+set remote vfork-event-feature-packet -- Set use of remote protocol `vfork-event-feature' (vfork-event-feature) packet.
+set remote write-siginfo-object-packet -- Set use of remote protocol `qXfer:siginfo:write' (write-siginfo-object) packet.
+set remote write-watchpoint-packet -- Set use of remote protocol `Z2' (write-watchpoint) packet.
+set remoteaddresssize -- Set the maximum size of the address (in bits) in a memory packet.
+set remotecache -- Set cache use for remote targets.
+set remoteflow -- Set use of hardware flow control for remote serial I/O.
+set remotelogbase -- Set numerical base for remote session logging.
+set remotelogfile -- Set filename for remote session recording.
+set remotetimeout -- Set timeout limit to wait for target to respond.
+set remotewritesize -- Set the maximum number of bytes per memory write packet (deprecated).
+set schedule-multiple -- Set mode for resuming threads of all processes.
+set scheduler-locking -- Set mode for locking scheduler during execution.
+set script-extension -- Set mode for script filename extension recognition.
+set serial -- Set default serial/parallel port configuration.
+set serial baud -- Set baud rate for remote serial I/O.
+set serial parity -- Set parity for remote serial I/O.
+set solib-search-path -- Set the search path for loading non-absolute shared library symbol files.
+set source -- Generic command for setting how sources are handled.
+set source open -- Set whether GDB should open source files.
+set stack-cache -- Set cache use for stack access.
+set startup-quietly -- Set whether GDB should start up quietly.
+set startup-with-shell -- Set use of shell to start subprocesses.  The default is on.
+set step-mode -- Set mode of the step operation.
+set stop-on-solib-events -- Set stopping for shared library events.
+set struct-convention -- Set the convention for returning small structs.
+set style -- Style-specific settings.
+set style address, set style disassembler address -- Address display styling.
+set style address background -- Set the background color for this property.
+set style address foreground -- Set the foreground color for this property.
+set style address intensity -- Set the display intensity for this property.
+set style disassembler -- Style-specific settings for the disassembler.
+set style disassembler comment -- Disassembler comment display styling.
+set style disassembler comment background -- Set the background color for this property.
+set style disassembler comment foreground -- Set the foreground color for this property.
+set style disassembler comment intensity -- Set the display intensity for this property.
+set style disassembler enabled -- Set whether disassembler output styling is enabled.
+set style disassembler immediate -- Disassembler immediate display styling.
+set style disassembler immediate background -- Set the background color for this property.
+set style disassembler immediate foreground -- Set the foreground color for this property.
+set style disassembler immediate intensity -- Set the display intensity for this property.
+set style disassembler mnemonic -- Disassembler mnemonic display styling.
+set style disassembler mnemonic background -- Set the background color for this property.
+set style disassembler mnemonic foreground -- Set the foreground color for this property.
+set style disassembler mnemonic intensity -- Set the display intensity for this property.
+set style disassembler register -- Disassembler register display styling.
+set style disassembler register background -- Set the background color for this property.
+set style disassembler register foreground -- Set the foreground color for this property.
+set style disassembler register intensity -- Set the display intensity for this property.
+set style enabled -- Set whether CLI styling is enabled.
+set style filename -- Filename display styling.
+set style filename background -- Set the background color for this property.
+set style filename foreground -- Set the foreground color for this property.
+set style filename intensity -- Set the display intensity for this property.
+set style function, set style disassembler symbol -- Function name display styling.
+set style function background -- Set the background color for this property.
+set style function foreground -- Set the foreground color for this property.
+set style function intensity -- Set the display intensity for this property.
+set style highlight -- Highlight display styling.
+set style highlight background -- Set the background color for this property.
+set style highlight foreground -- Set the foreground color for this property.
+set style highlight intensity -- Set the display intensity for this property.
+set style metadata -- Metadata display styling.
+set style metadata background -- Set the background color for this property.
+set style metadata foreground -- Set the foreground color for this property.
+set style metadata intensity -- Set the display intensity for this property.
+set style sources -- Set whether source code styling is enabled.
+set style title -- Title display styling.
+set style title background -- Set the background color for this property.
+set style title foreground -- Set the foreground color for this property.
+set style title intensity -- Set the display intensity for this property.
+set style tui-active-border -- TUI active border display styling.
+set style tui-active-border background -- Set the background color for this property.
+set style tui-active-border foreground -- Set the foreground color for this property.
+set style tui-border -- TUI border display styling.
+set style tui-border background -- Set the background color for this property.
+set style tui-border foreground -- Set the foreground color for this property.
+set style tui-current-position -- Set whether to style text highlighted by the TUI's current position indicator.
+set style variable -- Variable name display styling.
+set style variable background -- Set the background color for this property.
+set style variable foreground -- Set the foreground color for this property.
+set style variable intensity -- Set the display intensity for this property.
+set style version -- Version string display styling.
+set style version background -- Set the background color for this property.
+set style version foreground -- Set the foreground color for this property.
+set style version intensity -- Set the display intensity for this property.
+set substitute-path -- Add a substitution rule to rewrite the source directories.
+set suppress-cli-notifications -- Set whether printing notifications on CLI is suppressed.
+set sysroot, set solib-absolute-prefix -- Set an alternate system root.
+set target-charset -- Set the target character set.
+set target-file-system-kind -- Set assumed file system kind for target reported file names.
+set target-wide-charset -- Set the target wide character set.
+set tcp -- TCP protocol specific variables.
+set tcp auto-retry -- Set auto-retry on socket connect.
+set tcp connect-timeout -- Set timeout limit in seconds for socket connection.
+set tdesc -- Set target description specific variables.
+set tdesc filename -- Set the file to read for an XML target description.
+set trace-buffer-size -- Set requested size of trace buffer.
+set trace-commands -- Set tracing of GDB CLI commands.
+set trace-notes -- Set notes string to use for current and future trace runs.
+set trace-stop-notes -- Set notes string to use for future tstop commands.
+set trace-user -- Set the user name to use for current and future trace runs.
+set trust-readonly-sections -- Set mode for reading from readonly sections.
+set tui -- TUI configuration variables.
+set tui active-border-mode -- Set the attribute mode to use for the active TUI window border.
+set tui border-kind -- Set the kind of border for TUI windows.
+set tui border-mode -- Set the attribute mode to use for the TUI window borders.
+set tui compact-source -- Set whether the TUI source window is compact.
+set tui mouse-events -- Set whether TUI mode handles mouse clicks.
+set tui tab-width -- Set the tab width, in characters, for the TUI.
+set unwind-on-signal, set unwindonsignal -- Set unwinding of stack if a signal is received while in a call dummy.
+set unwind-on-terminating-exception -- Set unwinding of stack if std::terminate is called while in call dummy.
+set unwind-on-timeout -- Set unwinding of stack if a timeout occurs while in a call dummy.
+set use-coredump-filter -- Set whether gcore should consider /proc/PID/coredump_filter.
+set use-deprecated-index-sections -- Set whether to use deprecated gdb_index sections.
+set variable, set var -- Evaluate expression EXP and assign result to variable VAR.
+set verbose -- Set verbosity.
+set watchdog -- Set watchdog timer.
+set width -- Set number of characters where GDB should wrap lines of its output.
+set write -- Set writing into executable and core files.
+undisplay -- Cancel some expressions to be displayed when program stops.
+whatis -- Print data type of expression EXP.
+with, w -- Temporarily set SETTING to VALUE, run COMMAND, and restore SETTING.
+x -- Examine memory: x/FMT ADDRESS.
+
+Type "help" followed by command name for full documentation.
+Type "apropos word" to search for commands related to "word".
+Type "apropos -v word" for full documentation of commands related to "word".
+Command name abbreviations are allowed if unambiguous.

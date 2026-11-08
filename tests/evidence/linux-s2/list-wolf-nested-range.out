@@ -1,0 +1,39 @@
+2	    let doubled = n * 2
+3	    doubled + 1
+4	}
+3	    doubled + 1
+4	}
+5	fn outer(a: int) -> int {
+6	    let result = inner(a)
+7	    result - 1
+8	}
+9	fn main() -> int {
+10	    let answer = outer(7)
+11	    answer - 14
+12	}
+1	fn inner(n: int) -> int {
+2	    let doubled = n * 2
+3	    doubled + 1
+4	}
+5	fn outer(a: int) -> int {
+6	    let result = inner(a)
+1	fn inner(n: int) -> int {
+2	    let doubled = n * 2
+3	    doubled + 1
+2	    let doubled = n * 2
+3	    doubled + 1
+4	}
+5	fn outer(a: int) -> int {
+6	    let result = inner(a)
+2	    let doubled = n * 2
+3	    doubled + 1
+4	}
+5	fn outer(a: int) -> int {
+8	}
+9	fn main() -> int {
+10	    let answer = outer(7)
+11	    answer - 14
+12	}
+3	    doubled + 1
+4	}
+5	fn outer(a: int) -> int {

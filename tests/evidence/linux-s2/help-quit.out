@@ -1,0 +1,5 @@
+quit, exit, q
+Exit gdb.
+Usage: quit [EXPR] or exit [EXPR]
+The optional expression EXPR, if present, is evaluated and the result
+used as GDB's exit code.  The default is zero.

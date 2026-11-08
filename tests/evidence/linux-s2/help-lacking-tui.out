@@ -1,0 +1,17 @@
+Text User Interface commands.
+
+List of tui subcommands:
+
+tui disable -- Disable TUI display mode.
+tui enable -- Enable TUI display mode.
+tui focus, fs, focus -- Set focus to named window or next/prev window.
+tui layout, layout -- Change the layout of windows.
+tui new-layout -- Create a new TUI layout.
+tui refresh, refresh -- Refresh the terminal display.
+tui reg -- TUI command to control the register window.
+tui window -- Text User Interface window commands.
+
+Type "help tui" followed by tui subcommand name for full documentation.
+Type "apropos word" to search for commands related to "word".
+Type "apropos -v word" for full documentation of commands related to "word".
+Command name abbreviations are allowed if unambiguous.

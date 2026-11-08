@@ -1,0 +1,11 @@
+continue, fg, c
+Continue program being debugged, after signal or breakpoint.
+Usage: continue [N]
+If proceeding from breakpoint, a number N may be used as an argument,
+which means to set the ignore count of that breakpoint to N - 1 (so that
+the breakpoint won't break until the Nth time it is reached).
+
+If non-stop mode is enabled, continue only the current thread,
+otherwise all the threads in the program are continued.  To
+continue all stopped threads in non-stop mode, use the -a option.
+Specifying -a and an ignore count simultaneously is an error.

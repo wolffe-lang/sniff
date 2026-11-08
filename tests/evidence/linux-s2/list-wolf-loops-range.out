@@ -1,0 +1,24 @@
+2	    var i = 0
+3	    var total = 0
+4	    while i < n {
+5	        total += i
+6	        i += 1
+7	    }
+8	    total
+9	}
+10	fn main() -> int {
+11	    let answer = sum(4)
+12	    answer - 6
+13	}
+12	    answer - 6
+13	}
+2	    var i = 0
+3	    var total = 0
+4	    while i < n {
+5	        total += i
+6	        i += 1
+7	    }
+8	    total
+9	}
+10	fn main() -> int {
+11	    let answer = sum(4)

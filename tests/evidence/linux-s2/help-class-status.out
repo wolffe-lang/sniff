@@ -1,0 +1,566 @@
+Status inquiries.
+
+List of commands:
+
+info, inf, i -- Generic command for showing things about the program being debugged.
+info address -- Describe where symbol SYM is stored.
+info all-registers -- List of all registers and their contents, for selected stack frame.
+info args -- All argument variables of current stack frame or those matching REGEXPs.
+info auto-load -- Print current status of auto-loaded files.
+info auto-load gdb-scripts -- Print the list of automatically loaded sequences of commands.
+info auto-load libthread-db -- Print the list of loaded inferior specific libthread_db.
+info auto-load local-gdbinit -- Print whether current directory .gdbinit file has been loaded.
+info auto-load python-scripts -- Print the list of automatically loaded Python scripts.
+info auxv -- Display the inferior's auxiliary vector.
+info bookmarks -- Status of user-settable bookmarks.
+info breakpoints, info b -- Status of specified breakpoints (all user-settable breakpoints if no argument).
+info checkpoints -- IDs of currently known checkpoints.
+info classes -- All Objective-C classes, or those matching REGEXP.
+info common -- Print out the values contained in a Fortran COMMON block.
+info connections -- Target connections in use.
+info copying -- Conditions for redistributing copies of GDB.
+info dcache -- Print information on the dcache performance.
+info display -- Expressions to display when program stops, with code numbers.
+info exceptions -- List all Ada exception names.
+info extensions -- All filename extensions associated with a source language.
+info files -- Names of targets and files being debugged.
+info float -- Print the status of the floating point unit.
+info frame, info f -- All about the selected stack frame.
+info frame address -- Print information about a stack frame selected by stack address.
+info frame function -- Print information about a stack frame selected by function name.
+info frame level -- Print information about a stack frame selected by level.
+info frame view -- Print information about a stack frame outside the current backtrace.
+info frame-filter -- List all registered Python frame-filters.
+info functions -- All function names or those matching REGEXPs.
+info guile, info gu -- Prefix command for Guile info displays.
+info inferiors -- Print a list of inferiors being managed.
+info line -- Core addresses of the code for a source line.
+info locals -- All local variables of current stack frame or those matching REGEXPs.
+info macro -- Show the definition of MACRO, and it's source location.
+info macros -- Show the definitions of all macros at LINESPEC, or the current source location.
+info main -- Get main symbol to identify entry point into program.
+info mem -- Memory region attributes.
+info missing-debug-handlers -- GDB command to list missing debug handlers.
+info module -- Print information about modules.
+info module functions -- Display functions arranged by modules.
+info module variables -- Display variables arranged by modules.
+info modules -- All module names, or those matching REGEXP.
+info os -- Show OS data ARG.
+info pretty-printer -- GDB command to list all registered pretty-printers.
+info probes -- Show available static probes.
+info probes all -- Show information about all type of probes.
+info probes dtrace -- Show information about DTrace static probes.
+info probes stap -- Show information about SystemTap static probes.
+info proc -- Show additional information about a process.
+info proc all -- List all available info about the specified process.
+info proc cmdline -- List command line arguments of the specified process.
+info proc cwd -- List current working directory of the specified process.
+info proc exe -- List absolute filename for executable of the specified process.
+info proc files -- List files opened by the specified process.
+info proc mappings -- List memory regions mapped by the specified process.
+info proc stat -- List process info from /proc/PID/stat.
+info proc status -- List process info from /proc/PID/status.
+info program -- Execution status of the program.
+info record, info rec -- Info record options.
+info registers, info r -- List of integer registers and their contents, for selected stack frame.
+info scope -- List the variables local to a scope.
+info selectors -- All Objective-C selectors, or those matching REGEXP.
+info sharedlibrary, info dll -- Status of loaded shared object libraries.
+info signals, info handle -- What debugger does when program gets various signals.
+info skip -- Display the status of skips.
+info source -- Information about the current source file.
+info sources -- All source files in the program or those matching REGEXP.
+info stack, info s -- Backtrace of the stack, or innermost COUNT frames.
+info static-tracepoint-markers -- List target static tracepoints markers.
+info symbol -- Describe what symbol is at location ADDR.
+info target -- Names of targets and files being debugged.
+info tasks -- Provide information about all known Ada tasks.
+info terminal -- Print inferior's saved terminal status.
+info threads -- Display currently known threads.
+info tracepoints, info tp -- Status of specified tracepoints (all tracepoints if no argument).
+info tvariables -- Status of trace state variables and their values.
+info type-printers -- GDB command to list all registered type-printers.
+info types -- All type names, or those matching REGEXP.
+info unwinder -- GDB command to list unwinders.
+info variables -- All global and static variable names or those matching REGEXPs.
+info vector -- Print the status of the vector unit.
+info vtbl -- Show the virtual function table for a C++ object.
+info warranty -- Various kinds of warranty you do not have.
+info watchpoints -- Status of specified watchpoints (all watchpoints if no argument).
+info win -- List of all displayed windows.
+info xmethod -- GDB command to list registered xmethod matchers.
+macro -- Prefix for commands dealing with C preprocessor macros.
+macro define -- Define a new C/C++ preprocessor macro.
+macro expand, macro exp -- Fully expand any C/C++ preprocessor macro invocations in EXPRESSION.
+macro expand-once, macro exp1 -- Expand C/C++ preprocessor macro invocations appearing directly in EXPRESSION.
+macro list -- List all the macros defined using the `macro define' command.
+macro undef -- Remove the definition of the C/C++ preprocessor macro with the given name.
+show, info set -- Generic command for showing things about the debugger.
+show ada -- Generic command for showing Ada-specific settings.
+show ada print-signatures -- Show whether the output of formal and return types for functions in the overloads selection menu is activated.
+show ada source-charset -- Show the Ada source character set.
+show ada trust-PAD-over-XVS -- Show whether an optimization trusting PAD types over XVS types is activated.
+show agent -- Show debugger's willingness to use agent as a helper.
+show always-read-ctf -- Show whether CTF is always read.
+show annotate -- Show annotation_level.
+show architecture -- Show architecture of target.
+show args -- Show argument list to give program being debugged when it is started.
+show auto-connect-native-target -- Show whether GDB may automatically connect to the native target.
+show auto-load -- Show auto-loading specific settings.
+show auto-load gdb-scripts -- Show whether auto-loading of canned sequences of commands scripts is enabled.
+show auto-load libthread-db -- Show whether auto-loading inferior specific libthread_db is enabled.
+show auto-load local-gdbinit -- Show whether auto-loading .gdbinit script in current directory is enabled.
+show auto-load python-scripts -- Show the debugger's behaviour regarding auto-loaded Python scripts.
+show auto-load safe-path -- Show the list of files and directories that are safe for auto-loading.
+show auto-load scripts-directory -- Show the list of directories from which to load auto-loaded scripts.
+show auto-solib-add -- Show autoloading of shared library symbols.
+show backtrace -- Show backtrace specific variables.
+show backtrace limit -- Show the upper bound on the number of backtrace levels.
+show backtrace past-entry -- Show whether backtraces should continue past the entry point of a program.
+show backtrace past-main -- Show whether backtraces should continue past "main".
+show basenames-may-differ -- Show whether a source file may have multiple base names.
+show breakpoint -- Breakpoint specific settings.
+show breakpoint always-inserted -- Show mode for inserting breakpoints.
+show breakpoint auto-hw -- Show automatic usage of hardware breakpoints.
+show breakpoint condition-evaluation -- Show mode of breakpoint condition evaluation.
+show breakpoint pending -- Show debugger's behavior regarding pending breakpoints.
+show can-use-hw-watchpoints -- Show debugger's willingness to use watchpoint hardware.
+show case-sensitive -- Show case sensitivity in name search (on/off/auto).
+show charset -- Show the host and target character sets.
+show check, show ch, show c -- Show the status of the type/range checker.
+show check range -- Show range checking (on/warn/off/auto).
+show check type -- Show strict type checking.
+show circular-trace-buffer -- Show target's use of circular trace buffer.
+show code-cache -- Show cache use for code segment access.
+show coerce-float-to-double -- Show coercion of floats to doubles when calling functions.
+show commands -- Show the history of commands you typed.
+show compile-args -- Show compile command GCC command-line arguments.
+show compile-gcc -- Show compile command GCC driver filename.
+show complaints -- Show max number of complaints about incorrect symbols.
+show configuration -- Show how GDB was configured at build time.
+show confirm -- Show whether to confirm potentially dangerous operations.
+show convenience, show conv -- Debugger convenience ("$foo") variables and functions.
+show copying -- Conditions for redistributing copies of GDB.
+show cp-abi -- Show the ABI used for inspecting C++ objects.
+show cwd -- Show the current working directory that is used when the inferior is started.
+show data-directory -- Show GDB's data directory.
+show dcache -- Show dcache settings.
+show dcache line-size -- Show dcache line size.
+show dcache size -- Show number of dcache lines.
+show debug -- Generic command for showing gdb debugging flags.
+show debug arch -- Show architecture debugging.
+show debug auto-load -- Show auto-load verifications debugging.
+show debug bfd-cache -- Show bfd cache debugging.
+show debug breakpoint -- Show breakpoint location debugging.
+show debug check-physname -- Show cross-checking of "physname" code against demangler.
+show debug coff-pe-read -- Show coff PE read debugging.
+show debug compile -- Show compile command debugging.
+show debug compile-cplus-scopes -- Show debugging of C++ compile scopes.
+show debug compile-cplus-types -- Show debugging of C++ compile type conversion.
+show debug displaced -- Show displaced stepping debugging.
+show debug dwarf-die -- Show debugging of the DWARF DIE reader.
+show debug dwarf-line -- Show debugging of the dwarf line reader.
+show debug dwarf-read -- Show debugging of the DWARF reader.
+show debug entry-values -- Show entry values and tail call frames debugging.
+show debug event-loop -- Show event-loop debugging.
+show debug expression -- Show expression debugging.
+show debug fortran-array-slicing -- Show debugging of Fortran array slicing.
+show debug frame -- Show frame debugging.
+show debug index-cache -- Show display of index-cache debug messages.
+show debug infcall -- Show inferior call debugging.
+show debug infrun -- Show inferior debugging.
+show debug jit -- Show JIT debugging.
+show debug libthread-db -- Show libthread-db debugging.
+show debug linux-namespaces -- Show debugging of GNU/Linux namespaces module.
+show debug linux-nat -- Show debugging of GNU/Linux native target.
+show debug notification -- Show debugging of async remote notification.
+show debug observer -- Show observer debugging.
+show debug overload -- Show debugging of C++ overloading.
+show debug parser -- Show parser debugging.
+show debug py-breakpoint -- Show Python breakpoint debugging.
+show debug py-micmd -- Show Python micmd debugging.
+show debug py-unwind -- Show Python unwinder debugging.
+show debug record -- Show debugging of record/replay feature.
+show debug remote -- Show debugging of remote protocol.
+show debug remote-packet-max-chars -- Show the maximum number of characters to display for each remote packet.
+show debug separate-debug-file -- Show printing of separate debug info file search debug.
+show debug serial -- Show serial debugging.
+show debug skip -- Show whether the debug output about skipping files and functions is printed.
+show debug solib -- Show solib debugging.
+show debug stap-expression -- Show SystemTap expression debugging.
+show debug symbol-lookup -- Show debugging of symbol lookup.
+show debug symfile -- Show debugging of the symfile functions.
+show debug symtab-create -- Show debugging of symbol table creation.
+show debug target -- Show target debugging.
+show debug threads -- Show thread debugging.
+show debug timestamp -- Show timestamping of debugging messages.
+show debug tui -- Show tui debugging.
+show debug varobj -- Show varobj debugging.
+show debug xml -- Show XML parser debugging.
+show debug-file-directory -- Show the directories where separate debug symbols are searched for.
+show debuginfod -- Show debuginfod options.
+show debuginfod enabled -- Show whether to use debuginfod.
+show debuginfod urls -- Show the list of debuginfod server URLs.
+show debuginfod verbose -- Show debuginfod debugging.
+show default-collect -- Show the list of expressions to collect by default.
+show demangle-style -- Show the current C++ demangling style.
+show detach-on-fork -- Show whether gdb will detach the child of a fork.
+show direct-call-timeout -- Show the timeout, for direct calls to inferior function calls.
+show directories -- Show the search path for finding source files.
+show disable-randomization -- Show disabling of debuggee's virtual address space randomization.
+show disassemble-next-line -- Show whether to disassemble next source line or insn when execution stops.
+show disassembler-options -- Show the disassembler options.
+show disassembly-flavor -- Show the disassembly flavor.
+show disconnected-dprintf -- Show whether dprintf continues after GDB disconnects.
+show disconnected-tracing -- Show whether tracing continues after GDB disconnects.
+show displaced-stepping -- Show debugger's willingness to use displaced stepping.
+show dprintf-channel -- Show the channel to use for dynamic printf.
+show dprintf-function -- Show the function to use for dynamic printf.
+show dprintf-style -- Show the style of usage for dynamic printf.
+show dump-excluded-mappings -- Show whether gcore should dump mappings marked with the VM_DONTDUMP flag.
+show editing -- Show editing of command lines as they are typed.
+show endian -- Show endianness of target.
+show environment -- The environment to give the program, or one variable's value.
+show exec-direction -- Show direction of execution (forward/reverse).
+show exec-done-display -- Show notification of completion for asynchronous execution commands.
+show exec-file-mismatch -- Show exec-file-mismatch handling (ask|warn|off).
+show exec-wrapper -- Show the wrapper for running programs.
+show extended-prompt -- Show the extended prompt.
+show extension-language -- Show mapping between filename extension and source language.
+show filename-display -- Show how to display filenames.
+show follow-exec-mode -- Show debugger response to a program call of exec.
+show follow-fork-mode -- Show debugger response to a program call of fork or vfork.
+show fortran -- Generic command for showing Fortran-specific settings.
+show fortran repack-array-slices -- Show whether non-contiguous array slices are repacked.
+show frame-filter -- Prefix command for 'show' frame-filter related operations.
+show frame-filter priority -- GDB command to show the priority of the specified frame-filter.
+show gnutarget -- Show the current BFD target.
+show guile, show gu -- Prefix command for Guile preference settings.
+show guile print-stack -- Show the mode of Guile exception printing on error.
+show height -- Show number of lines in a page for GDB output pagination.
+show history -- Generic command for showing command history parameters.
+show history expansion -- Show history expansion on command input.
+show history filename -- Show the filename in which to record the command history.
+show history remove-duplicates -- Show how far back in history to look for and remove duplicate entries.
+show history save -- Show saving of the history record on exit.
+show history size -- Show the size of the command history.
+show host-charset -- Show the host character set.
+show index-cache -- Show index-cache options.
+show index-cache directory -- Show the directory of the index cache.
+show index-cache enabled -- Show whether the index cache is enabled.
+show index-cache stats -- Show some stats about the index cache.
+show indirect-call-timeout -- Show the timeout, for indirect calls to inferior function calls.
+show inferior-tty -- Show terminal for future runs of program being debugged.
+show input-radix -- Show default input radix for entering numbers.
+show interactive-mode -- Show whether GDB's standard input is a terminal.
+show language -- Show the current source language.
+show libthread-db-search-path -- Show the current search path or libthread_db.
+show listsize -- Show number of source lines gdb will list by default.
+show logging -- Show logging options.
+show logging debugredirect -- Show the logging debug output mode.
+show logging enabled -- Show whether logging is enabled.
+show logging file -- Show the current logfile.
+show logging overwrite -- Show whether logging overwrites or appends to the log file.
+show logging redirect -- Show the logging output mode.
+show max-completions -- Show maximum number of completion candidates.
+show max-user-call-depth -- Show the max call depth for non-python/scheme user-defined commands.
+show max-value-size -- Show maximum sized value gdb will load from the inferior.
+show may-call-functions -- Show permission to call functions in the program.
+show may-insert-breakpoints -- Show permission to insert breakpoints in the target.
+show may-insert-fast-tracepoints -- Show permission to insert fast tracepoints in the target.
+show may-insert-tracepoints -- Show permission to insert tracepoints in the target.
+show may-interrupt -- Show permission to interrupt or signal the target.
+show may-write-memory -- Show permission to write into target memory.
+show may-write-registers -- Show permission to write into registers.
+show mem -- Memory regions settings.
+show mem inaccessible-by-default -- Show handling of unknown memory regions.
+show mi-async -- Show whether MI asynchronous mode is enabled.
+show mpx -- Show Intel Memory Protection Extensions specific variables.
+show multiple-symbols -- Show how the debugger handles ambiguities in expressions.
+show non-stop -- Show whether gdb controls the inferior in non-stop mode.
+show observer -- Show whether gdb controls the inferior in observer mode.
+show opaque-type-resolution -- Show resolution of opaque struct/class/union types (if set before loading symbols).
+show osabi -- Show OS ABI of target.
+show output-radix -- Show default output radix for printing of values.
+show overload-resolution -- Show overload resolution in evaluating C++ functions.
+show pagination -- Show state of GDB output pagination.
+show paths -- Current search path for finding object files.
+show print, show pr, show p -- Generic command for showing print settings.
+show print address -- Show printing of addresses.
+show print array -- Show pretty formatting of arrays.
+show print array-indexes -- Show printing of array indexes.
+show print asm-demangle -- Show demangling of C++/ObjC names in disassembly listings.
+show print characters -- Show limit on string chars to print.
+show print demangle -- Show demangling of encoded C++/ObjC names when displaying symbols.
+show print elements -- Show limit on array elements to print.
+show print entry-values -- Show printing of function arguments at function entry.
+show print finish -- Show whether `finish' prints the return value.
+show print frame-arguments -- Show printing of non-scalar frame arguments.
+show print frame-info -- Show printing of frame information.
+show print inferior-events -- Show printing of inferior events (such as inferior start and exit).
+show print max-depth -- Show maximum print depth for nested structures, unions, and arrays.
+show print max-symbolic-offset -- Show the largest offset that will be printed in <SYMBOL+1234> form.
+show print memory-tag-violations -- Show printing of memory tag violations for pointers.
+show print nibbles -- Show whether to print binary values in groups of four bits.
+show print null-stop -- Show printing of char arrays to stop at first null char.
+show print object -- Show printing of C++ virtual function tables.
+show print pascal_static-members -- Show printing of pascal static members.
+show print pretty -- Show pretty formatting of structures.
+show print raw-frame-arguments -- Show whether to print frame arguments in raw form.
+show print raw-values -- Show whether to print values in raw form.
+show print repeats -- Show threshold for repeated print elements.
+show print sevenbit-strings -- Show printing of 8-bit characters in strings as \nnn.
+show print static-members -- Show printing of C++ static members.
+show print symbol -- Show printing of symbol names when printing pointers.
+show print symbol-filename -- Show printing of source filename and line number with <SYMBOL>.
+show print symbol-loading -- Show printing of symbol loading messages.
+show print thread-events -- Show printing of thread events (such as thread start and exit).
+show print type -- Generic command for setting how types print.
+show print type hex -- Show whether sizes and offsets of struct members are printed using hex notation.
+show print type methods -- Show printing of methods defined in classes.
+show print type nested-type-limit -- Show the number of recursive nested type definitions to print.
+show print type typedefs -- Show printing of typedefs defined in classes.
+show print union -- Show printing of unions interior to structures.
+show print vtbl -- Show printing of C++ virtual function tables.
+show prompt -- Show gdb's prompt.
+show python -- Prefix command for python preference settings.
+show python dont-write-bytecode -- Show whether the Python interpreter should avoid byte-compiling python modules.
+show python ignore-environment -- Show whether the Python interpreter showlist ignore environment variables.
+show python print-stack -- Show the mode of Python stack printing on error.
+show radix -- Show the default input and output number radices.
+show range-stepping -- Show whether target-assisted range stepping is enabled.
+show ravenscar -- Prefix command for showing Ravenscar-specific settings.
+show ravenscar task-switching -- Show whether support for GNAT Ravenscar tasks is enabled.
+show record, show rec -- Show record options.
+show record btrace -- Show record options.
+show record btrace bts -- Show record btrace bts options.
+show record btrace bts buffer-size -- Show the record/replay bts buffer size.
+show record btrace cpu -- Show the cpu to be used for trace decode.
+show record btrace pt -- Show record btrace pt options.
+show record btrace pt buffer-size -- Show the record/replay pt buffer size.
+show record btrace replay-memory-access -- Show what memory accesses are allowed during replay.
+show record full -- Show record options.
+show record full insn-number-max -- Show record/replay buffer limit.
+show record full memory-query -- Show whether query if PREC cannot record memory change of next instruction.
+show record full stop-at-limit -- Show whether record/replay stops when record/replay buffer becomes full.
+show record function-call-history-size -- Show number of functions to print in "record function-call-history".
+show record instruction-history-size -- Show number of instructions to print in "record instruction-history".
+show remote -- Remote protocol specific variables.
+show remote TracepointSource-packet -- Show current use of remote protocol `TracepointSource' (TracepointSource) packet.
+show remote Z-packet -- Show use of remote protocol `Z' packets.
+show remote access-watchpoint-packet -- Show current use of remote protocol `Z4' (access-watchpoint) packet.
+show remote agent-packet -- Show current use of remote protocol `QAgent' (agent) packet.
+show remote allow-packet -- Show current use of remote protocol `QAllow' (allow) packet.
+show remote attach-packet -- Show current use of remote protocol `vAttach' (attach) packet.
+show remote binary-download-packet, show remote X-packet -- Show current use of remote protocol `X' (binary-download) packet.
+show remote breakpoint-commands-packet -- Show current use of remote protocol `BreakpointCommands' (breakpoint-commands) packet.
+show remote btrace-conf-bts-size-packet -- Show current use of remote protocol `Qbtrace-conf:bts:size' (btrace-conf-bts-size) packet.
+show remote btrace-conf-pt-size-packet -- Show current use of remote protocol `Qbtrace-conf:pt:size' (btrace-conf-pt-size) packet.
+show remote catch-syscalls-packet -- Show current use of remote protocol `QCatchSyscalls' (catch-syscalls) packet.
+show remote conditional-breakpoints-packet -- Show current use of remote protocol `ConditionalBreakpoints' (conditional-breakpoints) packet.
+show remote conditional-tracepoints-packet -- Show current use of remote protocol `ConditionalTracepoints' (conditional-tracepoints) packet.
+show remote ctrl-c-packet -- Show current use of remote protocol `vCtrlC' (ctrl-c) packet.
+show remote disable-btrace-packet -- Show current use of remote protocol `Qbtrace:off' (disable-btrace) packet.
+show remote disable-randomization-packet -- Show current use of remote protocol `QDisableRandomization' (disable-randomization) packet.
+show remote enable-btrace-bts-packet -- Show current use of remote protocol `Qbtrace:bts' (enable-btrace-bts) packet.
+show remote enable-btrace-pt-packet -- Show current use of remote protocol `Qbtrace:pt' (enable-btrace-pt) packet.
+show remote environment-hex-encoded-packet -- Show current use of remote protocol `QEnvironmentHexEncoded' (environment-hex-encoded) packet.
+show remote environment-reset-packet -- Show current use of remote protocol `QEnvironmentReset' (environment-reset) packet.
+show remote environment-unset-packet -- Show current use of remote protocol `QEnvironmentUnset' (environment-unset) packet.
+show remote exec-event-feature-packet -- Show current use of remote protocol `exec-event-feature' (exec-event-feature) packet.
+show remote exec-file -- Show the remote pathname for "run".
+show remote fast-tracepoints-packet -- Show current use of remote protocol `FastTracepoints' (fast-tracepoints) packet.
+show remote fetch-register-packet, show remote p-packet -- Show current use of remote protocol `p' (fetch-register) packet.
+show remote fork-event-feature-packet -- Show current use of remote protocol `fork-event-feature' (fork-event-feature) packet.
+show remote get-thread-information-block-address-packet -- Show current use of remote protocol `qGetTIBAddr' (get-thread-information-block-address) packet.
+show remote get-thread-local-storage-address-packet -- Show current use of remote protocol `qGetTLSAddr' (get-thread-local-storage-address) packet.
+show remote hardware-breakpoint-limit -- Show the maximum number of target hardware breakpoints.
+show remote hardware-breakpoint-packet -- Show current use of remote protocol `Z1' (hardware-breakpoint) packet.
+show remote hardware-watchpoint-length-limit -- Show the maximum length (in bytes) of a target hardware watchpoint.
+show remote hardware-watchpoint-limit -- Show the maximum number of target hardware watchpoints.
+show remote hostio-close-packet -- Show current use of remote protocol `vFile:close' (hostio-close) packet.
+show remote hostio-fstat-packet -- Show current use of remote protocol `vFile:fstat' (hostio-fstat) packet.
+show remote hostio-open-packet -- Show current use of remote protocol `vFile:open' (hostio-open) packet.
+show remote hostio-pread-packet -- Show current use of remote protocol `vFile:pread' (hostio-pread) packet.
+show remote hostio-pwrite-packet -- Show current use of remote protocol `vFile:pwrite' (hostio-pwrite) packet.
+show remote hostio-readlink-packet -- Show current use of remote protocol `vFile:readlink' (hostio-readlink) packet.
+show remote hostio-setfs-packet -- Show current use of remote protocol `vFile:setfs' (hostio-setfs) packet.
+show remote hostio-unlink-packet -- Show current use of remote protocol `vFile:unlink' (hostio-unlink) packet.
+show remote hwbreak-feature-packet -- Show current use of remote protocol `hwbreak-feature' (hwbreak-feature) packet.
+show remote install-in-trace-packet -- Show current use of remote protocol `InstallInTrace' (install-in-trace) packet.
+show remote interrupt-on-connect -- Show whether interrupt-sequence is sent to remote target when gdb connects to.
+show remote interrupt-sequence -- Show interrupt sequence to remote target.
+show remote kill-packet -- Show current use of remote protocol `vKill' (kill) packet.
+show remote library-info-packet -- Show current use of remote protocol `qXfer:libraries:read' (library-info) packet.
+show remote library-info-svr4-packet -- Show current use of remote protocol `qXfer:libraries-svr4:read' (library-info-svr4) packet.
+show remote memory-map-packet -- Show current use of remote protocol `qXfer:memory-map:read' (memory-map) packet.
+show remote memory-read-packet-size -- Show the maximum number of bytes per memory-read packet.
+show remote memory-tagging-address-check-packet -- Show current use of remote protocol `qIsAddressTagged' (memory-tagging-address-check) packet.
+show remote memory-tagging-feature-packet -- Show current use of remote protocol `memory-tagging-feature' (memory-tagging-feature) packet.
+show remote memory-write-packet-size -- Show the maximum number of bytes per memory-write packet.
+show remote multiprocess-feature-packet -- Show current use of remote protocol `multiprocess-feature' (multiprocess-feature) packet.
+show remote no-resumed-stop-reply-packet -- Show current use of remote protocol `N stop reply' (no-resumed-stop-reply) packet.
+show remote noack-packet -- Show current use of remote protocol `QStartNoAckMode' (noack) packet.
+show remote osdata-packet -- Show current use of remote protocol `qXfer:osdata:read' (osdata) packet.
+show remote pass-signals-packet -- Show current use of remote protocol `QPassSignals' (pass-signals) packet.
+show remote pid-to-exec-file-packet -- Show current use of remote protocol `qXfer:exec-file:read' (pid-to-exec-file) packet.
+show remote program-signals-packet -- Show current use of remote protocol `QProgramSignals' (program-signals) packet.
+show remote query-attached-packet -- Show current use of remote protocol `qAttached' (query-attached) packet.
+show remote read-aux-vector-packet -- Show current use of remote protocol `qXfer:auxv:read' (read-aux-vector) packet.
+show remote read-btrace-conf-packet -- Show current use of remote protocol `qXfer:btrace-conf' (read-btrace-conf) packet.
+show remote read-btrace-packet -- Show current use of remote protocol `qXfer:btrace' (read-btrace) packet.
+show remote read-fdpic-loadmap-packet -- Show current use of remote protocol `qXfer:fdpic:read' (read-fdpic-loadmap) packet.
+show remote read-sdata-object-packet -- Show current use of remote protocol `qXfer:statictrace:read' (read-sdata-object) packet.
+show remote read-siginfo-object-packet -- Show current use of remote protocol `qXfer:siginfo:read' (read-siginfo-object) packet.
+show remote read-watchpoint-packet -- Show current use of remote protocol `Z3' (read-watchpoint) packet.
+show remote reverse-continue-packet -- Show current use of remote protocol `bc' (reverse-continue) packet.
+show remote reverse-step-packet -- Show current use of remote protocol `bs' (reverse-step) packet.
+show remote run-packet -- Show current use of remote protocol `vRun' (run) packet.
+show remote search-memory-packet -- Show current use of remote protocol `qSearch:memory' (search-memory) packet.
+show remote set-register-packet, show remote P-packet -- Show current use of remote protocol `P' (set-register) packet.
+show remote set-working-dir-packet -- Show current use of remote protocol `QSetWorkingDir' (set-working-dir) packet.
+show remote software-breakpoint-packet -- Show current use of remote protocol `Z0' (software-breakpoint) packet.
+show remote startup-with-shell-packet -- Show current use of remote protocol `QStartupWithShell' (startup-with-shell) packet.
+show remote static-tracepoints-packet -- Show current use of remote protocol `StaticTracepoints' (static-tracepoints) packet.
+show remote supported-packets-packet -- Show current use of remote protocol `qSupported' (supported-packets) packet.
+show remote swbreak-feature-packet -- Show current use of remote protocol `swbreak-feature' (swbreak-feature) packet.
+show remote symbol-lookup-packet -- Show current use of remote protocol `qSymbol' (symbol-lookup) packet.
+show remote system-call-allowed -- Show if the host system(3) call is allowed for the target.
+show remote target-features-packet -- Show current use of remote protocol `qXfer:features:read' (target-features) packet.
+show remote thread-events-packet -- Show current use of remote protocol `QThreadEvents' (thread-events) packet.
+show remote thread-options-packet -- Show current use of remote protocol `QThreadOptions' (thread-options) packet.
+show remote threads-packet -- Show current use of remote protocol `qXfer:threads:read' (threads) packet.
+show remote trace-buffer-size-packet -- Show current use of remote protocol `QTBuffer:size' (trace-buffer-size) packet.
+show remote trace-status-packet -- Show current use of remote protocol `qTStatus' (trace-status) packet.
+show remote traceframe-info-packet -- Show current use of remote protocol `qXfer:traceframe-info:read' (traceframe-info) packet.
+show remote unwind-info-block-packet -- Show current use of remote protocol `qXfer:uib:read' (unwind-info-block) packet.
+show remote verbose-resume-packet -- Show current use of remote protocol `vCont' (verbose-resume) packet.
+show remote verbose-resume-supported-packet -- Show current use of remote protocol `vContSupported' (verbose-resume-supported) packet.
+show remote vfork-event-feature-packet -- Show current use of remote protocol `vfork-event-feature' (vfork-event-feature) packet.
+show remote write-siginfo-object-packet -- Show current use of remote protocol `qXfer:siginfo:write' (write-siginfo-object) packet.
+show remote write-watchpoint-packet -- Show current use of remote protocol `Z2' (write-watchpoint) packet.
+show remoteaddresssize -- Show the maximum size of the address (in bits) in a memory packet.
+show remotecache -- Show cache use for remote targets.
+show remoteflow -- Show use of hardware flow control for remote serial I/O.
+show remotelogbase -- Show numerical base for remote session logging.
+show remotelogfile -- Show filename for remote session recording.
+show remotetimeout -- Show timeout limit to wait for target to respond.
+show remotewritesize -- Show the maximum number of bytes per memory write packet (deprecated).
+show schedule-multiple -- Show mode for resuming threads of all processes.
+show scheduler-locking -- Show mode for locking scheduler during execution.
+show script-extension -- Show mode for script filename extension recognition.
+show serial -- Show default serial/parallel port configuration.
+show serial baud -- Show baud rate for remote serial I/O.
+show serial parity -- Show parity for remote serial I/O.
+show solib-search-path -- Show the search path for loading non-absolute shared library symbol files.
+show source -- Generic command for showing source settings.
+show source open -- Show whether GDB should open source files.
+show stack-cache -- Show cache use for stack access.
+show startup-quietly -- Show whether GDB should start up quietly.
+show startup-with-shell -- Show use of shell to start subprocesses.
+show step-mode -- Show mode of the step operation.
+show stop-on-solib-events -- Show stopping for shared library events.
+show struct-convention -- Show the convention for returning small structs.
+show style -- Style-specific settings.
+show style address, show style disassembler address -- Address display styling.
+show style address background -- Show the background color for this property.
+show style address foreground -- Show the foreground color for this property.
+show style address intensity -- Show the display intensity for this property.
+show style disassembler -- Style-specific settings for the disassembler.
+show style disassembler comment -- Disassembler comment display styling.
+show style disassembler comment background -- Show the background color for this property.
+show style disassembler comment foreground -- Show the foreground color for this property.
+show style disassembler comment intensity -- Show the display intensity for this property.
+show style disassembler enabled -- Show whether disassembler output styling is enabled.
+show style disassembler immediate -- Disassembler immediate display styling.
+show style disassembler immediate background -- Show the background color for this property.
+show style disassembler immediate foreground -- Show the foreground color for this property.
+show style disassembler immediate intensity -- Show the display intensity for this property.
+show style disassembler mnemonic -- Disassembler mnemonic display styling.
+show style disassembler mnemonic background -- Show the background color for this property.
+show style disassembler mnemonic foreground -- Show the foreground color for this property.
+show style disassembler mnemonic intensity -- Show the display intensity for this property.
+show style disassembler register -- Disassembler register display styling.
+show style disassembler register background -- Show the background color for this property.
+show style disassembler register foreground -- Show the foreground color for this property.
+show style disassembler register intensity -- Show the display intensity for this property.
+show style enabled -- Show whether CLI is enabled.
+show style filename -- Filename display styling.
+show style filename background -- Show the background color for this property.
+show style filename foreground -- Show the foreground color for this property.
+show style filename intensity -- Show the display intensity for this property.
+show style function, show style disassembler symbol -- Function name display styling.
+show style function background -- Show the background color for this property.
+show style function foreground -- Show the foreground color for this property.
+show style function intensity -- Show the display intensity for this property.
+show style highlight -- Highlight display styling.
+show style highlight background -- Show the background color for this property.
+show style highlight foreground -- Show the foreground color for this property.
+show style highlight intensity -- Show the display intensity for this property.
+show style metadata -- Metadata display styling.
+show style metadata background -- Show the background color for this property.
+show style metadata foreground -- Show the foreground color for this property.
+show style metadata intensity -- Show the display intensity for this property.
+show style sources -- Show whether source code styling is enabled.
+show style title -- Title display styling.
+show style title background -- Show the background color for this property.
+show style title foreground -- Show the foreground color for this property.
+show style title intensity -- Show the display intensity for this property.
+show style tui-active-border -- TUI active border display styling.
+show style tui-active-border background -- Show the background color for this property.
+show style tui-active-border foreground -- Show the foreground color for this property.
+show style tui-border -- TUI border display styling.
+show style tui-border background -- Show the background color for this property.
+show style tui-border foreground -- Show the foreground color for this property.
+show style tui-current-position -- Show whether to style text highlighted by the TUI's current position indicator.
+show style variable -- Variable name display styling.
+show style variable background -- Show the background color for this property.
+show style variable foreground -- Show the foreground color for this property.
+show style variable intensity -- Show the display intensity for this property.
+show style version -- Version string display styling.
+show style version background -- Show the background color for this property.
+show style version foreground -- Show the foreground color for this property.
+show style version intensity -- Show the display intensity for this property.
+show substitute-path -- Show one or all substitution rules rewriting the source directories.
+show suppress-cli-notifications -- Show whether printing notifications on CLI is suppressed.
+show sysroot, show solib-absolute-prefix -- Show the current system root.
+show target-charset -- Show the target character set.
+show target-file-system-kind -- Show assumed file system kind for target reported file names.
+show target-wide-charset -- Show the target wide character set.
+show tcp -- TCP protocol specific variables.
+show tcp auto-retry -- Show auto-retry on socket connect.
+show tcp connect-timeout -- Show timeout limit in seconds for socket connection.
+show tdesc -- Show target description specific variables.
+show tdesc filename -- Show the file to read for an XML target description.
+show trace-buffer-size -- Show requested size of trace buffer.
+show trace-commands -- Show state of GDB CLI command tracing.
+show trace-notes -- Show the notes string to use for current and future trace runs.
+show trace-stop-notes -- Show the notes string to use for future tstop commands.
+show trace-user -- Show the user name to use for current and future trace runs.
+show trust-readonly-sections -- Show mode for reading from readonly sections.
+show tui -- TUI configuration variables.
+show tui active-border-mode -- Show the attribute mode to use for the active TUI window border.
+show tui border-kind -- Show the kind of border for TUI windows.
+show tui border-mode -- Show the attribute mode to use for the TUI window borders.
+show tui compact-source -- Show whether the TUI source window is compact.
+show tui mouse-events -- Show whether TUI mode handles mouse clicks.
+show tui tab-width -- Show the tab width, in characters, for the TUI.
+show unwind-on-signal, show unwindonsignal -- Show unwinding of stack if a signal is received while in a call dummy.
+show unwind-on-terminating-exception -- Show unwinding of stack if std::terminate() is called while in a call dummy.
+show unwind-on-timeout -- Show unwinding of stack if a timeout occurs while in a call dummy.
+show use-coredump-filter -- Show whether gcore should consider /proc/PID/coredump_filter.
+show use-deprecated-index-sections -- Show whether to use deprecated gdb_index sections.
+show user -- Show definitions of non-python/scheme user defined commands.
+show values -- Elements of value history around item number IDX (or last ten).
+show varsize-limit -- Show the maximum number of bytes allowed in a variable-size object.
+show verbose -- Show verbosity.
+show version -- Show what version of GDB this is.
+show warranty -- Various kinds of warranty you do not have.
+show watchdog -- Show watchdog timer.
+show width -- Show number of characters where GDB should wrap lines of its output.
+show write -- Show writing into executable and core files.
+
+Type "help" followed by command name for full documentation.
+Type "apropos word" to search for commands related to "word".
+Type "apropos -v word" for full documentation of commands related to "word".
+Command name abbreviations are allowed if unambiguous.

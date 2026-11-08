@@ -1,0 +1,41 @@
+maintenance, mt
+Commands for use by GDB maintainers.
+Includes commands to dump specific internal GDB structures in
+a human readable form, to cause GDB to deliberately dump core, etc.
+
+List of maintenance subcommands:
+
+maintenance agent -- Translate an expression into remote agent bytecode for tracing.
+maintenance agent-eval -- Translate an expression into remote agent bytecode for evaluation.
+maintenance agent-printf -- Translate an expression into remote agent bytecode for evaluation and display the bytecodes.
+maintenance btrace -- Branch tracing maintenance commands.
+maintenance check -- Commands for checking internal gdb state.
+maintenance check-psymtabs -- Check consistency of currently expanded psymtabs versus symtabs.
+maintenance check-symtabs -- Check consistency of currently expanded symtabs.
+maintenance cplus, maintenance cp -- C++ maintenance commands.
+maintenance demangler-warning -- Give GDB a demangler warning.
+maintenance deprecate -- Deprecate a command (for testing purposes).
+maintenance dump-me -- Get fatal error; make debugger dump its core.
+maintenance expand-symtabs -- Expand symbol tables.
+maintenance flush -- Maintenance command for flushing GDB internal caches.
+maintenance ignore-probes -- Ignore probes.
+maintenance info, maintenance i -- Commands for showing internal info about the program being debugged.
+maintenance internal-error -- Give GDB an internal error.
+maintenance internal-warning -- Give GDB an internal warning.
+maintenance packet -- Send an arbitrary packet to a remote target.
+maintenance print -- Maintenance command for printing GDB internal state.
+maintenance selftest -- Run gdb's unit tests.
+maintenance set -- Set GDB internal variables used by the GDB maintainer.
+maintenance show -- Show GDB internal variables used by the GDB maintainer.
+maintenance space -- Set the display of space usage.
+maintenance test-options -- Generic command for testing the options infrastructure.
+maintenance time -- Set the display of time usage.
+maintenance translate-address -- Translate a section name and address to a symbol.
+maintenance undeprecate -- Undeprecate a command (for testing purposes).
+maintenance wait-for-index-cache -- Wait until all pending writes to the index cache have completed.
+maintenance with -- Like "with", but works with "maintenance set" variables.
+
+Type "help maintenance" followed by maintenance subcommand name for full documentation.
+Type "apropos word" to search for commands related to "word".
+Type "apropos -v word" for full documentation of commands related to "word".
+Command name abbreviations are allowed if unambiguous.

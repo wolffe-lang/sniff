@@ -1,0 +1,4 @@
+List of all registers and their contents, for selected stack frame.
+One or more register names as argument means describe the given registers.
+One or more register group names as argument means describe the registers
+in the named register groups.

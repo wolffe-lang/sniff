@@ -1,0 +1,2 @@
+/work/target/s2/undefined-info.cmd:1: Error in sourced command file:
+Undefined info command: "nosuch".  Try "help info".

@@ -1,0 +1,51 @@
+backtrace, where, bt
+Print backtrace of all stack frames, or innermost COUNT frames.
+Usage: backtrace [OPTION]... [QUALIFIER]... [COUNT | -COUNT]
+
+Options:
+  -entry-values no|only|preferred|if-needed|both|compact|default
+    Set printing of function arguments at function entry.
+    GDB can sometimes determine the values of function arguments at entry,
+    in addition to their current values.  This option tells GDB whether
+    to print the current value, the value at entry (marked as val@entry),
+    or both.  Note that one or both of these values may be <optimized out>.
+
+  -frame-arguments all|scalars|none|presence
+    Set printing of non-scalar frame arguments.
+
+  -raw-frame-arguments [on|off]
+    Set whether to print frame arguments in raw form.
+    If set, frame arguments are printed in raw form, bypassing any
+    pretty-printers for that value.
+
+  -frame-info auto|source-line|location|source-and-location|location-and-address|short-location
+    Set printing of frame information.
+
+  -past-main [on|off]
+    Set whether backtraces should continue past "main".
+    Normally the caller of "main" is not of interest, so GDB will terminate
+    the backtrace at "main".  Set this if you need to see the rest
+    of the stack trace.
+
+  -past-entry [on|off]
+    Set whether backtraces should continue past the entry point of a program.
+    Normally there are no callers beyond the entry point of a program, so GDB
+    will terminate the backtrace there.  Set this if you need to see
+    the rest of the stack trace.
+
+  -full
+    Print values of local variables.
+
+  -no-filters
+    Prohibit frame filters from executing on a backtrace.
+
+  -hide
+    Causes Python frame filter elided frames to not be printed.
+
+For backward compatibility, the following qualifiers are supported:
+
+   full       - same as -full option.
+   no-filters - same as -no-filters option.
+   hide       - same as -hide.
+
+With a negative COUNT, print outermost -COUNT frames.
