@@ -20,7 +20,7 @@ branch's gauntlet-green head, with their own rows, gauntlet and plant.
 | symbol names | of several symbols at one address, the pinned gdb names the one that sorts last byte by byte (all 240 alias groups of a static C library program, by `info symbol`: `clone3`, not `__clone3`). A name that does not start with `_` loses a compiler's final clone number and shows `.cold` as `[cold]` (`msort_with_tmp.part.0` is `msort_with_tmp.part`; all 175 names with a dot in two static programs) |
 | `stepi N` | the place is shown once, where the last step stops, as gdb shows it |
 | help | `help handle`, `help signal`, `help thread` and its alias `t`, `help info signals` (and `info handle`) and `help info threads`: gdb's whole text where sniff does all it says, gdb's first lines and sniff's own where it does not (thread's subcommands, `-gid`); the class and `info` listings name them, and none is called a command sniff lacks any more |
-| harness | `tools/session.py`: the pid normalisation covers every `process N`; LWP ids are numbered by first appearance; the spin loop's pc prefix and the threads table's padding are normalised by name; tick counts only where a row names them; on the PAX set a thread's address, which is where the kernel mapped its stack, is `<STACK>` after the heap's rule. `tools/session-mac.py`: thread facts, the stopping thread, lldb's restarted-signal line, and a thread's status block is no frame fact on either side. The attach runner (the sleeper started as the harness's child, `{pid}` substituted, its end appended) is here for the attach rows that follow |
+| harness | `tools/session.py`: the pid normalisation covers every `process N`; LWP ids are numbered by first appearance; the spin loop's pc prefix and the threads table's padding are normalised by name; tick counts only where a row names them; a thread's address is named by first appearance on every set (`<T1>`, `<T2>`, ...; see "After the merge"). `tools/session-mac.py`: thread facts, the stopping thread, lldb's restarted-signal line, and a thread's status block is no frame fact on either side. The attach runner (the sleeper started as the harness's child, `{pid}` substituted, its end appended) is here for the attach rows that follow |
 | ABI | S6's ptrace requests, events and `siginfo_t` offsets, checked against the oracle by `tools/abi-probe.c` (`tests/evidence/linux-s2/abi.txt`) |
 
 Rows: 26 threads rows, 33 signals rows (three at a terminal), 6 library-frame rows and 7 help rows on the session set, the same
@@ -46,7 +46,8 @@ holds them. Every new row was red at trunk on all three sets but the guards `sig
     first (`threads-*-spinner`);
   - the static C library's aliases (`__clone3` and `clone3`) and its clone suffixes (`.part.0`), both now
     measured rules;
-  - PAX maps a thread's stack below Linux's `0x7ff…` range, which the PAX set's stack rule did not reach;
+  - PAX maps a thread's stack below Linux's `0x7ff…` range, which the PAX set's stack rule did not reach, and a
+    host's stack limit moves every thread's address on Linux too (see "After the merge");
   - lldb prints `thread select`'s status block asynchronously: in one take it came after the next
     command's output, under that command's prompt;
   - under lldb, the threaded signal row's `continue` ended the program with status 1, where it exits 0 natively
@@ -89,6 +90,20 @@ Kill Process, Background Execution and Interrupted System Calls sections; the ma
 `tgkill(2)`, `clone(2)`, `sigaction(2)`, `pthreads(7)`, `prctl(2)` and `kill(2)`, each fetched twice and
 digest-checked; the macOS SDK headers' declarations for the task, thread and exception calls. gdb ran only as the
 pinned binary in the oracle image and lldb only as the system binary. No debugger's or kernel's source was read.
+
+## After the merge: thread addresses
+
+The first trunk run of the full tier on a hosted runner failed `session-oracle-stable` on 23 threads rows, each at
+the second thread's `[New Thread …]` line: the pinned gdb printed `0x7ffff6da06c0` where the goldens, captured on
+another host, have `0x7ffff75a06c0`. A thread's address is the C library's record of it, at the top of a stack the
+library maps, and the library sizes that stack by the stack limit: there the stack limit was 16 MiB, where the
+golden's host has 8 MiB, so the second thread sat 8 MiB lower. The same rows ran red under `ulimit -s 16384` in
+the oracle image (23 `oracle-drift` lines, the runner's own), and green again once `tools/session.py` named a
+thread's address by first appearance, as it names an LWP id: `Thread <T2> (LWP <L2>)` wherever gdb prints a
+thread's target id (`[New Thread …]`, `[Switching to …]`, `info threads`, `[Thread … exited]`, `[Current thread
+is …]`). The rule replaces the PAX set's `<STACK>` for thread addresses, so both sets read alike. sniff still prints
+the real address, and a thread shown at another thread's address is still told apart. The macOS rows hold no
+thread address (lldb fact rows), so nothing there moved.
 
 ## Done-when
 
