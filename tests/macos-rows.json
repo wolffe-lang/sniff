@@ -922,427 +922,533 @@
   },
   {
    "name": "list-wolf-nested-bare",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-wolf-loops-bare",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-wolf-nested-plus",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-wolf-nested-stop",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-wolf-loops-stop",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-wolf-nested-frames",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-wolf-nested-finish",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-wolf-loops-exited",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-wolf-nested-dot",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-wolf-nested-n",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-wolf-loops-n",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-wolf-nested-func",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-wolf-loops-func",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-wolf-nested-file",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-wolf-loops-file",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-wolf-nested-star",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-wolf-nested-alias",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-wolf-nested-range",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-wolf-loops-range",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-wolf-loops-minus",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-wolf-nested-minus",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-wolf-nested-past-end",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-wolf-nested-past-end-file",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-wolf-loops-range-past",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-wolf-loops-to-past",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-wolf-nested-no-func",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-wolf-nested-no-file",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-wolf-nested-no-file-func",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-wolf-nested-junk",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-c-clang-recursion-bare",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-c-clang-recursion-stop",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-c-clang-recursion-n",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-c-clang-recursion-func",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-c-clang-recursion-file",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-c-clang-recursion-range",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-c-clang-recursion-minus",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-c-clang-recursion-star",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-c-clang-recursion-past-end",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-c-clang-calls-noline",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-c-clang-gone",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "list-c-clang-gone-stop",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-bare",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-h",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-all",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-class-running",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-class-breakpoints",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-class-data",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-class-stack",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-class-status",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-class-files",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-class-support",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-class-internals",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-info",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-i",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-bytes-running",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-bytes-stack",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-bytes-support",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-list",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-l",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-run",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-continue",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-c",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-kill",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-k",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-break",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-b",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-tbreak",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-delete",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-watch",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-rwatch",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-awatch",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-condition",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-display",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-undisplay",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-backtrace",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-bt",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-frame",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-until",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-print",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-p",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-call",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-x",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-quit",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-maintenance",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-mt",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-info-breakpoints",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-info-b",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-info-watchpoints",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-info-locals",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-info-args",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-info-registers",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-info-all-registers",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-lacking-catch",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-lacking-tui",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-lacking-set",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-lacking-j",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-lacking-info-frame",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-lacking-info-source",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-maint-frames",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-undefined",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "help-undefined-info",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "undefined-command",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "undefined-info",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "undefined-maint",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "lacking-command-catch",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "echo-leading-space",
-   "kind": "linux"
+   "kind": "linux",
+   "stderr": true
   },
   {
    "name": "tty-wolf-loops-repeat-next",
