@@ -3,12 +3,14 @@
  * and the wait-status truth table by compiling against the C library and
  * running, so no header text is read. Output is committed as
  * tests/evidence/linux-s2/abi.txt and checked by tools/check-abi.py. */
+#define _GNU_SOURCE
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
 #include <unistd.h>
 #include <sys/ptrace.h>
+#include <sys/syscall.h>
 #include <sys/personality.h>
 #include <sys/resource.h>
 #include <sys/user.h>
@@ -40,6 +42,14 @@ int main(void) {
     REQ(PTRACE_KILL); REQ(PTRACE_SINGLESTEP); REQ(PTRACE_GETREGS); REQ(PTRACE_SETREGS);
     REQ(PTRACE_SETOPTIONS); REQ(PTRACE_O_EXITKILL); REQ(PTRACE_GETFPREGS); REQ(PTRACE_DETACH);
     REQ(PTRACE_GETEVENTMSG); REQ(PTRACE_O_TRACEFORK); REQ(PTRACE_O_TRACEVFORK);
+    /* S6: threads (clone events, one thread stopped by tgkill, every thread waited for), signals and attach */
+    REQ(PTRACE_O_TRACECLONE); REQ(PTRACE_EVENT_CLONE); REQ(PTRACE_ATTACH); REQ(PTRACE_GETSIGINFO);
+    REQ(PTRACE_SEIZE); REQ(PTRACE_INTERRUPT); REQ(PTRACE_EVENT_STOP); REQ(__WALL); REQ(SYS_tgkill);
+    printf("siginfo size %d\n", (int)sizeof(siginfo_t));
+    printf("siginfo si_signo %d\n", (int)offsetof(siginfo_t, si_signo));
+    printf("siginfo si_code %d\n", (int)offsetof(siginfo_t, si_code));
+    printf("siginfo si_pid %d\n", (int)offsetof(siginfo_t, si_pid));
+    printf("siginfo si_addr %d\n", (int)offsetof(siginfo_t, si_addr));
     printf("request ADDR_NO_RANDOMIZE %d\n", (int)ADDR_NO_RANDOMIZE);
     printf("regs size %d\n", (int)(sizeof(struct user_regs_struct) / 8));
     OFF(r15); OFF(r14); OFF(r13); OFF(r12); OFF(rbp); OFF(rbx); OFF(r11); OFF(r10); OFF(r9); OFF(r8);

@@ -26,7 +26,13 @@ REQUESTS = {
     'PTRACE_O_TRACEFORK': 'opt_tracefork', 'PTRACE_O_TRACEVFORK': 'opt_tracevfork',
     'PTRACE_O_EXITKILL': 'opt_exitkill', 'ADDR_NO_RANDOMIZE': 'addr_no_randomize',
     'PTRACE_PEEKUSER': 'req_peekuser', 'PTRACE_POKEUSER': 'req_pokeuser',
+    'PTRACE_O_TRACECLONE': 'opt_traceclone', 'PTRACE_EVENT_CLONE': 'event_clone', 'PTRACE_ATTACH': 'req_attach',
+    'PTRACE_GETSIGINFO': 'req_getsiginfo', 'PTRACE_SEIZE': 'req_seize', 'PTRACE_INTERRUPT': 'req_interrupt',
+    'PTRACE_EVENT_STOP': 'event_stop', '__WALL': 'wait_all', 'SYS_tgkill': 'sys_tgkill',
 }
+# siginfo_t (S6's signal stops): its size and the byte offsets of the fields read through PTRACE_GETSIGINFO
+SIGINFO = {'size': 'siginfo_size', 'si_signo': 'siginfo_signo', 'si_code': 'siginfo_code', 'si_pid': 'siginfo_pid',
+           'si_addr': 'siginfo_addr'}
 # struct user fields the probe measures (S5's debug registers), byte offsets and sizes
 USER = {'u_debugreg': 'user_debugreg_offset', 'u_debugreg_size': 'user_debugreg_size'}
 REGS = ['r15', 'r14', 'r13', 'r12', 'rbp', 'rbx', 'r11', 'r10', 'r9', 'r8', 'rax', 'rcx', 'rdx', 'rsi', 'rdi',
@@ -73,6 +79,10 @@ def check(_args):
             seen[w[1]] = int(w[2])
             if consts.get(USER[w[1]]) != int(w[2]):
                 bad.append('user %s is %s in the probe and %s in types.lu' % (w[1], w[2], consts.get(USER[w[1]])))
+        elif w[0] == 'siginfo' and w[1] in SIGINFO:
+            seen['siginfo ' + w[1]] = int(w[2])
+            if consts.get(SIGINFO[w[1]]) != int(w[2]):
+                bad.append('siginfo %s is %s in the probe and %s in types.lu' % (w[1], w[2], consts.get(SIGINFO[w[1]])))
         elif w[0] == 'regs' and w[1] in REGS:
             want = 'reg_' + w[1]
             if consts.get(want) != int(w[2]):
@@ -83,6 +93,9 @@ def check(_args):
     for name in USER:
         if name not in seen:
             bad.append('probe output lacks user ' + name)
+    for name in SIGINFO:
+        if 'siginfo ' + name not in seen:
+            bad.append('probe output lacks siginfo ' + name)
     sizes = [ln for ln in lines if ln.startswith('regs size')]
     if not sizes or int(sizes[0].split()[2]) != consts.get('reg_count'):
         bad.append('regs size differs from reg_count')
@@ -100,7 +113,7 @@ def check(_args):
         for b in bad:
             print('FAIL abi-constants: ' + b)
         return 1
-    print('PASS abi-constants requests=%d regs=%d user=%d waits=%d' % (len(REQUESTS), len(REGS), len(USER), len(expect)))
+    print('PASS abi-constants requests=%d regs=%d user=%d siginfo=%d waits=%d' % (len(REQUESTS), len(REGS), len(USER), len(SIGINFO), len(expect)))
     return 0
 
 
