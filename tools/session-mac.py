@@ -20,7 +20,11 @@ Two kinds of row (tests/macos-rows.json):
          facts by a named extraction and the lists must be equal. Extractions: bpset
          (number, address, file, line), frame (level, function, file, line), print and
          retval (value text), var (name, value text), exit (code), signal and died
-         (signal name). lldb's text differs from gdb's; only these facts are compared.
+         (signal name), thread (a row of `info threads` or lldb's `thread list`: number,
+         function, file, line, for a frame with a source line) and stopthread (the thread a
+         breakpoint or signal stopped, when it is not thread 1: gdb names the thread only
+         once a program has more than one, and lldb always does). lldb's text differs from
+         gdb's; only these facts are compared.
 
 `capture` runs lldb on the lldb rows and stores its raw output in
 tests/evidence/macos-s3, so extraction can be replayed without lldb. `check` runs sniff
@@ -118,6 +122,17 @@ def facts_sniff(text):
         if m:
             facts.append(('var', m[1], m[2]))
             continue
+        m = re.match(r'^Thread (\d+) "[^"]*" (?:hit|received) ', line)
+        if m and int(m[1]) != 1:
+            facts.append(('stopthread', int(m[1])))
+        m = re.match(r'^Thread \d+ "[^"]*" received signal (SIG\w+),', line)
+        if m:
+            facts.append(('signal', m[1]))
+            continue
+        m = re.match(r'^[* ] (\d+) +(?:Thread|process|LWP) .*? (?:0x[0-9a-f]+ in )?([\w.$]+) \(.*\) at (.*):(\d+)$', line)
+        if m:
+            facts.append(('thread', int(m[1]), m[2], base(m[3]), int(m[4])))
+            continue
         m = re.match(r'^\[Inferior \d+ \(process \d+\) exited (?:normally|with code (\d+))\]$', line)
         if m:
             facts.append(('exit', int(m[1], 8) if m[1] else 0))
@@ -180,6 +195,18 @@ def facts_lldb(text):
         m = re.match(r'^Process \d+ exited with status = (\d+) \(0x[0-9a-f]+\)$', line)
         if m:
             facts.append(('exit', int(m[1])))
+            continue
+        m = re.match(r'^[* ] thread #(\d+): tid = 0x[0-9a-f]+, 0x[0-9a-f]+ \S+?`([\w.$]+)(?:\(.*?\))?(?: \+ \d+)? at (\S+?):(\d+)(?::\d+)?(?:,|$)', line)
+        if m:
+            facts.append(('thread', int(m[1]), m[2], base(m[3]), int(m[4])))
+            continue
+        m = re.match(r'^\* thread #(\d+),.*stop reason = ', line)
+        if m and in_stop_cmd and int(m[1]) != 1:
+            facts.append(('stopthread', int(m[1])))
+        m = re.search(r'stopped and restarted: thread \d+ received signal: (SIG\w+)', line)
+        if m:
+            if in_stop_cmd:
+                facts.append(('signal', m[1]))
             continue
         m = re.search(r'stop reason = (EXC_\w+)', line)
         if m and m[1] in SIGNAL_OF_EXC:
