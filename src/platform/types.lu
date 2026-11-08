@@ -50,9 +50,9 @@ pub struct Target {
 }
 
 /// Byte offset of struct user's u_debugreg, and the size of one debug register (S5's watchpoints).
-pub const user_debugreg_offset: int = 0
+pub const user_debugreg_offset: int = 848
 /// Size of one u_debugreg slot.
-pub const user_debugreg_size: int = 0
+pub const user_debugreg_size: int = 8
 
 /// A watch slot's condition: data writes only, or data reads and writes.
 pub const watch_write: int = 1
