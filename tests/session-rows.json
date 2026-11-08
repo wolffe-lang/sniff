@@ -1528,6 +1528,366 @@
     "run",
     "info breakpoints"
    ]
+  },
+  {
+   "name": "watch-gcc-global",
+   "prog": "c/watch/gcc-O0/prog",
+   "script": [
+    "break main",
+    "run",
+    "watch counter",
+    "continue",
+    "continue",
+    "continue",
+    "continue"
+   ]
+  },
+  {
+   "name": "watch-gcc-local-scope",
+   "prog": "c/watch/gcc-O0/prog",
+   "script": [
+    "break main.c:28",
+    "run",
+    "watch total",
+    "continue",
+    "continue",
+    "continue",
+    "continue",
+    "continue",
+    "continue"
+   ]
+  },
+  {
+   "name": "watch-gcc-members",
+   "prog": "c/watch/gcc-O0/prog",
+   "script": [
+    "break main",
+    "run",
+    "watch origin.hist[2]",
+    "watch cursor->y",
+    "info watchpoints",
+    "continue",
+    "continue",
+    "continue"
+   ]
+  },
+  {
+   "name": "watch-gcc-delete",
+   "prog": "c/watch/gcc-O0/prog",
+   "script": [
+    "break main",
+    "run",
+    "watch counter",
+    "info breakpoints",
+    "delete 2",
+    "continue"
+   ]
+  },
+  {
+   "name": "rwatch-gcc-global",
+   "prog": "c/watch/gcc-O0/prog",
+   "script": [
+    "break main",
+    "run",
+    "rwatch counter",
+    "continue",
+    "continue",
+    "continue",
+    "continue",
+    "continue",
+    "continue"
+   ]
+  },
+  {
+   "name": "awatch-gcc-global",
+   "prog": "c/watch/gcc-O0/prog",
+   "script": [
+    "break main",
+    "run",
+    "awatch counter",
+    "continue",
+    "continue",
+    "continue",
+    "continue",
+    "continue",
+    "continue",
+    "continue",
+    "continue"
+   ]
+  },
+  {
+   "name": "print-gcc-expressions",
+   "prog": "c/watch/gcc-O0/prog",
+   "script": [
+    "break main.c:41",
+    "run",
+    "print origin.hist[2]",
+    "print counter + 1",
+    "print cursor->hist[1] * 3 - counter",
+    "print *cursor",
+    "print origin.hist",
+    "print origin.hist[1] == 20",
+    "print -counter",
+    "print !counter",
+    "print origin.hist[1] / 3",
+    "print origin.hist[1] % 3",
+    "print (char) origin.hist[0]",
+    "print counter * scale",
+    "print &origin.y",
+    "print cursor->x + seen",
+    "print sum > seen",
+    "print (origin.hist[0] + origin.hist[3]) * 2",
+    "print origin.hist[cursor->x - 1]",
+    "output counter + 1"
+   ]
+  },
+  {
+   "name": "print-gcc-no-member",
+   "prog": "c/watch/gcc-O0/prog",
+   "script": [
+    "break main.c:41",
+    "run",
+    "print origin.nosuch"
+   ]
+  },
+  {
+   "name": "print-gcc-subscript-scalar",
+   "prog": "c/watch/gcc-O0/prog",
+   "script": [
+    "break main.c:41",
+    "run",
+    "print counter[0]"
+   ]
+  },
+  {
+   "name": "print-gcc-division-by-zero",
+   "prog": "c/watch/gcc-O0/prog",
+   "script": [
+    "break main.c:41",
+    "run",
+    "print counter / 0"
+   ]
+  },
+  {
+   "name": "break-gcc-condition",
+   "prog": "c/watch/gcc-O0/prog",
+   "script": [
+    "break bump if by == 1",
+    "run",
+    "info breakpoints",
+    "print by",
+    "continue"
+   ]
+  },
+  {
+   "name": "break-gcc-condition-command",
+   "prog": "c/watch/gcc-O0/prog",
+   "script": [
+    "break main.c:29",
+    "condition 1 i == 2",
+    "run",
+    "print total",
+    "info breakpoints",
+    "condition 1",
+    "continue",
+    "print i",
+    "delete 1",
+    "continue"
+   ]
+  },
+  {
+   "name": "display-gcc-stops",
+   "prog": "c/watch/gcc-O0/prog",
+   "script": [
+    "break bump",
+    "run",
+    "display counter",
+    "display/x by",
+    "continue",
+    "info display",
+    "undisplay 1",
+    "next"
+   ]
+  },
+  {
+   "name": "watch-clang-global",
+   "prog": "c/watch/clang-O0/prog",
+   "script": [
+    "break main",
+    "run",
+    "watch counter",
+    "continue",
+    "continue",
+    "continue",
+    "continue"
+   ]
+  },
+  {
+   "name": "watch-clang-local-scope",
+   "prog": "c/watch/clang-O0/prog",
+   "script": [
+    "break main.c:28",
+    "run",
+    "watch total",
+    "continue",
+    "continue",
+    "continue",
+    "continue",
+    "continue",
+    "continue"
+   ]
+  },
+  {
+   "name": "watch-clang-members",
+   "prog": "c/watch/clang-O0/prog",
+   "script": [
+    "break main",
+    "run",
+    "watch origin.hist[2]",
+    "watch cursor->y",
+    "info watchpoints",
+    "continue",
+    "continue",
+    "continue"
+   ]
+  },
+  {
+   "name": "watch-clang-delete",
+   "prog": "c/watch/clang-O0/prog",
+   "script": [
+    "break main",
+    "run",
+    "watch counter",
+    "info breakpoints",
+    "delete 2",
+    "continue"
+   ]
+  },
+  {
+   "name": "rwatch-clang-global",
+   "prog": "c/watch/clang-O0/prog",
+   "script": [
+    "break main",
+    "run",
+    "rwatch counter",
+    "continue",
+    "continue",
+    "continue",
+    "continue",
+    "continue",
+    "continue"
+   ]
+  },
+  {
+   "name": "awatch-clang-global",
+   "prog": "c/watch/clang-O0/prog",
+   "script": [
+    "break main",
+    "run",
+    "awatch counter",
+    "continue",
+    "continue",
+    "continue",
+    "continue",
+    "continue",
+    "continue",
+    "continue",
+    "continue"
+   ]
+  },
+  {
+   "name": "print-clang-expressions",
+   "prog": "c/watch/clang-O0/prog",
+   "script": [
+    "break main.c:41",
+    "run",
+    "print origin.hist[2]",
+    "print counter + 1",
+    "print cursor->hist[1] * 3 - counter",
+    "print *cursor",
+    "print origin.hist",
+    "print origin.hist[1] == 20",
+    "print -counter",
+    "print !counter",
+    "print origin.hist[1] / 3",
+    "print origin.hist[1] % 3",
+    "print (char) origin.hist[0]",
+    "print counter * scale",
+    "print &origin.y",
+    "print cursor->x + seen",
+    "print sum > seen",
+    "print (origin.hist[0] + origin.hist[3]) * 2",
+    "print origin.hist[cursor->x - 1]",
+    "output counter + 1"
+   ]
+  },
+  {
+   "name": "print-clang-no-member",
+   "prog": "c/watch/clang-O0/prog",
+   "script": [
+    "break main.c:41",
+    "run",
+    "print origin.nosuch"
+   ]
+  },
+  {
+   "name": "print-clang-subscript-scalar",
+   "prog": "c/watch/clang-O0/prog",
+   "script": [
+    "break main.c:41",
+    "run",
+    "print counter[0]"
+   ]
+  },
+  {
+   "name": "print-clang-division-by-zero",
+   "prog": "c/watch/clang-O0/prog",
+   "script": [
+    "break main.c:41",
+    "run",
+    "print counter / 0"
+   ]
+  },
+  {
+   "name": "break-clang-condition",
+   "prog": "c/watch/clang-O0/prog",
+   "script": [
+    "break bump if by == 1",
+    "run",
+    "info breakpoints",
+    "print by",
+    "continue"
+   ]
+  },
+  {
+   "name": "break-clang-condition-command",
+   "prog": "c/watch/clang-O0/prog",
+   "script": [
+    "break main.c:29",
+    "condition 1 i == 2",
+    "run",
+    "print total",
+    "info breakpoints",
+    "condition 1",
+    "continue",
+    "print i",
+    "delete 1",
+    "continue"
+   ]
+  },
+  {
+   "name": "display-clang-stops",
+   "prog": "c/watch/clang-O0/prog",
+   "script": [
+    "break bump",
+    "run",
+    "display counter",
+    "display/x by",
+    "continue",
+    "info display",
+    "undisplay 1",
+    "next"
+   ]
   }
  ]
 }

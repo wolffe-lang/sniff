@@ -45,6 +45,9 @@ int main(void) {
     OFF(r15); OFF(r14); OFF(r13); OFF(r12); OFF(rbp); OFF(rbx); OFF(r11); OFF(r10); OFF(r9); OFF(r8);
     OFF(rax); OFF(rcx); OFF(rdx); OFF(rsi); OFF(rdi); OFF(orig_rax); OFF(rip); OFF(cs); OFF(eflags);
     OFF(rsp); OFF(ss); OFF(fs_base); OFF(gs_base); OFF(ds); OFF(es); OFF(fs); OFF(gs);
+    /* S5: the debug registers, read and written with PEEKUSER and POKEUSER at these byte offsets */
+    printf("user u_debugreg %d\n", (int)offsetof(struct user, u_debugreg));
+    printf("user u_debugreg_size %d\n", (int)sizeof(((struct user *)0)->u_debugreg[0]));
     status("exit0", 0, 0); status("exit3", 3, 0); status("exit255", 255, 0);
     status("sigsegv", 0, SIGSEGV); status("sigkill", 0, SIGKILL); status("sigabrt", 0, SIGABRT);
     /* the stop at exec: PTRACE_TRACEME, then exec; first stop status */

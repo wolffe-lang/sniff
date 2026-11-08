@@ -25,7 +25,10 @@ REQUESTS = {
     'PTRACE_DETACH': 'req_detach', 'PTRACE_SETOPTIONS': 'req_setoptions', 'PTRACE_GETEVENTMSG': 'req_geteventmsg',
     'PTRACE_O_TRACEFORK': 'opt_tracefork', 'PTRACE_O_TRACEVFORK': 'opt_tracevfork',
     'PTRACE_O_EXITKILL': 'opt_exitkill', 'ADDR_NO_RANDOMIZE': 'addr_no_randomize',
+    'PTRACE_PEEKUSER': 'req_peekuser', 'PTRACE_POKEUSER': 'req_pokeuser',
 }
+# struct user fields the probe measures (S5's debug registers), byte offsets and sizes
+USER = {'u_debugreg': 'user_debugreg_offset', 'u_debugreg_size': 'user_debugreg_size'}
 REGS = ['r15', 'r14', 'r13', 'r12', 'rbp', 'rbx', 'r11', 'r10', 'r9', 'r8', 'rax', 'rcx', 'rdx', 'rsi', 'rdi',
         'orig_rax', 'rip', 'cs', 'eflags', 'rsp', 'ss', 'fs_base', 'gs_base', 'ds', 'es', 'fs', 'gs']
 
@@ -66,6 +69,10 @@ def check(_args):
             want = REQUESTS.get(name)
             if want is not None and consts.get(want) != value:
                 bad.append('%s is %s in the probe and %s in types.lu' % (name, value, consts.get(want)))
+        elif w[0] == 'user' and w[1] in USER:
+            seen[w[1]] = int(w[2])
+            if consts.get(USER[w[1]]) != int(w[2]):
+                bad.append('user %s is %s in the probe and %s in types.lu' % (w[1], w[2], consts.get(USER[w[1]])))
         elif w[0] == 'regs' and w[1] in REGS:
             want = 'reg_' + w[1]
             if consts.get(want) != int(w[2]):
@@ -73,6 +80,9 @@ def check(_args):
     for name in REQUESTS:
         if name not in seen and not name.startswith('PTRACE_PEEK'):
             bad.append('probe output lacks ' + name)
+    for name in USER:
+        if name not in seen:
+            bad.append('probe output lacks user ' + name)
     sizes = [ln for ln in lines if ln.startswith('regs size')]
     if not sizes or int(sizes[0].split()[2]) != consts.get('reg_count'):
         bad.append('regs size differs from reg_count')
@@ -90,7 +100,7 @@ def check(_args):
         for b in bad:
             print('FAIL abi-constants: ' + b)
         return 1
-    print('PASS abi-constants requests=%d regs=%d waits=%d' % (len(REQUESTS), len(REGS), len(expect)))
+    print('PASS abi-constants requests=%d regs=%d user=%d waits=%d' % (len(REQUESTS), len(REGS), len(USER), len(expect)))
     return 0
 
 
