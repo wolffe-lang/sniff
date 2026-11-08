@@ -1,0 +1,143 @@
+{
+  "schema": 1,
+  "lane": "sn07",
+  "written_before_code": "2026-11-08",
+  "scope": "S6: multi-threaded inferiors (all-stop), info threads and thread N, signal stops and handle, info signals and signal, attach PID, detach and sniff -p PID, on Linux x86-64, macOS arm64 and PAX. Rows on the Linux, macOS and PAX sets, red first against trunk (91d271e).",
+  "measured_before_code": {
+    "oracles": {
+      "gdb": "GNU gdb (Ubuntu 15.1-1ubuntu1~24.04.1) 15.1, the pinned binary in the oracle image, run only as a binary: batch scripts (-nx -q -batch -iex 'set confirm off' -iex 'set pagination off' -x SCRIPT) three times each, and terminal sessions through tools/session.py's pty runner",
+      "lldb": "lldb-2100.0.16.4, the system binary on macOS 26.4.1 arm64 (Apple clang 21.0.0), lldb -b -s SCRIPT, three times each",
+      "linux_host": "the oracle image under rootless podman: Linux 7.2.4, Yama ptrace_scope 1, CAP_SYS_PTRACE in the container's user namespace (no host setting changed); gcc 13.3.0 and clang 18.1.3",
+      "pax": "PAX at px102's head 3afcb9ce, its console kernel (sha256 e799629f610afc8f3261e945030d16576a4d035cc70c072db9dbdd8c427dbdfe) under KVM, one boot"
+    },
+    "fixtures": {
+      "fixtures/session/c/workers/main.c": "466d329211a6c93d6b60db1372586c919c1987802998cc7b88c1d72531345bc9: main and three threads; two spinners loop until let go, the worker calls work() once all three loops have been entered (every thread is in the fixture when work() stops), then the threads end one at a time (worker, first spinner, second spinner). With the argument `signal` the worker first sends itself SIGUSR1 by tgkill made in the file",
+      "fixtures/session/c/sigusr/main.c": "86e433a1913e5ad1e41e261f0b2b23a4ba0c7c2efb2a15f60abc1a916f24ef06: sends itself SIGUSR1, SIGUSR2, SIGUSR1 with the kill system call made in the file (no C library frame between the stop and the file); exit code 10 x SIGUSR1s seen + SIGUSR2s seen (21 when all pass)",
+      "fixtures/session/c/sleeper/main.c": "2ff6c2513fd8ec18533cd0773b2d147e25c0c7c7575e3223d78ec492c546b79b: prints `ready PID`, ticks N times (argv[1], 100 by default) napping 20 ms with the system call made in the file (nanosleep on Linux, select on macOS), prints `done N`, exits 0",
+      "fixtures/session/c/holder/main.c": "010643c58438c6a40759967ab6929dbb5fb97d5fa4194f57ad735d7f32dc238f: PTRACE_SEIZE of a pid, `held PID`, a wait, an exit (which detaches): another tracer, so that an attach is refused",
+      "fixtures/session/c/exits/main.c": "unchanged: its `fault` argument is the program's own SIGSEGV",
+      "tests/pax-probe/s6.c": "e591974bf9990f23e08bfc5df2c337b97a74e5b7359ab7835103921c1b236251: S6's kernel calls, one line each, no pid or address printed, the same static binary run on Linux and on PAX",
+      "wolf_tasks_probe": "a wolf program (two tasks in a scope, each calling work(), sums back over a channel), sha256 cdc2503c83f746ce0fd0197b61021c2d15b37045a65304204f7e30c761b84701, kept in the lane's probe directory, not a fixture"
+    },
+    "probe_runs": "probe 1 (98 gdb scripts, 3 takes each; the kernel probe on Linux), probe 2 (11 terminal sessions, 18 batch scripts, 9 attach scripts, 2 takes each), the macOS probes (16 lldb scripts and 10 attach scripts, 3 takes each; task ports of a process the prober did not start, by signature), the PAX boot of the kernel probe. sniff at trunk ran every gdb-language script once."
+  },
+  "threads": {
+    "linux_gdb": [
+      "`[New Thread 0x7ffff7da16c0 (LWP n)]` when each thread starts, in creation order; the address is the thread's pthread_t, which is its fs_base (the kernel probe: `the thread's fs_base is its pthread_self -> yes` on Linux and PAX). With randomisation off the addresses are stable across takes: 0x7ffff7da16c0, 0x7ffff75a06c0, 0x7ffff6d9f6c0 (dynamic), 0x7ffff7ff66c0, 0x7ffff77f56c0, 0x7ffff6ff46c0 (static); main's is 0x7ffff7da2740 (dynamic) and 0x4cf3c0 (static, its TLS block in the image)",
+      "a breakpoint in a multi-threaded program: `[Switching to Thread 0x... (LWP n)]`, a blank line, `Thread 4 \"prog\" hit Breakpoint 1, work (n=4) at FILE:LINE` (the prefix only once the program has more than one thread; a single-threaded program keeps `Breakpoint 1, main () at ...`)",
+      "a signal taken by a thread: `Thread 4 \"prog\" received signal SIGUSR1, User defined signal 1.` before its `[Switching to Thread ...]` line (the reverse of a breakpoint's order), then the frame line and source line",
+      "`info threads`: a header `  Id   Target Id<pad>Frame ` and one row per thread, `* ` on the current one, the Target Id column `Thread 0x... (LWP n) \"prog\"` padded to the longest; the frame is gdb's frame line without its `#0`. A static program whose symbols name `_thread_db_*` (the threaded fixture) uses the same form; one without them (the static sleeper) shows `process N \"prog\"`, and a static wolf program, which has `__nptl_version` but no `_thread_db_*` symbols, `LWP n \"prog\"`. A dynamic single-threaded program shows `Thread 0x7ffff7da2740 (LWP n) \"prog\"`",
+      "`info threads 2 3` lists those rows under the same header; `info threads 9` prints `No threads match '9'.` (status 0); with no process, `No threads.`",
+      "`thread N`: `[Switching to thread N (Thread 0x... (LWP n))]`, then `#0  ` and the frame line, then the source line; `thread` alone: `[Current thread is N (Thread 0x... (LWP n))]`; errors `Unknown thread 9.`, `Invalid thread ID: 0`, `Invalid thread ID: x`, and with no process `No thread selected` (no period) and `Unknown thread 2.`",
+      "bt, frame, print and info locals read the selected thread's registers; a non-main thread's bt goes past its start routine: `#2  0x00007ffff7e41b84 in ?? () from /lib/x86_64-linux-gnu/libc.so.6` and `#3  0x00007ffff7eceecc in ?? () from /lib/x86_64-linux-gnu/libc.so.6` (start_thread and clone3, which libc's dynamic symbols do not name); on the static builds `#2  0x... in start_thread ()` and `#3  0x... in clone3 ()`. main's bt stops at main, as in S2",
+      "continue resumes every thread; next, step and finish in the worker run while the other threads spin and report the worker's lines (31, 32, 31, then `Run till exit` and `Value returned is $1 = 10`)",
+      "each thread's end prints `[Thread 0x... (LWP n) exited]`, in the fixture's order (worker, first spinner, second spinner), then `[Inferior 1 (process N) exited normally]`; kill prints `[Inferior 1 (process N) killed]` and no thread lines",
+      "what varies between takes, and is normalised by name: the LWP ids and process ids; a spinning thread's pc, which is anywhere in its one-line loop, so its frame shows or omits the `0x... in` prefix; the padding of the Target Id column, which follows the ids' digits",
+      "the threads' stop is all-stop: with the other threads stopped, `next` and `finish` in the worker were never interrupted by a spinner (none hits a breakpoint)"
+    ],
+    "wolf": "wolf 0.2.38's std has no thread module. The language's `spawn` runs tasks on the runtime's worker threads: under gdb the probe program showed two `[New Thread]` lines on two CPUs, both tasks hitting work() in an order that changed between takes, the main thread in libc's `syscall ()`, and frames through `wolf_rt::task::leave::arch::enter`; on the Mac lldb listed 19 threads (one per core, plus the scheduler's). The worker count follows the host's CPUs and the order follows the scheduler, so no wolf thread transcript is stable. S6's thread rows are C-only until wolf's std has threads",
+    "macos_lldb": [
+      "`thread list`: `  thread #N: tid = 0x..., 0x... prog`spin(flag=..., want=1, slot=0) at main.c:15:20` (the main thread adds `queue = 'com.apple.main-thread'`, the stopped one `stop reason = breakpoint 1.1`), the same four threads in the same order as gdb's",
+      "`thread select N` then `bt`: frames with source in the fixture, then `libsystem_pthread.dylib`_pthread_start + 136` (no source: not a fact)",
+      "lldb prints no line when a thread starts or ends",
+      "sniff at trunk on macOS reports the worker's breakpoint (the exception names the thread) and, at `next`, stops in a spinner: its layer is not thread-aware"
+    ]
+  },
+  "signals": {
+    "linux_gdb": [
+      "a stop: a blank line, `Program received signal SIGUSR1, User defined signal 1.`, the frame line (`0x... in deliver (sig=10) at FILE:18`, mid-line after the syscall), the source line; continue passes it (the handler runs) and the program ends `exited with code 025`",
+      "`handle SIG KEYWORDS` in batch mode prints nothing; at a terminal it prints `Signal        Stop\\tPrint\\tPass to program\\tDescription` and one row per signal named (`SIGUSR1       No\\tYes\\tYes\\t\\tUser defined signal 1`). nostop keeps print, noprint implies nostop, stop implies print; keywords may be abbreviated (`nos`, `nopr`, `st`); ignore and noignore are nopass and pass; numbers 1-15 are gdb's numbering (14 is SIGALRM, 12 SIGSYS) and ranges are allowed (`1-3`); `all` changes every signal but SIGINT and SIGTRAP. Errors: `Argument required (signal to handle).`, `Unrecognized or ambiguous flag word: \"SIGFOO\".` (also for `USR1` and `sometimes`), `Only signals 1-15 are valid as numeric signals.` then `Use \"info signals\" for a list of symbolic signals.`. SIGINT, SIGTRAP and SIGKILL accept changes with no question under confirm off",
+      "nostop with print: the `Program received signal` line is printed and the program goes on; nostop noprint: nothing; nopass: the stop is reported and the program never sees the signal (exit 01: one SIGUSR2 seen)",
+      "`signal 0` resumes without the signal (exit 013), `signal SIGUSR2` with another (exit 014), `signal 12` with gdb's 12, SIGSYS (`Program terminated with signal SIGSYS, Bad system call.`); at a terminal `Continuing with signal SIGUSR2.` and `Continuing with no signal.`, in batch nothing. Errors: `The program is not being run.`, `Argument required (signal number).`, and for an unknown name `No symbol \"SIGFOO\" in current context.` (gdb evaluates it as an expression)",
+      "`info signals SIGUSR1` (or `info handle`, or a number 1-15): the header and the row; `info signals` alone: the header, a blank line, 150 rows in gdb's own order (SIGHUP ... SIGLIBRT, with gdb's names for other systems' signals: SIGEMT, SIGLOST, SIGWIND, SIG32-SIG127, EXC_BAD_ACCESS and the rest), a blank line and `Use the \"handle\" command to change these tables.`; `info signals SIGFOO` prints the header, then the error. sniff's table is generated from the pinned gdb's output, never typed",
+      "the program's own SIGSEGV (c/exits `fault`): stopped at the faulting line `0x... in main (argc=2, argv=...) at FILE:19`; nopass or `signal 0` re-executes the store and stops again at the same line; nostop noprint ends `Program terminated with signal SIGSEGV, Segmentation fault.`",
+      "past the contract's list, measured and left to the remainder: `step` from a signal stop enters the handler and `bt` shows `#1  <signal handler called>`; `next` over a line whose nostop signal arrives steps over the handler; `queue-signal`"
+    ],
+    "macos_lldb": [
+      "a stop: `stop reason = signal SIGUSR1` at `deliver(sig=30) at main.c:24:5` (darwin's numbers); exit `status = 21`",
+      "`process handle SIGUSR1 -s false -n false -p true` then run: the stop is SIGUSR2 only; `-n true`: `Process N stopped and restarted: thread 1 received signal: SIGUSR1`; `-p false`: exit 1",
+      "the fault: `stop reason = EXC_BAD_ACCESS (code=1, address=0x0)` at main.c:19:18, and a continue faults again; `process handle SIGSEGV -s false` still stops at EXC_BAD_ACCESS (lldb takes the Mach exception before any signal)",
+      "lldb has no continue-with-a-signal; `process signal SIGUSR2` fails here (`Failed to send signal 31`)"
+    ]
+  },
+  "attach": {
+    "linux_gdb": [
+      "the rows' harness starts the sleeper as its own child, without address randomisation (as both debuggers start their own programs), reads `ready PID`, and runs the debugger with the pid in its script; afterwards it waits for the sleeper and records how it ended. Attach under Yama scope 1 works because the debugger has CAP_SYS_PTRACE in the container's user namespace",
+      "batch `attach PID`: no `Attaching to program` line (that is a terminal's); the stop's frame line `0x000055555555521e in nap () at FILE:19` and its source line (mid-line after the syscall); `detach`: `[Inferior 1 (process N) detached]`; the sleeper then prints `done 100` and exits 0",
+      "at a terminal: `Attaching to program: PATH, process N`, then for a dynamic program `Reading symbols from /lib/x86_64-linux-gnu/libc.so.6...` and `(No debugging symbols found in /lib/x86_64-linux-gnu/libc.so.6)` and the same two lines for `/lib64/ld-linux-x86-64.so.2`; at detach `Detaching from program: PATH, process N` before the `detached` line",
+      "after attach, break, continue, print, bt and delete work as after run; the breakpoint's argument is the tick reached by then (n=7 in both takes, timing-dependent, normalised by name); `kill` prints `[Inferior 1 (process N) killed]` and the sleeper dies of SIGKILL; the end of a batch script while attached detaches (the sleeper ends `done 100`); `continue` runs it to `[Inferior 1 (process N) exited normally]`; `signal SIGTERM` ends it `Program terminated with signal SIGTERM, Terminated.`",
+      "`gdb -p PID PROG` and `gdb PROG PID` attach before the script runs; `-p PID` without a program finds it",
+      "refusals: `ptrace: No such process.`; `Argument required (process-id to attach).`; `Illegal process-id: x.`; `detach` with nothing: `The program is not being run.`. Not permitted (a process another tracer holds, or the debugger as uid 1000 against root's sleeper): Ubuntu's three-line Yama paragraph on stdout, `warning: process N is already traced by process M` (the held case) and `ptrace: Inappropriate ioctl for device.`: the pinned gdb loses the attach's errno (EPERM, as the kernel probe shows) and prints another",
+      "info threads after attach: dynamic `* 1    Thread 0x7ffff7da2740 (LWP N) \"prog\" ...`; the static sleeper `* 1    process N \"prog\" ...`"
+    ],
+    "macos": [
+      "lldb `process attach --pid N`: `stop reason = signal SIGSTOP` at `nap at main.c:28:5`; `process detach`: `Process N detached`, and the sleeper ends `done 100`; `process kill`: `exited with status = 9`; `lldb -p PID`; `error: attach failed: no such process`",
+      "task ports of a process the prober did not start (a C probe from the SDK's declarations): an unsigned prober gets the task port and PT_ATTACHEXC of a target signed with get-task-allow (kr 0) and is refused an ad hoc target without it (kr 5, EPERM); a prober signed with the debugger entitlement also gets the ad hoc target; a hardened-runtime target is refused to both (kr 5), and lldb says `error: attach failed: attach failed (Not allowed to attach to process.  Look in the console messages ...)`. That is macOS's not-permitted witness. Developer mode reads disabled; nothing was changed"
+    ]
+  },
+  "pax": {
+    "probe": "tests/pax-probe/s6.c, static, the same binary: 45 lines on Linux, 45 on PAX, four differ",
+    "supported": [
+      "PTRACE_O_TRACECLONE: the clone event stop 0x3057f, GETEVENTMSG naming the new thread, its first stop 0x137f",
+      "tgkill SIGSTOP of one thread and of the leader (0x137f each), GETREGS of each, fs_base equal to pthread_self, PEEKDATA through a thread's id, the thread's and the leader's ends",
+      "/proc/PID/task with two entries",
+      "signal-delivery stops (0xa7f), GETSIGINFO (signo 10, code 0, the sender), CONT passing, suppressing and replacing a signal; a fault's stop (0xb7f, code 1, address 0), suppressed and re-taken, passed and fatal",
+      "ATTACH of a sibling (stop 0x137f), GETREGS, DETACH, the sleeper running on to exit 0; EPERM for a second ATTACH, for a process another tracer holds and for itself; ESRCH for no such process; SEIZE and INTERRUPT (0x80057f) and DETACH"
+    ],
+    "gaps": [
+      "/proc/PID/comm: open -1 errno 2 (Linux: \"s6\")",
+      "/proc/PID/task/TID/comm: open -1 errno 2 (Linux: \"s6\"): gdb's `\"prog\"` in info threads and in `Thread 4 \"prog\" hit Breakpoint` comes from it",
+      "/proc/PID/task/TID/stat: open -1 errno 2 (Linux: state t), as sn04 found",
+      "not a gap: the thread's end read 0x0 on PAX and 0x700 on Linux, where the group's exit replaced the racing thread's status (px102 measured the same race)"
+    ],
+    "plan": "the threads, signals and attach rows run at PAX's console under KVM on the static builds, held to the pinned gdb's goldens on the same builds. Where PAX lacks comm, sniff names a thread as Linux names it at exec (the program file's base name, 15 bytes), and the gap is filed as a pax issue with the probe's line as its witness. PAX has no Yama, so attach as root is the Linux container's case"
+  },
+  "rows": {
+    "sets": "every new row is in tests/session-rows.json and runs on the Linux S2 set (dynamic builds), the PAX set (static builds at PAX's console, goldens from the pinned gdb on the same builds, tests/pax-rows.json naming any drop or skip), and the macOS set (tests/macos-rows.json: linux rows after the named normalisations where both answer alike, lldb fact rows where they do not)",
+    "threads": "threads-{gcc,clang}-{run,info,switch,spinner,next,list,kill,signal,signal-nostop}, threads-gcc-{single,norun-info,norun-thread,unknown,invalid,nomatch}",
+    "signals": "signals-{gcc,clang}-{run,nostop,nostop-noprint,nopass,signal0,replace}, signals-gcc-{sigsys,info,info-all,info-bad,handle-bad,handle-word,handle-noarg,handle-num16,signal-norun,signal-bad,signal-noarg,segv-nostop,segv-nostop-noprint,segv-nopass,segv-signal0,segv-info}, tty-gcc-signals-{handle,handle-all,signal}",
+    "attach": "attach-{gcc,clang}-{detach,break}, attach-gcc-{info,kill,quit,continue,dash-p,signal,held,nosuch,noarg,word}, detach-gcc-norun, tty-gcc-attach",
+    "normalisations": "pid (as S2, plus `process N` in a Target Id and in the attach and detach lines, and the pids in the held warning), lwp (an LWP id), threads-table (the Target Id column's padding and the header's), spin (a spinning thread's optional `0x... in` before `spin (`), ticks (the tick a breakpoint after attach lands on), the sleeper line the harness appends (`[sleeper exited with code 0: done 100]`)",
+    "red_at_trunk": "sniff at trunk ran every gdb-language probe script: 3 of 103 matched gdb after the pid and banner normalisations, sig-run on gcc, clang and the static gcc build (a single-threaded signal stop, its frame line, and continue passing the signal: S2 already does this). Those become guard rows (signals-*-run), green at trunk; the sub-items they cover are red at trunk through the thread rows (threads-*-signal: `Thread 4 \"prog\" received signal`). Every other row is red at trunk: `info threads`, `info signals`, `thread`, `handle`, `signal`, `attach` and `detach` are named as gdb commands sniff does not implement yet, no `[New Thread]` or `Thread N \"prog\" hit` line is printed, and `-p` is read as a program path"
+  },
+  "rulings_asked": {
+    "R-sn07-1": {
+      "question": "S6 is too big for one PR",
+      "options": {
+        "a": "two PRs: threads and signals on all three platforms first, then attach and detach on all three, from the first's gauntlet-green head",
+        "b": "three PRs: signals, then threads, then attach",
+        "c": "one PR"
+      },
+      "recommend": "a: attach to a threaded process attaches every thread, so it builds on the thread list; a thread's signal stop is printed differently from a single thread's, so threads and signals are held together; each PR stays one gauntlet, one plant and one set of records"
+    },
+    "R-sn07-2": {
+      "question": "a wolf program with threads",
+      "recommend": "S6's thread rows are C-only: wolf 0.2.38's std has no threads, and its tasks' worker threads follow the host's CPUs and the scheduler (measured above). A wolf thread row is owed when wolf's std has threads"
+    },
+    "R-sn07-3": {
+      "question": "a dynamic program's library frames under a thread",
+      "recommend": "sniff unwinds through a shared library with the library's own .eh_frame (the file /proc/PID/maps names, at its load address) and names its frames from the library's dynamic symbols, printing `?? () from LIB` where none covers the pc, as gdb does"
+    },
+    "R-sn07-4": {
+      "question": "the not-permitted refusal, where the pinned gdb prints a distribution's Yama paragraph and an errno that is not the attach's",
+      "recommend": "sniff prints gdb's `warning: process N is already traced by process M` when another tracer holds the process, and `ptrace: Operation not permitted.`, the errno the kernel gave; the row holds sniff's own text and checks that the golden shows gdb refusing the attach"
+    },
+    "R-sn07-5": {
+      "question": "threads on macOS, where lldb is the oracle",
+      "recommend": "the macOS thread rows are lldb fact rows (each thread's index, function, file and line; the stopped thread; the selected thread's frames), and sniff's own Target Id there is `Thread 0x<pthread> (tid <thread id>)`, its own form, named in the note"
+    },
+    "R-sn07-6": {
+      "question": "stepping into a handler, `<signal handler called>`, `next` over a handler, queue-signal and thread apply",
+      "recommend": "measured, outside the contract's list: S6's remainder, listed in the note"
+    }
+  },
+  "honesty": {
+    "not_known_before_code": [
+      "whether all-stop on PAX keeps the order of thread events under load as Linux does (px102 lists thread SIGSTOP ordering under load as owed)",
+      "whether gdb's thread lines' order (the exits in the fixture's order) holds on every take; it held in all the probe's takes",
+      "how sniff's macOS layer learns of new threads (lldb prints nothing; task_threads at each stop is the plan)",
+      "the macOS facts were measured on the workers fixture before its signal mode was added; the rows' facts are re-captured on the committed fixture"
+    ],
+    "clean_room": "the GDB manual's Threads, All-Stop Mode, Thread Stops, Signals, Attach, Kill Process, Background Execution and Interrupted System Calls sections and the man pages ptrace(2), wait(2), signal(7), proc(5), proc_pid_task(5), proc_pid_comm(5), proc_pid_stat(5), proc_pid_status(5), tgkill(2), clone(2), sigaction(2), pthreads(7), prctl(2) and kill(2), each read twice by curl and digest-checked; the macOS SDK headers' declarations; gdb and lldb only as binaries; no debugger's or kernel's source read"
+  }
+}
