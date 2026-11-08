@@ -152,7 +152,19 @@ fn frame_args(s: Session, fr: Frame) -> str {
         let name = attr_text(s.prog, ui, pd, 3)
         let t = attr_ref(s.prog, pd, 73)
         var text = "..."
-        if is_scalar(s.prog, t) { text = var_text(s, fr, pd, false) }
+        if is_scalar(s.prog, t) {
+            text = var_text(s, fr, pd, false)
+            // a pointer into code or data is followed by its symbol, as print shows it (`flag=0x5555... <worked>`)
+            let v = var_val(s, fr, pd)
+            if v.ok {
+                var sym = ""
+                if v.ty == ty_codep { sym = symbolize(s, as_u64(v.bytes)) } else {
+                    let (k, _) = num_class(s, v.ty)
+                    if k == 5 && !is_char_pointer(s, v.ty) { sym = data_symbolize(s, as_u64(v.bytes)) }
+                }
+                if sym.len() > 0 { text = "{text} {sym}" }
+            }
+        }
         if i > 0 { out = "{out}, " }
         out = "{out}{name}={text}"
         i += 1
