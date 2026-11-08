@@ -5,7 +5,8 @@ lupin's place trace names every place a statement touched by its path (`p.x`, `p
 value after that statement. A debugger stopped before the next statement must print the same value
 for the same path: the path is a wolf expression (field access, indexing through a List's header),
 evaluated by sniff's wolf mode. Arithmetic and comparisons over those places are held to the values
-the wolf spec's rules give (integer arithmetic on the places' values; a comparison is a bool).
+the wolf spec's rules give (integer arithmetic on the places' values; a comparison is a bool). A watch on a
+wolf local reports, in order, the values lupin's trace gives the place (gate step session-expr-join).
 """
 import argparse
 import json
@@ -30,6 +31,36 @@ CASES = [
         ('p.hist[2] > by && p.y < 10', lambda v: 'true' if int(v['p.hist[2]']) > int(v['by']) and int(v['p.y']) < 10 else 'false'),
     ]),
 ]
+
+# A watch on a wolf local, held to lupin: the New values sniff reports, in order, are the values the place
+# takes in lupin's trace of the function, each change once. The first is the initialisation's value, and a
+# write of the value the slot already held is silent, as any write of an unchanged value is.
+WATCHES = [
+    ('wolf/loops', 'sum', 'total', ['break sum', 'run', 'watch total'] + ['continue'] * 5),
+]
+
+
+def watch_join(a, env, values):
+    bad = 0
+    for case, function, place, script_lines in WATCHES:
+        rows = [r for f in values['fixtures'] if f['id'] == case for r in f['rows'] if r['function'] == function]
+        seq = []
+        for r in rows:
+            v = r['locals'].get(place)
+            if v is not None and (not seq or seq[-1] != v):
+                seq.append(v)
+        script = Path(a.work) / ('watch-' + case.replace('/', '-') + '.cmd')
+        script.write_text('\n'.join(script_lines) + '\n')
+        prog = a.fixtures / case.split('/')[0] / case.split('/')[1] / 'wolf-debug' / 'prog'
+        run = subprocess.run([a.sniff, '-batch', '-x', str(script), str(prog)], cwd=a.cwd, env=env,
+                             capture_output=True, text=True, timeout=60)
+        news = re.findall(r'^New value = (.*)$', run.stdout, re.M)
+        if not seq or not news or (news != seq and news != seq[1:]):
+            print('FAIL watch-join %s `%s` lupin=%s sniff=%s' % (case, place, seq, news))
+            bad += 1
+        else:
+            print('PASS watch-join %s `%s` lupin=%s sniff=%s' % (case, place, ','.join(seq), ','.join(news)))
+    return bad
 
 
 def main():
@@ -83,6 +114,7 @@ def main():
             bad += 1
         print('%s expr-join %s at %s places=%d derived=%d agreed=%d' % ('PASS' if bad == 0 else 'INFO', case, where,
               len(live), len(derived), agreed))
+    bad += watch_join(a, env, values)
     return 1 if bad else 0
 
 
