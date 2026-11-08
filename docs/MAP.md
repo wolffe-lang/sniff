@@ -221,3 +221,16 @@ gdb's describe what sniff lacks, and gdb's command names that sniff lacks, which
 yet. At a terminal an empty line repeats the previous one as gdb repeats it. The help rows compare bytes, a
 held head, a subset of gdb's lines or sniff's own text, named per row in `tests/session-rows.json`
 (`tools/session.py`). Boundaries that remain are listed in `notes/sn06-list-and-help.md`.
+
+### The session's threads and signals (S6)
+
+`src/session/threads.lu` keeps the program's threads all-stop: on Linux and PAX a new thread is traced from its
+clone event (`PTRACE_O_TRACECLONE`) and a stop stops every other thread (a SIGSTOP to each by `tgkill(2)`, each
+awaited); on macOS the task is suspended at each reported exception and its thread list read then
+(`task_threads`). It prints gdb's thread lines, `info threads` and `thread N`, in gdb's three target-id forms on
+Linux and PAX and in sniff's own on macOS. `src/session/signals.lu` answers `handle`, `info signals` and `signal`
+over gdb's signal table (`src/session/sigtable.lu`, generated from the pinned gdb's `info signals`), with pass
+read at the resume. `src/session/libs.lu` unwinds a frame in a shared library by the library's own `.eh_frame` and
+names it from the library's symbols. The macOS thread rows are lldb fact rows; the PAX rows run at PAX's console,
+where a thread's name is the program's base name until PAX keeps procfs `comm` (pax#322). Attach and detach are
+the second part of S6. Boundaries that remain are listed in `notes/sn07-threads-and-signals.md`.
