@@ -74,25 +74,32 @@ pub fn uint_le(data: List[byte], mut c: Cursor, width: int) -> u64 ! ReadError {
         return unsupported_width
     }
     let span = take_span(data, mut c, width)?
-    var value: u64 = 0
-    var i: int = 0
-    while i < width {
-        let octet = data[span.start + i] as int as u64
-        value |= octet << (i * 8) as u64
-        i += 1
-    }
-    value
+    let s = span.start
+    // Unrolled per width: the loop was a tenth of startup on a large runtime's DWARF.
+    let b0 = data[s] as int as u64
+    if width == 1 { return b0 }
+    let b1 = data[s + 1] as int as u64
+    if width == 2 { return b0 | b1 << 8 }
+    let low = b0 | b1 << 8 | (data[s + 2] as int as u64) << 16 | (data[s + 3] as int as u64) << 24
+    if width == 4 { return low }
+    low | (data[s + 4] as int as u64) << 32 | (data[s + 5] as int as u64) << 40 |
+        (data[s + 6] as int as u64) << 48 | (data[s + 7] as int as u64) << 56
 }
 
 /// Decode up to ten unsigned LEB128 octets. Missing terminators and bits
 /// outside u64 return named rows; consumed bytes remain consumed on failure.
 pub fn uleb64(data: List[byte], mut c: Cursor) -> u64 ! ReadError {
+    // The cursor is validated once: each octet only moves pos toward end, which stays
+    // within the buffer, so the per-octet checks that remain are the end and the work.
+    valid_cursor(data, c)?
     var value: u64 = 0
     var i: int = 0
     while i < 10 {
-        valid_cursor(data, c)?
         if c.pos == c.end { return unterminated_leb128 }
-        let octet = uint_le(data, mut c, 1)?
+        if c.fuel < 1 { return resource_limit }
+        let octet = data[c.pos] as int as u64
+        c.pos += 1
+        c.fuel -= 1
         let payload = octet & 127
         // The tenth group contributes only bit 63. Reject before shifting.
         if i == 9 && (payload > 1 || octet & 128 != 0) {
@@ -108,12 +115,16 @@ pub fn uleb64(data: List[byte], mut c: Cursor) -> u64 ! ReadError {
 /// Decode up to ten signed LEB128 octets with checked sign extension.
 /// Overflow and missing terminators are rows, not casts that trap or wrap.
 pub fn sleb64(data: List[byte], mut c: Cursor) -> i64 ! ReadError {
+    // Validated once, as uleb64.
+    valid_cursor(data, c)?
     var value: u64 = 0
     var i: int = 0
     while i < 10 {
-        valid_cursor(data, c)?
         if c.pos == c.end { return unterminated_leb128 }
-        let octet = uint_le(data, mut c, 1)?
+        if c.fuel < 1 { return resource_limit }
+        let octet = data[c.pos] as int as u64
+        c.pos += 1
+        c.fuel -= 1
         let payload = octet & 127
         if i == 9 {
             // Bits above bit 63 must be a valid sign extension.
@@ -145,7 +156,10 @@ pub fn cstring(data: List[byte], mut c: Cursor) -> ByteSpan ! ReadError {
     valid_cursor(data, c)?
     let start = c.pos
     while c.pos < c.end {
-        let octet = uint_le(data, mut c, 1)?
+        if c.fuel < 1 { return resource_limit }
+        let octet = data[c.pos] as int
+        c.pos += 1
+        c.fuel -= 1
         if octet == 0 {
             return ByteSpan { start: start, length: c.pos - start - 1 }
         }
