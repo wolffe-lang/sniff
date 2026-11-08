@@ -29,6 +29,7 @@ A row compares standard output byte for byte unless its "compare" says otherwise
           "own" lines, each of which sniff must print; sniff prints something
   own     sniff's text is the row's "expect" lines (and "expect_err", "expect_rc" when
           given), and the golden shows gdb answering the command with text and status 0
+          (or, with "gdb": "lacks", refusing it: a command of sniff's own)
 """
 import argparse
 import json
@@ -321,12 +322,13 @@ def judge(row, out, err, rc, want_o, want_e, want_rc):
         if why:
             bad.append('stdout (%s) %s' % (mode, why))
     if mode == 'own':
-        if want_rc.strip() != '0' or not want_o.strip():
+        if row.get('gdb', 'has') == 'has' and (want_rc.strip() != '0' or not want_o.strip()):
             bad.append('golden: gdb does not answer this command with text and status 0')
-        if 'expect_err' in row:
-            want_e = ''.join(x + '\n' for x in row['expect_err'])
-        if 'expect_rc' in row:
-            want_rc = str(row['expect_rc'])
+        if row.get('gdb') == 'lacks' and want_rc.strip() == '0':
+            bad.append('golden: gdb answers this command, which the row says it lacks')
+        # sniff's own answer: its stderr and status are the row's (none and 0 unless it says otherwise)
+        want_e = ''.join(x + '\n' for x in row.get('expect_err', []))
+        want_rc = str(row.get('expect_rc', 0))
     if err != want_e:
         bad.append('stderr ' + first_diff(want_e, err))
     if str(rc) != want_rc.strip():
@@ -416,7 +418,7 @@ def row_form(r):
     """'' when a row's compare fields are well formed, else the reason."""
     mode = r.get('compare', 'bytes')
     if mode == 'bytes':
-        extra = sorted({'head', 'own', 'expect', 'expect_err', 'expect_rc'} & set(r))
+        extra = sorted({'head', 'own', 'expect', 'expect_err', 'expect_rc', 'gdb'} & set(r))
         return 'fields of another compare mode: ' + ', '.join(extra) if extra else ''
     if r.get('tty'):
         return 'a terminal row compares bytes'
@@ -428,7 +430,11 @@ def row_form(r):
         own = r.get('own', [])
         return '' if isinstance(own, list) and all(isinstance(x, str) for x in own) else 'own must be a list of lines'
     if mode == 'own':
-        return '' if isinstance(r.get('expect'), list) and r['expect'] else 'own needs its expect lines'
+        if r.get('gdb', 'has') not in ('has', 'lacks'):
+            return 'gdb must be has or lacks'
+        if not isinstance(r.get('expect'), list) or not (r['expect'] or r.get('expect_err')):
+            return 'own needs its expect lines'
+        return ''
     return 'unknown compare mode ' + mode
 
 
