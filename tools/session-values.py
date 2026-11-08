@@ -9,9 +9,10 @@ a lupin row of the same function for every variable lupin reports live. Rows
 are taken in order: a stop never matches an earlier row than its predecessor.
 Variables sniff prints that lupin does not yet report live (declared later in
 the function, so only the frame's memory) are counted as `unverified`, never
-as agreement. A one-byte or wide integer whose DWARF encoding is signed while
-the source type is unsigned is accepted only through its unsigned
-reinterpretation and is counted under gap R-sn00-1.
+as agreement. A one-byte integer agrees through its number: gdb's form
+`255 '\\377'` shows the character too. Since wolf 0.2.38 the unsigned types are
+unsigned in the DWARF (R-sn00-1), so no value is reinterpreted any more: a signed
+reading of an unsigned value is a disagreement.
 """
 import argparse
 import json
@@ -27,7 +28,6 @@ CASES = [
     ('wolf/loops', 'sum', 14),
     ('wolf/types', 'scalars', 6),
 ]
-BITS = {'u8': 8, 'u16': 16, 'u32': 32, 'u64': 64, 'uint': 64}
 ENV = {'PATH': '/usr/local/bin:/usr/bin:/bin', 'HOME': '/work/target/home', 'LC_ALL': 'C', 'TZ': 'UTC', 'TERM': 'dumb'}
 CWD = '/work'
 
@@ -62,16 +62,12 @@ def number(text):
 
 
 def agree(sniff_text, row, name):
-    """True, 'gap' or False."""
+    """Whether sniff's text is lupin's value."""
     live = row['locals'][name]
     if sniff_text == live:
         return True
-    kind = next((p['type'] for p in row['places'] if p['path'] == name), '')
-    bits = BITS.get(kind)
     n = number(sniff_text)
-    if bits and n is not None and n < 0 and str(n + (1 << bits)) == live:
-        return 'gap'
-    return False
+    return n is not None and str(n) == live
 
 
 def main():
@@ -95,7 +91,7 @@ def main():
         rows = [r for f in values['fixtures'] if f['id'] == case for r in f['rows'] if r['function'] == function]
         stops = sniff_stops(a.sniff, a.fixtures, case, function, count, a.work)
         pointer = 0
-        agreed = unverified = gaps = matched = 0
+        agreed = unverified = matched = 0
         stops = [st for st in stops if st['function'] == function]
         for k, whole in enumerate(stops):
             stop = dict(whole['args'])
@@ -105,7 +101,7 @@ def main():
                 for j in range(len(rows)):
                     ok = True
                     for name in rows[j]['locals']:
-                        if name not in stop or agree(stop[name], rows[j], name) is False:
+                        if name not in stop or not agree(stop[name], rows[j], name):
                             ok = False
                             break
                     if ok:
@@ -121,7 +117,7 @@ def main():
             if k == 0:
                 # entry stop: only the arguments are live, and lupin's first row names them
                 first = rows[0]['locals']
-                bad = [n for n in whole['args'] if n in first and agree(whole['args'][n], rows[0], n) is False]
+                bad = [n for n in whole['args'] if n in first and not agree(whole['args'][n], rows[0], n)]
                 if bad:
                     print('FAIL value-join-entry %s %s %s' % (case, function, bad))
                     failures += 1
@@ -129,34 +125,27 @@ def main():
             found = None
             for j in range(pointer, len(rows)):
                 ok = True
-                gap = 0
                 for name in rows[j]['locals']:
-                    if name not in stop:
+                    if name not in stop or not agree(stop[name], rows[j], name):
                         ok = False
                         break
-                    r = agree(stop[name], rows[j], name)
-                    if r is False:
-                        ok = False
-                        break
-                    gap += 1 if r == 'gap' else 0
                 if ok:
-                    found = (j, gap)
+                    found = j
                     break
             if found is None:
                 print('FAIL value-join-stop %s %s stop=%d values=%r' % (case, function, k, stop))
                 failures += 1
                 continue
-            pointer = found[0]
+            pointer = found
             matched += 1
-            agreed += len(rows[found[0]]['locals'])
-            gaps += found[1]
-            unverified += len([n for n in stop if n not in rows[found[0]]['locals']])
+            agreed += len(rows[found]['locals'])
+            unverified += len([n for n in stop if n not in rows[found]['locals']])
         if matched < 1:
             print('FAIL value-join-%s-%s: no stop matched a lupin row (stops=%d rows=%d)' % (case.replace('/', '-'), function, len(stops), len(rows)))
             failures += 1
         else:
-            print('PASS value-join %s %s stops=%d matched=%d agreed_values=%d unverified=%d gap_R-sn00-1=%d' %
-                  (case, function, len(stops), matched, agreed, unverified, gaps))
+            print('PASS value-join %s %s stops=%d matched=%d agreed_values=%d unverified=%d' %
+                  (case, function, len(stops), matched, agreed, unverified))
         record.append({'case': case, 'function': function, 'stops': stops, 'matched': matched})
     if a.out:
         a.out.write_text(json.dumps(record, indent=1) + '\n')
