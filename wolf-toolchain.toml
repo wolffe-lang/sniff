@@ -1,23 +1,23 @@
-# Whole published release archives; metadata identities read twice on 2026-11-05.
+# Whole published release archives; metadata identities read twice on 2026-11-08.
 # Each wolf archive binds its included standard library and runtime too.
 
 [wolf]
-version = "0.2.37"
+version = "0.2.38"
 repo = "wolffe-lang/wolf-lang"
-rev = "e2757a7bd702d3b21f06396291010d2d1cb6101d"
-aarch64-apple-darwin = "c2ebfba6f80b96710b818d3d72f3a201144698abdfc6d065594acaa8c10f5e15"
-x86_64-unknown-linux-gnu = "9811d32e1dddcb743b96a14ea685faee06ba453242c1ae3deb90063f5bb9bcaa"
-aarch64-unknown-linux-gnu = "24c0975dfbc804dbb76c26449a9795a6897f186089fa39e2de1a84ab78d431f8"
+rev = "95ae0827a8ad4d0bbed9302df7811caaa7009fa1"
+aarch64-apple-darwin = "66a2c31324e9e4c4cbb6f103e4014e36b400366c198598b67c71491a65cffba4"
+x86_64-unknown-linux-gnu = "8447a57944da67ba8e76f5b4e88c2f38a32f39466f44b65e5817dcc276394f39"
+aarch64-unknown-linux-gnu = "e0a6763095cf99cb60a18f260966c96dd62be826076aa0ea22e4ad4f141a60e6"
 
 [lupin]
-version = "0.1.59"
+version = "0.1.60"
 repo = "wolffe-lang/wolf-interp"
-rev = "668fb752c690f33cf124c052cc9bae2e9696eeef"
-aarch64-apple-darwin = "9f091af873768677593659bf2fda97243db01c489e6836b15c17ed50aabbf5f5"
-x86_64-unknown-linux-gnu = "12121909c289ac8ff4a138de8faabdb86b72df97988832b39047d5f312ec3a18"
-aarch64-unknown-linux-gnu = "73bdf749f5c9699c724776d00995e16c6432c66d0e69c497ca6ccdf83f766a3f"
+rev = "17bd522382373b361fe035a5cc61f9e136e1caba"
+aarch64-apple-darwin = "f3cae16fdb88a94702c0fd816d5eb90cdc8e8636c028dcf40f03868c5dc36bb8"
+x86_64-unknown-linux-gnu = "e7d4c4f1534736c9262f4ccd01a631f03ff70e3b8122eefe6e9ec1e15c02637e"
+aarch64-unknown-linux-gnu = "dc19e519c77e3b830965ba1516cecf3ef0097d658bc8dfd12ae96f2693d3373c"
 
 [std]
 # Included in, and bound by, every pinned wolf archive above.
 repo = "wolffe-lang/wolf-std"
-rev = "5b3a59942b2ee69b99682544341ce8a12c984e9e"
+rev = "d4a4d4cab358e1e8c174f0206f9e13ad5cfe6c61"
