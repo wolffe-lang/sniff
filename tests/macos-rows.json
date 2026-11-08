@@ -1790,6 +1790,7 @@
   "signals-clang-signal0": "darwin numbers its signals its own way (the handler's sig is 30, not 10) and the system call that sends one is arm64's (svc, at line 24): the lldb-signals-* rows hold the stops and the exit code, and the signals-mac-* rows the exit code where lldb has no continue-with-a-signal",
   "signals-clang-replace": "darwin numbers its signals its own way (the handler's sig is 30, not 10) and the system call that sends one is arm64's (svc, at line 24): the lldb-signals-* rows hold the stops and the exit code, and the signals-mac-* rows the exit code where lldb has no continue-with-a-signal",
   "libframes-clang-bt": "macOS's system libraries are in the dyld shared cache, with no file for a frame's `from LIB` and no .eh_frame to read; the lldb rows' frames through libsystem hold sniff's own unwinding there",
-  "libframes-clang-up": "macOS's system libraries are in the dyld shared cache, with no file for a frame's `from LIB` and no .eh_frame to read; the lldb rows' frames through libsystem hold sniff's own unwinding there"
+  "libframes-clang-up": "macOS's system libraries are in the dyld shared cache, with no file for a frame's `from LIB` and no .eh_frame to read; the lldb rows' frames through libsystem hold sniff's own unwinding there",
+  "libframes-clang-entry": "macOS's system libraries are in the dyld shared cache, with no file for a frame's `from LIB` and no .eh_frame to read; the lldb rows' frames through libsystem hold sniff's own unwinding there"
  }
 }

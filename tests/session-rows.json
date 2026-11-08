@@ -3940,6 +3940,30 @@
     "delete",
     "continue"
    ]
+  },
+  {
+   "name": "libframes-gcc-entry",
+   "prog": "c/sorter/gcc-O0/prog",
+   "script": [
+    "break 16",
+    "run",
+    "stepi 9",
+    "bt",
+    "delete",
+    "continue"
+   ]
+  },
+  {
+   "name": "libframes-clang-entry",
+   "prog": "c/sorter/clang-O0/prog",
+   "script": [
+    "break 16",
+    "run",
+    "stepi 10",
+    "bt",
+    "delete",
+    "continue"
+   ]
   }
  ]
 }
