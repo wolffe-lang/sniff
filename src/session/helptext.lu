@@ -14,31 +14,27 @@ struct HelpCmd {
     pub body: List[str],
 }
 
-fn help_cmd(name: str, take aliases: List[str], class: str, summary: str, take body: List[str]) -> HelpCmd {
-    HelpCmd { name: name, aliases: aliases, class: class, summary: summary, body: body }
-}
-
 /// sniff's commands and subcommands, in gdb's (alphabetical) order.
 fn help_table() -> List[HelpCmd] {
     [
-        help_cmd("awatch", [], "breakpoints", "Set an access watchpoint for EXPRESSION.",
-            [
+        HelpCmd { name: "awatch", aliases: [], class: "breakpoints", summary: "Set an access watchpoint for EXPRESSION.",
+            body: [
                 "Usage: awatch EXPRESSION",
                 "",
                 "An access watchpoint stops execution of your program whenever the value",
                 "of an expression is either read or written.",
                 "sniff's watchpoints are hardware watchpoints: the place EXPRESSION names",
                 "must be 1, 2, 4 or 8 bytes, aligned to its size.  -location is not implemented yet.",
-            ]),
-        help_cmd("backtrace", ["where", "bt"], "stack", "Print backtrace of all stack frames, or innermost COUNT frames.",
-            [
+            ] },
+        HelpCmd { name: "backtrace", aliases: ["where", "bt"], class: "stack", summary: "Print backtrace of all stack frames, or innermost COUNT frames.",
+            body: [
                 "Usage: backtrace",
                 "Every frame is printed, innermost first.  COUNT, -COUNT, the options",
                 "(-full, -entry-values, -frame-arguments and the others) and the",
                 "qualifiers are not implemented yet.",
-            ]),
-        help_cmd("break", ["brea", "bre", "br", "b"], "breakpoints", "Set breakpoint at specified location.",
-            [
+            ] },
+        HelpCmd { name: "break", aliases: ["brea", "bre", "br", "b"], class: "breakpoints", summary: "Set breakpoint at specified location.",
+            body: [
                 "break [LOCATION] [if CONDITION]",
                 "LOCATION is one of:",
                 "  FUNCTION, the function's first line past its prologue,",
@@ -50,121 +46,121 @@ fn help_table() -> List[HelpCmd] {
                 "",
                 "A LOCATION is required.  Probe points, threads, explicit locations,",
                 "-qualified and -force-condition are not implemented yet.",
-            ]),
-        help_cmd("call", [], "data", "Call a function in the program.",
-            [
+            ] },
+        HelpCmd { name: "call", aliases: [], class: "data", summary: "Call a function in the program.",
+            body: [
                 "Usage: call EXP",
                 "sniff prints the value of EXP as \"print\" does: calling a function of the",
                 "program is not implemented yet.",
-            ]),
-        help_cmd("condition", [], "breakpoints", "Specify breakpoint number N to break only if COND is true.",
-            [
+            ] },
+        HelpCmd { name: "condition", aliases: [], class: "breakpoints", summary: "Specify breakpoint number N to break only if COND is true.",
+            body: [
                 "Usage is `condition N COND', where N is an integer and COND",
                 "is an expression to be evaluated whenever breakpoint N is reached.",
                 "The -force option is not implemented yet.",
-            ]),
-        help_cmd("continue", ["fg", "c"], "running", "Continue program being debugged, after signal or breakpoint.",
-            [
+            ] },
+        HelpCmd { name: "continue", aliases: ["fg", "c"], class: "running", summary: "Continue program being debugged, after signal or breakpoint.",
+            body: [
                 "Usage: continue",
                 "The program runs until it stops again.  A count N (an ignore count for the",
                 "breakpoint it stopped at), non-stop mode and -a are not implemented yet.",
-            ]),
-        help_cmd("delete", ["del", "d"], "breakpoints", "Delete all or some breakpoints.",
-            [
+            ] },
+        HelpCmd { name: "delete", aliases: ["del", "d"], class: "breakpoints", summary: "Delete all or some breakpoints.",
+            body: [
                 "Usage: delete [BREAKPOINTNUM]...",
                 "Arguments are breakpoint numbers with spaces in between.",
                 "To delete all breakpoints and watchpoints, give no argument.",
                 "",
                 "\"delete display\" and gdb's other delete subcommands are not implemented yet.",
-            ]),
-        help_cmd("display", [], "data", "Print value of expression EXP each time the program stops.",
-            [
+            ] },
+        HelpCmd { name: "display", aliases: [], class: "data", summary: "Print value of expression EXP each time the program stops.",
+            body: [
                 "Usage: display[/FMT] EXP",
                 "/FMT may be used before EXP as in the \"print\" command.",
                 "",
                 "With no argument, display all currently requested auto-display expressions.",
                 "Use \"undisplay\" to cancel display requests previously made.",
                 "The \"x\" command's /i and /s formats and size letters are not implemented yet.",
-            ]),
-        help_cmd("down", ["dow", "do"], "stack", "Select and print stack frame called by this one.",
-            [
+            ] },
+        HelpCmd { name: "down", aliases: ["dow", "do"], class: "stack", summary: "Select and print stack frame called by this one.",
+            body: [
                 "An argument says how many frames down to go.",
-            ]),
-        help_cmd("echo", [], "support", "Print a constant string.  Give string as argument.",
-            [
+            ] },
+        HelpCmd { name: "echo", aliases: [], class: "support", summary: "Print a constant string.  Give string as argument.",
+            body: [
                 "C escape sequences may be used in the argument.",
                 "No newline is added at the end of the argument;",
                 "use \"\\n\" if you want a newline to be printed.",
                 "Since leading and trailing whitespace are ignored in command arguments,",
                 "if you want to print some you must use \"\\\" before leading whitespace",
                 "to be printed or after trailing whitespace.",
-            ]),
-        help_cmd("finish", ["fin"], "running", "Execute until selected stack frame returns.",
-            [
+            ] },
+        HelpCmd { name: "finish", aliases: ["fin"], class: "running", summary: "Execute until selected stack frame returns.",
+            body: [
                 "Usage: finish",
                 "Upon return, the value returned is printed and put in the value history.",
-            ]),
-        help_cmd("frame", ["f"], "stack", "Select and print a stack frame.",
-            [
+            ] },
+        HelpCmd { name: "frame", aliases: ["f"], class: "stack", summary: "Select and print a stack frame.",
+            body: [
                 "With no argument, print the selected stack frame.",
                 "A single numerical argument specifies the frame to select.",
                 "",
                 "The frame subcommands (address, apply, function, level and view) and",
                 "\"info frame\" are not implemented yet.",
-            ]),
-        help_cmd("help", ["h"], "support", "Print list of commands.",
-            []),
-        help_cmd("ignore", [], "breakpoints", "Set ignore-count of breakpoint number N to COUNT.",
-            [
+            ] },
+        HelpCmd { name: "help", aliases: ["h"], class: "support", summary: "Print list of commands.",
+            body: [] },
+        HelpCmd { name: "ignore", aliases: [], class: "breakpoints", summary: "Set ignore-count of breakpoint number N to COUNT.",
+            body: [
                 "Usage is `ignore N COUNT'.",
-            ]),
-        help_cmd("info", ["inf", "i"], "status", "Generic command for showing things about the program being debugged.",
-            []),
-        help_cmd("info all-registers", [], "status", "List of all registers and their contents, for selected stack frame.",
-            [
+            ] },
+        HelpCmd { name: "info", aliases: ["inf", "i"], class: "status", summary: "Generic command for showing things about the program being debugged.",
+            body: [] },
+        HelpCmd { name: "info all-registers", aliases: [], class: "status", summary: "List of all registers and their contents, for selected stack frame.",
+            body: [
                 "sniff prints the general registers, as \"info registers\" does: the floating",
                 "point and vector registers are not implemented yet.",
-            ]),
-        help_cmd("info args", [], "status", "All argument variables of current stack frame or those matching REGEXPs.",
-            [
+            ] },
+        HelpCmd { name: "info args", aliases: [], class: "status", summary: "All argument variables of current stack frame or those matching REGEXPs.",
+            body: [
                 "Usage: info args",
                 "Prints the argument variables of the current stack frame.",
                 "The -q and -t TYPEREGEXP options and NAMEREGEXP are not implemented yet.",
-            ]),
-        help_cmd("info breakpoints", ["info b"], "status", "Status of specified breakpoints (all user-settable breakpoints if no argument).",
-            [
+            ] },
+        HelpCmd { name: "info breakpoints", aliases: ["info b"], class: "status", summary: "Status of specified breakpoints (all user-settable breakpoints if no argument).",
+            body: [
                 "The \"Type\" column is breakpoint, hw watchpoint, read watchpoint or acc watchpoint.",
                 "The \"Disp\" column is \"keep\", or \"del\" for a temporary breakpoint.  The",
                 "\"Address\" and \"What\" columns indicate the address and file/line number respectively.",
                 "Every breakpoint and watchpoint is listed: a breakpoint number argument is not",
                 "implemented yet.",
-            ]),
-        help_cmd("info display", [], "status", "Expressions to display when program stops, with code numbers.",
-            [
+            ] },
+        HelpCmd { name: "info display", aliases: [], class: "status", summary: "Expressions to display when program stops, with code numbers.",
+            body: [
                 "Usage: info display",
-            ]),
-        help_cmd("info locals", [], "status", "All local variables of current stack frame or those matching REGEXPs.",
-            [
+            ] },
+        HelpCmd { name: "info locals", aliases: [], class: "status", summary: "All local variables of current stack frame or those matching REGEXPs.",
+            body: [
                 "Usage: info locals",
                 "Prints the local variables of the current stack frame.",
                 "The -q and -t TYPEREGEXP options and NAMEREGEXP are not implemented yet.",
-            ]),
-        help_cmd("info registers", ["info r"], "status", "List of integer registers and their contents, for selected stack frame.",
-            [
+            ] },
+        HelpCmd { name: "info registers", aliases: ["info r"], class: "status", summary: "List of integer registers and their contents, for selected stack frame.",
+            body: [
                 "One or more register names as argument means describe the given registers.",
                 "Register groups are not implemented yet.",
-            ]),
-        help_cmd("info watchpoints", [], "status", "Status of specified watchpoints (all watchpoints if no argument).",
-            [
+            ] },
+        HelpCmd { name: "info watchpoints", aliases: [], class: "status", summary: "Status of specified watchpoints (all watchpoints if no argument).",
+            body: [
                 "Every watchpoint is listed: a watchpoint number argument is not implemented yet.",
-            ]),
-        help_cmd("kill", [], "running", "Kill execution of program being debugged.",
-            [
+            ] },
+        HelpCmd { name: "kill", aliases: [], class: "running", summary: "Kill execution of program being debugged.",
+            body: [
                 "Usage: kill",
                 "sniff debugs one program at a time: \"kill inferiors\" is not implemented yet.",
-            ]),
-        help_cmd("list", ["l"], "files", "List specified function or line.",
-            [
+            ] },
+        HelpCmd { name: "list", aliases: ["l"], class: "files", summary: "List specified function or line.",
+            body: [
                 "With no argument, lists ten more lines after or around previous listing.",
                 "\"list +\" lists the ten lines following a previous ten-line listing.",
                 "\"list -\" lists the ten lines before a previous ten-line listing.",
@@ -181,35 +177,35 @@ fn help_table() -> List[HelpCmd] {
                 "the other arg.",
                 "",
                 "sniff always lists ten lines: \"set listsize\" is not implemented yet.",
-            ]),
-        help_cmd("maintenance", ["mt"], "internals", "sniff's own maintenance commands.",
-            []),
-        help_cmd("maintenance frames", [], "internals", "Name how each frame of the stack was unwound.",
-            [
+            ] },
+        HelpCmd { name: "maintenance", aliases: ["mt"], class: "internals", summary: "sniff's own maintenance commands.",
+            body: [] },
+        HelpCmd { name: "maintenance frames", aliases: [], class: "internals", summary: "Name how each frame of the stack was unwound.",
+            body: [
                 "Usage: maintenance frames",
                 "Each frame is named with unwind=cfi (its call frame information),",
                 "unwind=frame-pointer (the frame-pointer fallback) or, for the last frame, unwind=outermost.",
                 "This is sniff's own command; gdb has no maintenance command of this name.",
-            ]),
-        help_cmd("next", ["n"], "running", "Step program, proceeding through subroutine calls.",
-            [
+            ] },
+        HelpCmd { name: "next", aliases: ["n"], class: "running", summary: "Step program, proceeding through subroutine calls.",
+            body: [
                 "Usage: next [N]",
                 "Unlike \"step\", if the current source line calls a subroutine,",
                 "this command does not enter the subroutine, but instead steps over",
                 "the call, in effect treating it as a single source line.",
-            ]),
-        help_cmd("nexti", ["ni"], "running", "Step one instruction, but proceed through subroutine calls.",
-            [
+            ] },
+        HelpCmd { name: "nexti", aliases: ["ni"], class: "running", summary: "Step one instruction, but proceed through subroutine calls.",
+            body: [
                 "Usage: nexti [N]",
                 "Argument N means step N times (or till program stops for another reason).",
-            ]),
-        help_cmd("output", [], "data", "Like \"print\" but don't put in value history and don't print newline.",
-            [
+            ] },
+        HelpCmd { name: "output", aliases: [], class: "data", summary: "Like \"print\" but don't put in value history and don't print newline.",
+            body: [
                 "Usage: output EXP",
                 "This is useful in user-defined commands.",
-            ]),
-        help_cmd("print", ["inspect", "p"], "data", "Print value of expression EXP.",
-            [
+            ] },
+        HelpCmd { name: "print", aliases: ["inspect", "p"], class: "data", summary: "Print value of expression EXP.",
+            body: [
                 "Usage: print [/FMT] [EXP]",
                 "",
                 "Variables accessible are those of the lexical environment of the selected",
@@ -225,78 +221,78 @@ fn help_table() -> List[HelpCmd] {
                 "",
                 "The options, $$, convenience variables, assignment, {{TYPE}}ADREXP and @",
                 "are not implemented yet.",
-            ]),
-        help_cmd("quit", ["exit", "q"], "support", "Exit sniff.",
-            [
+            ] },
+        HelpCmd { name: "quit", aliases: ["exit", "q"], class: "support", summary: "Exit sniff.",
+            body: [
                 "Usage: quit",
                 "The program being debugged is killed.  An exit code EXPR is not implemented yet.",
-            ]),
-        help_cmd("run", ["r"], "running", "Start debugged program.",
-            [
+            ] },
+        HelpCmd { name: "run", aliases: ["r"], class: "running", summary: "Start debugged program.",
+            body: [
                 "You may specify arguments to give it, separated by spaces.  sniff passes them",
                 "to the program as they are typed: there is no shell between, so \"*\" and \"[...]\"",
                 "are not expanded and \">\", \"<\" and \">>\" do not redirect.",
                 "",
                 "With no arguments, uses arguments last specified (with \"run\" or the --args",
                 "of sniff's command line).  \"set args\" is not implemented yet.",
-            ]),
-        help_cmd("rwatch", [], "breakpoints", "Set a read watchpoint for EXPRESSION.",
-            [
+            ] },
+        HelpCmd { name: "rwatch", aliases: [], class: "breakpoints", summary: "Set a read watchpoint for EXPRESSION.",
+            body: [
                 "Usage: rwatch EXPRESSION",
                 "",
                 "A read watchpoint stops execution of your program whenever the value of",
                 "an expression is read.",
                 "sniff's watchpoints are hardware watchpoints: the place EXPRESSION names",
                 "must be 1, 2, 4 or 8 bytes, aligned to its size.  -location is not implemented yet.",
-            ]),
-        help_cmd("step", ["s"], "running", "Step program until it reaches a different source line.",
-            [
+            ] },
+        HelpCmd { name: "step", aliases: ["s"], class: "running", summary: "Step program until it reaches a different source line.",
+            body: [
                 "Usage: step [N]",
                 "Argument N means step N times (or till program stops for another reason).",
-            ]),
-        help_cmd("stepi", ["si"], "running", "Step one instruction exactly.",
-            [
+            ] },
+        HelpCmd { name: "stepi", aliases: ["si"], class: "running", summary: "Step one instruction exactly.",
+            body: [
                 "Usage: stepi [N]",
                 "Argument N means step N times (or till program stops for another reason).",
-            ]),
-        help_cmd("tbreak", [], "breakpoints", "Set a temporary breakpoint.",
-            [
+            ] },
+        HelpCmd { name: "tbreak", aliases: [], class: "breakpoints", summary: "Set a temporary breakpoint.",
+            body: [
                 "Like \"break\" except the breakpoint is only temporary,",
                 "so it will be deleted when hit.",
                 "",
                 "tbreak [LOCATION] [if CONDITION]",
                 "LOCATION and CONDITION are as for \"break\".",
-            ]),
-        help_cmd("undisplay", [], "data", "Cancel some expressions to be displayed when program stops.",
-            [
+            ] },
+        HelpCmd { name: "undisplay", aliases: [], class: "data", summary: "Cancel some expressions to be displayed when program stops.",
+            body: [
                 "Usage: undisplay [NUM]...",
                 "Arguments are the code numbers of the expressions to stop displaying.",
                 "No argument means cancel all automatic-display expressions.",
                 "Do \"info display\" to see current list of code numbers.",
                 "\"delete display\" is not implemented yet.",
-            ]),
-        help_cmd("until", ["u"], "running", "Execute until past the current line or past a LOCATION.",
-            [
+            ] },
+        HelpCmd { name: "until", aliases: ["u"], class: "running", summary: "Execute until past the current line or past a LOCATION.",
+            body: [
                 "Usage: until",
                 "Execute until the program reaches a source line greater than the current",
                 "within the current frame.",
                 "until LOCATION is not implemented yet: an argument is read as a repeat count.",
-            ]),
-        help_cmd("up", [], "stack", "Select and print stack frame that called this one.",
-            [
+            ] },
+        HelpCmd { name: "up", aliases: [], class: "stack", summary: "Select and print stack frame that called this one.",
+            body: [
                 "An argument says how many frames up to go.",
-            ]),
-        help_cmd("watch", [], "breakpoints", "Set a watchpoint for EXPRESSION.",
-            [
+            ] },
+        HelpCmd { name: "watch", aliases: [], class: "breakpoints", summary: "Set a watchpoint for EXPRESSION.",
+            body: [
                 "Usage: watch EXPRESSION",
                 "",
                 "A watchpoint stops execution of your program whenever the value of",
                 "an expression changes.",
                 "sniff's watchpoints are hardware watchpoints: the place EXPRESSION names",
                 "must be 1, 2, 4 or 8 bytes, aligned to its size.  -location is not implemented yet.",
-            ]),
-        help_cmd("x", [], "data", "Examine memory: x/FMT ADDRESS.",
-            [
+            ] },
+        HelpCmd { name: "x", aliases: [], class: "data", summary: "Examine memory: x/FMT ADDRESS.",
+            body: [
                 "ADDRESS is an expression for the memory address to examine.",
                 "FMT is a repeat count followed by a format letter and a size letter.",
                 "Format letters are o(octal), x(hex), d(decimal), u(unsigned decimal),",
@@ -309,7 +305,7 @@ fn help_table() -> List[HelpCmd] {
                 "is examined, with the count, format and size it used.",
                 "f(float), i(instruction), z(hex, zero padded on the left) and negative",
                 "counts are not implemented yet.",
-            ]),
+            ] },
     ]
 }
 
