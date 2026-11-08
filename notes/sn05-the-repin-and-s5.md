@@ -1,8 +1,8 @@
 # sn05: the 0.2.38 re-pin, the startup margin, and S5
 
 Base: sniff trunk `5ceae8e` (sn04 merged as sniff#9). The prediction was committed before code
-(`tests/sn05-prediction.json`, `82319fe`). This note covers the first PR (the re-pin and sniff#10); S5's
-sections follow with the second PR.
+(`tests/sn05-prediction.json`, `82319fe`). The first PR (sniff#12) was the re-pin and sniff#10; the S5
+sections are the second PR's.
 
 ## The re-pin: wolf 0.2.38, lupin 0.1.60, every wolf fixture built with `-g`
 
@@ -141,8 +141,156 @@ R-sn05-1 was ruled (A): cut the cost, then derive the margin from the measured s
 
 1.90 x 1.43 x 1.25 is 3.40, so the margin is 3.5 (`3ca6c8a`). The base code's 4.75 is red against it, and the
 head is green. At the worst factor seen, a hosted run of the head would read 2.72. The PR's hosted run is the
-check on the factor. The macOS row keeps its stated margin (6.0 against lldb, measured 0.13); hosted macOS CI
+check on the factor: sniff#12's labelled run (42462212567) read 2.53, a factor of 1.30 over the
+local 1.94 of the same head. The macOS row keeps its stated margin (6.0 against lldb, measured 0.13); hosted macOS CI
 skips it by name.
+
+## S5: watchpoints and expressions
+
+S5 is the contract's two items, watchpoints and `print` over expressions, then the evaluator's thin extras:
+conditional breakpoints, `display`, and wolf aggregates. Every C row is held to the pinned gdb's transcript on
+Linux (`tests/evidence/linux-s2`, both compilers), on the PAX set's static builds (`tests/evidence/pax-linux`)
+for every row but the watch rows, and to the same transcript on macOS with each arm64 difference named. Wolf expressions are held to lupin's
+values and to the wolf spec's expression rules.
+
+### Watchpoints
+
+`watch`, `rwatch` and `awatch` set a hardware watchpoint on the place an expression names. A place is 1, 2, 4
+or 8 bytes, aligned to its size. sniff has no software watchpoints, and it says so by name when a place
+cannot go in a slot. The C fixture is `fixtures/session/c/watch/main.c`: a global counter, a struct with an
+array member, a pointer to it, and a loop whose local is watched until its frame returns. The wolf row watches
+`total` in `fixtures/wolf/loops`.
+
+- **Linux x86-64.** DR0-DR3 hold the addresses. DR7 has per slot i the local enable bit 2i, R/W at bits 16+4i
+  (01 data writes, 11 data reads or writes) and LEN at bits 18+4i (00 one byte, 01 two, 11 four, 10 eight). The
+  registers are written through `PTRACE_POKEUSER` at `offsetof(struct user, u_debugreg)` (848, slots of 8 bytes,
+  probed from the system headers by `tools/abi-probe.c` and held by `abi-constants`). DR7 is cleared first, so
+  no half-written slot can fire. At a SIGTRAP stop, DR6's B0-B3 name the slot that fired, and DR6 is then
+  cleared, since the processor never clears it (Intel SDM vol. 3, 18.2).
+- **macOS arm64.** The thread's `ARM_DEBUG_STATE64` (flavor 15) holds the watch value and control registers.
+  Each control word has E, PAC = 2 (EL0), LSC (2 store, 3 load or store) and the byte-address select for the
+  watched bytes. `hw.optional.watchpoint` gives the slot count (4 on both Macs used). A watch trap is
+  `EXC_BREAKPOINT` with code `EXC_ARM_DA_DEBUG` (0x102) and the data address in the subcode. It is taken before
+  the access completes, so sniff clears the slots, steps the thread over the access, and sets the slots again
+  before it reports.
+- **macOS 15 kept a step armed.** On a second Mac (macOS 15.5), a watch row's script failed in 40 of 140 runs: after
+  the breakpoint's step-over, every resume trapped at once at the same pc. The exception state named a
+  software step taken with no instruction run (ESR class 0x32, ISV 0): the step was still armed in the
+  hardware, though the thread's debug state read back with the bit clear. Runs with no watch armed never
+  failed (0 of 110), and macOS 26.4.1 never failed (0 of 30). sniff now writes an empty debug state before the
+  one that clears the step bit, so the kernel drops the thread's state and loads the next one afresh
+  (`3ff1b50`). After it: 0 of 60 on macOS 15.5 and 0 of 30 on macOS 26.4.1.
+- **gdb's semantics, from its transcripts.** `watch` reports `Old value` and `New value` only when the value
+  changed; a write of the same value is passed silently. `rwatch` reports `Value =`. x86 has no read-only data
+  breakpoint, so a read slot fires on writes too: an `rwatch` whose value changed was a write and is passed, and
+  a write of the same value is reported as a read, as gdb reports it. `awatch` reports Old and New when the value
+  changed, and `Value =` when it did not. A watch on a local is deleted when its frame returns, with gdb's two
+  lines (`Watchpoint N deleted because the program has left the block in` / `which its expression is valid.`).
+  `info watchpoints`, `delete` and the hit counts in `info breakpoints` are gdb's.
+
+| row (gcc and clang) | holds |
+|---|---|
+| `watch-*-global` | a global's writes: changed values reported, a same-value write passed |
+| `watch-*-local-scope` | a loop local watched until its frame returns, then deleted with gdb's text |
+| `watch-*-members` | `origin.hist[2]` and `cursor->y` (through a pointer) at once; `info watchpoints` |
+| `watch-*-delete` | `info breakpoints` lists the watchpoint; `delete 2`; the program runs to its end |
+| `rwatch-*-global` | reads reported, a changed write passed |
+| `awatch-*-global` | reads and writes, each in its own form |
+| `watch-wolf-local` | a wolf local's changes, then the watch deleted when `sum` returns |
+
+`session-expr-join` also holds the wolf watch to lupin: the New values sniff reports for `total`, set once it
+is initialised, are the values lupin's trace gives it afterwards, each change once (`1, 3, 6`).
+
+On macOS, two clang rows drop lines by name, both for where arm64 clang's line table puts the stop after a
+write (the SDK clang, `-O0`):
+
+- `watch-clang-local-scope`: in `walk`, line 29's store to `total` (`str w8, [sp, #0x8]`) is followed by a row
+  for line 30, the loop body's closing brace (`b`), so the stop after the write is at line 30. On x86-64 it is at
+  line 28, the loop's increment.
+- `watch-clang-members`: line 37's store to `cursor->y` (`str w8, [x9, #0x4]`) is followed by `adrp x9`, line
+  38's address computation, still inside line 37's row. So the stop after the write is mid-line 37, where
+  x86-64's is at line 38's start.
+
+### Expressions
+
+`print` takes an expression, not just a name. The parser is sniff's own (`src/session/eval.lu`). A frame
+whose unit's `DW_AT_producer` starts with `wolf` is read in wolf mode; any other is read in C mode.
+
+- **Both modes:** names (the frame's locals and parameters, then globals), value history (`$`, `$N`) and
+  registers (`$pc`), field access, indexing, unary
+  `-` and `!`, the binary arithmetic, bitwise and shift operators, comparisons, `&&` and `||`, and parentheses.
+- **C mode** (held to gdb): `->`, unary `*`, `&` and `~`, casts to the frame's types and C's base types, C's
+  integer promotions and usual arithmetic conversions, pointer arithmetic, and gdb's errors by their text
+  (`There is no member named nosuch.`, ``cannot subscript something of type `int'``, `Division by zero`). An
+  address in data prints its symbol, as gdb's does (`(int *) 0x555555558014 <origin+4>`).
+- **wolf mode** (held to the wolf spec): `as` casts, integer literals taking the other operand's type, `!` on an
+  integer as the bitwise not, comparisons that do not chain, booleans printed as `true` and `false`. A member
+  of a reference is read through it, and a `List[T]` is indexed through its header (`data`, `len`), checked
+  against its length as the language checks it.
+- **References.** A wolf `mut` parameter is described as a reference (`DW_TAG_reference_type`). sniff prints it
+  as gdb prints one, `(struct Point &) @0x7fffffffeb40: {x = 4, y = 2, hist = 0x5555555b02d0}`, and reads
+  through it wherever its value is used (`wolf-mut-reference`).
+- **clang's DWARF 5 globals.** clang on Linux locates a global by `DW_OP_addrx`, an index into the unit's
+  `.debug_addr` contribution, where gcc writes `DW_OP_addr`. sniff resolves both.
+
+`session-expr-join` holds wolf expressions to lupin's place trace. At the stop in `bump`, each place lupin
+names (`p.x`, `p.y`, `p.hist[2]`, `by`) is a wolf expression, and sniff must print lupin's value for it. Five
+derived expressions over those places (`p.x + by`, `p.hist[2] * 2 - p.y`, `(p.x + p.y) % by`, `p.x == 4`,
+`p.hist[2] > by && p.y < 10`) must print the values the spec's rules give. All nine agree, on Linux and on
+macOS.
+
+### Conditions and display
+
+- `break LOCATION if EXPR` and `condition N EXPR`: the hit counts only when the condition is true, as gdb
+  counts it, and `info breakpoints` prints `stop only if EXPR` (`break-*-condition`,
+  `break-*-condition-command`).
+- `display EXPR` and `display/FMT EXPR` print at every stop, `next` included, numbered as gdb numbers them.
+  `undisplay` and `info display` are gdb's. In batch mode gdb does not print a new display at once, and neither
+  does sniff (`display-*-stops`).
+
+### wolf 0.2.38 places a struct local where it is not
+
+At the stop before `count = count + p.hist[2]`, main's `var p = Point {...}` has a `DW_AT_location` of
+`DW_OP_fbreg -192`. On macOS arm64
+that is the frame's lowest address (sp), while the code builds the struct at `sp + 0x60` (`x23` in the
+disassembly) and passes that address to `bump`. On Linux x86-64 the slot at the stated offset holds a stack
+pointer and small integers. The pinned gdb on Linux, lldb on macOS and sniff on both read the same wrong bytes
+there (`p = {x = 8, y = 140737488350048, hist = 0x1}` on Linux). `count`, a scalar local of the same frame,
+reads right. The parameter of `bump`, a reference to the same struct, reads right on both. So the expression
+join stops in `bump`. The producer's location is wolf-lang#1078.
+
+### The PAX half, drafted for a px lane
+
+The watch rows are skipped by name in `tests/pax-rows.json`. PAX's ptrace has no debug-register path yet. The
+lane that adds it needs:
+
+1. `PTRACE_PEEKUSER` and `PTRACE_POKEUSER` at `offsetof(struct user, u_debugreg)` (848, 8-byte slots): DR0-DR3,
+   DR6 and DR7. An address must be a user address, aligned to its length. DR7 may set only the local enable
+   bits, R/W 01 or 11 and the LEN values: no R/W 10 (I/O), no general-detect bit. Any other value is refused
+   with `EINVAL`, never loaded.
+2. DR0-DR3 and DR7 saved and restored per task at each switch, and cleared at `execve`. A traced task's slots
+   must never fire in another task.
+3. `#DB` from a data breakpoint delivered to the task as SIGTRAP with `si_code` TRAP_HWBKPT. DR6 stays readable
+   through PEEKUSER until the tracer clears it.
+4. The procfs gaps sn04 witnessed that these rows touch: `/proc/PID/maps` and `auxv`.
+5. Then the watch rows (six per compiler, and the wolf row) run at PAX's console under KVM, as the other rows
+   do, held to goldens the pinned gdb gives the static builds on Linux. These goldens are not captured yet,
+   since the PAX set skips the rows by name.
+
+### S5's remainder
+
+Listed per R-sn05-2, none of it started:
+
+- software watchpoints (a place that is not 1, 2, 4 or 8 aligned bytes, or more places than slots), `watch -l`,
+  conditions on watchpoints, and watchpoints on registers
+- lldb-fact rows for watchpoints on macOS (`watchpoint set variable`): the gdb transcripts run on the Mac with
+  named drops hold the watch text there
+- calling the program's functions from an expression, `sizeof`, string and character comparisons, and
+  assignment (`print x = 3`, `set var`)
+- wolf mode's enums, error unions and `?`, slices, tuples beyond `.0` member access, and `<=>`
+- `display` of memory and instructions (`display/4xw &v`, `display/i $pc`); a display takes `print`'s value
+  formats only (`x d u o t c a`)
+- the PAX debug-register path above
 
 ## R-list
 
@@ -162,11 +310,18 @@ The clean room held. These were read: the DWARF 5 standard, wolf-lang's 0.2.38 r
 memory-model chapter, as the producer's and the language's documentation, and valgrind's manual. The pinned gdb
 and llvm-dwarfdump ran only as binaries in the oracle image, and lldb only as the system binary. No debugger's,
 DWARF library's or Linux's source was read. Of PAX, this organisation's own kernel, `kernel/vm`'s statement of
-where a program's break starts was read for the heap normalisation.
+where a program's break starts was read for the heap normalisation. For S5: the Intel SDM (vol. 3, chapter 18,
+the debug registers), the Arm ARM's self-hosted debug chapter (the watchpoint registers, MDSCR_EL1 and the ESR
+classes), ptrace(2) and sigaction(2), the GDB manual, the macOS SDK headers' declarations (`mach/arm/_structs.h`,
+`mach/arm/exception.h`, `mach/thread_status.h`) and the wolf spec's expression and type chapters. lupin ran only
+as a binary.
 
 ## Done-when
 
 - [x] the prediction before code
 - [x] the 0.2.38 re-pin, fixtures with `-g`, red first, every moved golden re-captured and explained
 - [x] #10: where startup goes, measured; the cuts, each measured; the margin derived
-- [ ] the gauntlet, the plant and the macOS records: in the PR
+- [x] the first PR's gauntlet, plant and macOS records (sniff#12)
+- [x] S5: watchpoints on Linux and macOS held to gdb's transcripts; expressions in a C mode held to gdb and a
+  wolf mode held to lupin and the spec; conditions and `display`; the PAX half drafted
+- [ ] S5's gauntlet, plant and macOS records: in the second PR
