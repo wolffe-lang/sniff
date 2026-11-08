@@ -20,7 +20,7 @@ ENV = {'PATH': '/usr/local/bin:/usr/bin:/bin', 'HOME': '/work/target/home', 'LC_
 # the function, and derived expressions with how their value follows from the places' values.
 # The stop is inside bump, whose `mut p: Point` is a reference: wolf 0.2.38 places main's own struct
 # local at a frame slot that does not hold it (gdb and lldb read the same wrong bytes there), so the
-# struct is reached where its location is right (notes/sn05-the-repin-and-s5.md).
+# struct is reached where its location is right (wolf-lang#1078; notes/sn05-the-repin-and-s5.md).
 CASES = [
     ('wolf/aggregates', 'main.lu:10', '9:', 'bump', [
         ('p.x + by', lambda v: str(int(v['p.x']) + int(v['by']))),
