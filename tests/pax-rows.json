@@ -59,6 +59,11 @@
   },
   "watch-wolf-local": {
    "skip": "hardware watchpoints on PAX wait for its debug registers through ptrace (the px lane drafted in notes/sn05-the-repin-and-s5.md)"
+  },
+  "tty-wolf-loops-repeat-x": {
+   "drop": [
+    "\\b0x00007fff[0-9a-f]{8}\\b"
+   ]
   }
  }
 }
