@@ -126,7 +126,7 @@ fn repeat_cmd(mut s: Session, rest: str, kind: int) -> str {
 /// sniff's own maintenance commands (not gdb's): `maint frames` names, per frame,
 /// whether it was unwound through CFI or through the frame-pointer fallback.
 fn cmd_maint(mut s: Session, rest: str) -> str {
-    if rest.trim() != "frames" { return "Undefined maintenance command: \"{rest.trim()}\"." }
+    if rest.trim() != "frames" { return "Undefined maintenance command: \"{rest.trim()}\".  Try \"help maintenance\"." }
     if !s.alive { return "No stack." }
     var i = 0
     while i < s.frames.len {
@@ -149,8 +149,7 @@ fn cmd_info(mut s: Session, rest: str) -> str {
     if what == "locals" || what == "lo" { return cmd_info_locals(mut s) }
     if what == "args" || what == "ar" { return cmd_info_args(mut s) }
     if what == "registers" || what == "r" || what == "reg" || what == "all-registers" { return cmd_info_registers(mut s, more) }
-    // no `help` yet, so the line names no command to try (sniff#11)
-    "Undefined info command: \"{rest.trim()}\"."
+    "Undefined info command: \"{rest.trim()}\".  Try \"help info\"."
 }
 
 /// Execute one command line. Returns "" or the error message.
@@ -208,8 +207,8 @@ fn dispatch(mut s: Session, word: str, rest: str, text: str) -> str {
     if word == "info" || word == "i" { return cmd_info(mut s, rest) }
     if word == "maint" || word == "maintenance" { return cmd_maint(mut s, rest) }
     if word == "list" || word == "l" { return cmd_list(mut s, rest) }
-    // no `help` yet, so the line names no command to try (sniff#11)
-    "Undefined command: \"{word}\"."
+    if word == "help" || word == "h" { return cmd_help(mut s, rest) }
+    "Undefined command: \"{word}\".  Try \"help\"."
 }
 
 /// Run a command script; the first error aborts the rest, as gdb does for -x.
