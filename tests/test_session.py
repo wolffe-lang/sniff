@@ -62,6 +62,87 @@ class Normalise(unittest.TestCase):
         self.assertEqual(fired, {'tty', 'wrap80'})
 
 
+class ThreadsAndAttach(unittest.TestCase):
+    """S6's normalisations and the attach runner, each red on the break it exists to catch."""
+    TABLE = ('  Id   Target Id                              Frame \n'
+             '* 1    Thread 0x7ffff7da2740 (LWP 212) "prog" 0x00005555555551de in spin (flag=0x5555 <worked>, want=1) at /w/m.c:15\n'
+             '  2    Thread 0x7ffff7da16c0 (LWP 1215) "prog" spin (flag=0x5556 <released>, want=1) at /w/m.c:15\n')
+
+    def test_lwp_ids_are_numbered_by_first_appearance(self):
+        fired = set()
+        text = '[New Thread 0x1 (LWP 77)]\n[New Thread 0x2 (LWP 78)]\n[Switching to Thread 0x2 (LWP 78)]\n'
+        out = session.normalize(text, fired)
+        self.assertEqual(out, '[New Thread 0x1 (LWP <L1>)]\n[New Thread 0x2 (LWP <L2>)]\n[Switching to Thread 0x2 (LWP <L2>)]\n')
+        self.assertEqual(fired, {'lwp'})
+        # a debugger that switched to the wrong thread is still told apart
+        wrong = text.replace('to Thread 0x2 (LWP 78)', 'to Thread 0x1 (LWP 77)')
+        self.assertNotEqual(session.normalize(wrong, set()), out)
+
+    def test_threads_table_padding_and_spin_prefix(self):
+        fired = set()
+        a = session.normalize(self.TABLE, fired)
+        other = self.TABLE.replace('LWP 1215) "prog" spin', 'LWP 9) "prog" 0x0000555555555198 in spin')
+        other = other.replace('LWP 212) "prog" 0x00005555555551de in', 'LWP 21) "prog"')
+        self.assertEqual(session.normalize(other, set()), a)
+        self.assertEqual(fired, {'lwp', 'spin', 'threads-table'})
+        self.assertIn('* 1 Thread 0x7ffff7da2740 (LWP <L1>) "prog" spin (', a)
+        # a different frame, thread address or name is not normalised away
+        for change in (('want=1) at /w/m.c:15\n  2', 'want=2) at /w/m.c:15\n  2'), ('0x7ffff7da16c0', '0x7ffff7da16c8'),
+                       ('"prog" spin (flag=0x5556', '"prag" spin (flag=0x5556')):
+            self.assertNotEqual(session.normalize(self.TABLE.replace(*change), set()), a, change)
+
+    def test_ticks_only_where_a_row_names_it(self):
+        text = 'Breakpoint 1, tick (n=7) at /w/s.c:13\n'
+        self.assertEqual(session.normalize(text, set()), text)
+        fired = set()
+        self.assertEqual(session.normalize(text, fired, {'normalise': ['ticks']}), 'Breakpoint 1, tick (n=<N>) at /w/s.c:13\n')
+        self.assertEqual(fired, {'ticks'})
+
+    def test_process_ids_in_attach_lines(self):
+        fired = set()
+        text = ('Attaching to program: /w/prog, process 4242\nwarning: process 4242 is already traced by process 4243\n'
+                '* 1    process 4242 "prog" nap () at /w/s.c:19\n')
+        out = session.normalize(text, fired)
+        self.assertEqual(out, 'Attaching to program: /w/prog, process <PID>\nwarning: process <PID> is already traced by process <PID>\n'
+                              '* 1 process <PID> "prog" nap () at /w/s.c:19\n')
+        self.assertEqual(fired, {'pid', 'threads-table'})
+
+    def test_refuses_is_an_own_row_against_a_refusing_golden(self):
+        row = {'compare': 'own', 'why': 'errno', 'gdb': 'refuses', 'expect': [],
+               'expect_err': ['x:1: Error in sourced command file:', 'ptrace: Operation not permitted.'], 'expect_rc': 1}
+        err = 'x:1: Error in sourced command file:\nptrace: Operation not permitted.\n'
+        self.assertEqual(session.judge(row, '', err, 1, 'Could not attach\n', 'ptrace: Inappropriate ioctl for device.\n', '1\n'), [])
+        self.assertTrue(session.judge(row, '', err, 1, 'Could not attach\n', '', '0\n'))
+        self.assertTrue(session.judge(row, '', 'ptrace: Inappropriate ioctl for device.\n', 1, '', '', '1\n'))
+        self.assertEqual(session.row_form(dict(row, name='r')), '')
+
+    def test_attach_run_gives_the_pid_and_reports_the_sleeper(self):
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t)
+            sleeper = d / 'c/sleeper/x/prog'
+            sleeper.parent.mkdir(parents=True)
+            sleeper.write_text('#!%s\nimport os, sys, time\nprint("ready %%d" %% os.getpid(), flush=True)\ntime.sleep(0.3)\n'
+                               'print("done " + sys.argv[1])\nsys.exit(3)\n' % sys.executable)
+            sleeper.chmod(0o755)
+            dbg = d / 'dbg'
+            dbg.write_text('#!%s\nimport sys\na = sys.argv[1:]\nprint(" ".join("PID" if x.isdigit() else x for x in a[a.index("-x") + 2:]))\n'
+                           'print(open(a[a.index("-x") + 1]).read(), end="")\n' % sys.executable)
+            dbg.chmod(0o755)
+            old = session.SCRIPTS
+            session.SCRIPTS = 'scripts'
+            try:
+                row = {'name': 'r', 'script': ['attach {pid}', 'detach'], 'attach': {'ticks': 5}}
+                out, err, rc = session.attach_run(str(dbg), row, str(sleeper), str(d), False)
+                lines = out.splitlines()
+                self.assertEqual(lines[0], str(sleeper))
+                self.assertRegex(lines[1], r'^attach \d+$')
+                self.assertEqual(lines[-1], '[sleeper exited with code 3: done 5]')
+                out, err, rc = session.attach_run(str(dbg), dict(row, attach={'ticks': 2, 'form': 'dash-p'}), str(sleeper), str(d), False)
+                self.assertEqual(out.splitlines()[0], '-p PID ' + str(sleeper))
+            finally:
+                session.SCRIPTS = old
+
+
 class Inventory(unittest.TestCase):
     def test_rows_are_well_formed(self):
         rows = session.load_rows()
