@@ -6,6 +6,7 @@ struct Point {
 
 fn bump(mut p: Point, by: int) -> int {
     p.x = p.x + by
+    p.hist[2] = p.hist[2] + by
     p.x
 }
 
