@@ -269,57 +269,65 @@ fn line_order(a: LineEnt, b: LineEnt) -> bool {
     a.ord <= b.ord
 }
 
-/// An ascending run of line rows, keyed by its first row.
-struct LineRun {
-    pub addr: u64,
-    pub ord: int,
-    pub start: int,
-    pub end: int,
-}
-
-fn run_order(a: LineRun, b: LineRun) -> bool {
-    if a.addr != b.addr { return a.addr < b.addr }
-    a.ord <= b.ord
-}
-
-/// Sort the rows by line_order. Rows arrive as ascending runs, one per line-table sequence
-/// (3,056 runs in 129,077 rows of a large runtime's tables), so the runs are ordered by their
-/// first row and laid end to end; when that is sorted, it is the answer, because (addr, ord)
-/// is a total order with ord unique and the sorted list is therefore unique. Runs that
-/// overlap fall back to the full sort.
+/// Sort the rows by line_order, a natural merge sort over an index list. Rows arrive as
+/// ascending runs (3,056 in 129,077 rows of a large runtime's tables), so merging the runs
+/// pairwise takes a dozen passes over integers where the standard sort took seventeen over
+/// whole rows, each into a fresh list (139 MB on that runtime). (addr, ord) is a total
+/// order, ord being unique, so the sorted list is the one any correct sort gives.
 pub fn sort_lines(mut lines: List[LineEnt]) {
     let n = lines.len
     if n < 2 { return }
-    var runs: List[LineRun] = []
-    var start: int = 0
+    var bounds: List[int] = [0]
     var i: int = 1
-    while i <= n {
-        if i == n || !line_order(lines[i - 1], lines[i]) {
-            (mut runs).push(LineRun { addr: lines[start].addr, ord: lines[start].ord, start: start, end: i })
-            start = i
-        }
+    while i < n {
+        if !line_order(lines[i - 1], lines[i]) { (mut bounds).push(i) }
         i += 1
     }
-    if runs.len == 1 { return }
-    (mut runs).sort_by(run_order)
+    (mut bounds).push(n)
+    if bounds.len == 2 { return }
+    var a: List[int] = []
+    (mut a).reserve(n)
+    i = 0
+    while i < n { (mut a).push(i); i += 1 }
+    var b = copy a
+    while bounds.len > 2 {
+        var next: List[int] = [0]
+        var r: int = 0
+        while r + 1 < bounds.len {
+            let lo = bounds[r]
+            let mid = bounds[r + 1]
+            if r + 2 < bounds.len {
+                let hi = bounds[r + 2]
+                var x = lo
+                var y = mid
+                var k = lo
+                while x < mid && y < hi {
+                    // the right row first only when it orders strictly before the left one
+                    if line_order(lines[a[y]], lines[a[x]]) { b[k] = a[y]; y += 1 } else { b[k] = a[x]; x += 1 }
+                    k += 1
+                }
+                while x < mid { b[k] = a[x]; x += 1; k += 1 }
+                while y < hi { b[k] = a[y]; y += 1; k += 1 }
+                (mut next).push(hi)
+                r += 2
+            } else {
+                var k = lo
+                while k < mid { b[k] = a[k]; k += 1 }
+                (mut next).push(mid)
+                r += 1
+            }
+        }
+        let t = a
+        a = b
+        b = t
+        bounds = next
+    }
     var out: List[LineEnt] = []
     (mut out).reserve(n)
-    var r: int = 0
-    while r < runs.len {
-        var k = runs[r].start
-        while k < runs[r].end { (mut out).push(copy lines[k]); k += 1 }
-        r += 1
-    }
-    var j: int = 1
-    while j < n {
-        if !line_order(out[j - 1], out[j]) {
-            (mut lines).sort_by(line_order)
-            return
-        }
-        j += 1
-    }
-    j = 0
-    while j < n { lines[j] = copy out[j]; j += 1 }
+    i = 0
+    while i < n { (mut out).push(copy lines[a[i]]); i += 1 }
+    i = 0
+    while i < n { lines[i] = copy out[i]; i += 1 }
 }
 
 /// Read the ELF file at path and build the session's view of it. A program

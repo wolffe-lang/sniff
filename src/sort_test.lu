@@ -1,7 +1,7 @@
 //! member: false
-// The line-row sort (session.sort_lines): ascending runs laid end to end in the order of
-// their first rows, or the full sort when runs overlap. Either way the answer is the one
-// list sorted by (addr, ord), checked here against an insertion sort.
+// The line-row sort (session.sort_lines): a natural merge of the ascending runs the line
+// tables emit. The answer is the one list sorted by (addr, ord), checked here against an
+// insertion sort, for runs laid end to end and for runs whose ranges interleave.
 use session
 
 fn row(addr: u64, ord: int) -> session.LineEnt {
@@ -62,7 +62,7 @@ fn runs() {
 }
 
 fn overlap() {
-    // runs whose ranges interleave cannot be laid end to end: the full sort answers
+    // runs whose ranges interleave, and a list in descending order (one run per row)
     assert(check([100, 300, 500, 200, 400, 600]))
     assert(check([50, 40, 30, 20, 10]))
     print("PASS line-sort-overlap")
