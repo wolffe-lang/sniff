@@ -837,11 +837,33 @@
   },
   {
    "name": "watch-clang-local-scope",
-   "kind": "linux"
+   "kind": "linux",
+   "drop": [
+    {
+     "match": "^walk \\(n=4\\) at <FX>/session/c/watch/main\\.c:(28|30)$",
+     "why": "arm64 clang puts a row for the loop body's closing brace (line 30) right after the store to total, so a write stops at line 30 where x86-64 stops at the loop's increment (line 28); the disassembly is in the note"
+    },
+    {
+     "match": "^(28|30)\\t",
+     "why": "the source line of the same stop (28 or 30), as above"
+    }
+   ]
   },
   {
    "name": "watch-clang-members",
-   "kind": "linux"
+   "kind": "linux",
+   "drop": [
+    {
+     "line": 22,
+     "text": "main () at <FX>/session/c/watch/main.c:38",
+     "why": "arm64 clang computes line 38's address (adrp) inside line 37, after the store to cursor->y, so the stop after that write is mid-line 37 where x86-64's is at line 38's start; the disassembly is in the note"
+    },
+    {
+     "line": 23,
+     "text": "38\t    counter = counter;",
+     "why": "the source line of the same stop, as above"
+    }
+   ]
   },
   {
    "name": "watch-clang-delete",
