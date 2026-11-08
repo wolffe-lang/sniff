@@ -16,7 +16,12 @@ fn cmd_break(mut s: Session, rest: str, temp: bool) -> str {
     let spec = rest.trim()
     if spec.len() == 0 { return "No default breakpoint location." }
     var location = spec
-    // a condition is not part of S2
+    var cond = ""
+    let at = spec.find(" if ") else { 0 - 1 }
+    if at >= 0 {
+        location = str_upto(spec, at).trim()
+        cond = str_from(spec, at + 4).trim()
+    }
     let r = resolve_location(s, location)
     if r.err.len() > 0 {
         flush_out(mut s)
@@ -27,7 +32,7 @@ fn cmd_break(mut s: Session, rest: str, temp: bool) -> str {
     s.bp_next += 1
     var i = 0
     while i < r.addrs.len {
-        (mut s.bps).push(Bp { num: num, addr: r.addrs[i], hits: 0, temp: temp, enabled: true, internal: false, abs: r.abs, ignore: 0, loc: i + 1, nloc: r.addrs.len, orig: 0, inserted: false })
+        (mut s.bps).push(Bp { num: num, addr: r.addrs[i], hits: 0, temp: temp, enabled: true, internal: false, abs: r.abs, ignore: 0, loc: i + 1, nloc: r.addrs.len, orig: 0, inserted: false, cond: cond, scope: 0 })
         i += 1
     }
     let kind = if temp { "Temporary breakpoint" } else { "Breakpoint" }
@@ -63,10 +68,11 @@ fn cmd_delete(mut s: Session, rest: str) -> str {
         var keep: List[Bp] = []
         var i = 0
         while i < s.bps.len {
-            if s.bps[i].internal { (mut keep).push(copy s.bps[i]) }
+            if s.bps[i].internal && s.bps[i].scope == 0 { (mut keep).push(copy s.bps[i]) }
             i += 1
         }
         s.bps = keep
+        s.watches = []
         return ""
     }
     for w in t.words() {
@@ -79,8 +85,9 @@ fn cmd_delete(mut s: Session, rest: str) -> str {
             if s.bps[i].num == n.addr as int && !s.bps[i].internal { found = true } else { (mut keep).push(copy s.bps[i]) }
             i += 1
         }
-        if !found { emit_line(mut s, "No breakpoint number {w}.") }
         s.bps = keep
+        if delete_watch(mut s, n.addr as int) { found = true }
+        if !found { emit_line(mut s, "No breakpoint number {w}.") }
     }
     ""
 }
@@ -102,9 +109,9 @@ fn bp_what(s: Session, addr: u64) -> str {
     sym
 }
 
-/// info breakpoints
+/// info breakpoints: breakpoints and watchpoints in number order.
 fn cmd_info_breakpoints(mut s: Session) -> str {
-    var any = false
+    var any = s.watches.len > 0
     var i = 0
     while i < s.bps.len {
         if !s.bps[i].internal { any = true }
@@ -115,32 +122,48 @@ fn cmd_info_breakpoints(mut s: Session) -> str {
         return ""
     }
     emit_line(mut s, "Num     Type           Disp Enb Address            What")
-    i = 0
-    while i < s.bps.len {
-        let b = copy s.bps[i]
-        if !b.internal && b.nloc > 1 {
-            if b.loc == 1 {
-                let disp = if b.temp { "del" } else { "keep" }
-                emit_line(mut s, "{pad_right("{b.num}", 8)}{pad_right("breakpoint", 15)}{pad_right(disp, 5)}{pad_right("y", 4)}{pad_right("<MULTIPLE>", 19)}")
-                var total = 0
-                var k = 0
-                while k < s.bps.len { if s.bps[k].num == b.num { total += s.bps[k].hits }; k += 1 }
-                if total > 0 {
-                    let times = if total == 1 { "time" } else { "times" }
-                    emit_line(mut s, "\tbreakpoint already hit {total} {times}")
-                }
-            }
-            emit_line(mut s, "{pad_right("{b.num}.{b.loc}", 28)}{pad_right("y", 4)}{pad_right(addr16(bp_rt(s, i)), 19)}{bp_what(s, b.addr)}")
-        } else if !b.internal {
-            let disp = if b.temp { "del" } else { "keep" }
-            let enb = if b.enabled { "y" } else { "n" }
-            emit_line(mut s, "{pad_right("{b.num}", 8)}{pad_right("breakpoint", 15)}{pad_right(disp, 5)}{pad_right(enb, 4)}{pad_right(addr16(bp_rt(s, i)), 19)}{bp_what(s, if b.abs && b.addr >= s.base { b.addr - s.base } else { b.addr })}")
-            if b.hits > 0 {
-                let times = if b.hits == 1 { "time" } else { "times" }
-                emit_line(mut s, "\tbreakpoint already hit {b.hits} {times}")
-            }
+    var num = 1
+    while num < s.bp_next {
+        i = 0
+        while i < s.bps.len {
+            if s.bps[i].num == num && !s.bps[i].internal { bp_row(mut s, i) }
+            i += 1
         }
-        i += 1
+        i = 0
+        while i < s.watches.len {
+            if s.watches[i].num == num { watch_row(mut s, copy s.watches[i]) }
+            i += 1
+        }
+        num += 1
     }
     ""
+}
+
+/// The condition line and the hit count of breakpoint i, as gdb prints them under its row.
+fn bp_tail(mut s: Session, cond: str, hits: int) {
+    if cond.len() > 0 { emit_line(mut s, "\tstop only if {cond}") }
+    if hits > 0 {
+        let times = if hits == 1 { "time" } else { "times" }
+        emit_line(mut s, "\tbreakpoint already hit {hits} {times}")
+    }
+}
+
+fn bp_row(mut s: Session, i: int) {
+    let b = copy s.bps[i]
+    if b.nloc > 1 {
+        if b.loc == 1 {
+            let disp = if b.temp { "del" } else { "keep" }
+            emit_line(mut s, "{pad_right("{b.num}", 8)}{pad_right("breakpoint", 15)}{pad_right(disp, 5)}{pad_right("y", 4)}{pad_right("<MULTIPLE>", 19)}")
+            var total = 0
+            var k = 0
+            while k < s.bps.len { if s.bps[k].num == b.num { total += s.bps[k].hits }; k += 1 }
+            bp_tail(mut s, b.cond, total)
+        }
+        emit_line(mut s, "{pad_right("{b.num}.{b.loc}", 28)}{pad_right("y", 4)}{pad_right(addr16(bp_rt(s, i)), 19)}{bp_what(s, b.addr)}")
+        return
+    }
+    let disp = if b.temp { "del" } else { "keep" }
+    let enb = if b.enabled { "y" } else { "n" }
+    emit_line(mut s, "{pad_right("{b.num}", 8)}{pad_right("breakpoint", 15)}{pad_right(disp, 5)}{pad_right(enb, 4)}{pad_right(addr16(bp_rt(s, i)), 19)}{bp_what(s, if b.abs && b.addr >= s.base { b.addr - s.base } else { b.addr })}")
+    bp_tail(mut s, b.cond, b.hits)
 }

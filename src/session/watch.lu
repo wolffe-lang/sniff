@@ -1,0 +1,350 @@
+// Hardware watchpoints (S5): watch, rwatch and awatch on the place an expression names, kept in the
+// platform's watch slots (DR0-DR3 and DR7 on x86-64; arm64's watch registers on macOS). The text
+// is gdb's: a watch reports a changed value with Old and New, an rwatch the value it read, an
+// awatch either. A slot set for reads and writes cannot tell one from the other (x86 has no
+// read-only data breakpoint), so an rwatch whose value changed was a write and is passed silently,
+// and a write of the same value is reported as a read, as gdb does. A watch on a frame's local is
+// deleted when that frame returns.
+
+use platform
+
+const wk_write: int = 1
+const wk_read: int = 2
+const wk_access: int = 3
+
+/// One watchpoint. addr is a runtime address; old holds the value last reported or set.
+struct Watch {
+    pub num: int,
+    pub kind: int,
+    pub expr: str,
+    pub addr: u64,
+    pub len: int,
+    pub ty: int,
+    pub old: List[byte],
+    pub hits: int,
+    pub enabled: bool,
+    /// The CFA of the frame whose local the expression reads, 0 for none, and that frame's
+    /// return address, where its scope ends.
+    pub scope_cfa: u64,
+    pub scope_ret: u64,
+}
+
+fn watch_label(kind: int) -> str {
+    if kind == wk_read { return "Hardware read watchpoint" }
+    if kind == wk_access { return "Hardware access (read/write) watchpoint" }
+    "Hardware watchpoint"
+}
+
+fn watch_type_text(kind: int) -> str {
+    if kind == wk_read { return "read watchpoint" }
+    if kind == wk_access { return "acc watchpoint" }
+    "hw watchpoint"
+}
+
+/// Whether the expression names a local or argument of the selected frame (an identifier that is
+/// not a member name and that the frame's scope resolves).
+fn names_a_local(s: Session, text: str) -> bool {
+    let toks = tokenize(text)
+    var i = 0
+    while i < toks.len {
+        let t = copy toks[i]
+        let after_member = i > 0 && toks[i - 1].kind == tk_op && (toks[i - 1].text == "." || toks[i - 1].text == "->")
+        if t.kind == tk_ident && !after_member {
+            let v = find_var(s, t.text)
+            if v.ok { return true }
+        }
+        i += 1
+    }
+    false
+}
+
+/// watch / rwatch / awatch EXPR
+fn cmd_watch(mut s: Session, rest: str, kind: int) -> str {
+    let text = rest.trim()
+    if text.len() == 0 { return "Argument required (expression to compute)." }
+    if !s.alive { return "sniff sets watchpoints on a running program only." }
+    compute_frames(mut s)
+    let v = eval_expr(s, text)
+    if !v.ok { return v.why }
+    if !v.has_addr {
+        if kind == wk_write { return "Cannot watch constant value `{text}'." }
+        return "Expression cannot be implemented with read/access watchpoint."
+    }
+    let len = ty_size(s.prog, v.ty)
+    if len != 1 && len != 2 && len != 4 && len != 8 || v.addr % len as u64 != 0 {
+        if kind == wk_write { return "sniff has no software watchpoints; `{text}' is not an aligned 1, 2, 4 or 8 bytes." }
+        return "Expression cannot be implemented with read/access watchpoint."
+    }
+    var used = 0
+    var i = 0
+    while i < s.watches.len { if s.watches[i].enabled { used += 1 }; i += 1 }
+    if used >= platform.target_watch_slots(s.target) {
+        return "Hardware watchpoints used exceeds limit."
+    }
+    var cfa: u64 = 0
+    var ret: u64 = 0
+    if names_a_local(s, text) && s.sel + 1 < s.frames.len {
+        cfa = s.frames[s.sel].cfa
+        ret = s.frames[s.sel + 1].pc
+    }
+    let num = s.bp_next
+    s.bp_next += 1
+    (mut s.watches).push(Watch { num: num, kind: kind, expr: text, addr: v.addr, len: len, ty: v.ty, old: copy v.bytes,
+        hits: 0, enabled: true, scope_cfa: cfa, scope_ret: ret })
+    if ret != 0 {
+        (mut s.bps).push(Bp { num: 0, addr: ret, hits: 0, temp: false, enabled: true, internal: true, abs: true, ignore: 0,
+            loc: 0, nloc: 1, orig: 0, inserted: false, cond: "", scope: num })
+    }
+    emit_line(mut s, "{watch_label(kind)} {num}: {text}")
+    ""
+}
+
+/// Put every enabled watch in a slot before the child runs. "" or the platform's refusal.
+fn arm_watches(mut s: Session) -> str {
+    var addrs: List[u64] = []
+    var lens: List[int] = []
+    var kinds: List[int] = []
+    var i = 0
+    while i < s.watches.len {
+        if s.watches[i].enabled {
+            (mut addrs).push(s.watches[i].addr)
+            (mut lens).push(s.watches[i].len)
+            (mut kinds).push(if s.watches[i].kind == wk_write { platform.watch_write } else { platform.watch_access })
+        }
+        i += 1
+    }
+    if addrs.len == 0 && !s.watch_armed { return "" }
+    s.watch_armed = addrs.len > 0
+    platform.target_set_watches(s.target, addrs, lens, kinds)
+}
+
+/// The watch whose slot fired at this stop, or -1. A fired slot whose watch has nothing to report
+/// (an unchanged write watch, a changed read watch) answers -2, so the caller resumes silently.
+fn watch_hit(mut s: Session) -> int {
+    if !s.watch_armed { return 0 - 1 }
+    let slot = platform.target_watch_hit(s.target)
+    if slot < 0 { return 0 - 1 }
+    var k = 0
+    var i = 0
+    while i < s.watches.len {
+        if s.watches[i].enabled {
+            if k == slot {
+                let r = platform.target_read(s.target, s.watches[i].addr, s.watches[i].len)
+                if !r.ok { return i }
+                let changed = !same_list(r.data, s.watches[i].old)
+                if s.watches[i].kind == wk_write && !changed { return 0 - 2 }
+                if s.watches[i].kind == wk_read && changed {
+                    s.watches[i].old = copy r.data
+                    return 0 - 2
+                }
+                return i
+            }
+            k += 1
+        }
+        i += 1
+    }
+    0 - 1
+}
+
+fn same_list(a: List[byte], b: List[byte]) -> bool {
+    if a.len != b.len { return false }
+    var i = 0
+    while i < a.len { if a[i] != b[i] { return false }; i += 1 }
+    true
+}
+
+/// Report watch i's trigger, as gdb prints it, and remember the new value.
+fn report_watch(mut s: Session, i: int) {
+    let w = copy s.watches[i]
+    let r = platform.target_read(s.target, w.addr, w.len)
+    let now = if r.ok { copy r.data } else { copy w.old }
+    s.watches[i].hits += 1
+    emit_line(mut s, "")
+    emit_line(mut s, "{watch_label(w.kind)} {w.num}: {w.expr}")
+    emit_line(mut s, "")
+    if w.kind != wk_read && !same_list(now, w.old) {
+        emit_line(mut s, "Old value = {format_bytes(s.prog, s.target, w.ty, w.old, true)}")
+        emit_line(mut s, "New value = {format_bytes(s.prog, s.target, w.ty, now, true)}")
+    } else {
+        emit_line(mut s, "Value = {format_bytes(s.prog, s.target, w.ty, now, true)}")
+    }
+    s.watches[i].old = now
+    s.frames = []
+    s.frames_ok = false
+    print_stop_frame(mut s, true, "")
+}
+
+/// At a scope breakpoint: when the frame the watch's local lives in has returned (the stack
+/// pointer is at or past its CFA), the watch is deleted, as gdb reports. Returns true when it was.
+fn scope_ended(mut s: Session, bp: int) -> bool {
+    let num = s.bps[bp].scope
+    var i = 0
+    while i < s.watches.len {
+        if s.watches[i].num == num {
+            let regs = platform.target_regs(s.target)
+            if regs.len != platform.arch_nregs() { return false }
+            let sp = regs[platform.arch_sp_slot()]
+            if sp < s.watches[i].scope_cfa { return false }
+            delete_watch(mut s, num)
+            emit_line(mut s, "")
+            emit_line(mut s, "Watchpoint {num} deleted because the program has left the block in")
+            emit_line(mut s, "which its expression is valid.")
+            s.frames = []
+            s.frames_ok = false
+            print_stop_frame(mut s, true, "")
+            return true
+        }
+        i += 1
+    }
+    false
+}
+
+/// Remove watch num and its scope breakpoint. True when there was one.
+fn delete_watch(mut s: Session, num: int) -> bool {
+    var found = false
+    var keep: List[Watch] = []
+    var i = 0
+    while i < s.watches.len {
+        if s.watches[i].num == num { found = true } else { (mut keep).push(copy s.watches[i]) }
+        i += 1
+    }
+    s.watches = keep
+    var bkeep: List[Bp] = []
+    i = 0
+    while i < s.bps.len {
+        if s.bps[i].scope != num || num == 0 { (mut bkeep).push(copy s.bps[i]) }
+        i += 1
+    }
+    s.bps = bkeep
+    found
+}
+
+/// The `info breakpoints` / `info watchpoints` row of watch w.
+fn watch_row(mut s: Session, w: Watch) {
+    let enb = if w.enabled { "y" } else { "n" }
+    emit_line(mut s, "{pad_right("{w.num}", 8)}{pad_right(watch_type_text(w.kind), 15)}{pad_right("keep", 5)}{pad_right(enb, 4)}{pad_right("", 19)}{w.expr}")
+    if w.hits > 0 {
+        let times = if w.hits == 1 { "time" } else { "times" }
+        emit_line(mut s, "\tbreakpoint already hit {w.hits} {times}")
+    }
+}
+
+/// info watchpoints
+fn cmd_info_watchpoints(mut s: Session) -> str {
+    if s.watches.len == 0 {
+        emit_line(mut s, "No watchpoints.")
+        return ""
+    }
+    emit_line(mut s, "Num     Type           Disp Enb Address            What")
+    var i = 0
+    while i < s.watches.len { watch_row(mut s, copy s.watches[i]); i += 1 }
+    ""
+}
+
+// ---- display ------------------------------------------------------------------------------
+
+/// One auto-display: its number, the format letter(s) and the expression.
+struct Display {
+    pub num: int,
+    pub fmt: str,
+    pub expr: str,
+    pub enabled: bool,
+}
+
+/// display[/f] EXPR: shown at every stop from the next one on.
+fn cmd_display(mut s: Session, rest: str) -> str {
+    let (fmt, expr) = split_format(rest)
+    if expr.len() == 0 { do_displays(mut s); return "" }
+    let num = s.disp_next
+    s.disp_next += 1
+    (mut s.disps).push(Display { num: num, fmt: fmt, expr: expr, enabled: true })
+    ""
+}
+
+/// The displays, as gdb prints them after a stop: "N: EXPR = VALUE" and "N: /f EXPR = VALUE".
+/// One that cannot be evaluated here is left out.
+fn do_displays(mut s: Session) {
+    if !s.alive { return }
+    var i = 0
+    while i < s.disps.len {
+        let d = copy s.disps[i]
+        if d.enabled {
+            let v = eval_expr(s, d.expr)
+            if v.ok {
+                let shown = if d.fmt.len() > 0 { "/{d.fmt} {d.expr}" } else { d.expr }
+                emit_line(mut s, "{d.num}: {shown} = {text_with_format(s, v, d.fmt, true)}")
+            }
+        }
+        i += 1
+    }
+}
+
+/// undisplay [N...]
+fn cmd_undisplay(mut s: Session, rest: str) -> str {
+    let t = rest.trim()
+    if t.len() == 0 { s.disps = []; return "" }
+    for w in t.words() {
+        let n = parse_uint(w)
+        if !n.ok { return "Arguments must be display numbers." }
+        var keep: List[Display] = []
+        var i = 0
+        while i < s.disps.len {
+            if s.disps[i].num != n.addr as int { (mut keep).push(copy s.disps[i]) }
+            i += 1
+        }
+        s.disps = keep
+    }
+    ""
+}
+
+/// info display
+fn cmd_info_display(mut s: Session) -> str {
+    if s.disps.len == 0 {
+        emit_line(mut s, "There are no auto-display expressions now.")
+        return ""
+    }
+    emit_line(mut s, "Auto-display expressions now in effect:")
+    emit_line(mut s, "Num Enb Expression")
+    var i = 0
+    while i < s.disps.len {
+        let d = copy s.disps[i]
+        let enb = if d.enabled { "y" } else { "n" }
+        let shown = if d.fmt.len() > 0 { "/{d.fmt} {d.expr}" } else { d.expr }
+        emit_line(mut s, "{d.num}:   {enb}  {shown}")
+        i += 1
+    }
+    ""
+}
+
+// ---- conditions ---------------------------------------------------------------------------
+
+/// Whether breakpoint i's condition holds at this stop (no condition holds). An expression that
+/// cannot be evaluated stops the program, as gdb does.
+fn condition_holds(mut s: Session, i: int) -> bool {
+    let c = s.bps[i].cond
+    if c.len() == 0 { return true }
+    s.frames = []
+    s.frames_ok = false
+    compute_frames(mut s)
+    let v = eval_expr(s, c)
+    if !v.ok { return true }
+    is_true(s, v)
+}
+
+/// condition N [EXPR]
+fn cmd_condition(mut s: Session, rest: str) -> str {
+    let t = rest.trim()
+    if t.len() == 0 { return "Argument required (breakpoint number)." }
+    let parts = t.splitn(" ", 2)
+    let n = parse_uint(parts[0])
+    if !n.ok { return "Bad breakpoint argument: '{parts[0]}'" }
+    let cond = if parts.len > 1 { parts[1].trim() } else { "" }
+    var found = false
+    var i = 0
+    while i < s.bps.len {
+        if s.bps[i].num == n.addr as int && !s.bps[i].internal { s.bps[i].cond = cond; found = true }
+        i += 1
+    }
+    if !found { return "No breakpoint number {parts[0]}." }
+    ""
+}

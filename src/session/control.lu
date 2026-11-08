@@ -90,6 +90,7 @@ fn start_process(mut s: Session) -> str {
     }
     s.target = copy t
     s.alive = true
+    s.watch_armed = false
     s.pending_signal = 0
     s.base = image_base(s, t)
     ""
@@ -250,8 +251,14 @@ fn step_insn(mut s: Session) -> Event {
     flush_out(mut s)
     s.frames_ok = false
     let sig = take_signal(mut s)
+    let refused = arm_watches(mut s)
+    if refused.len() > 0 { s.errmsg = refused; return Event { kind: ev_error, signal: 0, code: 0, bp: -1 } }
     if platform.target_step(s.target, sig) < 0 { s.alive = false; return lost() }
     var st = platform.target_wait(s.target)
+    if st >= 0 && platform.status_stopped(st) && platform.status_stop_signal(st) == 5 {
+        let w = watch_hit(mut s)
+        if w >= 0 { return Event { kind: ev_watch, signal: 5, code: 0, bp: w } }
+    }
     if st >= 0 && is_fork_event(st) {
         handle_fork(mut s, st)
         if platform.target_step(s.target, 0) < 0 { s.alive = false; return lost() }
@@ -266,6 +273,8 @@ fn cont_user(mut s: Session) -> Event {
     loop {
         let e = cont_event(mut s)
         if e.kind != ev_breakpoint || s.bps[e.bp].internal { return e }
+        // a breakpoint whose condition is false passes silently and does not count the hit
+        if !condition_holds(mut s, e.bp) { continue }
         let pc = bp_rt(s, e.bp)
         var skip = false
         var i: int = 0
@@ -304,6 +313,12 @@ fn cont_event(mut s: Session) -> Event {
         }
         flush_out(mut s)
         let sig = take_signal(mut s)
+        let refused = arm_watches(mut s)
+        if refused.len() > 0 {
+            remove_all(mut s)
+            s.errmsg = refused
+            return Event { kind: ev_error, signal: 0, code: 0, bp: -1 }
+        }
         if platform.target_cont(s.target, sig) < 0 { s.alive = false; return lost() }
         var st = platform.target_wait(s.target)
         if st >= 0 && is_fork_event(st) {
@@ -313,7 +328,18 @@ fn cont_event(mut s: Session) -> Event {
         if st >= 0 && platform.status_stopped(st) {
             remove_all(mut s)
         }
+        if st >= 0 && platform.status_stopped(st) && platform.status_stop_signal(st) == 5 {
+            // a data watch traps after the access, with no breakpoint byte to wind back over
+            let w = watch_hit(mut s)
+            if w >= 0 { return Event { kind: ev_watch, signal: 5, code: 0, bp: w } }
+            if w == 0 - 2 { continue }
+        }
         let e = classify(mut s, st, false)
+        if e.kind == ev_breakpoint && s.bps[e.bp].scope > 0 {
+            if scope_ended(mut s, e.bp) { return Event { kind: ev_scope, signal: 5, code: 0, bp: -1 } }
+            // a deeper call of the same function returned: step over the breakpoint and run on
+            return cont_event(mut s)
+        }
         if e.kind == ev_signal && e.signal != 5 {
             if !signal_stops(e.signal) {
                 if signal_passes(e.signal) { s.pending_signal = e.signal }

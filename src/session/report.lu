@@ -39,6 +39,7 @@ fn print_stop_frame(mut s: Session, header: bool, prefix: str) {
     } else {
         print_frame_source(mut s, 0, true)
     }
+    do_displays(mut s)
 }
 
 fn need_stack(s: Session) -> str {

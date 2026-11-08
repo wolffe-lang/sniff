@@ -36,14 +36,14 @@ fn user_bp_at(s: Session, addr: u64) -> int {
 
 /// Add an internal breakpoint at a runtime address.
 fn add_internal(mut s: Session, addr: u64) {
-    (mut s.bps).push(Bp { num: 0, addr: addr, hits: 0, temp: false, enabled: true, internal: true, abs: true, ignore: 0, loc: 0, nloc: 1, orig: 0, inserted: false })
+    (mut s.bps).push(Bp { num: 0, addr: addr, hits: 0, temp: false, enabled: true, internal: true, abs: true, ignore: 0, loc: 0, nloc: 1, orig: 0, inserted: false, cond: "", scope: 0 })
 }
 
 fn drop_internal(mut s: Session) {
     var keep: List[Bp] = []
     var i = 0
     while i < s.bps.len {
-        if !s.bps[i].internal { (mut keep).push(copy s.bps[i]) }
+        if !s.bps[i].internal || s.bps[i].scope > 0 { (mut keep).push(copy s.bps[i]) }
         i += 1
     }
     s.bps = keep
@@ -70,6 +70,7 @@ fn report_bp_hit(mut s: Session, idx: int) {
     emit_line(mut s, "")
     emit_line(mut s, "{label} {num_text}, {frame_line(s, 0, false)}")
     print_frame_source(mut s, 0, false)
+    do_displays(mut s)
     // temporary breakpoints are deleted once hit
     var keep: List[Bp] = []
     i = 0
@@ -105,6 +106,8 @@ fn report_other(mut s: Session, e: Event) -> bool {
 /// Report any resume result that is not an ordinary arrival. Returns true when
 /// the event was reported (the caller must stop).
 fn report_event_if_stop(mut s: Session, e: Event) -> bool {
+    if e.kind == ev_watch { report_watch(mut s, e.bp); return true }
+    if e.kind == ev_scope { return true }
     if e.kind == ev_breakpoint {
         if s.bps[e.bp].internal {
             let user = user_bp_at(s, current_pc(s))

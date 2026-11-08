@@ -21,6 +21,10 @@ struct Bp {
     pub nloc: int,
     pub orig: int,
     pub inserted: bool,
+    /// The condition (`break X if E`, `condition N E`), "" for none.
+    pub cond: str,
+    /// For an internal breakpoint at a watch's scope end, that watch's number; else 0.
+    pub scope: int,
 }
 
 /// How a resume ended.
@@ -38,6 +42,10 @@ const ev_signal: int = 4
 const ev_stepped: int = 5
 const ev_lost: int = 6
 const ev_error: int = 7
+/// A watch's slot fired and it has something to report (bp is the watch's index).
+const ev_watch: int = 8
+/// A watch's frame returned; the deletion and the stop are already reported.
+const ev_scope: int = 9
 
 /// All of the debugger's state.
 struct Session {
@@ -63,6 +71,11 @@ struct Session {
     pub errmsg: str,
     pub tty: bool,
     pub quit: bool,
+    pub watches: List[Watch],
+    /// Whether the slots hold anything (they are cleared once when the last watch goes).
+    pub watch_armed: bool,
+    pub disps: List[Display],
+    pub disp_next: int,
 }
 
 /// Printed text goes to standard output through one buffer, flushed before
@@ -90,5 +103,6 @@ fn session_new(take p: Prog) -> Session {
     Session {
         prog: p, target: platform.target_none(), alive: false, base: 0, args: [], out: [],
         script: "", lineno: 0, bps: [], bp_next: 1, pending_signal: 0, cfi: [], frames: [], frames_ok: false, sel: 0, src_file: [], src_lines: [], src_ok: [], hist: [], errmsg: "", tty: false, quit: false,
+        watches: [], watch_armed: false, disps: [], disp_next: 1,
     }
 }

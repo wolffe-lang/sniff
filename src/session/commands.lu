@@ -34,6 +34,8 @@ fn report_end(mut s: Session, e: Event) {
 
 /// Report how a resume ended.
 fn report_event(mut s: Session, e: Event) {
+    if e.kind == ev_watch { report_watch(mut s, e.bp); return }
+    if e.kind == ev_scope { return }
     if e.kind == ev_breakpoint {
         report_bp_hit(mut s, e.bp)
         return
@@ -142,6 +144,8 @@ fn cmd_info(mut s: Session, rest: str) -> str {
     var more = ""
     if parts.len > 1 { more = parts[1] }
     if what == "breakpoints" || what == "break" || what == "b" || what == "breakpoint" { return cmd_info_breakpoints(mut s) }
+    if what == "watchpoints" || what == "wat" || what == "watch" { return cmd_info_watchpoints(mut s) }
+    if what == "display" { return cmd_info_display(mut s) }
     if what == "locals" || what == "lo" { return cmd_info_locals(mut s) }
     if what == "args" || what == "ar" { return cmd_info_args(mut s) }
     if what == "registers" || what == "r" || what == "reg" || what == "all-registers" { return cmd_info_registers(mut s, more) }
@@ -173,6 +177,13 @@ fn dispatch(mut s: Session, word: str, rest: str, text: str) -> str {
     if word == "tbreak" || word == "tb" { return cmd_break(mut s, rest, true) }
     if word == "delete" || word == "d" { return cmd_delete(mut s, rest) }
     if word == "ignore" { return cmd_ignore(mut s, rest) }
+    if word == "watch" || word == "wa" { return cmd_watch(mut s, rest, wk_write) }
+    if word == "rwatch" { return cmd_watch(mut s, rest, wk_read) }
+    if word == "awatch" { return cmd_watch(mut s, rest, wk_access) }
+    if word == "condition" { return cmd_condition(mut s, rest) }
+    if word == "display" || word == "disp" { return cmd_display(mut s, rest) }
+    if word.starts_with("display/") { return cmd_display(mut s, "/{str_from(word, 8)} {rest}") }
+    if word == "undisplay" || word == "undisp" { return cmd_undisplay(mut s, rest) }
     if word == "bt" || word == "backtrace" || word == "where" { return cmd_bt(mut s, rest) }
     if word == "frame" || word == "f" { return cmd_frame(mut s, rest) }
     if word == "up" { return cmd_up(mut s, rest) }
