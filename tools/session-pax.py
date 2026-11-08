@@ -211,13 +211,7 @@ def compare(sess, rows, got):
         fired = set()
         o, e = sess.normalize(out, fired, row), sess.normalize(err, fired, row)
         want_o, want_e, want_rc = (p.read_text() for p in gold)
-        bad = []
-        if o != want_o:
-            bad.append('stdout ' + sess.first_diff(want_o, o))
-        if e != want_e:
-            bad.append('stderr ' + sess.first_diff(want_e, e))
-        if str(rc) != want_rc.strip():
-            bad.append('exit want %s got %s' % (want_rc.strip(), rc))
+        bad = sess.judge(row, o, e, rc, want_o, want_e, want_rc)
         if bad:
             print('FAIL %s %s' % (row['name'], '; '.join(bad)))
             fails += 1
