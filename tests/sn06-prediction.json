@@ -1,0 +1,109 @@
+{
+  "schema": 1,
+  "lane": "sn06",
+  "written_before_code": "2026-11-08",
+  "scope": "sniff#11: the session's `list` (every form in the issue, from the source-line reader `step` and `frame` already use), `help` (the command classes restricted to sniff's commands, each command's paragraph, gdb commands sniff lacks named as not implemented yet), the undefined-command line, and the empty line at a terminal repeating the previous command. Rows on the Linux, macOS and PAX sets, red first against trunk.",
+
+  "measured_before_code": {
+    "oracle": "GNU gdb (Ubuntu 15.1-1ubuntu1~24.04.1) 15.1, the pinned binary in the oracle image, run only as a binary: batch scripts (`-nx -q -batch -iex 'set confirm off' -iex 'set pagination off' -x SCRIPT`) and terminal sessions in a pseudo-terminal through tools/session.py's own runner. Two probe runs, 124 and 99 scripts.",
+    "programs": "wolf nested and loops built by the pinned wolf 0.2.38 with -g; C recursion (fixtures/c/recursion) by gcc 13.3.0 and clang 18.1.3 at -O0 with DWARF 5; a copy of C recursion whose source is removed after the build; the calls fixture's plain.c (no -g); and, to separate the rules, 20 synthetic C programs written for the probe with main at line N in two shapes (A: `int main(void) {` at N, the first statement at N+1; B: `int` at N, `main(void)` at N+1, `{` at N+2, the first statement at N+3) for N in 3, 5, 8, 10, 11, 12, 13, 15, 20, 30.",
+    "documentation": "the GDB manual's Printing Source Lines, Linespec Locations, Location Specifications, Command Syntax, Command Files, Getting Help and Examining Source Files sections, staged as digest-checked inputs (sha256 List.html 90e2fdee5c9b84d1ad57a1c879f4d6dbfcbc8c16f5eab979de22ccb98f6adb85, Help.html 0939826b68afe3e648eb4d75d02763dff481dc0e9cbe4b9a94361c09b676d46d, Command-Syntax.html 66a4d0a94bcbe768499a1bd4221796afd6fdd65d95cda8a8f72b690faf82f3b2)",
+    "sniff_at_trunk": "every `list` and `help` script stops at its first command with `Undefined command: \"list\".  Try \"help\".` or `Undefined command: \"help\".  Try \"help\".` on stderr and exit status 1; an empty line at the terminal does nothing. Every new row is predicted red at trunk by that line."
+  },
+
+  "list": {
+    "terms": "L(f) is the line of the line-table row at function f's entry address; B(main) is the line of main's breakpoint (past the prologue). For wolf programs the entry row already carries the first statement's line (inner 2, outer 6, main 10 in nested; sum 2, main 11 in loops); for gcc factorial it is 2 and main 7. A listing prints `LINE<TAB>TEXT` per line.",
+    "centred": "a listing centred on line c prints first = max(c - 5, 1) through first + 9, cut at the file's end. It is not shifted back at the end: `list 11` on nested's 12 lines prints 6..12. If first is past the end: `Line number FIRST out of range; FILE has N lines.` (FILE is the path the line table names), e.g. `list 20` on nested reads `Line number 15 out of range; /work/fixtures/wolf/nested/main.lu has 12 lines.`",
+    "forms": {
+      "list N": "centred on N; `list 0` prints 1..10",
+      "list FUNCTION": "centred on L(FUNCTION): nested `list main` 5..12, loops `list main` 6..13, recursion `list main` 2..7, and 1..10 (or 1..7) for inner, outer, sum and factorial. The synthetic programs place the centre on main's entry row (shape B: the `{` line), not its declaration line and not its first statement",
+      "list FILE:N, list FILE:FUNCTION": "as N and FUNCTION; FILE matches a line-table file name by its trailing components (`main.lu`, `nested/main.lu`)",
+      "list FIRST,LAST": "FIRST through LAST, cut at the end (`list 8,30` prints 8..12); each side is any of the forms above, the second in the first's file. A function side is L(f): `list inner,outer` prints 2..6. FIRST > LAST prints nothing, status 0. `list 3,+2` prints 3..5. FIRST past the end: `Line number FIRST out of range; FILE has N lines.`",
+      "list FIRST,": "FIRST through FIRST + 9",
+      "list ,LAST": "max(LAST - 9, 1) through LAST; when LAST - 9 is past the end the out-of-range line names LAST - 9 (`list ,60` on a 35-line file: `Line number 51 out of range`)",
+      "list (no argument), list +": "after a listing: the ten lines after the last line printed; past the end: `End of the file was already reached, use \"list .\" to list the current location again`. After a frame's solitary source line (a stop, `frame`, `up`, `down`, `finish`): centred on that line, the selected frame's. With neither: around main, first = max(B(main) - 14, 1), so 1..10 on nested, loops and recursion (the synthetic programs fit this at every N). After the program exits, a later `list` is again around main",
+      "list -": "after a listing: max(FIRST - 10, 1) through FIRST - 1, FIRST being the first line last printed; at line 1: `Already at the start of FILE.` After a solitary line, and with nothing printed yet, it prints what a bare `list` would",
+      "list .": "centred on the selected frame's line; with no process, around main as a bare `list`",
+      "list *ADDRESS": "a first line `0xADDR is in FUNCTION (FILE:LINE).`, then centred on LINE. ADDR is the file address before the program runs (0xa530 for `*inner`) and the run-time address after",
+      "l": "the alias of list"
+    },
+    "refusals": {
+      "a line past the end": "`Line number FIRST out of range; FILE has N lines.` as above, on stderr; in batch mode the script stops there, status 1",
+      "a function with no line information": "`list _start`, `list *_start` and `list plain_twice` print nothing at all, status 0, and leave the listing state as it was (a following `list` is the one around main)",
+      "a source file that cannot be read at the path the line table names": "the first time a file is wanted: `warning: LINE<TAB>PATH: No such file or directory` on stderr, LINE the first line of the range (a stop at line 3 warns with 3), and the command succeeds; every later time: `LINE<TAB>in PATH` on stdout, for a listing and for a frame's source line alike. After such a listing a bare `list` answers `End of the file was already reached...`",
+      "no such function": "`Function \"nosuch\" not defined.`; with a file: `Function \"nosuch\" not defined in \"main.lu\".`",
+      "no such file": "`No source file named nosuch.lu.`",
+      "trailing junk": "`list 3 4`: `malformed linespec error: unexpected number, \"4\"`",
+      "at the start": "`Already at the start of FILE.`",
+      "at the end": "`End of the file was already reached, use \"list .\" to list the current location again`"
+    }
+  },
+
+  "help": {
+    "classes": "`help` and `h` print `List of classes of commands:`, a blank line, thirteen `CLASS -- DOC` lines, a blank line and six footer lines. Restricted to sniff's commands the classes are breakpoints, data, files (list), internals (sniff's own `maintenance frames`), running, stack, status (info) and support (echo, help, quit). gdb's alone: `aliases`, `obscure`, `text-user-interface`, `tracepoints`, `user-defined`, and the two footer lines that name `apropos`",
+    "help CLASS": "the class's doc, `List of commands:`, one `NAME, ALIASES -- SUMMARY` line per command and subcommand of the class, and the footer. Every line sniff prints is predicted to be one of gdb's, in gdb's order, except where a summary names gdb itself (internals)",
+    "help COMMAND": "a first line with the command and its aliases when gdb registers aliases (`break, brea, bre, br, b`; `delete, del, d`; `down, dow, do`; `info, inf, i`; `maintenance, mt`; `continue, fg, c`; `print, inspect, p`; `quit, exit, q`), none otherwise (kill, tbreak, watch, ignore, up, condition, display), then the summary line and the paragraph. An alias (`help b`, `help l`, `help k`) answers with its command's text. Prefix commands (info, maintenance, delete, frame, kill) add `List of X subcommands:`, their lines and a footer",
+    "bytes_rows": "the paragraph holds for sniff word for word, so the row compares bytes: help, step, next, stepi, nexti, finish, up, down, ignore, echo, output, info display",
+    "shape_rows": "gdb's paragraph describes what sniff does not have (run's shell and `set args`, continue's ignore count and non-stop, break's probes, threads and -force-condition, watch's -location, print's options, backtrace's options, list's `set listsize`, x's f/i/z formats and negative counts, info locals' and args' -q/-t filters, delete's and frame's subcommands, kill's `kill inferiors`, quit's EXPR, until's LOCATION, call's function calls, display's i and s formats, undisplay's `delete display`). The row holds the names line and the summary line byte for byte, and the rest is sniff's own words, stating what sniff does and what is not implemented yet. The listings (`help`, `help CLASS`, `help info`, `help all`) are held line by line: every line sniff prints is one of gdb's, in order, or a named sniff line",
+    "lacking": "`help catch`, `help tui`, `help set` and every other gdb command sniff lacks print gdb's help in gdb (status 0); sniff names the command as a gdb command it does not implement yet, never `Undefined command`",
+    "undefined": "`help nosuch`: `Undefined command: \"nosuch\".  Try \"help\".`; `help info nosuch`: `Undefined info command: \"nosuch\".  Try \"help info\".`",
+    "abbreviations": "gdb takes any unambiguous prefix (`help lis`, and `help dis` is disable). sniff's dispatcher takes exact names and its aliases only, so `help` follows it; prefixes are not in this lane's rows"
+  },
+
+  "undefined_command_line": {
+    "gdb": "`Undefined command: \"nosuch\".  Try \"help\".`, `Undefined info command: \"nosuch\".  Try \"help info\".`, `Undefined maintenance command: \"nosuch\".  Try \"help maintenance\".`",
+    "plan": "a commit before `help` exists drops the `Try \"help\"` and `Try \"help info\"` hints, held by its own rows; the commit that adds `help` restores them and adds the maintenance hint, and the rows then hold gdb's lines exactly. No existing golden prints any of these lines, so no existing row moves"
+  },
+
+  "empty_line": {
+    "batch": "the manual's Command Files: an empty line in a command file does nothing. sniff already does nothing; unchanged",
+    "terminal": "an empty or whitespace-only line repeats the previous line. Measured repeating: next, step, until, stepi, nexti, continue, finish, print, output, info (every subcommand measured), bt, frame (with its argument), up, down, x, break, tbreak, watch, rwatch, awatch, ignore, kill, echo, help, maintenance, and an undefined command (its error again). Not repeating: run, delete, display, undisplay, condition. A comment line is a previous line that repeats as nothing. `list` repeats as a bare `list` once it has printed, and `list -` as `list -`; a `list` that failed repeats as typed (`list 40` errs again). `x` repeats as a bare `x`: the same count, format and size at the address after the last one examined. At the first prompt an empty line does nothing",
+    "predicted_size": "small: the previous line kept in the session, two rewrite rules (list and x), a five-name no-repeat set, and x's last format and next address. Implemented, not drafted",
+    "gdb_only_detail": "a repeated `break` prints gdb's `Note: breakpoint 1 also set at pc 0xa53f.` before the new breakpoint; sniff prints no such note today. No row repeats `break`; the note is listed as remainder"
+  },
+
+  "rows": {
+    "sets": "every new row is in tests/session-rows.json and runs on the Linux S2 set (dynamic builds, tools/session.py), the PAX set (the static builds, sniff at PAX's console under KVM, held to the pinned gdb's goldens on the same static builds), and the macOS set (tests/macos-rows.json, Linux goldens after the named normalisation; clang rows run there and gcc rows are Linux and PAX only)",
+    "fixtures": "wolf nested and loops (already session fixtures); C recursion (fixtures/c/recursion) joins the session build for gcc and clang, and a second build of it from a copy of its source that the build removes (`c/recursion-gone`), for the unreadable-source refusal. The calls fixture's plain_twice is the second function with no line information",
+    "compare": "a row compares bytes unless it says otherwise: `head` holds the first N lines and states why the rest is sniff's own; `subset` holds every line as one of gdb's in order, with sniff's named lines; `own` holds sniff's expected text and gdb's capture showing the command exists",
+    "predicted_red_at_trunk": "every new row, by name, on all three sets: stdout empty or cut at the first list/help command, stderr `Undefined command: \"list\".  Try \"help\".` (or help), exit 1. The terminal repeat rows are red by their missing repeated lines",
+    "predicted_to_hold": "every existing row (no existing golden contains a missing source, a help text, an undefined-command line or an empty line); the stop path changes only for an unreadable source file, which no existing row has",
+    "platform_differences_expected": "macOS: no `_start` in a Mach-O image, so the `_start` rows are Linux and PAX only, excluded on macOS by name; `list *ADDRESS`'s address is normalised there as every address is. PAX: the static builds' `_start` comes from the static C library and has no line information either"
+  },
+
+  "rulings_asked": {
+    "R-sn06-1": {
+      "question": "item 4 asks the undefined-command line to stop pointing at `help` until `help` exists. Both land in this PR.",
+      "options": {
+        "a": "a commit before `help` drops the hints and its rows hold that; the `help` commit restores gdb's lines and the rows flip to gdb's",
+        "b": "keep gdb's line throughout, since `help` lands in the same PR"
+      },
+      "recommend": "a: it is the item as written, costs two small commits, and the history shows the line never pointing at a missing command"
+    },
+    "R-sn06-2": {
+      "question": "a gdb command sniff lacks, typed as a command (not under `help`)",
+      "options": {
+        "a": "say what `help` says: that it is a gdb command sniff does not implement yet",
+        "b": "keep `Undefined command`, as the issue only names `help`"
+      },
+      "recommend": "a: `Undefined command` is as wrong for `catch` typed as a command as under help; the list of gdb's command names comes from the pinned gdb's `help all` (243 top-level names and aliases)"
+    },
+    "R-sn06-3": {
+      "question": "the empty-line repeat beyond next, step and list",
+      "options": {
+        "a": "every command as gdb repeats it, with the measured no-repeat set and the list and x rewrites",
+        "b": "next, step and list only"
+      },
+      "recommend": "a: the rule is one table, and (b) would make an empty line after `continue` or `up` do nothing where gdb repeats it"
+    }
+  },
+
+  "honesty": {
+    "not_known_before_code": [
+      "whether PAX's console delivers an empty typed line to sniff's prompt as an empty line (the typing tool sends a carriage return; the repeat rows decide)",
+      "whether the static builds list the same lines as the dynamic ones (predicted yes: the same sources and line tables)",
+      "the help text for the Mac's lldb is not an oracle here: lldb's command language differs, so the macOS rows hold sniff to the Linux gdb goldens only"
+    ],
+    "clean_room": "the GDB manual sections above; gdb only as a binary; no debugger's source read"
+  }
+}
