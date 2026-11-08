@@ -3892,6 +3892,54 @@
     "continue"
    ],
    "tty": true
+  },
+  {
+   "name": "libframes-gcc-bt",
+   "prog": "c/sorter/gcc-O0/prog",
+   "script": [
+    "break order",
+    "run",
+    "bt",
+    "delete",
+    "continue"
+   ]
+  },
+  {
+   "name": "libframes-gcc-up",
+   "prog": "c/sorter/gcc-O0/prog",
+   "script": [
+    "break order",
+    "run",
+    "up",
+    "up",
+    "frame",
+    "delete",
+    "continue"
+   ]
+  },
+  {
+   "name": "libframes-clang-bt",
+   "prog": "c/sorter/clang-O0/prog",
+   "script": [
+    "break order",
+    "run",
+    "bt",
+    "delete",
+    "continue"
+   ]
+  },
+  {
+   "name": "libframes-clang-up",
+   "prog": "c/sorter/clang-O0/prog",
+   "script": [
+    "break order",
+    "run",
+    "up",
+    "up",
+    "frame",
+    "delete",
+    "continue"
+   ]
   }
  ]
 }
