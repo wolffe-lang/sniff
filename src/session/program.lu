@@ -269,6 +269,59 @@ fn line_order(a: LineEnt, b: LineEnt) -> bool {
     a.ord <= b.ord
 }
 
+/// An ascending run of line rows, keyed by its first row.
+struct LineRun {
+    pub addr: u64,
+    pub ord: int,
+    pub start: int,
+    pub end: int,
+}
+
+fn run_order(a: LineRun, b: LineRun) -> bool {
+    if a.addr != b.addr { return a.addr < b.addr }
+    a.ord <= b.ord
+}
+
+/// Sort the rows by line_order. Rows arrive as ascending runs, one per line-table sequence
+/// (3,056 runs in 129,077 rows of a large runtime's tables), so the runs are ordered by their
+/// first row and laid end to end; when that is sorted, it is the answer, because (addr, ord)
+/// is a total order with ord unique and the sorted list is therefore unique. Runs that
+/// overlap fall back to the full sort.
+fn sort_lines(mut lines: List[LineEnt]) {
+    let n = lines.len
+    if n < 2 { return }
+    var runs: List[LineRun] = []
+    var start: int = 0
+    var i: int = 1
+    while i <= n {
+        if i == n || !line_order(lines[i - 1], lines[i]) {
+            (mut runs).push(LineRun { addr: lines[start].addr, ord: lines[start].ord, start: start, end: i })
+            start = i
+        }
+        i += 1
+    }
+    if runs.len == 1 { return }
+    (mut runs).sort_by(run_order)
+    var out: List[LineEnt] = []
+    (mut out).reserve(n)
+    var r: int = 0
+    while r < runs.len {
+        var k = runs[r].start
+        while k < runs[r].end { (mut out).push(copy lines[k]); k += 1 }
+        r += 1
+    }
+    var j: int = 1
+    while j < n {
+        if !line_order(out[j - 1], out[j]) {
+            (mut lines).sort_by(line_order)
+            return
+        }
+        j += 1
+    }
+    j = 0
+    while j < n { lines[j] = copy out[j]; j += 1 }
+}
+
 /// Read the ELF file at path and build the session's view of it. A program
 /// without DWARF loads with has_info false; symbols still work.
 fn prog_load(path: str) -> Prog {
@@ -381,7 +434,7 @@ fn load_dwarf(mut p: Prog, data: List[byte]) {
         }
         ui += 1
     }
-    (mut p.lines).sort_by(line_order)
+    sort_lines(mut p.lines)
     // subprograms with ranges
     let subs = subprogram_entries(p.info)
     var si: int = 0
