@@ -3315,6 +3315,583 @@
     "up"
    ],
    "tty": true
+  },
+  {
+   "name": "threads-gcc-run",
+   "prog": "c/workers/gcc-O0/prog",
+   "script": [
+    "run"
+   ]
+  },
+  {
+   "name": "threads-gcc-info",
+   "prog": "c/workers/gcc-O0/prog",
+   "script": [
+    "break work",
+    "run",
+    "info threads",
+    "continue"
+   ]
+  },
+  {
+   "name": "threads-gcc-switch",
+   "prog": "c/workers/gcc-O0/prog",
+   "script": [
+    "break work",
+    "run",
+    "thread 1",
+    "bt",
+    "frame",
+    "info threads",
+    "thread 4",
+    "bt",
+    "print n",
+    "continue"
+   ]
+  },
+  {
+   "name": "threads-gcc-spinner",
+   "prog": "c/workers/gcc-O0/prog",
+   "script": [
+    "break work",
+    "run",
+    "thread 2",
+    "bt",
+    "frame 1",
+    "print id",
+    "info locals",
+    "thread",
+    "continue"
+   ]
+  },
+  {
+   "name": "threads-gcc-next",
+   "prog": "c/workers/gcc-O0/prog",
+   "script": [
+    "break work",
+    "run",
+    "next",
+    "next",
+    "next",
+    "bt",
+    "finish",
+    "continue"
+   ]
+  },
+  {
+   "name": "threads-gcc-list",
+   "prog": "c/workers/gcc-O0/prog",
+   "script": [
+    "break work",
+    "run",
+    "info threads 2 3",
+    "info threads 4",
+    "continue"
+   ]
+  },
+  {
+   "name": "threads-gcc-kill",
+   "prog": "c/workers/gcc-O0/prog",
+   "script": [
+    "break work",
+    "run",
+    "kill",
+    "info threads"
+   ]
+  },
+  {
+   "name": "threads-gcc-signal",
+   "prog": "c/workers/gcc-O0/prog",
+   "script": [
+    "run signal",
+    "bt",
+    "info threads",
+    "continue"
+   ]
+  },
+  {
+   "name": "threads-gcc-signal-nostop",
+   "prog": "c/workers/gcc-O0/prog",
+   "script": [
+    "handle SIGUSR1 nostop noprint",
+    "break work",
+    "run signal",
+    "info threads",
+    "continue"
+   ]
+  },
+  {
+   "name": "threads-clang-run",
+   "prog": "c/workers/clang-O0/prog",
+   "script": [
+    "run"
+   ]
+  },
+  {
+   "name": "threads-clang-info",
+   "prog": "c/workers/clang-O0/prog",
+   "script": [
+    "break work",
+    "run",
+    "info threads",
+    "continue"
+   ]
+  },
+  {
+   "name": "threads-clang-switch",
+   "prog": "c/workers/clang-O0/prog",
+   "script": [
+    "break work",
+    "run",
+    "thread 1",
+    "bt",
+    "frame",
+    "info threads",
+    "thread 4",
+    "bt",
+    "print n",
+    "continue"
+   ]
+  },
+  {
+   "name": "threads-clang-spinner",
+   "prog": "c/workers/clang-O0/prog",
+   "script": [
+    "break work",
+    "run",
+    "thread 2",
+    "bt",
+    "frame 1",
+    "print id",
+    "info locals",
+    "thread",
+    "continue"
+   ]
+  },
+  {
+   "name": "threads-clang-next",
+   "prog": "c/workers/clang-O0/prog",
+   "script": [
+    "break work",
+    "run",
+    "next",
+    "next",
+    "next",
+    "bt",
+    "finish",
+    "continue"
+   ]
+  },
+  {
+   "name": "threads-clang-list",
+   "prog": "c/workers/clang-O0/prog",
+   "script": [
+    "break work",
+    "run",
+    "info threads 2 3",
+    "info threads 4",
+    "continue"
+   ]
+  },
+  {
+   "name": "threads-clang-kill",
+   "prog": "c/workers/clang-O0/prog",
+   "script": [
+    "break work",
+    "run",
+    "kill",
+    "info threads"
+   ]
+  },
+  {
+   "name": "threads-clang-signal",
+   "prog": "c/workers/clang-O0/prog",
+   "script": [
+    "run signal",
+    "bt",
+    "info threads",
+    "continue"
+   ]
+  },
+  {
+   "name": "threads-clang-signal-nostop",
+   "prog": "c/workers/clang-O0/prog",
+   "script": [
+    "handle SIGUSR1 nostop noprint",
+    "break work",
+    "run signal",
+    "info threads",
+    "continue"
+   ]
+  },
+  {
+   "name": "threads-gcc-single",
+   "prog": "c/sigusr/gcc-O0/prog",
+   "script": [
+    "break main",
+    "run",
+    "info threads",
+    "thread",
+    "thread 1",
+    "kill"
+   ]
+  },
+  {
+   "name": "threads-gcc-norun-info",
+   "prog": "c/workers/gcc-O0/prog",
+   "script": [
+    "info threads"
+   ]
+  },
+  {
+   "name": "threads-gcc-norun-thread",
+   "prog": "c/workers/gcc-O0/prog",
+   "script": [
+    "thread"
+   ]
+  },
+  {
+   "name": "threads-gcc-unknown",
+   "prog": "c/workers/gcc-O0/prog",
+   "script": [
+    "break work",
+    "run",
+    "thread 9"
+   ]
+  },
+  {
+   "name": "threads-gcc-invalid",
+   "prog": "c/workers/gcc-O0/prog",
+   "script": [
+    "break work",
+    "run",
+    "thread 0"
+   ]
+  },
+  {
+   "name": "threads-gcc-nomatch",
+   "prog": "c/workers/gcc-O0/prog",
+   "script": [
+    "break work",
+    "run",
+    "info threads 9"
+   ]
+  },
+  {
+   "name": "signals-gcc-run",
+   "prog": "c/sigusr/gcc-O0/prog",
+   "script": [
+    "run",
+    "bt",
+    "continue",
+    "continue",
+    "continue"
+   ]
+  },
+  {
+   "name": "signals-gcc-nostop",
+   "prog": "c/sigusr/gcc-O0/prog",
+   "script": [
+    "handle SIGUSR1 nostop",
+    "run",
+    "continue"
+   ]
+  },
+  {
+   "name": "signals-gcc-nostop-noprint",
+   "prog": "c/sigusr/gcc-O0/prog",
+   "script": [
+    "handle SIGUSR1 nostop noprint",
+    "run",
+    "continue"
+   ]
+  },
+  {
+   "name": "signals-gcc-nopass",
+   "prog": "c/sigusr/gcc-O0/prog",
+   "script": [
+    "handle SIGUSR1 nopass",
+    "run",
+    "continue",
+    "continue",
+    "continue"
+   ]
+  },
+  {
+   "name": "signals-gcc-signal0",
+   "prog": "c/sigusr/gcc-O0/prog",
+   "script": [
+    "run",
+    "signal 0",
+    "continue",
+    "continue"
+   ]
+  },
+  {
+   "name": "signals-gcc-replace",
+   "prog": "c/sigusr/gcc-O0/prog",
+   "script": [
+    "run",
+    "signal SIGUSR2",
+    "continue",
+    "continue"
+   ]
+  },
+  {
+   "name": "signals-gcc-segv-nopass",
+   "prog": "c/exits/gcc-O0/prog",
+   "script": [
+    "handle SIGSEGV nopass",
+    "run fault",
+    "continue",
+    "kill"
+   ]
+  },
+  {
+   "name": "signals-clang-run",
+   "prog": "c/sigusr/clang-O0/prog",
+   "script": [
+    "run",
+    "bt",
+    "continue",
+    "continue",
+    "continue"
+   ]
+  },
+  {
+   "name": "signals-clang-nostop",
+   "prog": "c/sigusr/clang-O0/prog",
+   "script": [
+    "handle SIGUSR1 nostop",
+    "run",
+    "continue"
+   ]
+  },
+  {
+   "name": "signals-clang-nostop-noprint",
+   "prog": "c/sigusr/clang-O0/prog",
+   "script": [
+    "handle SIGUSR1 nostop noprint",
+    "run",
+    "continue"
+   ]
+  },
+  {
+   "name": "signals-clang-nopass",
+   "prog": "c/sigusr/clang-O0/prog",
+   "script": [
+    "handle SIGUSR1 nopass",
+    "run",
+    "continue",
+    "continue",
+    "continue"
+   ]
+  },
+  {
+   "name": "signals-clang-signal0",
+   "prog": "c/sigusr/clang-O0/prog",
+   "script": [
+    "run",
+    "signal 0",
+    "continue",
+    "continue"
+   ]
+  },
+  {
+   "name": "signals-clang-replace",
+   "prog": "c/sigusr/clang-O0/prog",
+   "script": [
+    "run",
+    "signal SIGUSR2",
+    "continue",
+    "continue"
+   ]
+  },
+  {
+   "name": "signals-clang-segv-nopass",
+   "prog": "c/exits/clang-O0/prog",
+   "script": [
+    "handle SIGSEGV nopass",
+    "run fault",
+    "continue",
+    "kill"
+   ]
+  },
+  {
+   "name": "signals-gcc-sigsys",
+   "prog": "c/sigusr/gcc-O0/prog",
+   "script": [
+    "run",
+    "signal 12"
+   ]
+  },
+  {
+   "name": "signals-gcc-info",
+   "prog": "c/sigusr/gcc-O0/prog",
+   "script": [
+    "info signals SIGUSR1",
+    "info handle SIGSEGV",
+    "info signals 14",
+    "info signals SIGALRM"
+   ]
+  },
+  {
+   "name": "signals-gcc-info-all",
+   "prog": "c/sigusr/gcc-O0/prog",
+   "script": [
+    "info signals"
+   ]
+  },
+  {
+   "name": "signals-gcc-info-bad",
+   "prog": "c/sigusr/gcc-O0/prog",
+   "script": [
+    "info signals SIGFOO"
+   ]
+  },
+  {
+   "name": "signals-gcc-handle-bad",
+   "prog": "c/sigusr/gcc-O0/prog",
+   "script": [
+    "handle SIGFOO stop"
+   ]
+  },
+  {
+   "name": "signals-gcc-handle-word",
+   "prog": "c/sigusr/gcc-O0/prog",
+   "script": [
+    "handle SIGUSR1 sometimes"
+   ]
+  },
+  {
+   "name": "signals-gcc-handle-noarg",
+   "prog": "c/sigusr/gcc-O0/prog",
+   "script": [
+    "handle"
+   ]
+  },
+  {
+   "name": "signals-gcc-handle-num16",
+   "prog": "c/sigusr/gcc-O0/prog",
+   "script": [
+    "handle 16 nostop"
+   ]
+  },
+  {
+   "name": "signals-gcc-handle-forms",
+   "prog": "c/sigusr/gcc-O0/prog",
+   "script": [
+    "handle SIGUSR1 nos",
+    "handle 1-3 nostop",
+    "handle 14 stop",
+    "handle SIGUSR2 ignore",
+    "handle SIGUSR2 noignore",
+    "handle SIGUSR1 st",
+    "run",
+    "continue",
+    "continue",
+    "continue"
+   ]
+  },
+  {
+   "name": "signals-gcc-signal-norun",
+   "prog": "c/sigusr/gcc-O0/prog",
+   "script": [
+    "signal SIGUSR1"
+   ]
+  },
+  {
+   "name": "signals-gcc-signal-bad",
+   "prog": "c/sigusr/gcc-O0/prog",
+   "script": [
+    "run",
+    "signal SIGFOO"
+   ]
+  },
+  {
+   "name": "signals-gcc-signal-noarg",
+   "prog": "c/sigusr/gcc-O0/prog",
+   "script": [
+    "run",
+    "signal"
+   ]
+  },
+  {
+   "name": "signals-gcc-segv-nostop",
+   "prog": "c/exits/gcc-O0/prog",
+   "script": [
+    "handle SIGSEGV nostop",
+    "run fault"
+   ]
+  },
+  {
+   "name": "signals-gcc-segv-nostop-noprint",
+   "prog": "c/exits/gcc-O0/prog",
+   "script": [
+    "handle SIGSEGV nostop noprint",
+    "run fault"
+   ]
+  },
+  {
+   "name": "signals-gcc-segv-signal0",
+   "prog": "c/exits/gcc-O0/prog",
+   "script": [
+    "run fault",
+    "signal 0",
+    "kill"
+   ]
+  },
+  {
+   "name": "signals-gcc-segv-info",
+   "prog": "c/exits/gcc-O0/prog",
+   "script": [
+    "run fault",
+    "info signals SIGSEGV",
+    "bt",
+    "continue"
+   ]
+  },
+  {
+   "name": "tty-gcc-signals-handle",
+   "prog": "c/sigusr/gcc-O0/prog",
+   "script": [
+    "handle SIGUSR1 nostop",
+    "handle SIGUSR1",
+    "handle SIGUSR2 nopass noprint",
+    "handle 14 stop",
+    "handle SIGALRM SIGWINCH nopass",
+    "handle 1-3 nostop",
+    "handle SIGUSR1 stop",
+    "info signals SIGUSR1",
+    "handle SIGUSR2 print",
+    "run",
+    "continue",
+    "continue"
+   ],
+   "tty": true
+  },
+  {
+   "name": "tty-gcc-signals-handle-all",
+   "prog": "c/sigusr/gcc-O0/prog",
+   "script": [
+    "handle SIGINT nostop",
+    "handle SIGTRAP nopass",
+    "handle SIGKILL nostop",
+    "handle all nostop"
+   ],
+   "tty": true
+  },
+  {
+   "name": "tty-gcc-signals-signal",
+   "prog": "c/sigusr/gcc-O0/prog",
+   "script": [
+    "run",
+    "signal SIGUSR2",
+    "continue",
+    "signal 0",
+    "continue"
+   ],
+   "tty": true
   }
  ]
 }
