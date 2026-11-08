@@ -336,6 +336,17 @@ pub fn dwarf_info_read(
         abbreviation_tables_read: 0,
         fuel_remaining: limits.work,
     }
+    // Capacity is reserved once from the section's size, at a little over the densest
+    // producer measured (0.30 attributes and 0.115 entries per byte, the linked Rust
+    // runtime's DWARF), instead of growing by doubling: on that runtime's 4.8 MB of DIEs the
+    // read peaked at 365 MB grown and 165 MB reserved (the pages a reservation does not fill
+    // are never touched). A denser section grows past the reservation as before.
+    var want_attributes = info_span.length / 3
+    if want_attributes > limits.attributes { want_attributes = limits.attributes }
+    var want_entries = info_span.length / 8
+    if want_entries > limits.dies * 2 { want_entries = limits.dies * 2 }
+    (mut info.attributes).reserve(want_attributes)
+    (mut info.entries).reserve(want_entries)
     var c = cursor(info_span.start, info_end, limits.work)
     while c.pos < c.end {
         c.fuel = info.fuel_remaining
