@@ -111,7 +111,7 @@ def main():
         directory = out / ident
         directory.mkdir(parents=True, exist_ok=True)
         exe = directory / 'prog'
-        run([args.wolf, 'build', source, '-g', '--no-cache', '-o', exe], wolf_env, source.parent)
+        run([args.wolf, 'build', source, '--no-cache', '-o', exe], wolf_env, source.parent)
         if mac:
             mac_sign(exe, env)
         rows.append({'id': ident, 'producer': 'wolf', 'source': str(source.relative_to(ROOT)),
