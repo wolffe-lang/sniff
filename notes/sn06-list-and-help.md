@@ -12,11 +12,11 @@ empty-line repeat. All four are here, with rows on the Linux, macOS and PAX sets
 | `list` | `src/session/listing.lu`: every form in the issue (no argument and `+`, `-`, `.`, `N`, `FUNCTION`, `FILE:N`, `FILE:FUNCTION`, `FIRST,LAST`, `FIRST,`, `,LAST`, `FIRST,+N`) and `*ADDRESS`, over the source-line reader `step` and `frame` use. `l` is its alias |
 | the reader | `src/session/report.lu`: a frame's source line is the solitary line a bare `list` centres on, and a file that cannot be read is warned about once, as gdb does, then named |
 | `help` | `src/session/help.lu` over the table in `src/session/helptext.lu`: `help`, `help all`, `help CLASS`, `help COMMAND` (and every alias), `help info SUB`, `help maintenance SUB` |
-| gdb commands sniff lacks | `help catch` and `catch fork` both answer `"catch" is a gdb command that sniff does not implement yet.`, for 181 top-level names and 65 info subcommands from the pinned gdb's `help all` and `help info` |
-| the undefined-command line | dropped its `Try "help"` while `help` did not exist (`de4efcb`), and points at it again since (`233f1d6`); maintenance's names `help maintenance`, as gdb's does |
+| gdb commands sniff lacks | as the contract asked, named as not implemented yet, never as undefined: `help catch` and `catch fork` both answer `"catch" is a gdb command that sniff does not implement yet.`, for 181 top-level names and 65 info subcommands from the pinned gdb's `help all` and `help info` |
+| the undefined-command line | as the contract asked: it dropped its `Try "help"` while `help` did not exist (`de4efcb`), and points at it again since (`233f1d6`); maintenance's names `help maintenance`, as gdb's does |
 | aliases | gdb's registered aliases sniff lacked, so that help's names lines are true of sniff: `bre`, `del`, `dow`, `do`, `inf`, `mt` |
 | the empty line | `src/session/commands.lu`: at the terminal an empty or blank line repeats the previous line as gdb repeats it, with `list` and `x` rewritten; `x` with no address goes on from the last `x` |
-| two small fixes the repeat rows need | at a terminal a new `display` is shown at once (gdb does; batch mode does not), and `echo` drops its argument's leading blanks |
+| three behaviour changes outside the issue | the repeat rows exposed them, and each has its own row: at a terminal a new `display` is shown at once, as gdb shows it (batch mode still waits for the next stop; `tty-wolf-loops-repeat-not`); `echo` drops its argument's leading blanks, as gdb does (`echo-leading-space`); `x` with no address goes on after the last `x` with its count, format and size (`tty-wolf-loops-repeat-x`) |
 | harness | compare modes per row (`head`, `subset`, `own`) in `tools/session.py`, used by `tools/session-pax.py` and `tools/session-mac.py`; macOS rows may hold stderr and the exit status; C recursion (the reader corpus's) joins the session fixtures, with a copy whose source the build removes |
 
 ### list, as measured
@@ -98,15 +98,16 @@ As measured at gdb's terminal:
     prompt, typing `exit` into the middle of the rows; the console now types the rows and the exit as one
     line.
 
-## R-list
+## Decisions
 
-- R-sn06-1 (recommend (a), implemented): the undefined-command line dropped its hint in a commit before `help`
-  (`de4efcb`) and regained it with `help` (`233f1d6`). Its rows hold gdb's line, so they were red in between
-  and green at trunk and at the head: trunk already printed gdb's line.
-- R-sn06-2 (recommend (a), implemented): a gdb command sniff lacks, typed as a command, says what `help` says,
-  not `Undefined command`.
-- R-sn06-3 (recommend (a), implemented): the empty line repeats every command as gdb does, with the measured
-  no-repeat set and the list and x rewrites.
+- The undefined-command line, as the contract asked: a commit before `help` dropped the hint (`de4efcb`) and the
+  `help` commit restored gdb's line (`233f1d6`). The rows hold gdb's line, so they were red in between, and
+  green at trunk and at the head: trunk already printed gdb's line.
+- A gdb command sniff lacks is named as not implemented yet, as the contract asked, both under `help` and when
+  it is typed as a command.
+- The empty line repeats every command gdb repeats, with the measured no-repeat set and the `list` and `x`
+  rewrites, not only `next`, `step` and `list`: the table stayed small, and an empty line after `continue` or
+  `up` would otherwise do nothing where gdb repeats it.
 
 ## Remainder
 
