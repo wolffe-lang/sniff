@@ -3042,18 +3042,14 @@
    "prog": "c/sigusr/gcc-O0/prog",
    "script": [
     "help handle"
-   ],
-   "compare": "head",
-   "head": 2
+   ]
   },
   {
    "name": "help-signal",
    "prog": "c/sigusr/gcc-O0/prog",
    "script": [
     "help signal"
-   ],
-   "compare": "head",
-   "head": 2
+   ]
   },
   {
    "name": "help-thread",
@@ -3062,7 +3058,8 @@
     "help thread"
    ],
    "compare": "head",
-   "head": 2
+   "head": 3,
+   "why": "the held lines are gdb's names, summary and the rule for a thread ID; sniff names thread's subcommands as not implemented yet"
   },
   {
    "name": "help-t",
@@ -3071,7 +3068,8 @@
     "help t"
    ],
    "compare": "head",
-   "head": 2
+   "head": 3,
+   "why": "the held lines are gdb's names, summary and the rule for a thread ID; sniff names thread's subcommands as not implemented yet"
   },
   {
    "name": "help-info-threads",
@@ -3080,25 +3078,22 @@
     "help info threads"
    ],
    "compare": "head",
-   "head": 2
+   "head": 4,
+   "why": "the held lines are gdb's summary, usage and the ID list; sniff names the -gid option as not implemented yet"
   },
   {
    "name": "help-info-signals",
    "prog": "c/sigusr/gcc-O0/prog",
    "script": [
     "help info signals"
-   ],
-   "compare": "head",
-   "head": 2
+   ]
   },
   {
    "name": "help-info-handle",
    "prog": "c/sigusr/gcc-O0/prog",
    "script": [
     "help info handle"
-   ],
-   "compare": "head",
-   "head": 2
+   ]
   },
   {
    "name": "undefined-command",
