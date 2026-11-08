@@ -23,7 +23,8 @@ Two kinds of row (tests/macos-rows.json):
          (signal name), thread (a row of `info threads` or lldb's `thread list`: number,
          function, file, line, for a frame with a source line) and stopthread (the thread a
          breakpoint or signal stopped, when it is not thread 1: gdb names the thread only
-         once a program has more than one, and lldb always does). lldb's text differs from
+         once a program has more than one and only at those stops, and lldb names it at
+         every stop). lldb's text differs from
          gdb's; only these facts are compared.
 
 `capture` runs lldb on the lldb rows and stores its raw output in
@@ -200,7 +201,7 @@ def facts_lldb(text):
         if m:
             facts.append(('thread', int(m[1]), m[2], base(m[3]), int(m[4])))
             continue
-        m = re.match(r'^\* thread #(\d+),.*stop reason = ', line)
+        m = re.match(r'^\* thread #(\d+),.*stop reason = (?:breakpoint|signal|EXC_)', line)
         if m and in_stop_cmd and int(m[1]) != 1:
             facts.append(('stopthread', int(m[1])))
         m = re.search(r'stopped and restarted: thread \d+ received signal: (SIG\w+)', line)
