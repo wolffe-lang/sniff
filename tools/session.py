@@ -20,6 +20,15 @@ Normalisations, each named in every PASS/FAIL line only when it fired:
           was given, which gdb's inferior on Linux and PAX's console do not share.
 Terminal rows run both debuggers in a pseudo-terminal with echo off and send
 one command per prompt, as R-sn02-1 specifies.
+
+A row compares standard output byte for byte unless its "compare" says otherwise
+(standard error and the exit status are always compared with the golden's):
+  head    the first "head" lines are gdb's, byte for byte, and sniff prints more after
+          them, in its own words; "why" says what gdb's text describes that sniff lacks
+  subset  every line sniff prints is one of gdb's, in gdb's order, or one of the row's
+          "own" lines, each of which sniff must print; sniff prints something
+  own     sniff's text is the row's "expect" lines (and "expect_err", "expect_rc" when
+          given), and the golden shows gdb answering the command with text and status 0
 """
 import argparse
 import json
@@ -262,6 +271,69 @@ def cmd_capture(a):
     return 0
 
 
+def subset_lines(want, got, own):
+    """'' when every line of got is a line of want in want's order or one of own, else the reason."""
+    if not got:
+        return 'prints nothing'
+    i = 0
+    for k, line in enumerate(got):
+        if line in own:
+            continue
+        while i < len(want) and want[i] != line:
+            i += 1
+        if i == len(want):
+            return 'line %d is not one of gdb\'s, in order: %r' % (k + 1, line)
+        i += 1
+    missing = [x for x in own if x not in got]
+    if missing:
+        return 'its own line is missing: %r' % missing[0]
+    return ''
+
+
+def lines_verdict(row, want, got):
+    """'' when sniff's stdout lines hold against gdb's as the row's compare mode says, else the reason."""
+    mode = row.get('compare', 'bytes')
+    if mode == 'bytes':
+        return '' if got == want else first_diff('\n'.join(want), '\n'.join(got))
+    if mode == 'head':
+        n = row['head']
+        if got[:n] != want[:n]:
+            return 'held lines: ' + first_diff('\n'.join(want[:n]), '\n'.join(got[:n]))
+        if len(got) <= n:
+            return 'nothing of its own after the %d held lines' % n
+        return ''
+    if mode == 'subset':
+        return subset_lines(want, got, row.get('own', []))
+    if mode == 'own':
+        return '' if got == row['expect'] else first_diff('\n'.join(row['expect']), '\n'.join(got))
+    return 'unknown compare mode ' + mode
+
+
+def judge(row, out, err, rc, want_o, want_e, want_rc):
+    """What differs between sniff's run of a row and the golden (normalised texts); [] when it holds."""
+    bad = []
+    mode = row.get('compare', 'bytes')
+    if mode == 'bytes':
+        if out != want_o:
+            bad.append('stdout ' + first_diff(want_o, out))
+    else:
+        why = lines_verdict(row, want_o.splitlines(), out.splitlines())
+        if why:
+            bad.append('stdout (%s) %s' % (mode, why))
+    if mode == 'own':
+        if want_rc.strip() != '0' or not want_o.strip():
+            bad.append('golden: gdb does not answer this command with text and status 0')
+        if 'expect_err' in row:
+            want_e = ''.join(x + '\n' for x in row['expect_err'])
+        if 'expect_rc' in row:
+            want_rc = str(row['expect_rc'])
+    if err != want_e:
+        bad.append('stderr ' + first_diff(want_e, err))
+    if str(rc) != want_rc.strip():
+        bad.append('exit want %s got %s' % (want_rc.strip(), rc))
+    return bad
+
+
 def first_diff(a, b):
     al, bl = a.splitlines(), b.splitlines()
     for i in range(max(len(al), len(bl))):
@@ -303,13 +375,7 @@ def cmd_check(a):
             fired = set()
         o, e = normalize(out, fired, row), normalize(err, fired, row)
         want_o, want_e, want_rc = (p.read_text() for p in gold)
-        bad = []
-        if o != want_o:
-            bad.append('stdout ' + first_diff(want_o, o))
-        if e != want_e:
-            bad.append('stderr ' + first_diff(want_e, e))
-        if str(rc) != want_rc.strip():
-            bad.append('exit want %s got %s' % (want_rc.strip(), rc))
+        bad = judge(row, o, e, rc, want_o, want_e, want_rc)
         if bad:
             print('FAIL %s %s' % (row['name'], '; '.join(bad)))
             fails += 1
@@ -346,8 +412,32 @@ def cmd_oracle(a):
     return 1 if fails else 0
 
 
+def row_form(r):
+    """'' when a row's compare fields are well formed, else the reason."""
+    mode = r.get('compare', 'bytes')
+    if mode == 'bytes':
+        extra = sorted({'head', 'own', 'expect', 'expect_err', 'expect_rc'} & set(r))
+        return 'fields of another compare mode: ' + ', '.join(extra) if extra else ''
+    if r.get('tty'):
+        return 'a terminal row compares bytes'
+    if not str(r.get('why', '')).strip():
+        return 'compare %s without a why' % mode
+    if mode == 'head':
+        return '' if isinstance(r.get('head'), int) and r['head'] > 0 else 'head needs a positive line count'
+    if mode == 'subset':
+        own = r.get('own', [])
+        return '' if isinstance(own, list) and all(isinstance(x, str) for x in own) else 'own must be a list of lines'
+    if mode == 'own':
+        return '' if isinstance(r.get('expect'), list) and r['expect'] else 'own needs its expect lines'
+    return 'unknown compare mode ' + mode
+
+
 def cmd_verify(a):
     rows = load_rows()
+    bad = ['%s: %s' % (r['name'], row_form(r)) for r in rows if row_form(r)]
+    if bad:
+        print('FAIL session-rows-form: ' + '; '.join(bad))
+        return 1
     have = {p.name for p in GOLD.glob('*') if p.is_file() and p.suffix in ('.out', '.err', '.rc')}
     want = {p.name for r in rows if not r.get('skip') for p in golden_paths(r)}
     if want - have:
