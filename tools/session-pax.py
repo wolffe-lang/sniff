@@ -56,6 +56,41 @@ def serial_norm(text):
     return re.sub(r'(?m)^user: [^\n]*\n', '', text)
 
 
+def sh_double(text):
+    """text as the inside of a double-quoted shell word, with {pid} becoming the sleeper's pid."""
+    t = text.replace('\\', '\\\\').replace('"', '\\"').replace('$', '\\$').replace('`', '\\`')
+    return t.replace('{pid}', '$pid')
+
+
+def attach_block(row, scripts_dir, fx_guest, prog):
+    """The shell lines that start an attach row's sleeper and give sniff its pid, as tools/session.py's attach_run
+    does on Linux: the sleeper in the background, its 'ready PID' line awaited, the holder first if the row says
+    so, the script written with the pid, sniff run, then the sleeper's end appended to stdout."""
+    a = row['attach']
+    script = '%s/%s.cmd' % (scripts_dir, row['name'])
+    out = ['%s %d > /tmp/sl 2> /dev/null &' % (prog, a.get('ticks', 100)), 'sp=$!', 'r=',
+           'while [ -z "$r" ]; do read r < /tmp/sl; done', 'pid=${r#ready }']
+    if a.get('held'):
+        holder = prog.replace('/c/sleeper/', '/c/holder/')
+        out += ['%s $pid 3000 > /tmp/hl &' % holder, 'hp=$!', 'h=', 'while [ -z "$h" ]; do read h < /tmp/hl; done']
+    out.append(': > %s' % script)
+    for ln in row['script']:
+        out.append('printf \'%%s\\n\' "%s" >> %s' % (sh_double(ln), script))
+    form = a.get('form', 'script')
+    target = '-p $pid %s' % prog if form == 'dash-p' else '%s $pid' % prog if form == 'positional' else prog
+    out.append('/bin/sniff -batch -x %s %s > /tmp/o 2> /tmp/e' % (script, target))
+    out.append('rc=$?')
+    out.append('wait $sp')
+    out.append('src=$?')
+    out.append('last=; while read l; do last=$l; done < /tmp/sl')
+    out.append('if [ $src -gt 128 ]; then printf \'%s\\n\' "[sleeper killed by signal $((src - 128))]" >> /tmp/o; '
+               'else printf \'%s\\n\' "[sleeper exited with code $src: $last]" >> /tmp/o; fi')
+    if a.get('held'):
+        out.append('wait $hp')
+    out.append("printf '%s\\n' \"" + RC + "$rc\"")
+    return out
+
+
 def guest_script(rows, scripts_dir, fx_guest):
     """The text of /etc/rows.sh: one block per row; markers on lines of their own."""
     lines = []
@@ -65,8 +100,11 @@ def guest_script(rows, scripts_dir, fx_guest):
             args = ' --args ' + ' '.join(row['args'])
         prog = fx_guest + '/' + row['prog']
         lines.append("printf '%s\\n' '" + BEGIN + row['name'] + "'")
-        lines.append('/bin/sniff -batch -x %s/%s.cmd %s%s > /tmp/o 2> /tmp/e' % (scripts_dir, row['name'], prog, args))
-        lines.append("printf '%s\\n' \"" + RC + "$?\"")
+        if row.get('attach'):
+            lines += attach_block(row, scripts_dir, fx_guest, prog)
+        else:
+            lines.append('/bin/sniff -batch -x %s/%s.cmd %s%s > /tmp/o 2> /tmp/e' % (scripts_dir, row['name'], prog, args))
+            lines.append("printf '%s\\n' \"" + RC + "$?\"")
         lines.append("printf '%s\\n' '" + OUT + "'")
         lines.append('cat /tmp/o')
         lines.append("printf '\\n%s\\n' '" + ERR + "'")
@@ -171,7 +209,8 @@ def build_image(pax, kernel, inputs, sniff, fixtures, rows, work, label):
         f = scripts / (row['name'] + '.cmd')
         f.write_text('\n'.join(row['script']) + '\n')
         files.append(('/work/target/s2/%s.cmd' % row['name'], f, 644))
-    for prog in sorted({r['prog'] for r in rows}):
+    progs = {r['prog'] for r in rows} | {r['prog'].replace('/c/sleeper/', '/c/holder/') for r in rows if r.get('attach', {}).get('held')}
+    for prog in sorted(progs):
         files.append(('/work/target/pax-fixtures/' + prog, Path(fixtures) / prog, 755))
     for dest, src in sources_for(rows).items():
         files.append((dest, src, 644))
@@ -323,6 +362,15 @@ def cmd_selftest(a):
     assert got['r1'] == ('3', 'hello\nno-nl', 'warn\n'), got['r1']
     assert got['r2'] == ('0', '', ''), got['r2']
     assert 'r3' not in got
+    held = {'name': 'a1', 'prog': 'c/sleeper/gcc-O0/prog', 'script': ['attach {pid}', 'print "$x"'], 'attach': {'ticks': 7, 'held': True}}
+    text = guest_script([held], '/s', '/f')
+    assert '/f/c/sleeper/gcc-O0/prog 7 > /tmp/sl 2> /dev/null &' in text, text
+    assert '/f/c/holder/gcc-O0/prog $pid 3000 > /tmp/hl &' in text, text
+    assert 'printf \'%s\\n\' "attach $pid" >> /s/a1.cmd' in text, text
+    assert 'printf \'%s\\n\' "print \\"\\$x\\"" >> /s/a1.cmd' in text, text
+    assert '/bin/sniff -batch -x /s/a1.cmd /f/c/sleeper/gcc-O0/prog > /tmp/o 2> /tmp/e' in text, text
+    dash = guest_script([dict(held, attach={'form': 'dash-p'})], '/s', '/f')
+    assert '-x /s/a1.cmd -p $pid /f/c/sleeper/gcc-O0/prog >' in dash and 'holder' not in dash, dash
     print('PASS session-pax-selftest')
     return 0
 
