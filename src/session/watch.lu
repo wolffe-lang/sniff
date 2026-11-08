@@ -258,6 +258,8 @@ fn cmd_display(mut s: Session, rest: str) -> str {
     let num = s.disp_next
     s.disp_next += 1
     (mut s.disps).push(Display { num: num, fmt: fmt, expr: expr, enabled: true })
+    // at a terminal gdb shows a new display at once; in batch mode it waits for the next stop
+    if s.tty { show_display(mut s, copy s.disps[s.disps.len - 1]) }
     ""
 }
 
@@ -267,16 +269,18 @@ fn do_displays(mut s: Session) {
     if !s.alive { return }
     var i = 0
     while i < s.disps.len {
-        let d = copy s.disps[i]
-        if d.enabled {
-            let v = eval_expr(s, d.expr)
-            if v.ok {
-                let shown = if d.fmt.len() > 0 { "/{d.fmt} {d.expr}" } else { d.expr }
-                emit_line(mut s, "{d.num}: {shown} = {text_with_format(s, v, d.fmt, true)}")
-            }
-        }
+        show_display(mut s, copy s.disps[i])
         i += 1
     }
+}
+
+/// One display's line, when it is enabled and can be evaluated here.
+fn show_display(mut s: Session, d: Display) {
+    if !s.alive || !d.enabled { return }
+    let v = eval_expr(s, d.expr)
+    if !v.ok { return }
+    let shown = if d.fmt.len() > 0 { "/{d.fmt} {d.expr}" } else { d.expr }
+    emit_line(mut s, "{d.num}: {shown} = {text_with_format(s, v, d.fmt, true)}")
 }
 
 /// undisplay [N...]
