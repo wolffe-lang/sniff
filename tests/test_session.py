@@ -114,8 +114,8 @@ class ThreadsAndAttach(unittest.TestCase):
         fired = set()
         text = '[New Thread 0x1 (LWP 77)]\n[New Thread 0x2 (LWP 78)]\n[Switching to Thread 0x2 (LWP 78)]\n'
         out = session.normalize(text, fired)
-        self.assertEqual(out, '[New Thread 0x1 (LWP <L1>)]\n[New Thread 0x2 (LWP <L2>)]\n[Switching to Thread 0x2 (LWP <L2>)]\n')
-        self.assertEqual(fired, {'lwp'})
+        self.assertEqual(out, '[New Thread <T1> (LWP <L1>)]\n[New Thread <T2> (LWP <L2>)]\n[Switching to Thread <T2> (LWP <L2>)]\n')
+        self.assertEqual(fired, {'lwp', 'thread-addr'})
         # a debugger that switched to the wrong thread is still told apart
         wrong = text.replace('to Thread 0x2 (LWP 78)', 'to Thread 0x1 (LWP 77)')
         self.assertNotEqual(session.normalize(wrong, set()), out)
@@ -126,31 +126,38 @@ class ThreadsAndAttach(unittest.TestCase):
         other = self.TABLE.replace('LWP 1215) "prog" spin', 'LWP 9) "prog" 0x0000555555555198 in spin')
         other = other.replace('LWP 212) "prog" 0x00005555555551de in', 'LWP 21) "prog"')
         self.assertEqual(session.normalize(other, set()), a)
-        self.assertEqual(fired, {'lwp', 'spin', 'threads-table'})
-        self.assertIn('* 1 Thread 0x7ffff7da2740 (LWP <L1>) "prog" spin (', a)
-        # a different frame, thread address or name is not normalised away
-        for change in (('want=1) at /w/m.c:15\n  2', 'want=2) at /w/m.c:15\n  2'), ('0x7ffff7da16c0', '0x7ffff7da16c8'),
+        self.assertEqual(fired, {'lwp', 'spin', 'threads-table', 'thread-addr'})
+        self.assertIn('* 1 Thread <T1> (LWP <L1>) "prog" spin (', a)
+        # a different frame or name is not normalised away, nor two threads shown at one address
+        for change in (('want=1) at /w/m.c:15\n  2', 'want=2) at /w/m.c:15\n  2'), ('0x7ffff7da16c0', '0x7ffff7da2740'),
                        ('"prog" spin (flag=0x5556', '"prag" spin (flag=0x5556')):
             self.assertNotEqual(session.normalize(self.TABLE.replace(*change), set()), a, change)
 
-    def test_pax_thread_records_are_mapped_by_the_kernel(self):
-        # on the PAX set a thread's address is where the kernel mapped its stack: PAX below 0x7ff..., Linux in it
-        linux = '[New Thread 0x7ffff7da16c0 (LWP 215)]\n[Switching to thread 2 (Thread 0x7ffff7da16c0 (LWP 215))]\n'
-        pax = linux.replace('0x7ffff7da16c0', '0x7efffffff6c0').replace('215', '391')
+    def test_thread_addresses_are_the_hosts(self):
+        # the C library sizes a thread's stack by the stack limit: an 8 MiB limit and a 16 MiB one put the second
+        # thread 8 MiB apart (a CI runner against the host the goldens came from), and PAX maps them elsewhere
+        host = ('[New Thread 0x7ffff7da16c0 (LWP 215)]\n[New Thread 0x7ffff75a06c0 (LWP 216)]\n'
+                '[Switching to thread 2 (Thread 0x7ffff75a06c0 (LWP 216))]\n[Thread 0x7ffff7da16c0 (LWP 215) exited]\n')
+        runner = host.replace('0x7ffff75a06c0', '0x7ffff6da06c0')
+        pax = host.replace('0x7ffff7da16c0', '0x7efffffff6c0').replace('0x7ffff75a06c0', '0x7effffefe6c0')
+        fired = set()
+        a = session.normalize(host, fired)
+        self.assertEqual(session.normalize(runner, set()), a)
+        self.assertIn('thread-addr', fired)
+        self.assertIn('[Switching to thread 2 (Thread <T2> (LWP <L2>))]', a)
         session.PAX_MODE = True
         try:
-            fired = set()
-            a, b = session.normalize(linux, set()), session.normalize(pax, fired)
-            self.assertEqual(a, b)
-            self.assertIn('thread-map', fired)
-            self.assertIn('[New Thread <STACK> (LWP <L1>)]', b)
-            # only a thread's own address: another address beside it is still compared
+            self.assertEqual(session.normalize(pax, set()), a)
+            # only a thread's own address: another address beside it is still the stack rule's or compared
             other = 'p = 0x7efffffff6c0\n'
             self.assertEqual(session.normalize(other, set()), other)
         finally:
             session.PAX_MODE = False
-        # the Linux set keeps every thread's address
-        self.assertNotEqual(session.normalize(linux, set()), session.normalize(pax, set()))
+        # the address names the thread: a switch to the other thread, or a thread's end under another's
+        # address, is told apart
+        for wrong in (host.replace('(Thread 0x7ffff75a06c0 (LWP 216))', '(Thread 0x7ffff7da16c0 (LWP 216))'),
+                      host.replace('[Thread 0x7ffff7da16c0 (LWP 215) exited]', '[Thread 0x7ffff75a06c0 (LWP 215) exited]')):
+            self.assertNotEqual(session.normalize(wrong, set()), a)
 
     def test_ticks_only_where_a_row_names_it(self):
         text = 'Breakpoint 1, tick (n=7) at /w/s.c:13\n'
