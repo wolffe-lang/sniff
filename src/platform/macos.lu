@@ -304,6 +304,14 @@ fn set_single_step(t: Target, on: bool) -> int {
         var v: u64 = ds[64]
         if on { v = v | 1 } else { v = v & !(1 as u64) }
         ds[64] = v
+        if !on && st[st_stepping] == 1 {
+            // After a step, an empty debug state goes first. While the thread's state still held a watch,
+            // macOS 15 could leave the step armed after the bit was cleared: the next resume trapped at once
+            // (ESR class 0x32 with ISV 0, a step with no instruction run). The empty state lets the kernel
+            // drop the thread's state and load the next one afresh (notes/sn05-the-repin-and-s5.md).
+            let z = c.calloc(1, 520) as *u64
+            if thread_set_state(st[st_thread] as u32, 15, z as u64, 130) != 0 { return -1 }
+        }
         let kr2 = thread_set_state(st[st_thread] as u32, 15, ds as u64, 130)
         if kr2 != 0 { return -1 }
         st[st_stepping] = if on { 1 } else { 0 }
