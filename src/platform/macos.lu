@@ -66,6 +66,8 @@ extern "c" fn ptrace(request: i32, pid: i32, addr: u64, data: i32) -> i32
 extern "c" fn waitpid(pid: i32, status: u64, options: i32) -> i32
 #[cfg(target = "aarch64-apple-darwin")]
 extern "c" fn kill(pid: i32, sig: i32) -> i32
+#[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn sysctlbyname(name: u64, old: u64, oldlen: u64, new: u64, newlen: u64) -> i32
 
 /// Slots of the state block every Target shares (u64 each).
 #[cfg(target = "aarch64-apple-darwin")]
@@ -102,6 +104,9 @@ const st_fork_task: int = 12
 const st_fork_pid: int = 13
 #[cfg(target = "aarch64-apple-darwin")]
 const st_fork_skip: int = 14
+/// The number of watch registers (hw.optional.watchpoint), read once; 0 until then.
+#[cfg(target = "aarch64-apple-darwin")]
+const st_watch_slots: int = 15
 
 /// Bytes of the message buffers (an exception request is 88 bytes plus a trailer).
 #[cfg(target = "aarch64-apple-darwin")]
@@ -116,6 +121,9 @@ const kind_signal: int = 259
 /// A hardware fault or other exception that the kernel turns into a Unix signal if replied to with failure.
 #[cfg(target = "aarch64-apple-darwin")]
 const kind_fault: int = 260
+/// A watch register's trap (EXC_BREAKPOINT with EXC_ARM_DA_DEBUG, the data address in the subcode).
+#[cfg(target = "aarch64-apple-darwin")]
+const kind_watch: int = 261
 
 /// Heap bytes holding text and a terminating zero, for the C calls.
 #[cfg(target = "aarch64-apple-darwin")]
@@ -258,7 +266,11 @@ fn decode_exception(t: Target, msg: u64) -> int {
         st[st_pending] = 1
         var kind = kind_fault
         var sig = 11
-        if exc == 6 {
+        if exc == 6 && c0 == 258 {
+            // EXC_ARM_DA_DEBUG (mach/arm/exception.h): a watch register fired, before the access
+            kind = kind_watch
+            sig = 5
+        } else if exc == 6 {
             // EXC_BREAKPOINT: the step trap has no address; a BRK carries its own
             if c1 == 0 && st[st_stepping] == 1 { kind = kind_step } else { kind = kind_brk }
             sig = 5
@@ -784,4 +796,109 @@ pub fn target_with_pid(t: Target, pid: int) -> Target {
         }
     }
     Target { pid: pid, memfd: -1, status: t.status, regs: t.regs, word: t.word }
+}
+
+
+/// The watch registers the hardware has: the hw.optional.watchpoint sysctl (sys/sysctl.h), read once.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_watch_slots(t: Target) -> int {
+    unsafe {
+        // # Safety: the value and its length are calloc'd; the name is a NUL-terminated buffer.
+        let st = t.word as *u64
+        if st[st_watch_slots] != 0 { return st[st_watch_slots] as int }
+        let name = cstr("hw.optional.watchpoint")
+        let v = c.calloc(1, 8) as *u32
+        let n = c.calloc(1, 8) as *u64
+        n[0] = 4
+        if sysctlbyname(name, v as u64, n as u64, 0, 0) != 0 { return 0 }
+        var k = v[0] as int
+        if k > 16 { k = 16 }
+        st[st_watch_slots] = k as u64
+        k
+    }
+}
+
+/// Read ARM_DEBUG_STATE64 (mach/arm/_structs.h: bvr[16], bcr[16], wvr[16], wcr[16], mdscr_el1) into a
+/// 130-word buffer, or 0.
+#[cfg(target = "aarch64-apple-darwin")]
+fn debug_state(t: Target) -> u64 {
+    unsafe {
+        // # Safety: the buffer is calloc'd 130 words; the thread port is the stopped thread's.
+        let st = t.word as *u64
+        let ds = c.calloc(1, 1040) as *u64
+        let cnt = c.calloc(1, 8) as *u32
+        cnt[0] = 130
+        if thread_get_state(st[st_thread] as u32, 15, ds as u64, cnt as u64) != 0 { return 0 }
+        ds as u64
+    }
+}
+
+/// Program the watch registers: addrs[i] for lens[i] bytes, kinds[i] watch_write (stores) or
+/// watch_access (loads and stores). DBGWCR (Arm ARM D13): E bit 0; PAC bits 1-2 = 0b10, EL0 only;
+/// LSC bits 3-4 = 0b10 store or 0b11 load and store; BAS bits 5-12, the bytes of the aligned
+/// doubleword DBGWVR names. Returns "" or why.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_set_watches(t: Target, addrs: List[u64], lens: List[int], kinds: List[int]) -> str {
+    let slots = target_watch_slots(t)
+    if addrs.len > slots { return "too many hardware watch slots" }
+    unsafe {
+        // # Safety: debug_state's buffer is 130 calloc'd words; the thread port is the stopped thread's.
+        let st = t.word as *u64
+        let p = debug_state(t)
+        if p == 0 { return "cannot read the debug state" }
+        let ds = p as *u64
+        var i = 0
+        while i < 16 {
+            ds[32 + i] = 0
+            ds[48 + i] = 0
+            i += 1
+        }
+        i = 0
+        while i < addrs.len {
+            let lsc: u64 = if kinds[i] == watch_write { 2 } else { 3 }
+            let lane = addrs[i] & 7
+            let bas: u64 = (((1 as u64) << lens[i] as u64) - 1) << lane
+            ds[32 + i] = addrs[i] - lane
+            ds[48 + i] = 1 | (2 << 1) | (lsc << 3) | (bas << 5)
+            i += 1
+        }
+        if thread_set_state(st[st_thread] as u32, 15, p, 130) != 0 { return "the kernel refused the watch registers" }
+        ""
+    }
+}
+
+/// The slot whose register fired at this stop, or -1. arm64 traps before the access, so the
+/// instruction is run here with the watch registers off (one step), then they go back: the
+/// session sees the access done, as on x86-64.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_watch_hit(t: Target) -> int {
+    unsafe {
+        // # Safety: buffers are layer-owned; the thread port is the stopped thread's.
+        let st = t.word as *u64
+        if st[st_kind] != kind_watch as u64 { return 0 - 1 }
+        let addr = st[st_code1]
+        let p = debug_state(t)
+        if p == 0 { return 0 - 1 }
+        let ds = p as *u64
+        var slot = 0 - 1
+        var saved: List[u64] = []
+        var i = 0
+        while i < 16 {
+            let w = ds[48 + i]
+            (mut saved).push(w)
+            if slot < 0 && (w & 1) == 1 && ds[32 + i] <= addr && addr < ds[32 + i] + 8 { slot = i }
+            ds[48 + i] = w & !(1 as u64)
+            i += 1
+        }
+        if thread_set_state(st[st_thread] as u32, 15, p, 130) != 0 { return slot }
+        if resume(t, 0, true) < 0 { return slot }
+        let _ = target_wait(t)
+        let q = debug_state(t)
+        if q == 0 { return slot }
+        let dq = q as *u64
+        i = 0
+        while i < 16 { dq[48 + i] = saved[i]; i += 1 }
+        let _ = thread_set_state(st[st_thread] as u32, 15, q, 130)
+        slot
+    }
 }

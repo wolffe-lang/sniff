@@ -36,14 +36,14 @@ fn user_bp_at(s: Session, addr: u64) -> int {
 
 /// Add an internal breakpoint at a runtime address.
 fn add_internal(mut s: Session, addr: u64) {
-    (mut s.bps).push(Bp { num: 0, addr: addr, hits: 0, temp: false, enabled: true, internal: true, abs: true, ignore: 0, loc: 0, nloc: 1, orig: 0, inserted: false, cond: "", scope: 0 })
+    (mut s.bps).push(Bp { num: 0, addr: addr, hits: 0, temp: false, enabled: true, internal: true, abs: true, ignore: 0, loc: 0, nloc: 1, orig: 0, inserted: false, cond: "", watch_end: 0 })
 }
 
 fn drop_internal(mut s: Session) {
     var keep: List[Bp] = []
     var i = 0
     while i < s.bps.len {
-        if !s.bps[i].internal || s.bps[i].scope > 0 { (mut keep).push(copy s.bps[i]) }
+        if !s.bps[i].internal || s.bps[i].watch_end > 0 { (mut keep).push(copy s.bps[i]) }
         i += 1
     }
     s.bps = keep

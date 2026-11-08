@@ -24,7 +24,7 @@ struct Bp {
     /// The condition (`break X if E`, `condition N E`), "" for none.
     pub cond: str,
     /// For an internal breakpoint at a watch's scope end, that watch's number; else 0.
-    pub scope: int,
+    pub watch_end: int,
 }
 
 /// How a resume ended.

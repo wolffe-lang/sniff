@@ -93,7 +93,7 @@ fn cmd_watch(mut s: Session, rest: str, kind: int) -> str {
         hits: 0, enabled: true, scope_cfa: cfa, scope_ret: ret })
     if ret != 0 {
         (mut s.bps).push(Bp { num: 0, addr: ret, hits: 0, temp: false, enabled: true, internal: true, abs: true, ignore: 0,
-            loc: 0, nloc: 1, orig: 0, inserted: false, cond: "", scope: num })
+            loc: 0, nloc: 1, orig: 0, inserted: false, cond: "", watch_end: num })
     }
     emit_line(mut s, "{watch_label(kind)} {num}: {text}")
     ""
@@ -177,7 +177,7 @@ fn report_watch(mut s: Session, i: int) {
 /// At a scope breakpoint: when the frame the watch's local lives in has returned (the stack
 /// pointer is at or past its CFA), the watch is deleted, as gdb reports. Returns true when it was.
 fn scope_ended(mut s: Session, bp: int) -> bool {
-    let num = s.bps[bp].scope
+    let num = s.bps[bp].watch_end
     var i = 0
     while i < s.watches.len {
         if s.watches[i].num == num {
@@ -212,7 +212,7 @@ fn delete_watch(mut s: Session, num: int) -> bool {
     var bkeep: List[Bp] = []
     i = 0
     while i < s.bps.len {
-        if s.bps[i].scope != num || num == 0 { (mut bkeep).push(copy s.bps[i]) }
+        if s.bps[i].watch_end != num || num == 0 { (mut bkeep).push(copy s.bps[i]) }
         i += 1
     }
     s.bps = bkeep

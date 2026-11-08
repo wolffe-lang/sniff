@@ -32,7 +32,7 @@ fn cmd_break(mut s: Session, rest: str, temp: bool) -> str {
     s.bp_next += 1
     var i = 0
     while i < r.addrs.len {
-        (mut s.bps).push(Bp { num: num, addr: r.addrs[i], hits: 0, temp: temp, enabled: true, internal: false, abs: r.abs, ignore: 0, loc: i + 1, nloc: r.addrs.len, orig: 0, inserted: false, cond: cond, scope: 0 })
+        (mut s.bps).push(Bp { num: num, addr: r.addrs[i], hits: 0, temp: temp, enabled: true, internal: false, abs: r.abs, ignore: 0, loc: i + 1, nloc: r.addrs.len, orig: 0, inserted: false, cond: cond, watch_end: 0 })
         i += 1
     }
     let kind = if temp { "Temporary breakpoint" } else { "Breakpoint" }
@@ -68,7 +68,7 @@ fn cmd_delete(mut s: Session, rest: str) -> str {
         var keep: List[Bp] = []
         var i = 0
         while i < s.bps.len {
-            if s.bps[i].internal && s.bps[i].scope == 0 { (mut keep).push(copy s.bps[i]) }
+            if s.bps[i].internal && s.bps[i].watch_end == 0 { (mut keep).push(copy s.bps[i]) }
             i += 1
         }
         s.bps = keep

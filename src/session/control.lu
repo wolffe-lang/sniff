@@ -335,7 +335,7 @@ fn cont_event(mut s: Session) -> Event {
             if w == 0 - 2 { continue }
         }
         let e = classify(mut s, st, false)
-        if e.kind == ev_breakpoint && s.bps[e.bp].scope > 0 {
+        if e.kind == ev_breakpoint && s.bps[e.bp].watch_end > 0 {
             if scope_ended(mut s, e.bp) { return Event { kind: ev_scope, signal: 5, code: 0, bp: -1 } }
             // a deeper call of the same function returned: step over the breakpoint and run on
             return cont_event(mut s)
