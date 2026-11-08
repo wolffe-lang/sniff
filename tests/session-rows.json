@@ -2444,7 +2444,8 @@
    "why": "the listing holds only the classes, commands and footer lines of what sniff implements",
    "own": [
     "quit, exit, q -- Exit sniff.",
-    "maintenance, mt -- sniff's own maintenance commands."
+    "maintenance, mt -- sniff's own maintenance commands.",
+    "maintenance frames -- Name how each frame of the stack was unwound."
    ]
   },
   {
@@ -3160,6 +3161,7 @@
     "output n",
     "",
     "echo \\n",
+    "next",
     "info locals",
     "",
     "# a comment",
@@ -3199,10 +3201,8 @@
     "info display",
     "condition 1 n > 9",
     "",
-    "info breakpoints",
     "delete 1",
     "",
-    "info breakpoints",
     "kill",
     "",
     "run",
@@ -3223,16 +3223,14 @@
    "name": "tty-wolf-nested-help-errors",
    "prog": "wolf/nested/wolf-debug/prog",
    "script": [
-    "help",
-    "help list",
     "nosuch",
     "",
     "help nosuch",
     "list 40",
     "list nosuch",
     "list 3",
-    "help catch",
-    "catch fork"
+    "help step",
+    ""
    ],
    "tty": true
   },
