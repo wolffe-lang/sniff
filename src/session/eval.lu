@@ -151,10 +151,10 @@ fn frame_is_wolf(s: Session) -> bool {
 }
 
 /// Evaluate an expression in the selected frame.
-fn eval_expr(mut s: Session, text: str) -> Val {
+fn eval_expr(s: Session, text: str) -> Val {
     var x = Ex { toks: tokenize(text), pos: 0, wolf: frame_is_wolf(s), text: text }
     if x.toks.len == 1 { return val_fail("") }
-    let v = ev_expr(mut s, mut x)
+    let v = ev_expr(s, mut x)
     if !v.ok { return v }
     if x.toks[x.pos].kind != tk_end { return syntax_error(x) }
     v
@@ -164,24 +164,24 @@ fn eval_expr(mut s: Session, text: str) -> Val {
 // C (gdb): || && | ^ & == != < > <= >= << >> + - * / % unary postfix.
 // wolf ([gram.expr.prec]): || && (one comparison, no chaining) | ^ & << >> + - * / % `as` prefix postfix.
 
-fn ev_expr(mut s: Session, mut x: Ex) -> Val { ev_or(mut s, mut x) }
+fn ev_expr(s: Session, mut x: Ex) -> Val { ev_or(s, mut x) }
 
-fn ev_or(mut s: Session, mut x: Ex) -> Val {
-    var left = ev_and(mut s, mut x)
+fn ev_or(s: Session, mut x: Ex) -> Val {
+    var left = ev_and(s, mut x)
     while left.ok && ex_is(x, "||") {
         let _ = ex_next(mut x)
-        let right = ev_and(mut s, mut x)
+        let right = ev_and(s, mut x)
         if !right.ok { return right }
         left = truth_val(s, x, is_true(s, left) || is_true(s, right))
     }
     left
 }
 
-fn ev_and(mut s: Session, mut x: Ex) -> Val {
-    var left = if x.wolf { ev_cmp_wolf(mut s, mut x) } else { ev_bitor(mut s, mut x) }
+fn ev_and(s: Session, mut x: Ex) -> Val {
+    var left = if x.wolf { ev_cmp_wolf(s, mut x) } else { ev_bitor(s, mut x) }
     while left.ok && ex_is(x, "&&") {
         let _ = ex_next(mut x)
-        let right = if x.wolf { ev_cmp_wolf(mut s, mut x) } else { ev_bitor(mut s, mut x) }
+        let right = if x.wolf { ev_cmp_wolf(s, mut x) } else { ev_bitor(s, mut x) }
         if !right.ok { return right }
         left = truth_val(s, x, is_true(s, left) && is_true(s, right))
     }
@@ -189,166 +189,166 @@ fn ev_and(mut s: Session, mut x: Ex) -> Val {
 }
 
 /// wolf's tier 11: at most one comparison between two bit-or operands.
-fn ev_cmp_wolf(mut s: Session, mut x: Ex) -> Val {
-    let left = ev_bitor(mut s, mut x)
+fn ev_cmp_wolf(s: Session, mut x: Ex) -> Val {
+    let left = ev_bitor(s, mut x)
     if !left.ok { return left }
     let t = ex_peek(x)
     if t.kind == tk_op && (t.text == "==" || t.text == "!=" || t.text == "<" || t.text == ">" || t.text == "<=" || t.text == ">=") {
         let _ = ex_next(mut x)
-        let right = ev_bitor(mut s, mut x)
+        let right = ev_bitor(s, mut x)
         if !right.ok { return right }
         let n = ex_peek(x)
         if n.kind == tk_op && (n.text == "==" || n.text == "!=" || n.text == "<" || n.text == ">" || n.text == "<=" || n.text == ">=") {
             return val_fail("comparison operators do not chain in wolf; use `&&`")
         }
-        return compare(mut s, x, t.text, left, right)
+        return compare(s, x, t.text, left, right)
     }
     if t.kind == tk_op && t.text == "<=>" { return val_fail("the `<=>` ordering is not evaluated yet") }
     left
 }
 
-fn ev_bitor(mut s: Session, mut x: Ex) -> Val {
-    var left = ev_bitxor(mut s, mut x)
+fn ev_bitor(s: Session, mut x: Ex) -> Val {
+    var left = ev_bitxor(s, mut x)
     while left.ok && ex_is(x, "|") {
         let _ = ex_next(mut x)
-        let right = ev_bitxor(mut s, mut x)
+        let right = ev_bitxor(s, mut x)
         if !right.ok { return right }
         left = int_binop(s, x, "|", left, right)
     }
     left
 }
 
-fn ev_bitxor(mut s: Session, mut x: Ex) -> Val {
-    var left = ev_bitand(mut s, mut x)
+fn ev_bitxor(s: Session, mut x: Ex) -> Val {
+    var left = ev_bitand(s, mut x)
     while left.ok && ex_is(x, "^") {
         let _ = ex_next(mut x)
-        let right = ev_bitand(mut s, mut x)
+        let right = ev_bitand(s, mut x)
         if !right.ok { return right }
         left = int_binop(s, x, "^", left, right)
     }
     left
 }
 
-fn ev_bitand(mut s: Session, mut x: Ex) -> Val {
-    var left = if x.wolf { ev_shift(mut s, mut x) } else { ev_equality(mut s, mut x) }
+fn ev_bitand(s: Session, mut x: Ex) -> Val {
+    var left = if x.wolf { ev_shift(s, mut x) } else { ev_equality(s, mut x) }
     while left.ok && ex_is(x, "&") {
         let _ = ex_next(mut x)
-        let right = if x.wolf { ev_shift(mut s, mut x) } else { ev_equality(mut s, mut x) }
+        let right = if x.wolf { ev_shift(s, mut x) } else { ev_equality(s, mut x) }
         if !right.ok { return right }
         left = int_binop(s, x, "&", left, right)
     }
     left
 }
 
-fn ev_equality(mut s: Session, mut x: Ex) -> Val {
-    var left = ev_relational(mut s, mut x)
+fn ev_equality(s: Session, mut x: Ex) -> Val {
+    var left = ev_relational(s, mut x)
     while left.ok && (ex_is(x, "==") || ex_is(x, "!=")) {
         let op = ex_next(mut x).text
-        let right = ev_relational(mut s, mut x)
+        let right = ev_relational(s, mut x)
         if !right.ok { return right }
-        left = compare(mut s, x, op, left, right)
+        left = compare(s, x, op, left, right)
     }
     left
 }
 
-fn ev_relational(mut s: Session, mut x: Ex) -> Val {
-    var left = ev_shift(mut s, mut x)
+fn ev_relational(s: Session, mut x: Ex) -> Val {
+    var left = ev_shift(s, mut x)
     while left.ok && (ex_is(x, "<") || ex_is(x, ">") || ex_is(x, "<=") || ex_is(x, ">=")) {
         let op = ex_next(mut x).text
-        let right = ev_shift(mut s, mut x)
+        let right = ev_shift(s, mut x)
         if !right.ok { return right }
-        left = compare(mut s, x, op, left, right)
+        left = compare(s, x, op, left, right)
     }
     left
 }
 
-fn ev_shift(mut s: Session, mut x: Ex) -> Val {
-    var left = ev_additive(mut s, mut x)
+fn ev_shift(s: Session, mut x: Ex) -> Val {
+    var left = ev_additive(s, mut x)
     while left.ok && (ex_is(x, "<<") || ex_is(x, ">>")) {
         let op = ex_next(mut x).text
-        let right = ev_additive(mut s, mut x)
+        let right = ev_additive(s, mut x)
         if !right.ok { return right }
         left = int_binop(s, x, op, left, right)
     }
     left
 }
 
-fn ev_additive(mut s: Session, mut x: Ex) -> Val {
-    var left = ev_term(mut s, mut x)
+fn ev_additive(s: Session, mut x: Ex) -> Val {
+    var left = ev_term(s, mut x)
     while left.ok && (ex_is(x, "+") || ex_is(x, "-")) {
         let op = ex_next(mut x).text
-        let right = ev_term(mut s, mut x)
+        let right = ev_term(s, mut x)
         if !right.ok { return right }
-        left = arith(mut s, x, op, left, right)
+        left = arith(s, x, op, left, right)
     }
     left
 }
 
-fn ev_term(mut s: Session, mut x: Ex) -> Val {
-    var left = if x.wolf { ev_cast_wolf(mut s, mut x) } else { ev_unary(mut s, mut x) }
+fn ev_term(s: Session, mut x: Ex) -> Val {
+    var left = if x.wolf { ev_cast_wolf(s, mut x) } else { ev_unary(s, mut x) }
     while left.ok && (ex_is(x, "*") || ex_is(x, "/") || ex_is(x, "%")) {
         let op = ex_next(mut x).text
-        let right = if x.wolf { ev_cast_wolf(mut s, mut x) } else { ev_unary(mut s, mut x) }
+        let right = if x.wolf { ev_cast_wolf(s, mut x) } else { ev_unary(s, mut x) }
         if !right.ok { return right }
-        left = arith(mut s, x, op, left, right)
+        left = arith(s, x, op, left, right)
     }
     left
 }
 
 /// wolf's tier 4: `e as T`, left associative.
-fn ev_cast_wolf(mut s: Session, mut x: Ex) -> Val {
-    var v = ev_unary(mut s, mut x)
+fn ev_cast_wolf(s: Session, mut x: Ex) -> Val {
+    var v = ev_unary(s, mut x)
     while v.ok && x.toks[x.pos].kind == tk_ident && x.toks[x.pos].text == "as" {
         let _ = ex_next(mut x)
         let t = ex_next(mut x)
         if t.kind != tk_ident { return syntax_error(x) }
         let ty = type_by_name(s, t.text, true)
         if ty == ty_none { return val_fail("No type \"{t.text}\" in this program.") }
-        v = convert(mut s, v, ty)
+        v = convert(s, v, ty)
     }
     v
 }
 
-fn ev_unary(mut s: Session, mut x: Ex) -> Val {
+fn ev_unary(s: Session, mut x: Ex) -> Val {
     let t = ex_peek(x)
     if t.kind == tk_op {
         if t.text == "-" {
             let _ = ex_next(mut x)
-            let v = ev_unary(mut s, mut x)
+            let v = ev_unary(s, mut x)
             if !v.ok { return v }
-            return negate(mut s, x, v)
+            return negate(s, x, v)
         }
         if t.text == "+" && !x.wolf {
             let _ = ex_next(mut x)
-            let v = ev_unary(mut s, mut x)
+            let v = ev_unary(s, mut x)
             if !v.ok { return v }
             return promote(s, v)
         }
         if t.text == "!" {
             let _ = ex_next(mut x)
-            let v = ev_unary(mut s, mut x)
+            let v = ev_unary(s, mut x)
             if !v.ok { return v }
             if x.wolf && !is_bool_type(s, v.ty) && is_integer(s, v.ty) {
                 // [type.int.not]: on an integer, `!` is the bitwise not
-                return int_unop(mut s, v, "~")
+                return int_unop(s, v, "~")
             }
             return truth_val(s, x, !is_true(s, v))
         }
         if t.text == "~" && !x.wolf {
             let _ = ex_next(mut x)
-            let v = ev_unary(mut s, mut x)
+            let v = ev_unary(s, mut x)
             if !v.ok { return v }
-            return int_unop(mut s, v, "~")
+            return int_unop(s, v, "~")
         }
         if t.text == "*" {
             let _ = ex_next(mut x)
-            let v = ev_unary(mut s, mut x)
+            let v = ev_unary(s, mut x)
             if !v.ok { return v }
-            return deref(mut s, v)
+            return deref(s, v)
         }
         if t.text == "&" {
             let _ = ex_next(mut x)
-            let v = ev_unary(mut s, mut x)
+            let v = ev_unary(s, mut x)
             if !v.ok { return v }
             if !v.has_addr { return val_fail("Attempt to take address of value not located in memory.") }
             return Val { ok: true, why: "", ty: pointer_type(v.ty), bytes: bytes_of(v.addr, 8), addr: 0, has_addr: false, reg: -1 }
@@ -357,40 +357,40 @@ fn ev_unary(mut s: Session, mut x: Ex) -> Val {
             // a C cast: '(' type-name ')' operand
             let ty = try_cast_type(s, mut x)
             if ty != ty_none {
-                let v = ev_unary(mut s, mut x)
+                let v = ev_unary(s, mut x)
                 if !v.ok { return v }
-                return convert(mut s, v, ty)
+                return convert(s, v, ty)
             }
         }
     }
     if t.kind == tk_ident && t.text == "sizeof" && !x.wolf { return val_fail("sizeof is not evaluated yet") }
-    ev_postfix(mut s, mut x)
+    ev_postfix(s, mut x)
 }
 
-fn ev_postfix(mut s: Session, mut x: Ex) -> Val {
-    var v = ev_primary(mut s, mut x)
+fn ev_postfix(s: Session, mut x: Ex) -> Val {
+    var v = ev_primary(s, mut x)
     while v.ok {
         if ex_is(x, ".") {
             let _ = ex_next(mut x)
             let m = ex_next(mut x)
             if m.kind != tk_ident && m.kind != tk_num { return syntax_error(x) }
-            v = member(mut s, v, m.text)
+            v = member(s, v, m.text)
         } else if ex_is(x, "->") && !x.wolf {
             let _ = ex_next(mut x)
             let m = ex_next(mut x)
             if m.kind != tk_ident { return syntax_error(x) }
             let (k, _) = num_class(s, v.ty)
             if k != 5 { return val_fail("The -> operator must be applied to a pointer.") }
-            let d = deref(mut s, v)
+            let d = deref(s, v)
             if !d.ok { return d }
-            v = member(mut s, d, m.text)
+            v = member(s, d, m.text)
         } else if ex_is(x, "[") {
             let _ = ex_next(mut x)
-            let i = ev_expr(mut s, mut x)
+            let i = ev_expr(s, mut x)
             if !i.ok { return i }
             if !ex_is(x, "]") { return syntax_error(x) }
             let _ = ex_next(mut x)
-            v = index(mut s, x, v, i)
+            v = index(s, x, v, i)
         } else if ex_is(x, "(") {
             return val_fail("calling functions in the program is not supported")
         } else if x.wolf && ex_is(x, "?") {
@@ -402,11 +402,11 @@ fn ev_postfix(mut s: Session, mut x: Ex) -> Val {
     v
 }
 
-fn ev_primary(mut s: Session, mut x: Ex) -> Val {
+fn ev_primary(s: Session, mut x: Ex) -> Val {
     let t = ex_next(mut x)
     if t.kind == tk_end { return val_fail("") }
     if t.kind == tk_op && t.text == "(" {
-        let v = ev_expr(mut s, mut x)
+        let v = ev_expr(s, mut x)
         if !v.ok { return v }
         if !ex_is(x, ")") { return syntax_error(x) }
         let _ = ex_next(mut x)
@@ -618,7 +618,7 @@ fn int_result(s: Session, ty: int, bits: u64) -> Val {
     val_of(ty, v)
 }
 
-fn arith(mut s: Session, x: Ex, op: str, a: Val, b: Val) -> Val {
+fn arith(s: Session, x: Ex, op: str, a: Val, b: Val) -> Val {
     let (ka, _) = num_class(s, a.ty)
     let (kb, _) = num_class(s, b.ty)
     if !x.wolf && (ka == 5 || kb == 5) { return pointer_arith(s, op, a, b) }
@@ -698,26 +698,26 @@ fn int_binop(s: Session, x: Ex, op: str, a: Val, b: Val) -> Val {
     else if op == "<<" { r = if q >= 64 { 0 } else { ((p as wrapping[u64]) << (q as wrapping[u64])) as u64 } }
     else {
         let (k, _) = num_class(s, ty)
-        if q >= 64 { r = 0 } else if k == 1 { r = platform.bits_u64(platform.bits_i64(p) >> q) } else { r = p >> q }
+        if q >= 64 { r = 0 } else if k == 1 { r = platform.bits_u64(platform.bits_i64(p) >> (q as i64)) } else { r = p >> q }
     }
     int_result(s, ty, r)
 }
 
-fn int_unop(mut s: Session, v: Val, op: str) -> Val {
+fn int_unop(s: Session, v: Val, op: str) -> Val {
     if !is_integer(s, v.ty) && v.ty != ty_lit_int { return val_fail("Argument to complement operation not an integer, boolean.") }
     let pv = promote(s, v)
     int_result(s, pv.ty, !int_bits(s, pv))
 }
 
-fn negate(mut s: Session, x: Ex, v: Val) -> Val {
+fn negate(s: Session, x: Ex, v: Val) -> Val {
     let (k, _) = num_class(s, v.ty)
-    if k == 3 { return val_of(if v.ty == ty_lit_float { ty_lit_float } else { v.ty }, double_bits(0.0 - as_double(s, v))) }
+    if k == 3 { return val_of(if v.ty == ty_lit_float { ty_lit_float } else { v.ty }, double_bits(-as_double(s, v))) }
     if k != 1 && k != 2 && !(k == 4 && !x.wolf) { return val_fail("Argument to arithmetic operation not a number or boolean.") }
     let pv = if x.wolf { v } else { promote(s, v) }
     int_result(s, pv.ty, platform.bits_u64(0 - platform.bits_i64(int_bits(s, pv))))
 }
 
-fn compare(mut s: Session, x: Ex, op: str, a: Val, b: Val) -> Val {
+fn compare(s: Session, x: Ex, op: str, a: Val, b: Val) -> Val {
     let (ka, _) = num_class(s, a.ty)
     let (kb, _) = num_class(s, b.ty)
     if ka == 0 || kb == 0 { return val_fail("Argument to comparison operation not a number, pointer or boolean.") }
@@ -744,7 +744,7 @@ fn compare(mut s: Session, x: Ex, op: str, a: Val, b: Val) -> Val {
 }
 
 /// A value converted to type ty (a cast): integers truncate or extend, floats convert both ways.
-fn convert(mut s: Session, v: Val, ty: int) -> Val {
+fn convert(s: Session, v: Val, ty: int) -> Val {
     let (kt, st) = num_class(s, ty)
     let (kv, _) = num_class(s, v.ty)
     if kt == 0 || kv == 0 { return val_fail("Invalid cast.") }
@@ -784,7 +784,7 @@ fn pointee_size(s: Session, ty: int) -> int {
     ty_size(s.prog, t)
 }
 
-fn deref(mut s: Session, v: Val) -> Val {
+fn deref(s: Session, v: Val) -> Val {
     let (k, _) = num_class(s, v.ty)
     if k != 5 { return val_fail("Attempt to take contents of a non-pointer value.") }
     let target = pointee(s, v.ty)
@@ -797,7 +797,7 @@ fn deref(mut s: Session, v: Val) -> Val {
 }
 
 /// The member `name` of a struct or union value (by name, or by position for a wolf tuple's `.0`).
-fn member(mut s: Session, v: Val, name: str) -> Val {
+fn member(s: Session, v: Val, name: str) -> Val {
     let st = if v.ty >= 0 { ty_strip(s.prog, v.ty) } else { 0 - 1 }
     if st < 0 { return val_fail("Attempt to extract a component of a value that is not a structure.") }
     let tag = s.prog.info.entries[st].tag
@@ -824,7 +824,7 @@ fn member(mut s: Session, v: Val, name: str) -> Val {
 
 /// v[i]: an array element, or the element a pointer reaches; in wolf, a List's element through its
 /// header, bounds-checked as the language checks it.
-fn index(mut s: Session, x: Ex, v: Val, i: Val) -> Val {
+fn index(s: Session, x: Ex, v: Val, i: Val) -> Val {
     if !is_integer(s, i.ty) && i.ty != ty_lit_int { return val_fail("Argument to arithmetic operation not a number or boolean.") }
     let n = platform.bits_i64(int_bits(s, i))
     let st = if v.ty >= 0 { ty_strip(s.prog, v.ty) } else { 0 - 1 }
@@ -847,10 +847,10 @@ fn index(mut s: Session, x: Ex, v: Val, i: Val) -> Val {
     if k == 5 {
         let p = pointer_arith(s, "+", v, i)
         if !p.ok { return p }
-        return deref(mut s, p)
+        return deref(s, p)
     }
     if x.wolf {
-        let l = list_element(mut s, v, n)
+        let l = list_element(s, v, n)
         if l.ok || l.why.len() > 0 { return l }
     }
     val_fail("cannot subscript something of type `{ty_name(s.prog, v.ty)}'")
@@ -858,13 +858,13 @@ fn index(mut s: Session, x: Ex, v: Val, i: Val) -> Val {
 
 /// A wolf List[T]'s element n: the header's data pointer plus n elements, when n is under its length.
 /// Empty why when v is not a List header.
-fn list_element(mut s: Session, v: Val, n: i64) -> Val {
+fn list_element(s: Session, v: Val, n: i64) -> Val {
     let st = if v.ty >= 0 { ty_strip(s.prog, v.ty) } else { 0 - 1 }
     if st < 0 || s.prog.info.entries[st].tag != tag_struct { return val_fail("") }
     let tname = attr_text(s.prog, s.prog.info.entries[st].unit, st, 3)
     if !tname.starts_with("List[") { return val_fail("") }
-    let data = member(mut s, v, "data")
-    let len = member(mut s, v, "len")
+    let data = member(s, v, "data")
+    let len = member(s, v, "len")
     if !data.ok || !len.ok { return val_fail("the List header {tname} has no data and len members") }
     let count = platform.bits_i64(int_bits(s, len))
     if n < 0 || n >= count { return val_fail("index {n} out of bounds for a List of length {count}") }
@@ -879,7 +879,7 @@ fn list_element(mut s: Session, v: Val, n: i64) -> Val {
 }
 
 /// A global variable: a unit-level DW_TAG_variable whose location is DW_OP_addr.
-fn find_global(mut s: Session, name: str) -> Val {
+fn find_global(s: Session, name: str) -> Val {
     var e = 0
     let n = s.prog.info.entries.len
     while e < n {

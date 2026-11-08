@@ -239,7 +239,7 @@ fn cmd_print(mut s: Session, rest: str) -> str {
         show_value(mut s, copy s.hist[s.hist.len - 1], fmt)
         return ""
     }
-    let v = eval_expr(mut s, expr)
+    let v = eval_expr(s, expr)
     if !v.ok { return v.why }
     show_value(mut s, v, fmt)
     ""
@@ -248,7 +248,7 @@ fn cmd_print(mut s: Session, rest: str) -> str {
 /// output EXPR
 fn cmd_output(mut s: Session, rest: str) -> str {
     let (fmt, expr) = split_format(rest)
-    let v = eval_expr(mut s, expr)
+    let v = eval_expr(s, expr)
     if !v.ok { return v.why }
     emit(mut s, text_with_format(s, v, fmt, true))
     ""
@@ -282,7 +282,7 @@ fn cmd_x(mut s: Session, rest: str) -> str {
     }
     if fmt == "i" { return "x/i is not implemented: sniff has no disassembler" }
     if addr_text.len() == 0 { return "Argument required (starting display address)." }
-    let v = eval_expr(mut s, addr_text)
+    let v = eval_expr(s, addr_text)
     if !v.ok { return v.why }
     var addr = as_u64(v.bytes)
     if v.has_addr && v.ty >= 0 {
