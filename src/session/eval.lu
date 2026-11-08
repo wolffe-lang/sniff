@@ -576,7 +576,7 @@ fn char_val(text: str) -> Val {
 fn promote(s: Session, v: Val) -> Val {
     let (k, size) = num_class(s, v.ty)
     if (k == 1 || k == 2 || k == 4) && size < 4 { return val_of(ty_int, int_bits(s, v)) }
-    v
+    copy v
 }
 
 /// The common type of two C operands (the usual arithmetic conversions, as gdb applies them):
@@ -672,8 +672,8 @@ fn pointer_arith(s: Session, op: str, a: Val, b: Val) -> Val {
         let d = platform.bits_i64(as_u64(a.bytes)) - platform.bits_i64(as_u64(b.bytes))
         return val_of(ty_long, platform.bits_u64(if size > 0 { d / size as i64 } else { d }))
     }
-    let pv = if ka == 5 { a } else { b }
-    let iv = if ka == 5 { b } else { a }
+    let pv = if ka == 5 { copy a } else { copy b }
+    let iv = if ka == 5 { copy b } else { copy a }
     if op != "+" && !(op == "-" && ka == 5) { return val_fail("Argument to arithmetic operation not a number or boolean.") }
     let size = pointee_size(s, pv.ty)
     let n = platform.bits_i64(int_bits(s, iv)) * (if size > 0 { size as i64 } else { 1 })
