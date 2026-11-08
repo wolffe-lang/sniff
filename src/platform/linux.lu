@@ -37,6 +37,8 @@ extern "c" fn setenv(name: *u8, value: *u8, overwrite: i32) -> i32
 extern "c" fn getenv(name: *u8) -> *u8
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 extern "c" fn getcwd(buf: *u8, size: u64) -> *u8
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+extern "c" fn syscall(number: i64, ...) -> i64
 
 /// Heap bytes holding text and a terminating zero, for the C calls.
 #[cfg(target = "x86_64-unknown-linux-gnu")]
@@ -117,8 +119,9 @@ pub fn target_spawn(path: str, args: List[str], env_lines: str, env_columns: str
         }
         let fd = open(cstr("/proc/{pid}/mem"), 0)
         // PTRACE_SETOPTIONS: EXITKILL (the child never outlives sniff), TRACEFORK and
-        // TRACEVFORK (so a forked child can be detached with its breakpoints removed).
-        let _ = ptrace(req_setoptions as i32, pid, 0 as u64, (opt_exitkill + opt_tracefork + opt_tracevfork) as u64)
+        // TRACEVFORK (so a forked child can be detached with its breakpoints removed), and
+        // TRACECLONE (every new thread traced from its start and reported by a clone event).
+        let _ = ptrace(req_setoptions as i32, pid, 0 as u64, (opt_exitkill + opt_tracefork + opt_tracevfork + opt_traceclone) as u64)
         Target { pid: pid as int, memfd: fd as int, status: tgt.status, regs: tgt.regs, word: tgt.word }
     }
 }
@@ -153,7 +156,9 @@ pub fn target_step(t: Target, sig: int) -> int {
     }
 }
 
-/// Kill the child with SIGKILL and reap it. Returns the final raw status.
+/// Kill the child with SIGKILL and reap every thread of it. Returns the leader's final raw status. A
+/// leader's death is reported only after its other traced threads are waited for (wait(2), __WALL), so
+/// every thread's report is collected, the leader's last.
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 pub fn target_kill(t: Target) -> int {
     unsafe {
@@ -163,16 +168,66 @@ pub fn target_kill(t: Target) -> int {
         let _ = close(t.memfd as i32)
         var last: int = -1
         var n = 0
-        while n < 8 {
-            let w = waitpid(t.pid as i32, status, 1073741824)
-            if w != t.pid as i32 { return last }
-            last = status[0] as int
-            if (last & 127) != 127 && (last & 255) != 127 { return last }
-            let _ = ptrace(req_cont as i32, t.pid as i32, 0 as u64, 9 as u64)
+        while n < 4096 {
+            let w = waitpid(0 - 1, status, wait_all as i32)
+            if w <= 0 { return last }
+            let st = status[0] as int
+            if (st & 255) == 127 {
+                // a thread caught in a stop: SIGKILL acts at once, its death follows
+                let _ = ptrace(req_cont as i32, w, 0 as u64, 9 as u64)
+            } else if w == t.pid as i32 {
+                return st
+            }
             n += 1
         }
         last
     }
+}
+
+/// A handle on one thread of the traced process: ptrace's requests go to that thread, memory through the
+/// process's /proc/PID/mem, which reads the same address space from any of its threads (proc_pid_mem(5)).
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_thread(t: Target, tid: int) -> Target {
+    Target { pid: tid, memfd: t.memfd, status: t.status, regs: t.regs, word: t.word }
+}
+
+/// The next event of any traced thread or child: waitpid(-1, __WALL). tid is -1 when the wait failed.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_wait_any(t: Target) -> Waited {
+    unsafe {
+        // # Safety: the status buffer is calloc'd; the waits are for the tracer's own tracees.
+        let status = t.status as *i32
+        let w = waitpid(0 - 1, status, wait_all as i32)
+        if w <= 0 { return Waited { tid: 0 - 1, status: 0 - 1 } }
+        Waited { tid: w as int, status: status[0] as int }
+    }
+}
+
+/// tgkill(2): send sig to one thread of the process pid. Returns 0 or -1.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_tgkill(t: Target, pid: int, tid: int, sig: int) -> int {
+    unsafe {
+        // # Safety: the thread is one of the traced process's.
+        syscall(sys_tgkill as i64, pid as i64, tid as i64, sig as i64) as int
+    }
+}
+
+/// The name the kernel keeps for a thread (/proc/PID/task/TID/comm, proc_pid_comm(5)), "" when it has none
+/// to read.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_thread_name(t: Target, pid: int, tid: int) -> str {
+    let raw = fs_read_bytes("/proc/{pid}/task/{tid}/comm") else { return "" }
+    let text = str_from_utf8(raw) else { return "" }
+    text.trim()
+}
+
+/// The thread a stopped thread's registers say it is (fs_base: glibc's thread pointer, which is its
+/// pthread_t), or 0.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_thread_pointer(t: Target) -> u64 {
+    let r = target_regs(t)
+    if r.len != reg_count { return 0 }
+    r[reg_fs_base]
 }
 
 /// The 27 user_regs_struct slots, or an empty list when the child cannot be read.
@@ -426,3 +481,7 @@ pub fn target_watch_hit(t: Target) -> int {
     }
     0 - 1
 }
+
+/// The thread a handle names: on Linux the handle's own id.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_current_thread(t: Target) -> int { t.pid }

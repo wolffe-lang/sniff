@@ -47,10 +47,36 @@ const ev_watch: int = 8
 /// A watch's frame returned; the deletion and the stop are already reported.
 const ev_scope: int = 9
 
+/// One thread of the program, numbered as gdb numbers threads: 1 for the first, then in the order they start.
+struct Thr {
+    pub num: int,
+    pub tid: int,
+    /// Its thread pointer (gdb's `Thread 0x...`), read at its first stop; 0 until read.
+    pub tls: u64,
+    pub running: bool,
+    /// A stop it reported while the others were being stopped, kept to be reported first; -1 for none.
+    pub pending: int,
+    /// A SIGSTOP the session sent it that is still to arrive.
+    pub expect_stop: bool,
+}
+
 /// All of the debugger's state.
 struct Session {
     pub prog: Prog,
+    /// The selected thread: registers, stepping and resuming go to it.
     pub target: platform.Target,
+    /// The process (its leader thread): memory, the program's end, kill.
+    pub inferior: platform.Target,
+    pub thr: List[Thr],
+    /// Index in thr of the selected thread.
+    pub thr_cur: int,
+    pub thr_next: int,
+    /// Whether the program has had more than one thread: gdb then names the thread at each stop.
+    pub thr_multi: bool,
+    /// The thread selected when the program was last resumed; a stop in another prints `[Switching to ...]`.
+    pub thr_prev: int,
+    /// Stops of threads or children seen before the event that names them.
+    pub early: List[platform.Waited],
     pub alive: bool,
     pub base: u64,
     pub args: List[str],
@@ -119,7 +145,8 @@ fn flush_out(mut s: Session) {
 /// A session over a loaded program.
 fn session_new(take p: Prog) -> Session {
     Session {
-        prog: p, target: platform.target_none(), alive: false, base: 0, args: [], out: [],
+        prog: p, target: platform.target_none(), inferior: platform.target_none(), thr: [], thr_cur: 0, thr_next: 1,
+        thr_multi: false, thr_prev: 0, early: [], alive: false, base: 0, args: [], out: [],
         script: "", lineno: 0, bps: [], bp_next: 1, pending_signal: 0, cfi: [], frames: [], frames_ok: false, sel: 0, src_file: [], src_lines: [], src_ok: [], hist: [], errmsg: "", tty: false, quit: false,
         watches: [], watch_armed: false, disps: [], disp_next: 1,
         lst_file: -1, lst_first: 0, lst_last: 0, lst_at_end: false, lst_solitary: 0, src_warned: [],

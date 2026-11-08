@@ -1,0 +1,374 @@
+// Threads, all-stop (the GDB manual's "All-Stop Mode"): whenever the session has control, every thread of
+// the program is stopped. A resume lets every thread run; the first thread to report something the
+// session must show stops the others (a SIGSTOP to each by tgkill(2), each awaited), and becomes the
+// selected thread. A new thread is reported by the clone event of the thread that made it
+// (PTRACE_O_TRACECLONE) and starts stopped; its end is its own report (wait(2) with __WALL). A
+// single step moves the selected thread alone.
+
+use platform
+
+/// Index in s.thr of the thread with this id, or -1.
+fn thr_index(s: Session, tid: int) -> int {
+    var i = 0
+    while i < s.thr.len {
+        if s.thr[i].tid == tid { return i }
+        i += 1
+    }
+    0 - 1
+}
+
+/// The program's threads at its start: the leader alone, selected.
+fn thr_reset(mut s: Session) {
+    s.thr = [Thr { num: 1, tid: platform.target_current_thread(s.inferior), tls: 0, running: false, pending: 0 - 1, expect_stop: false }]
+    s.thr_cur = 0
+    s.thr_next = 2
+    s.thr_multi = false
+    s.thr_prev = s.thr[0].tid
+    s.early = []
+}
+
+/// Select thread i: its registers are the session's from now on.
+fn thr_select(mut s: Session, i: int) {
+    s.thr_cur = i
+    s.target = platform.target_thread(s.inferior, s.thr[i].tid)
+    s.frames_ok = false
+}
+
+/// Whether gdb names this program's threads through the C library's thread records (libthread_db): a
+/// dynamically linked program, or a static one whose symbols carry the records' layout (`_thread_db_*`).
+/// Measured on the pinned gdb: the static sleeper, which has none, is `process N`; a static wolf program,
+/// which has `__nptl_version` but no `_thread_db_*`, is `LWP N`.
+fn thread_db_form(s: Session) -> bool {
+    if s.prog.interp { return true }
+    var i = 0
+    while i < s.prog.dsyms.len {
+        if s.prog.dsyms[i].name == "_thread_db_sizeof_pthread" { return true }
+        i += 1
+    }
+    false
+}
+
+/// A thread's thread pointer: the one read at its first stop, else its registers' now.
+fn thr_tls(mut s: Session, i: int) -> u64 {
+    if s.thr[i].tls == 0 { s.thr[i].tls = platform.target_thread_pointer(platform.target_thread(s.inferior, s.thr[i].tid)) }
+    s.thr[i].tls
+}
+
+/// gdb's target id of thread i: `Thread 0x7ffff7da16c0 (LWP 215)`, `LWP 215` or `process 212`.
+fn thr_target_id(mut s: Session, i: int) -> str {
+    if thread_db_form(s) {
+        let tls = thr_tls(mut s, i)
+        return "Thread 0x{tls:x} (LWP {s.thr[i].tid})"
+    }
+    if s.thr_multi { return "LWP {s.thr[i].tid}" }
+    "process {s.inferior.pid}"
+}
+
+/// A thread's name as gdb shows it: the kernel's (its comm); where the kernel keeps none to read, the name
+/// Linux gives a thread at exec, the program file's base name cut to 15 bytes.
+fn thr_name(s: Session, i: int) -> str {
+    let n = platform.target_thread_name(s.inferior, s.inferior.pid, s.thr[i].tid)
+    if n.len() > 0 { return n }
+    let b = path_base_name(s.prog.path)
+    if b.len() <= 15 { return b }
+    str_upto(b, 15)
+}
+
+/// A new thread, stopped at its first stop: numbered, its thread pointer read, `[New ...]` printed.
+fn thr_add(mut s: Session, tid: int) -> int {
+    var t = Thr { num: s.thr_next, tid: tid, tls: 0, running: false, pending: 0 - 1, expect_stop: false }
+    t.tls = platform.target_thread_pointer(platform.target_thread(s.inferior, tid))
+    s.thr_next += 1
+    (mut s.thr).push(t)
+    s.thr_multi = true
+    let i = s.thr.len - 1
+    let id = thr_target_id(mut s, i)
+    emit_line(mut s, "[New {id}]")
+    i
+}
+
+/// A thread's end: `[... exited]`, and it leaves the list (the leader is selected if it was).
+fn thr_gone(mut s: Session, i: int) {
+    let id = thr_target_id(mut s, i)
+    emit_line(mut s, "[{id} exited]")
+    let cur_tid = s.thr[s.thr_cur].tid
+    var keep: List[Thr] = []
+    var k = 0
+    while k < s.thr.len {
+        if k != i { (mut keep).push(copy s.thr[k]) }
+        k += 1
+    }
+    s.thr = keep
+    let c = thr_index(s, cur_tid)
+    thr_select(mut s, if c >= 0 { c } else { 0 })
+}
+
+/// Take a stop seen early (before the event naming its thread), or -1.
+fn take_early(mut s: Session, tid: int) -> int {
+    var k = 0
+    while k < s.early.len {
+        if s.early[k].tid == tid {
+            let st = s.early[k].status
+            var rest: List[platform.Waited] = []
+            var j = 0
+            while j < s.early.len {
+                if j != k { (mut rest).push(copy s.early[j]) }
+                j += 1
+            }
+            s.early = rest
+            return st
+        }
+        k += 1
+    }
+    0 - 1
+}
+
+/// A clone event in thread i: the new thread's first stop awaited (or taken from the early ones), the
+/// thread added; both stay stopped. Returns the new thread's index.
+fn thr_clone(mut s: Session, i: int) -> int {
+    let n = platform.target_event_pid(platform.target_thread(s.inferior, s.thr[i].tid))
+    if n <= 0 { return 0 - 1 }
+    if take_early(mut s, n) < 0 { let _ = platform.target_wait_pid(s.inferior, n) }
+    thr_add(mut s, n)
+}
+
+fn is_clone_event(st: int) -> bool {
+    platform.status_stopped(st) && (st >> 16) == platform.event_clone && platform.status_stop_signal(st) == 5
+}
+
+/// Let every stopped thread run: the selected one with sig. A thread holding a kept stop makes nothing run:
+/// that stop is reported first. Returns false when the selected thread could not be resumed.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+fn resume_all(mut s: Session, sig: int) -> bool {
+    s.thr_prev = s.thr[s.thr_cur].tid
+    var i = 0
+    while i < s.thr.len {
+        if s.thr[i].pending >= 0 { return true }
+        i += 1
+    }
+    i = 0
+    while i < s.thr.len {
+        if !s.thr[i].running {
+            let r = platform.target_cont(platform.target_thread(s.inferior, s.thr[i].tid), if i == s.thr_cur { sig } else { 0 })
+            if r < 0 && i == s.thr_cur { return false }
+            s.thr[i].running = r >= 0
+        }
+        i += 1
+    }
+    true
+}
+
+/// Stop every running thread but the selected one: a SIGSTOP each, each awaited. A thread that reports
+/// something else first keeps that stop for the next resume (and the SIGSTOP stays to come).
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+fn stop_others(mut s: Session) {
+    let pid = s.inferior.pid
+    var i = 0
+    while i < s.thr.len {
+        if i != s.thr_cur && s.thr[i].running {
+            if platform.target_tgkill(s.inferior, pid, s.thr[i].tid, 19) == 0 { s.thr[i].expect_stop = true }
+        }
+        i += 1
+    }
+    i = 0
+    while i < s.thr.len {
+        if i != s.thr_cur && s.thr[i].running {
+            let tid = s.thr[i].tid
+            let st = platform.target_wait_pid(s.inferior, tid)
+            if st < 0 || !platform.status_stopped(st) {
+                // it ended: report it and look at the same index again
+                thr_gone(mut s, i)
+                continue
+            }
+            s.thr[i].running = false
+            if platform.status_stop_signal(st) == 19 && (st >> 16) == 0 && s.thr[i].expect_stop {
+                s.thr[i].expect_stop = false
+            } else if is_clone_event(st) {
+                // it made a thread on its way to the stop: both stay stopped, and its SIGSTOP is still to come
+                let _ = thr_clone(mut s, i)
+            } else {
+                s.thr[i].pending = st
+            }
+        }
+        i += 1
+    }
+}
+
+/// The next stop the session reports, with every thread stopped and the stopping thread selected; or the
+/// program's end. New threads and the ends of threads are printed on the way, as they happen.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+fn wait_stop(mut s: Session) -> int {
+    loop {
+        var i = 0
+        while i < s.thr.len {
+            if s.thr[i].pending >= 0 {
+                let st = s.thr[i].pending
+                s.thr[i].pending = 0 - 1
+                thr_select(mut s, i)
+                stop_others(mut s)
+                return st
+            }
+            i += 1
+        }
+        let w = platform.target_wait_any(s.inferior)
+        if w.tid < 0 { return 0 - 1 }
+        let k = thr_index(s, w.tid)
+        if k < 0 {
+            // a new thread's first stop, or a forked child's, before the event that names it
+            (mut s.early).push(copy w)
+            continue
+        }
+        let st = w.status
+        if !platform.status_stopped(st) {
+            if w.tid == s.inferior.pid {
+                var j = 0
+                while j < s.thr.len { s.thr[j].running = false; j += 1 }
+                return st
+            }
+            thr_gone(mut s, k)
+            continue
+        }
+        s.thr[k].running = false
+        if platform.status_stop_signal(st) == 19 && (st >> 16) == 0 && s.thr[k].expect_stop {
+            // a SIGSTOP from an earlier stop of every thread, arriving late: not the program's
+            s.thr[k].expect_stop = false
+            s.thr[k].running = platform.target_cont(platform.target_thread(s.inferior, w.tid), 0) >= 0
+            continue
+        }
+        if is_clone_event(st) {
+            let n = thr_clone(mut s, k)
+            if n >= 0 { s.thr[n].running = platform.target_cont(platform.target_thread(s.inferior, s.thr[n].tid), 0) >= 0 }
+            s.thr[k].running = platform.target_cont(platform.target_thread(s.inferior, w.tid), 0) >= 0
+            continue
+        }
+        thr_select(mut s, k)
+        // a fork's event is handled and the program resumed at once (handle_fork); any other stop stops them all
+        if !is_fork_event(st) { stop_others(mut s) }
+        return st
+    }
+}
+
+/// macOS: one exception port reports every thread's exceptions, and the session resumes the process.
+#[cfg(target = "aarch64-apple-darwin")]
+fn resume_all(mut s: Session, sig: int) -> bool {
+    s.thr_prev = s.thr[s.thr_cur].tid
+    platform.target_cont(s.target, sig) >= 0
+}
+
+#[cfg(target = "aarch64-apple-darwin")]
+fn stop_others(mut s: Session) { }
+
+#[cfg(target = "aarch64-apple-darwin")]
+fn wait_stop(mut s: Session) -> int { platform.target_wait(s.target) }
+
+/// The stop line's thread: `Thread 4 "prog" ` once the program has had more than one thread, else "".
+fn stop_thread_prefix(s: Session) -> str {
+    if !s.thr_multi { return "" }
+    "Thread {s.thr[s.thr_cur].num} \"{thr_name(s, s.thr_cur)}\" "
+}
+
+/// `[Switching to ...]` when the stop is in another thread than the one selected at the resume.
+fn switching_line(mut s: Session) {
+    if !s.thr_multi || s.thr[s.thr_cur].tid == s.thr_prev { return }
+    let id = thr_target_id(mut s, s.thr_cur)
+    emit_line(mut s, "[Switching to {id}]")
+}
+
+/// The frame `info threads` shows for thread i: its innermost frame's line. The selected thread, frame
+/// and frame list are the same afterwards.
+fn thr_frame_text(mut s: Session, i: int) -> str {
+    let keep = s.thr_cur
+    let frames = copy s.frames
+    let ok = s.frames_ok
+    let sel = s.sel
+    thr_select(mut s, i)
+    compute_frames(mut s)
+    var text = "{addr16(current_pc(s))} in ?? ()"
+    if s.frames.len > 0 { text = frame_line(s, 0, false) }
+    thr_select(mut s, keep)
+    s.frames = frames
+    s.frames_ok = ok
+    s.sel = sel
+    text
+}
+
+/// The text after `Id`, padded to w.
+fn pad_to(t: str, w: int) -> str {
+    var out = t
+    var n = t.len()
+    while n < w { out = "{out} "; n += 1 }
+    out
+}
+
+/// info threads [ID...]
+fn cmd_info_threads(mut s: Session, rest: str) -> str {
+    if !s.alive || s.thr.len == 0 {
+        emit_line(mut s, "No threads.")
+        return ""
+    }
+    let want = rest.trim().words()
+    var rows: List[int] = []
+    var i = 0
+    while i < s.thr.len {
+        var wanted = want.len == 0
+        for w in want { if w == "{s.thr[i].num}" { wanted = true } }
+        if wanted { (mut rows).push(i) }
+        i += 1
+    }
+    if rows.len == 0 {
+        emit_line(mut s, "No threads match '{rest.trim()}'.")
+        return ""
+    }
+    var ids: List[str] = []
+    var width = 9
+    for k in rows {
+        let id = thr_target_id(mut s, k)
+        let t = "{id} \"{thr_name(s, k)}\""
+        if t.len() > width { width = t.len() }
+        (mut ids).push(t)
+    }
+    emit_line(mut s, "  {pad_to("Id", 4)} {pad_to("Target Id", width)} Frame ")
+    var r = 0
+    while r < rows.len {
+        let k = rows[r]
+        let mark = if k == s.thr_cur { "*" } else { " " }
+        let frame = thr_frame_text(mut s, k)
+        emit_line(mut s, "{mark} {pad_to("{s.thr[k].num}", 4)} {pad_to(ids[r], width)} {frame}")
+        r += 1
+    }
+    ""
+}
+
+/// thread [N]
+fn cmd_thread(mut s: Session, rest: str) -> str {
+    let t = rest.trim()
+    if t.starts_with("apply") || t.starts_with("name") || t.starts_with("find") {
+        return not_implemented("thread {t.words()[0]}")
+    }
+    if t.len() == 0 {
+        if !s.alive || s.thr.len == 0 { return "No thread selected" }
+        let id = thr_target_id(mut s, s.thr_cur)
+        emit_line(mut s, "[Current thread is {s.thr[s.thr_cur].num} ({id})]")
+        return ""
+    }
+    let n = parse_uint(t)
+    if !n.ok || n.addr == 0 { return "Invalid thread ID: {t}" }
+    var k = 0 - 1
+    var i = 0
+    while i < s.thr.len {
+        if s.alive && s.thr[i].num == n.addr as int { k = i }
+        i += 1
+    }
+    if k < 0 { return "Unknown thread {t}." }
+    thr_select(mut s, k)
+    compute_frames(mut s)
+    let id = thr_target_id(mut s, k)
+    emit_line(mut s, "[Switching to thread {s.thr[k].num} ({id})]")
+    if s.frames.len == 0 {
+        emit_line(mut s, "#0  {addr16(current_pc(s))} in ?? ()")
+        return ""
+    }
+    emit_line(mut s, "#0  {frame_line(s, 0, false)}")
+    print_frame_source(mut s, 0, false)
+    ""
+}

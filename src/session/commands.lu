@@ -18,7 +18,7 @@ fn octal2(n: int) -> str {
 
 /// The report line(s) for the end of a program.
 fn report_end(mut s: Session, e: Event) {
-    let pid = s.target.pid
+    let pid = s.inferior.pid
     if e.kind == ev_exited {
         if e.code == 0 {
             emit_line(mut s, "[Inferior 1 (process {pid}) exited normally]")
@@ -76,7 +76,7 @@ fn cmd_continue(mut s: Session, rest: str) -> str {
 
 fn cmd_kill(mut s: Session, rest: str) -> str {
     if !s.alive { return "The program is not being run." }
-    let pid = s.target.pid
+    let pid = s.inferior.pid
     kill_process(mut s)
     emit_line(mut s, "[Inferior 1 (process {pid}) killed]")
     ""
@@ -154,6 +154,7 @@ fn cmd_info(mut s: Session, rest: str) -> str {
     if what == "breakpoints" || what == "break" || what == "b" || what == "breakpoint" { return cmd_info_breakpoints(mut s) }
     if what == "watchpoints" || what == "wat" || what == "watch" { return cmd_info_watchpoints(mut s) }
     if what == "display" { return cmd_info_display(mut s) }
+    if what == "threads" || what == "thread" { return cmd_info_threads(mut s, more) }
     if what == "locals" || what == "lo" { return cmd_info_locals(mut s) }
     if what == "args" || what == "ar" { return cmd_info_args(mut s) }
     if what == "registers" || what == "r" || what == "reg" || what == "all-registers" { return cmd_info_registers(mut s, more) }
@@ -195,6 +196,7 @@ fn dispatch(mut s: Session, word: str, rest: str, text: str) -> str {
     if word == "undisplay" || word == "undisp" { return cmd_undisplay(mut s, rest) }
     if word == "bt" || word == "backtrace" || word == "where" { return cmd_bt(mut s, rest) }
     if word == "frame" || word == "f" { return cmd_frame(mut s, rest) }
+    if word == "thread" { return cmd_thread(mut s, rest) }
     if word == "up" { return cmd_up(mut s, rest) }
     if word == "down" || word == "dow" || word == "do" { return cmd_down(mut s, rest) }
     if word == "step" || word == "s" { return repeat_cmd(mut s, rest, 1) }

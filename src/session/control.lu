@@ -89,6 +89,8 @@ fn start_process(mut s: Session) -> str {
         return "Cannot start {s.prog.path}"
     }
     s.target = copy t
+    s.inferior = copy t
+    thr_reset(mut s)
     s.alive = true
     s.watch_armed = false
     s.pending_signal = 0
@@ -99,9 +101,11 @@ fn start_process(mut s: Session) -> str {
 /// Kill the child and reap it. Quiet; reports are the caller's.
 fn kill_process(mut s: Session) {
     if !s.alive { return }
-    let _ = platform.target_kill(s.target)
+    let _ = platform.target_kill(s.inferior)
     s.alive = false
     s.target = platform.target_none()
+    s.inferior = platform.target_none()
+    s.thr = []
 }
 
 /// Insert every enabled breakpoint. Returns the index of one that could not be
@@ -190,7 +194,8 @@ fn lost() -> Event { Event { kind: ev_lost, signal: 0, code: 0, bp: 0 } }
 fn handle_fork(mut s: Session, st: int) {
     let child = platform.target_event_pid(s.target)
     if child <= 0 { return }
-    let _ = platform.target_wait_pid(s.target, child)
+    // its first stop may have been seen already, before the event that names it
+    if take_early(mut s, child) < 0 { let _ = platform.target_wait_pid(s.target, child) }
     let ct = platform.target_with_pid(s.target, child)
     var i: int = 0
     while i < s.bps.len {
@@ -264,6 +269,17 @@ fn step_insn(mut s: Session) -> Event {
         if platform.target_step(s.target, 0) < 0 { s.alive = false; return lost() }
         st = platform.target_wait(s.target)
     }
+    if st >= 0 && is_clone_event(st) {
+        // the stepped instruction made a thread: it starts stopped, and the step goes on to its end
+        let _ = thr_clone(mut s, s.thr_cur)
+        if platform.target_step(s.target, 0) < 0 { s.alive = false; return lost() }
+        st = platform.target_wait(s.target)
+    }
+    if st >= 0 && !platform.status_stopped(st) && s.target.pid != s.inferior.pid && thr_index(s, s.target.pid) >= 0 {
+        // the selected thread ended under the step: the session goes on with the program's others
+        thr_gone(mut s, thr_index(s, s.target.pid))
+        return cont_event(mut s)
+    }
     classify(mut s, st, true)
 }
 
@@ -319,8 +335,8 @@ fn cont_event(mut s: Session) -> Event {
             s.errmsg = refused
             return Event { kind: ev_error, signal: 0, code: 0, bp: -1 }
         }
-        if platform.target_cont(s.target, sig) < 0 { s.alive = false; return lost() }
-        var st = platform.target_wait(s.target)
+        if !resume_all(mut s, sig) { s.alive = false; return lost() }
+        var st = wait_stop(mut s)
         if st >= 0 && is_fork_event(st) {
             handle_fork(mut s, st)
             continue

@@ -67,7 +67,10 @@ fn report_bp_hit(mut s: Session, idx: int) {
     compute_frames(mut s)
     var label = "Breakpoint"
     if temp { label = "Temporary breakpoint" }
+    // a multi-threaded program's stop names its thread, after any switch to it (as gdb prints them)
+    switching_line(mut s)
     emit_line(mut s, "")
+    if s.thr_multi { label = "{stop_thread_prefix(s)}hit {label}" }
     emit_line(mut s, "{label} {num_text}, {frame_line(s, 0, false)}")
     print_frame_source(mut s, 0, false)
     do_displays(mut s)
@@ -92,7 +95,13 @@ fn report_other(mut s: Session, e: Event) -> bool {
     }
     if e.kind == ev_signal {
         emit_line(mut s, "")
-        emit_line(mut s, "Program received signal {signal_name(e.signal)}, {signal_description(e.signal)}.")
+        if s.thr_multi {
+            emit_line(mut s, "{stop_thread_prefix(s)}received signal {signal_name(e.signal)}, {signal_description(e.signal)}.")
+        } else {
+            emit_line(mut s, "Program received signal {signal_name(e.signal)}, {signal_description(e.signal)}.")
+        }
+        // a signal names its thread before the switch to it (the reverse of a breakpoint's order)
+        switching_line(mut s)
         print_stop_frame(mut s, true, "")
         return true
     }

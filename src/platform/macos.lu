@@ -910,3 +910,48 @@ pub fn target_watch_hit(t: Target) -> int {
         slot
     }
 }
+
+
+/// Select a thread (its port): registers, stepping and the step bit go to it.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_thread(t: Target, tid: int) -> Target {
+    unsafe {
+        // # Safety: the state block is calloc'd.
+        let st = t.word as *u64
+        if tid > 0 { st[st_thread] = tid as u64 }
+    }
+    t
+}
+
+/// The next event, with the thread (its port) that reported it.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_wait_any(t: Target) -> Waited {
+    let st = target_wait(t)
+    unsafe {
+        // # Safety: the state block is calloc'd.
+        let blk = t.word as *u64
+        Waited { tid: blk[st_thread] as int, status: st }
+    }
+}
+
+/// No tgkill on macOS: the task is suspended instead.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_tgkill(t: Target, pid: int, tid: int, sig: int) -> int { 0 - 1 }
+
+/// macOS keeps no per-thread name a debugger reads through procfs.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_thread_name(t: Target, pid: int, tid: int) -> str { "" }
+
+/// The thread pointer (TPIDRRO_EL0) is not read yet on macOS.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_thread_pointer(t: Target) -> u64 { 0 }
+
+/// The thread the last exception named (its port).
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_current_thread(t: Target) -> int {
+    unsafe {
+        // # Safety: the state block is calloc'd.
+        let st = t.word as *u64
+        st[st_thread] as int
+    }
+}

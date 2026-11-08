@@ -38,6 +38,34 @@ pub const opt_tracevfork: int = 4
 pub const opt_exitkill: int = 1048576
 /// personality(2) ADDR_NO_RANDOMIZE.
 pub const addr_no_randomize: int = 262144
+/// PTRACE_O_TRACECLONE: a new thread is traced from its start and reported by a clone event.
+pub const opt_traceclone: int = 8
+/// PTRACE_EVENT_CLONE, the event in a clone stop's status (status >> 16).
+pub const event_clone: int = 3
+/// PTRACE_EVENT_STOP, the event of a seized tracee's interrupt stop.
+pub const event_stop: int = 128
+/// PTRACE_ATTACH.
+pub const req_attach: int = 16
+/// PTRACE_GETSIGINFO.
+pub const req_getsiginfo: int = 16898
+/// PTRACE_SEIZE.
+pub const req_seize: int = 16902
+/// PTRACE_INTERRUPT.
+pub const req_interrupt: int = 16903
+/// wait(2)'s __WALL: every child and tracee, threads included.
+pub const wait_all: int = 1073741824
+/// The tgkill system call's number on x86-64 Linux.
+pub const sys_tgkill: int = 234
+/// The size of siginfo_t and the byte offsets of the fields read through PTRACE_GETSIGINFO.
+pub const siginfo_size: int = 128
+/// si_signo's offset.
+pub const siginfo_signo: int = 0
+/// si_code's offset.
+pub const siginfo_code: int = 8
+/// si_pid's offset.
+pub const siginfo_pid: int = 16
+/// si_addr's offset.
+pub const siginfo_addr: int = 16
 
 /// One traced child and the scratch the calls share (addresses of C buffers
 /// are held as integers: the module boundary stays free of raw pointers).
@@ -116,6 +144,12 @@ pub const reg_fs: int = 25
 /// Slot of gs in user_regs_struct.
 pub const reg_gs: int = 26
 
+
+/// One wait(2) answer: the thread it is about and its raw status (tid -1 when the wait failed).
+pub struct Waited {
+    pub tid: int,
+    pub status: int,
+}
 
 /// Bytes read from the child; ok is false when the read failed.
 pub struct Bytes {

@@ -86,6 +86,8 @@ struct Prog {
     pub ui_size: int,
     /// The dSYM companion's path when one was paired, else "".
     pub dsym: str,
+    /// Whether the ELF file names an interpreter (an .interp section): a dynamically linked program.
+    pub interp: bool,
 }
 
 /// Bytes of a span as text; invalid UTF-8 yields the empty string.
@@ -118,7 +120,7 @@ fn prog_failed(why: str) -> Prog {
             line_str: copy sec, str_offsets: copy sec, addr: copy sec, ranges: copy sec, rnglists: copy sec,
             loc: copy sec, loclists: copy sec, frame: copy sec, eh_frame: copy sec, types: copy sec,
             has_split_dwarf: false, has_compact_unwind: false },
-        text_addr: 0, ui_off: 0, ui_size: 0, dsym: "",
+        text_addr: 0, ui_off: 0, ui_size: 0, dsym: "", interp: false,
     }
 }
 
@@ -354,6 +356,7 @@ fn prog_load(path: str) -> Prog {
         if (sec.flags & 2) != 0 && sec.kind != 8 && sec.size > 0 {
             (mut p.maps).push(SecMap { addr: sec.address, off: sec.offset, size: sec.size })
         }
+        if span_text(data, sec.name) == ".interp" { p.interp = true }
         m += 1
     }
     // function symbols
