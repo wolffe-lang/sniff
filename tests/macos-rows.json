@@ -203,7 +203,14 @@
   },
   {
    "name": "frame-clang-bt-up-down",
-   "kind": "linux"
+   "kind": "linux",
+   "drop": [
+    {
+     "line": 25,
+     "text": "below = 0",
+     "why": "reads uninitialised stack (below): its value is whatever the stack held (macOS 15 leaves 2 there, as lldb reads it)"
+    }
+   ]
   },
   {
    "name": "frame-clang-frame-errors",
