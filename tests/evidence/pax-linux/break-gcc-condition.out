@@ -1,0 +1,10 @@
+Breakpoint 1 at 0x401870: file /work/fixtures/session/c/watch/main.c, line 17.
+
+Breakpoint 1, bump (by=1) at /work/fixtures/session/c/watch/main.c:17
+17	    counter += by;
+Num     Type           Disp Enb Address            What
+1       breakpoint     keep y   0x0000000000401870 in bump at /work/fixtures/session/c/watch/main.c:17
+	stop only if by == 1
+	breakpoint already hit 1 time
+$1 = 1
+[Inferior 1 (process <PID>) exited normally]
