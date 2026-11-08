@@ -70,9 +70,11 @@ PAX_GOLD = ROOT / 'tests/evidence/pax-linux'
 PAX_ROWS = ROOT / 'tests/pax-rows.json'
 PAX_MODE = False
 STACK_HEX = re.compile(r'0x7ff[0-9a-f]{9}\b')
-# a thread's address is its C library's thread record, at the top of a stack the library mapped: where the
-# kernel puts that mapping is the kernel's (PAX maps it below Linux's 0x7ff... range)
-THREAD_ADDR = re.compile(r'\bThread 0x[0-9a-f]+ \(LWP ')
+# A thread's address is its C library's thread record, at the top of a stack the library mapped. Where that
+# mapping lands is the host's: the C library sizes a thread's stack by the stack limit (an 8 MiB limit on one
+# host, 16 MiB on a CI runner, put the second thread 8 MiB apart), and PAX maps it below Linux's 0x7ff...
+# range. So a thread's address is named by first appearance, as an LWP id is: <T1>, <T2>, ...
+THREAD_ADDR = re.compile(r'\bThread (0x[0-9a-f]+) \(LWP ')
 STACK_DEC = re.compile(r'\b140[67][0-9]{11}\b')
 HEX = re.compile(r'\b0x[0-9a-f]+\b')
 # where each row's prog is (set by main and by session-pax.py), for the heap normalisation
@@ -140,16 +142,22 @@ def heap_range(prog):
 LWP = re.compile(r'\bLWP (\d+)\b')
 SPIN = re.compile(r'\b0x[0-9a-f]+ in spin \(')
 THREADS_HEAD = re.compile(r'^  Id +Target Id +Frame ?$', re.M)
-THREADS_ROW = re.compile(r'^([* ]) (\d+) +(Thread (?:0x[0-9a-f]+|<STACK>) \(LWP <L\d+>\)|LWP <L\d+>|process <PID>)( "[^"]*")? +(\S.*)$', re.M)
+THREADS_ROW = re.compile(r'^([* ]) (\d+) +(Thread <T\d+> \(LWP <L\d+>\)|LWP <L\d+>|process <PID>)( "[^"]*")? +(\S.*)$', re.M)
 TICK = re.compile(r'\btick \(n=\d+\)')
 
 
 def normalize(text, fired, row=None):
     out = []
     lwps = {}
+    taddrs = {}
     drops = [re.compile(d) for d in (row or {}).get('drop', [])] if PAX_MODE else []
     heap = heap_range(str(Path(FIXTURES) / row['prog'])) if PAX_MODE and FIXTURES and row and row.get('prog') else None
     for line in text.splitlines(keepends=True):
+        # before the PAX set's stack and heap rules, which would otherwise take the address first
+        m = THREAD_ADDR.sub(lambda x: 'Thread <T%d> (LWP ' % taddrs.setdefault(x.group(1), len(taddrs) + 1), line)
+        if m != line:
+            fired.add('thread-addr')
+            line = m
         if PAX_MODE:
             m = STACK_DEC.sub('<STACK>', STACK_HEX.sub('<STACK>', line))
             if m != line:
@@ -160,11 +168,6 @@ def normalize(text, fired, row=None):
                 if m != line:
                     fired.add('heap')
                     line = m
-            # after the heap's: a static program's main thread keeps its record in the heap
-            m = THREAD_ADDR.sub('Thread <STACK> (LWP ', line)
-            if m != line:
-                fired.add('thread-map')
-                line = m
         if any(d.search(line) for d in drops):
             fired.add('drop')
             continue
