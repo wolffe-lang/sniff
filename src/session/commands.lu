@@ -173,9 +173,9 @@ fn dispatch(mut s: Session, word: str, rest: str, text: str) -> str {
     if word == "run" || word == "r" { return cmd_run(mut s, rest) }
     if word == "continue" || word == "c" || word == "cont" || word == "fg" { return cmd_continue(mut s, rest) }
     if word == "kill" || word == "k" { return cmd_kill(mut s, rest) }
-    if word == "break" || word == "b" || word == "br" || word == "brea" { return cmd_break(mut s, rest, false) }
+    if word == "break" || word == "b" || word == "br" || word == "bre" || word == "brea" { return cmd_break(mut s, rest, false) }
     if word == "tbreak" || word == "tb" { return cmd_break(mut s, rest, true) }
-    if word == "delete" || word == "d" { return cmd_delete(mut s, rest) }
+    if word == "delete" || word == "d" || word == "del" { return cmd_delete(mut s, rest) }
     if word == "ignore" { return cmd_ignore(mut s, rest) }
     if word == "watch" || word == "wa" { return cmd_watch(mut s, rest, wk_write) }
     if word == "rwatch" { return cmd_watch(mut s, rest, wk_read) }
@@ -187,7 +187,7 @@ fn dispatch(mut s: Session, word: str, rest: str, text: str) -> str {
     if word == "bt" || word == "backtrace" || word == "where" { return cmd_bt(mut s, rest) }
     if word == "frame" || word == "f" { return cmd_frame(mut s, rest) }
     if word == "up" { return cmd_up(mut s, rest) }
-    if word == "down" { return cmd_down(mut s, rest) }
+    if word == "down" || word == "dow" || word == "do" { return cmd_down(mut s, rest) }
     if word == "step" || word == "s" { return repeat_cmd(mut s, rest, 1) }
     if word == "next" || word == "n" { return repeat_cmd(mut s, rest, 2) }
     if word == "until" || word == "u" { return repeat_cmd(mut s, rest, 3) }
@@ -204,8 +204,8 @@ fn dispatch(mut s: Session, word: str, rest: str, text: str) -> str {
     if word == "x" || word.starts_with("x/") { return cmd_x(mut s, if word == "x" { rest } else { "{str_from(word, 1)} {rest}" }) }
     if word == "quit" || word == "q" || word == "exit" { s.quit = true; return "" }
     if word == "echo" { emit(mut s, unescape_echo(rest)); return "" }
-    if word == "info" || word == "i" { return cmd_info(mut s, rest) }
-    if word == "maint" || word == "maintenance" { return cmd_maint(mut s, rest) }
+    if word == "info" || word == "i" || word == "inf" { return cmd_info(mut s, rest) }
+    if word == "maint" || word == "maintenance" || word == "mt" { return cmd_maint(mut s, rest) }
     if word == "list" || word == "l" { return cmd_list(mut s, rest) }
     if word == "help" || word == "h" { return cmd_help(mut s, rest) }
     "Undefined command: \"{word}\".  Try \"help\"."
