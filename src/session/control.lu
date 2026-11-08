@@ -288,6 +288,38 @@ fn step_insn(mut s: Session) -> Event {
     classify(mut s, st, true)
 }
 
+/// Every other stopped thread whose pc is at a breakpoint (the one that reported it, after a `thread` to
+/// another) steps past it before the program resumes, or it would hit it again at once. They step with no
+/// signal: the selected thread's waits for the resume. An event on the way is returned, its thread selected.
+fn step_others_over(mut s: Session) -> Event {
+    let stepped = Event { kind: ev_stepped, signal: 0, code: 0, bp: -1 }
+    if s.thr.len < 2 { return stepped }
+    let keep = s.thr[s.thr_cur].tid
+    let sig = s.pending_signal
+    let given = s.signal_given
+    var tids: List[int] = []
+    var i = 0
+    while i < s.thr.len {
+        if s.thr[i].tid != keep && !s.thr[i].running && s.thr[i].pending < 0 { (mut tids).push(s.thr[i].tid) }
+        i += 1
+    }
+    for tid in tids {
+        let k = thr_index(s, tid)
+        if k < 0 { continue }
+        thr_select(mut s, k)
+        if bp_at(s, current_pc(s)) < 0 { continue }
+        s.pending_signal = 0
+        s.signal_given = false
+        let e = step_insn(mut s)
+        if e.kind != ev_stepped { return e }
+    }
+    let back = thr_index(s, keep)
+    thr_select(mut s, if back >= 0 { back } else { 0 })
+    s.pending_signal = sig
+    s.signal_given = given
+    stepped
+}
+
 /// cont_event, but a user breakpoint with an ignore count passes silently
 /// (its hit still counts), as gdb's ignore does.
 fn cont_user(mut s: Session) -> Event {
@@ -325,6 +357,8 @@ fn cont_event(mut s: Session) -> Event {
         let hit = bp_at(s, here)
         if hit >= 0 { return Event { kind: ev_breakpoint, signal: 5, code: 0, bp: hit } }
     }
+    let o = step_others_over(mut s)
+    if o.kind != ev_stepped { return o }
     loop {
         let bad = insert_all(mut s)
         if bad >= 0 {

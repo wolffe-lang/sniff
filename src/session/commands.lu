@@ -171,6 +171,7 @@ fn exec_line(mut s: Session, ln: str) -> str {
     let word = parts[0]
     var rest = ""
     if parts.len > 1 { rest = parts[1] }
+    thr_mark(mut s)
     let err = dispatch(mut s, word, rest, text)
     if s.errmsg.len() > 0 && err.len() == 0 {
         let m = s.errmsg

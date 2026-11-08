@@ -140,7 +140,6 @@ fn is_clone_event(st: int) -> bool {
 /// that stop is reported first. Returns false when the selected thread could not be resumed.
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 fn resume_all(mut s: Session, sig: int) -> bool {
-    s.thr_prev = s.thr[s.thr_cur].tid
     var i = 0
     while i < s.thr.len {
         if s.thr[i].pending >= 0 { return true }
@@ -251,7 +250,6 @@ fn wait_stop(mut s: Session) -> int {
 /// macOS: one exception port reports every thread's exceptions, and the session resumes the process.
 #[cfg(target = "aarch64-apple-darwin")]
 fn resume_all(mut s: Session, sig: int) -> bool {
-    s.thr_prev = s.thr[s.thr_cur].tid
     platform.target_cont(s.target, sig) >= 0
 }
 
@@ -267,7 +265,14 @@ fn stop_thread_prefix(s: Session) -> str {
     "Thread {s.thr[s.thr_cur].num} \"{thr_name(s, s.thr_cur)}\" "
 }
 
-/// `[Switching to ...]` when the stop is in another thread than the one selected at the resume.
+/// The thread selected as a command starts: a stop the command reports in another thread is announced
+/// with `[Switching to ...]`. Resumes inside the command (past a signal that does not stop, a breakpoint
+/// whose condition is false) leave it, as gdb's do.
+fn thr_mark(mut s: Session) {
+    if s.alive && s.thr_cur < s.thr.len { s.thr_prev = s.thr[s.thr_cur].tid }
+}
+
+/// `[Switching to ...]` when the stop is in another thread than the one selected as the command started.
 fn switching_line(mut s: Session) {
     if !s.thr_multi || s.thr[s.thr_cur].tid == s.thr_prev { return }
     let id = thr_target_id(mut s, s.thr_cur)
