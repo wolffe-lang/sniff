@@ -1,0 +1,13 @@
+Breakpoint 1 at 0x407482: file /work/fixtures/wolf/aggregates/main.lu, line 10.
+
+Breakpoint 1, bump (p=..., by=3) at /work/fixtures/wolf/aggregates/main.lu:10
+10	    p.x
+p = @<STACK>: {x = 4, y = 2, hist = 0x523b30}
+by = 3
+$1 = (struct Point &) @<STACK>: {x = 4, y = 2, hist = 0x523b30}
+$2 = 4
+$3 = 2
+$4 = {data = 0x523b60, len = 4, cap = 8, elem = 8, region = 0x0}
+$5 = 7
+0x000000000040761c in main () at /work/fixtures/wolf/aggregates/main.lu:16
+16	    count = count + bump(mut p, 3)
