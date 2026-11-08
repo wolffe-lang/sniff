@@ -39,7 +39,22 @@ fn in_image(p: Prog, addr: u64) -> bool {
     false
 }
 
-/// Index into prog.syms of the ELF function symbol containing a file address, or -1.
+/// Whether name a sorts after name b, byte by byte (a longer name after its own prefix).
+fn name_after(a: str, b: str) -> bool {
+    let x = a.bytes()
+    let y = b.bytes()
+    var i = 0
+    while i < x.len && i < y.len {
+        if x[i] != y[i] { return (x[i] as int) > (y[i] as int) }
+        i += 1
+    }
+    x.len > y.len
+}
+
+/// Index into prog.syms of the ELF function symbol containing a file address, or -1. Of several symbols
+/// at one address (a C library's aliases: `__clone3` and `clone3`), the name that sorts last byte by
+/// byte: the pinned gdb's choice in each of the 240 alias groups of a static glibc program, measured
+/// with `info symbol` (the note's alias table).
 fn sym_at(p: Prog, addr: u64) -> int {
     if !in_image(p, addr) { return -1 }
     var best = -1
@@ -48,6 +63,7 @@ fn sym_at(p: Prog, addr: u64) -> int {
         let s = p.syms[i].addr
         if s <= addr && (addr < s + p.syms[i].size || (p.syms[i].size == 0 && best < 0)) {
             if best < 0 || p.syms[best].addr < s { best = i }
+            else if p.syms[best].addr == s && name_after(p.syms[i].name, p.syms[best].name) { best = i }
         }
         i += 1
     }
