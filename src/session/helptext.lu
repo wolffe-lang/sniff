@@ -14,7 +14,7 @@ struct HelpCmd {
     pub body: List[str],
 }
 
-fn help_cmd(name: str, aliases: List[str], class: str, summary: str, body: List[str]) -> HelpCmd {
+fn help_cmd(name: str, take aliases: List[str], class: str, summary: str, take body: List[str]) -> HelpCmd {
     HelpCmd { name: name, aliases: aliases, class: class, summary: summary, body: body }
 }
 
