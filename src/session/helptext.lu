@@ -334,7 +334,8 @@ fn help_classes() -> List[HelpClass] {
 }
 
 /// gdb's top-level commands and aliases that sniff does not implement (from the pinned gdb's `help all`).
-fn gdb_only_commands() -> List[str] [
+fn gdb_only_commands() -> List[str] {
+[
     "!", "+", "-", "<", ">", "actions", "add-auto-load-safe-path", "add-auto-load-scripts-directory",
     "add-inferior", "add-symbol-file", "add-symbol-file-from-memory", "advance", "agent-printf", "alias",
     "append", "apropos", "attach", "break-range", "catch", "cd", "checkpoint", "cl", "clear", "clone-inferior",
@@ -356,9 +357,11 @@ fn gdb_only_commands() -> List[str] [
     "tui", "tvariable", "unset", "up-silently", "update", "w", "wh", "whatis", "while", "while-stepping",
     "winheight", "winwidth", "with", "ws", "|"
 ]
+}
 
 /// gdb's info subcommands and their aliases that sniff does not implement (from the pinned gdb's `help info`).
-fn gdb_only_info() -> List[str] [
+fn gdb_only_info() -> List[str] {
+[
     "address", "auto-load", "auxv", "bookmarks", "checkpoints", "classes", "common", "connections", "copying",
     "dcache", "dll", "exceptions", "extensions", "f", "files", "float", "frame", "frame-filter", "functions",
     "gu", "guile", "handle", "inferiors", "line", "macro", "macros", "main", "mem", "missing-debug-handlers",
@@ -367,3 +370,4 @@ fn gdb_only_info() -> List[str] [
     "symbol", "target", "tasks", "terminal", "threads", "tp", "tracepoints", "tvariables", "type-printers",
     "types", "unwinder", "variables", "vector", "vtbl", "warranty", "win", "xmethod"
 ]
+}
