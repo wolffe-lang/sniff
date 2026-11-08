@@ -57,7 +57,10 @@ fn ty_strip(p: Prog, t: int) -> int {
 
 /// Byte size of a type, 0 when it has none that is known.
 fn ty_size(p: Prog, t: int) -> int {
-    if t == ty_int { return 4 }
+    if t == ty_int || t == ty_uint || t == ty_float { return 4 }
+    if t == ty_char || t == ty_uchar || t == ty_bool { return 1 }
+    if t == ty_short || t == ty_ushort { return 2 }
+    if t == ty_double || t == ty_lit_int || t == ty_lit_float { return 8 }
     if t == ty_long || t == ty_ulong || t == ty_voidp || t == ty_codep || t <= 0 - 1000 { return 8 }
     let s = ty_strip(p, t)
     if s < 0 { return 1 }
@@ -95,6 +98,20 @@ const ty_long: int = 0 - 3
 const ty_ulong: int = 0 - 4
 const ty_voidp: int = 0 - 5
 const ty_codep: int = 0 - 6
+/// The expression evaluator's builtin C types (S5): unsigned int, char, unsigned char, short,
+/// unsigned short, double, float and _Bool; and wolf's untyped integer and float literals, which
+/// take the type of the other operand ([type.numlit]). ty_none is no type at all.
+const ty_uint: int = 0 - 7
+const ty_char: int = 0 - 8
+const ty_uchar: int = 0 - 9
+const ty_short: int = 0 - 10
+const ty_ushort: int = 0 - 11
+const ty_double: int = 0 - 12
+const ty_float: int = 0 - 13
+const ty_bool: int = 0 - 14
+const ty_lit_int: int = 0 - 15
+const ty_lit_float: int = 0 - 16
+const ty_none: int = 0 - 999
 
 /// The synthetic type of a pointer to DIE k.
 fn ty_pointer_to(k: int) -> int { 0 - 1000 - k }
@@ -106,6 +123,15 @@ fn ty_name(p: Prog, t: int) -> str {
     if t == ty_ulong { return "unsigned long" }
     if t == ty_voidp { return "void *" }
     if t == ty_codep { return "void (*)()" }
+    if t == ty_uint { return "unsigned int" }
+    if t == ty_char { return "char" }
+    if t == ty_uchar { return "unsigned char" }
+    if t == ty_short { return "short" }
+    if t == ty_ushort { return "unsigned short" }
+    if t == ty_double || t == ty_lit_float { return "double" }
+    if t == ty_float { return "float" }
+    if t == ty_bool { return "bool" }
+    if t == ty_lit_int { return "int" }
     if t <= 0 - 1000 {
         let n = ty_name(p, 0 - 1000 - t)
         if n.ends_with("*") { return "{n}*" }
@@ -214,6 +240,23 @@ fn format_bytes(p: Prog, tgt: platform.Target, t: int, b: List[byte], top: bool)
     if t == ty_int { return "{sign_extend(le_u64(b, 4), 4)}" }
     if t == ty_long { return "{sign_extend(le_u64(b, 8), 8)}" }
     if t == ty_ulong { return "{le_u64(b, 8)}" }
+    if t == ty_uint { return "{le_u64(b, 4)}" }
+    if t == ty_short { return "{sign_extend(le_u64(b, 2), 2)}" }
+    if t == ty_ushort { return "{le_u64(b, 2)}" }
+    if t == ty_lit_int { return "{sign_extend(le_u64(b, 8), 8)}" }
+    if t == ty_char || t == ty_uchar {
+        let v = le_u64(b, 1)
+        let n = if t == ty_char { sign_extend(v, 1) } else { platform.bits_i64(v) }
+        return "{n} '{char_escape((v & 255) as int, 39)}'"
+    }
+    if t == ty_double || t == ty_lit_float { return numfmt.fmt_double(le_u64(b, 8)) }
+    if t == ty_float { return numfmt.fmt_float(le_u64(b, 4)) }
+    if t == ty_bool {
+        let v = le_u64(b, 1)
+        if v == 0 { return "false" }
+        if v == 1 { return "true" }
+        return "{v}"
+    }
     if t == ty_voidp || t == ty_codep || t <= 0 - 1000 {
         let v = le_u64(b, 8)
         var text = hex_text(v)
