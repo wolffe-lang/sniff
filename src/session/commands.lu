@@ -199,7 +199,7 @@ fn dispatch(mut s: Session, word: str, rest: str, text: str) -> str {
     if word == "undisplay" || word == "undisp" { return cmd_undisplay(mut s, rest) }
     if word == "bt" || word == "backtrace" || word == "where" { return cmd_bt(mut s, rest) }
     if word == "frame" || word == "f" { return cmd_frame(mut s, rest) }
-    if word == "thread" { return cmd_thread(mut s, rest) }
+    if word == "thread" || word == "t" { return cmd_thread(mut s, rest) }
     if word == "handle" { return cmd_handle(mut s, rest) }
     if word == "signal" { return cmd_signal(mut s, rest) }
     if word == "up" { return cmd_up(mut s, rest) }
