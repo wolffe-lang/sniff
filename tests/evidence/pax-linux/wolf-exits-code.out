@@ -1,11 +1,11 @@
-Breakpoint 1 at 0x40740a: file /work/fixtures/session/wolf/exits/main.lu, line 2.
+Breakpoint 1 at 0x40741d: file /work/fixtures/session/wolf/exits/main.lu, line 2.
 
-Breakpoint 1, code () at /work/fixtures/session/wolf/exits/main.lu:2
+Breakpoint 1, code (text=...) at /work/fixtures/session/wolf/exits/main.lu:2
 2	    let value = text.to_int() else 0
-#0  code () at /work/fixtures/session/wolf/exits/main.lu:2
-#1  0x0000000000407679 in main () at /work/fixtures/session/wolf/exits/main.lu:11
-#2  0x0000000000407733 in main ()
-No arguments.
+#0  code (text=...) at /work/fixtures/session/wolf/exits/main.lu:2
+#1  0x0000000000407689 in main () at /work/fixtures/session/wolf/exits/main.lu:11
+#2  0x0000000000407743 in main ()
+text = {data = 0x525b60 "4", len = 1}
 value = 4
-0x0000000000407679 in main () at /work/fixtures/session/wolf/exits/main.lu:11
+main () at /work/fixtures/session/wolf/exits/main.lu:11
 11	    if args.len > 0 { return code(args[0]) }

@@ -26,4 +26,4 @@ Breakpoint 1, depth (n=0) at /work/fixtures/session/wolf/recursion/main.lu:2
 8	    let total = depth(3)
 total = 140737354125312
 #1  0x000055555555e653 in main ()
-No symbol table info available.
+No locals.
