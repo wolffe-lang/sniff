@@ -70,6 +70,9 @@ PAX_GOLD = ROOT / 'tests/evidence/pax-linux'
 PAX_ROWS = ROOT / 'tests/pax-rows.json'
 PAX_MODE = False
 STACK_HEX = re.compile(r'0x7ff[0-9a-f]{9}\b')
+# a thread's address is its C library's thread record, at the top of a stack the library mapped: where the
+# kernel puts that mapping is the kernel's (PAX maps it below Linux's 0x7ff... range)
+THREAD_ADDR = re.compile(r'\bThread 0x[0-9a-f]+ \(LWP ')
 STACK_DEC = re.compile(r'\b140[67][0-9]{11}\b')
 HEX = re.compile(r'\b0x[0-9a-f]+\b')
 # where each row's prog is (set by main and by session-pax.py), for the heap normalisation
@@ -157,6 +160,11 @@ def normalize(text, fired, row=None):
                 if m != line:
                     fired.add('heap')
                     line = m
+            # after the heap's: a static program's main thread keeps its record in the heap
+            m = THREAD_ADDR.sub('Thread <STACK> (LWP ', line)
+            if m != line:
+                fired.add('thread-map')
+                line = m
         if any(d.search(line) for d in drops):
             fired.add('drop')
             continue

@@ -91,6 +91,25 @@ class ThreadsAndAttach(unittest.TestCase):
                        ('"prog" spin (flag=0x5556', '"prag" spin (flag=0x5556')):
             self.assertNotEqual(session.normalize(self.TABLE.replace(*change), set()), a, change)
 
+    def test_pax_thread_records_are_mapped_by_the_kernel(self):
+        # on the PAX set a thread's address is where the kernel mapped its stack: PAX below 0x7ff..., Linux in it
+        linux = '[New Thread 0x7ffff7da16c0 (LWP 215)]\n[Switching to thread 2 (Thread 0x7ffff7da16c0 (LWP 215))]\n'
+        pax = linux.replace('0x7ffff7da16c0', '0x7efffffff6c0').replace('215', '391')
+        session.PAX_MODE = True
+        try:
+            fired = set()
+            a, b = session.normalize(linux, set()), session.normalize(pax, fired)
+            self.assertEqual(a, b)
+            self.assertIn('thread-map', fired)
+            self.assertIn('[New Thread <STACK> (LWP <L1>)]', b)
+            # only a thread's own address: another address beside it is still compared
+            other = 'p = 0x7efffffff6c0\n'
+            self.assertEqual(session.normalize(other, set()), other)
+        finally:
+            session.PAX_MODE = False
+        # the Linux set keeps every thread's address
+        self.assertNotEqual(session.normalize(linux, set()), session.normalize(pax, set()))
+
     def test_ticks_only_where_a_row_names_it(self):
         text = 'Breakpoint 1, tick (n=7) at /w/s.c:13\n'
         self.assertEqual(session.normalize(text, set()), text)
