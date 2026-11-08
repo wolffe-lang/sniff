@@ -209,3 +209,15 @@ sniff, the fixtures and their sources at the paths the line tables name), types 
 console, splits the console by marker, and compares each row with its golden. The five terminal rows are typed
 key by key at sniff's own prompt. The same rows also run on Linux (`pax-rows-linux`). Boundaries that remain:
 no `/proc/PID/maps`, `auxv` or `task/TID/stat` on PAX, and `personality` answers ENOSYS (`notes/sn04-sniff-on-pax.md`).
+
+### The session's list and help (sniff#11)
+
+`src/session/listing.lu` lists source lines through the reader `step` and `frame` use, in every form of the GDB
+manual's "Printing Source Lines" and with gdb's refusals; a frame's printed source line is the one a bare `list`
+centres on, and a source file that cannot be read is warned about once, as gdb does. `src/session/help.lu`
+answers `help` over `src/session/helptext.lu`, a table generated from the pinned gdb's help output and
+restricted to sniff's commands: gdb's names lines, summaries and shared paragraphs, sniff's own paragraphs where
+gdb's describe what sniff lacks, and gdb's command names that sniff lacks, which are named as not implemented
+yet. At a terminal an empty line repeats the previous one as gdb repeats it. The help rows compare bytes, a
+held head, a subset of gdb's lines or sniff's own text, named per row in `tests/session-rows.json`
+(`tools/session.py`). Boundaries that remain are listed in `notes/sn06-list-and-help.md`.
