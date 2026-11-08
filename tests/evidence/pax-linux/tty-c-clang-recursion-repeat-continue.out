@@ -1,0 +1,26 @@
+Reading symbols from /work/target/pax-fixtures/c/recursion/clang-O0/prog...
+Breakpoint 1 at 0x4017fb: file /work/fixtures/c/recursion/main.c, line 3.
+Starting program: /work/target/pax-fixtures/c/recursion/clang-O0/prog 
+
+Breakpoint 1, factorial (n=5) at /work/fixtures/c/recursion/main.c:3
+3	    if (n <= 1) return 1;
+Continuing.
+
+Breakpoint 1, factorial (n=4) at /work/fixtures/c/recursion/main.c:3
+3	    if (n <= 1) return 1;
+Continuing.
+
+Breakpoint 1, factorial (n=3) at /work/fixtures/c/recursion/main.c:3
+3	    if (n <= 1) return 1;
+Continuing.
+
+Breakpoint 1, factorial (n=2) at /work/fixtures/c/recursion/main.c:3
+3	    if (n <= 1) return 1;
+Run till exit from #0  factorial (n=2) at /work/fixtures/c/recursion/main.c:3
+
+Breakpoint 1, factorial (n=1) at /work/fixtures/c/recursion/main.c:3
+3	    if (n <= 1) return 1;
+Run till exit from #0  factorial (n=1) at /work/fixtures/c/recursion/main.c:3
+0x000000000040181c in factorial (n=2) at /work/fixtures/c/recursion/main.c:4
+4	    int smaller = factorial(n - 1);
+Value returned is $1 = 1

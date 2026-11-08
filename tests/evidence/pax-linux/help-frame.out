@@ -1,0 +1,17 @@
+frame, f
+Select and print a stack frame.
+With no argument, print the selected stack frame.  (See also "info frame").
+A single numerical argument specifies the frame to select.
+
+List of frame subcommands:
+
+frame address -- Select and print a stack frame by stack address.
+frame apply -- Apply a command to a number of frames.
+frame function -- Select and print a stack frame by function name.
+frame level -- Select and print a stack frame by level.
+frame view -- View a stack frame that might be outside the current backtrace.
+
+Type "help frame" followed by frame subcommand name for full documentation.
+Type "apropos word" to search for commands related to "word".
+Type "apropos -v word" for full documentation of commands related to "word".
+Command name abbreviations are allowed if unambiguous.

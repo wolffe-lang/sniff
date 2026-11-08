@@ -1,0 +1,39 @@
+Support facilities.
+
+List of commands:
+
+add-auto-load-safe-path -- Add entries to the list of directories from which it is safe to auto-load files.
+add-auto-load-scripts-directory -- Add entries to the list of directories from which to load auto-loaded scripts.
+alias -- Define a new command that is an alias of an existing command.
+apropos -- Search for commands matching a REGEXP.
+define -- Define a new command name.  Command name is argument.
+define-prefix -- Define or mark a command as a user-defined prefix command.
+demangle -- Demangle a mangled name.
+document -- Document a user-defined command or user-defined alias.
+dont-repeat -- Don't repeat this command.
+down-silently -- Same as the `down' command, but does not print anything.
+echo -- Print a constant string.  Give string as argument.
+help, h -- Print list of commands.
+if -- Execute nested commands once IF the conditional expression is non zero.
+interpreter-exec -- Execute a command in an interpreter.
+make -- Run the ``make'' program using the rest of the line as arguments.
+new-ui -- Create a new UI.
+overlay, ov, ovly -- Commands for debugging overlays.
+overlay auto -- Enable automatic overlay debugging.
+overlay list-overlays -- List mappings of overlay sections.
+overlay load-target -- Read the overlay mapping state from the target.
+overlay manual -- Enable overlay debugging.
+overlay map-overlay -- Assert that an overlay section is mapped.
+overlay off -- Disable overlay debugging.
+overlay unmap-overlay -- Assert that an overlay section is unmapped.
+pipe, | -- Send the output of a gdb command to a shell command.
+quit, exit, q -- Exit gdb.
+shell, ! -- Execute the rest of the line as a shell command.
+source -- Read commands from a file named FILE.
+up-silently -- Same as the `up' command, but does not print anything.
+while -- Execute nested commands WHILE the conditional expression is non zero.
+
+Type "help" followed by command name for full documentation.
+Type "apropos word" to search for commands related to "word".
+Type "apropos -v word" for full documentation of commands related to "word".
+Command name abbreviations are allowed if unambiguous.

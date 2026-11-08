@@ -1,0 +1,17 @@
+info frame, info f
+All about the selected stack frame.
+With no arguments, displays information about the currently selected stack
+frame.  Alternatively a frame specification may be provided (See "frame")
+the information is then printed about the specified frame.
+
+List of info frame subcommands:
+
+info frame address -- Print information about a stack frame selected by stack address.
+info frame function -- Print information about a stack frame selected by function name.
+info frame level -- Print information about a stack frame selected by level.
+info frame view -- Print information about a stack frame outside the current backtrace.
+
+Type "help info frame" followed by info frame subcommand name for full documentation.
+Type "apropos word" to search for commands related to "word".
+Type "apropos -v word" for full documentation of commands related to "word".
+Command name abbreviations are allowed if unambiguous.

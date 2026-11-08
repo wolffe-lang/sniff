@@ -1,0 +1,44 @@
+step, s
+Step program until it reaches a different source line.
+Usage: step [N]
+Argument N means step N times (or till program stops for another reason).
+step, s
+Step program until it reaches a different source line.
+Usage: step [N]
+Argument N means step N times (or till program stops for another reason).
+next, n
+Step program, proceeding through subroutine calls.
+Usage: next [N]
+Unlike "step", if the current source line calls a subroutine,
+this command does not enter the subroutine, but instead steps over
+the call, in effect treating it as a single source line.
+next, n
+Step program, proceeding through subroutine calls.
+Usage: next [N]
+Unlike "step", if the current source line calls a subroutine,
+this command does not enter the subroutine, but instead steps over
+the call, in effect treating it as a single source line.
+stepi, si
+Step one instruction exactly.
+Usage: stepi [N]
+Argument N means step N times (or till program stops for another reason).
+stepi, si
+Step one instruction exactly.
+Usage: stepi [N]
+Argument N means step N times (or till program stops for another reason).
+nexti, ni
+Step one instruction, but proceed through subroutine calls.
+Usage: nexti [N]
+Argument N means step N times (or till program stops for another reason).
+nexti, ni
+Step one instruction, but proceed through subroutine calls.
+Usage: nexti [N]
+Argument N means step N times (or till program stops for another reason).
+finish, fin
+Execute until selected stack frame returns.
+Usage: finish
+Upon return, the value returned is printed and put in the value history.
+finish, fin
+Execute until selected stack frame returns.
+Usage: finish
+Upon return, the value returned is printed and put in the value history.

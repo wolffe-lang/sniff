@@ -1,0 +1,2 @@
+/work/target/s2/list-wolf-nested-no-func.cmd:1: Error in sourced command file:
+Function "nosuch" not defined.

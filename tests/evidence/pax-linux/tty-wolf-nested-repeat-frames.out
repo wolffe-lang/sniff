@@ -1,0 +1,27 @@
+Reading symbols from /work/target/pax-fixtures/wolf/nested/wolf-debug/prog...
+Breakpoint 1 at 0x406c37: file /work/fixtures/wolf/nested/main.lu, line 2.
+Starting program: /work/target/pax-fixtures/wolf/nested/wolf-debug/prog 
+
+Breakpoint 1, inner (n=7) at /work/fixtures/wolf/nested/main.lu:2
+2	    let doubled = n * 2
+#1  0x0000000000406cd1 in outer (a=7) at /work/fixtures/wolf/nested/main.lu:6
+6	    let result = inner(a)
+#2  0x0000000000406d27 in main () at /work/fixtures/wolf/nested/main.lu:10
+10	    let answer = outer(7)
+#3  0x0000000000406d7f in main ()
+#2  0x0000000000406d27 in main () at /work/fixtures/wolf/nested/main.lu:10
+10	    let answer = outer(7)
+#1  0x0000000000406cd1 in outer (a=7) at /work/fixtures/wolf/nested/main.lu:6
+6	    let result = inner(a)
+#1  0x0000000000406cd1 in outer (a=7) at /work/fixtures/wolf/nested/main.lu:6
+6	    let result = inner(a)
+#1  0x0000000000406cd1 in outer (a=7) at /work/fixtures/wolf/nested/main.lu:6
+6	    let result = inner(a)
+#0  inner (n=7) at /work/fixtures/wolf/nested/main.lu:2
+#1  0x0000000000406cd1 in outer (a=7) at /work/fixtures/wolf/nested/main.lu:6
+#2  0x0000000000406d27 in main () at /work/fixtures/wolf/nested/main.lu:10
+#3  0x0000000000406d7f in main ()
+#0  inner (n=7) at /work/fixtures/wolf/nested/main.lu:2
+#1  0x0000000000406cd1 in outer (a=7) at /work/fixtures/wolf/nested/main.lu:6
+#2  0x0000000000406d27 in main () at /work/fixtures/wolf/nested/main.lu:10
+#3  0x0000000000406d7f in main ()

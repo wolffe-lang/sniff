@@ -1,0 +1,5 @@
+Call a function in the program.
+Usage: call EXP
+The argument is the function name and arguments, in the notation of the
+current working language.  The result is printed and saved in the value
+history, if it is not void.

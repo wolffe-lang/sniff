@@ -1,0 +1,23 @@
+delete, del, d
+Delete all or some breakpoints.
+Usage: delete [BREAKPOINTNUM]...
+Arguments are breakpoint numbers with spaces in between.
+To delete all breakpoints, watchpoints, tracepoints, and catchpoints,
+give no argument.
+
+Also a prefix command for deletion of other GDB objects.
+
+List of delete subcommands:
+
+delete bookmark -- Delete a bookmark from the bookmark list.
+delete breakpoints -- Delete all or some breakpoints or auto-display expressions.
+delete checkpoint -- Delete a checkpoint (experimental).
+delete display -- Cancel some expressions to be displayed when program stops.
+delete mem -- Delete memory region.
+delete tracepoints, delete tr -- Delete specified tracepoints.
+delete tvariable -- Delete one or more trace state variables.
+
+Type "help delete" followed by delete subcommand name for full documentation.
+Type "apropos word" to search for commands related to "word".
+Type "apropos -v word" for full documentation of commands related to "word".
+Command name abbreviations are allowed if unambiguous.

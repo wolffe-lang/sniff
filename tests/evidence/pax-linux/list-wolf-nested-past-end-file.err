@@ -1,0 +1,2 @@
+/work/target/s2/list-wolf-nested-past-end-file.cmd:1: Error in sourced command file:
+Line number 35 out of range; /work/fixtures/wolf/nested/main.lu has 12 lines.

@@ -1,0 +1,18 @@
+Reading symbols from /work/target/pax-fixtures/wolf/loops/wolf-debug/prog...
+Breakpoint 1 at 0x406c31: file /work/fixtures/wolf/loops/main.lu, line 2.
+Starting program: /work/target/pax-fixtures/wolf/loops/wolf-debug/prog 
+
+Breakpoint 1, sum (n=4) at /work/fixtures/wolf/loops/main.lu:2
+2	    var i = 0
+$1 = 4
+$2 = 4
+44
+i = 2
+total = 0
+i = 2
+total = 0
+4	    while i < n {
+5	        total += i
+6	        i += 1
+Will ignore next 2 crossings of breakpoint 1.
+Will ignore next 2 crossings of breakpoint 1.

@@ -1,0 +1,94 @@
+print, inspect, p
+Print value of expression EXP.
+Usage: print [[OPTION]... --] [/FMT] [EXP]
+
+Options:
+  -address [on|off]
+    Set printing of addresses.
+
+  -array [on|off]
+    Set pretty formatting of arrays.
+
+  -array-indexes [on|off]
+    Set printing of array indexes.
+
+  -nibbles [on|off]
+    Set whether to print binary values in groups of four bits.
+
+  -characters NUMBER|elements|unlimited
+    Set limit on string chars to print.
+    "elements" causes the array element limit to be used.
+    "unlimited" causes there to be no limit.
+
+  -elements NUMBER|unlimited
+    Set limit on array elements to print.
+    "unlimited" causes there to be no limit.
+    This setting also applies to string chars when "print characters"
+    is set to "elements".
+
+  -max-depth NUMBER|unlimited
+    Set maximum print depth for nested structures, unions and arrays.
+    When structures, unions, or arrays are nested beyond this depth then they
+    will be replaced with either '{...}' or '(...)' depending on the language.
+    Use "unlimited" to print the complete structure.
+
+  -memory-tag-violations [on|off]
+    Set printing of memory tag violations for pointers.
+    Issue a warning when the printed value is a pointer
+    whose logical tag doesn't match the allocation tag of the memory
+    location it points to.
+
+  -null-stop [on|off]
+    Set printing of char arrays to stop at first null char.
+
+  -object [on|off]
+    Set printing of C++ virtual function tables.
+
+  -pretty [on|off]
+    Set pretty formatting of structures.
+
+  -raw-values [on|off]
+    Set whether to print values in raw form.
+    If set, values are printed in raw form, bypassing any
+    pretty-printers for that value.
+
+  -repeats NUMBER|unlimited
+    Set threshold for repeated print elements.
+    "unlimited" causes all elements to be individually printed.
+
+  -static-members [on|off]
+    Set printing of C++ static members.
+
+  -symbol [on|off]
+    Set printing of symbol names when printing pointers.
+
+  -union [on|off]
+    Set printing of unions interior to structures.
+
+  -vtbl [on|off]
+    Set printing of C++ virtual function tables.
+
+Note: because this command accepts arbitrary expressions, if you
+specify any command option, you must use a double dash ("--")
+to mark the end of option processing.  E.g.: "print -o -- myobj".
+
+Variables accessible are those of the lexical environment of the selected
+stack frame, plus all those whose scope is global or an entire file.
+
+$NUM gets previous value number NUM.  $ and $$ are the last two values.
+$$NUM refers to NUM'th value back from the last one.
+Names starting with $ refer to registers (with the values they would have
+if the program were to return to the stack frame now selected, restoring
+all registers saved by frames farther in) or else to debugger
+"convenience" variables (any such name not a known register).
+Use assignment expressions to give values to convenience variables.
+
+{TYPE}ADREXP refers to a datum of data type TYPE, located at address ADREXP.
+@ is a binary operator for treating consecutive data objects
+anywhere in memory as an array.  FOO@NUM gives an array whose first
+element is FOO, whose second element is stored in the space following
+where FOO is stored, etc.  FOO must be an expression whose value
+resides in memory.
+
+EXP may be preceded with /FMT, where FMT is a format letter
+but no count or size letter (see "x" command).

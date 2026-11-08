@@ -1,0 +1,10 @@
+Breakpoint 1 at 0x401874: file /work/target/pax-fixtures/c/recursion-gone/gcc-O0/src/main.c, line 3.
+
+Breakpoint 1, factorial (n=5) at /work/target/pax-fixtures/c/recursion-gone/gcc-O0/src/main.c:3
+1	in /work/target/pax-fixtures/c/recursion-gone/gcc-O0/src/main.c
+4	in /work/target/pax-fixtures/c/recursion-gone/gcc-O0/src/main.c
+1	in /work/target/pax-fixtures/c/recursion-gone/gcc-O0/src/main.c
+#0  factorial (n=5) at /work/target/pax-fixtures/c/recursion-gone/gcc-O0/src/main.c:4
+4	in /work/target/pax-fixtures/c/recursion-gone/gcc-O0/src/main.c
+#1  0x00000000004018ac in main () at /work/target/pax-fixtures/c/recursion-gone/gcc-O0/src/main.c:7
+7	in /work/target/pax-fixtures/c/recursion-gone/gcc-O0/src/main.c

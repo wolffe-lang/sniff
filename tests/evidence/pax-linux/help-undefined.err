@@ -1,0 +1,2 @@
+/work/target/s2/help-undefined.cmd:1: Error in sourced command file:
+Undefined command: "nosuch".  Try "help".

@@ -1,0 +1,35 @@
+1	fn inner(n: int) -> int {
+2	    let doubled = n * 2
+3	    doubled + 1
+4	}
+5	fn outer(a: int) -> int {
+6	    let result = inner(a)
+7	    result - 1
+8	}
+9	fn main() -> int {
+10	    let answer = outer(7)
+11	    answer - 14
+12	}
+Breakpoint 1 at 0x406c37: file /work/fixtures/wolf/nested/main.lu, line 2.
+
+Breakpoint 1, inner (n=7) at /work/fixtures/wolf/nested/main.lu:2
+2	    let doubled = n * 2
+4	}
+5	fn outer(a: int) -> int {
+6	    let result = inner(a)
+7	    result - 1
+8	}
+9	fn main() -> int {
+10	    let answer = outer(7)
+11	    answer - 14
+12	}
+1	fn inner(n: int) -> int {
+2	    let doubled = n * 2
+3	    doubled + 1
+4	}
+5	fn outer(a: int) -> int {
+6	    let result = inner(a)
+7	    result - 1
+8	}
+9	fn main() -> int {
+10	    let answer = outer(7)

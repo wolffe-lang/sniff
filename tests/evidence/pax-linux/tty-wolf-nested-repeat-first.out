@@ -1,0 +1,11 @@
+Reading symbols from /work/target/pax-fixtures/wolf/nested/wolf-debug/prog...
+1	fn inner(n: int) -> int {
+2	    let doubled = n * 2
+3	    doubled + 1
+4	}
+5	fn outer(a: int) -> int {
+6	    let result = inner(a)
+7	    result - 1
+8	}
+9	fn main() -> int {
+10	    let answer = outer(7)

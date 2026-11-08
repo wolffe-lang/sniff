@@ -1,0 +1,47 @@
+break, brea, bre, br, b
+Set breakpoint at specified location.
+break [PROBE_MODIFIER] [LOCATION] [thread THREADNUM]
+	[-force-condition] [if CONDITION]
+PROBE_MODIFIER shall be present if the command is to be placed in a
+probe point.  Accepted values are `-probe' (for a generic, automatically
+guessed probe type), `-probe-stap' (for a SystemTap probe) or
+`-probe-dtrace' (for a DTrace probe).
+LOCATION may be a linespec, address, or explicit location as described
+below.
+
+With no LOCATION, uses current execution address of the selected
+stack frame.  This is useful for breaking on return to a stack frame.
+
+THREADNUM is the number from "info threads".
+CONDITION is a boolean expression.
+
+With the "-force-condition" flag, the condition is defined even when
+it is invalid for all current locations.
+
+Linespecs are colon-separated lists of location parameters, such as
+source filename, function name, label name, and line number.
+Example: To specify the start of a label named "the_top" in the
+function "fact" in the file "factorial.c", use
+"factorial.c:fact:the_top".
+
+Address locations begin with "*" and specify an exact address in the
+program.  Example: To specify the fourth byte past the start function
+"main", use "*main + 4".
+
+Explicit locations are similar to linespecs but use an option/argument
+syntax to specify location parameters.
+Example: To specify the start of the label named "the_top" in the
+function "fact" in the file "factorial.c", use "-source factorial.c
+-function fact -label the_top".
+
+By default, a specified function is matched against the program's
+functions in all scopes.  For C++, this means in all namespaces and
+classes.  For Ada, this means in all packages.  E.g., in C++,
+"func()" matches "A::func()", "A::B::func()", etc.  The
+"-qualified" flag overrides this behavior, making GDB interpret the
+specified name as a complete fully-qualified name instead.
+
+Multiple breakpoints at one place are permitted, and useful if their
+conditions are different.
+
+Do "help breakpoints" for info on other commands dealing with breakpoints.

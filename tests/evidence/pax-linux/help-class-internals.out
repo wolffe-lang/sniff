@@ -1,0 +1,209 @@
+Maintenance commands.
+Some gdb commands are provided just for use by gdb maintainers.
+These commands are subject to frequent change, and may not be as
+well documented as user commands.
+
+List of commands:
+
+maintenance, mt -- Commands for use by GDB maintainers.
+maintenance agent -- Translate an expression into remote agent bytecode for tracing.
+maintenance agent-eval -- Translate an expression into remote agent bytecode for evaluation.
+maintenance agent-printf -- Translate an expression into remote agent bytecode for evaluation and display the bytecodes.
+maintenance btrace -- Branch tracing maintenance commands.
+maintenance btrace clear -- Clears the branch tracing data.
+maintenance btrace clear-packet-history -- Clears the branch tracing packet history.
+maintenance btrace packet-history -- Print the raw branch tracing data.
+maintenance check -- Commands for checking internal gdb state.
+maintenance check libthread-db -- Run integrity checks on the current inferior's libthread_db.
+maintenance check xml-descriptions -- Check equality of GDB target descriptions and XML created descriptions.
+maintenance check-psymtabs -- Check consistency of currently expanded psymtabs versus symtabs.
+maintenance check-symtabs -- Check consistency of currently expanded symtabs.
+maintenance cplus, maintenance cp -- C++ maintenance commands.
+maintenance cplus first_component -- Print the first class/namespace component of NAME.
+maintenance demangler-warning -- Give GDB a demangler warning.
+maintenance deprecate -- Deprecate a command (for testing purposes).
+maintenance dump-me -- Get fatal error; make debugger dump its core.
+maintenance expand-symtabs -- Expand symbol tables.
+maintenance flush -- Maintenance command for flushing GDB internal caches.
+maintenance flush dcache -- Force gdb to flush its target memory data cache.
+maintenance flush register-cache -- Force gdb to flush its register and frame cache.
+maintenance flush source-cache -- Force gdb to flush its source code cache.
+maintenance flush symbol-cache -- Flush the symbol cache for each program space.
+maintenance ignore-probes -- Ignore probes.
+maintenance info, maintenance i -- Commands for showing internal info about the program being debugged.
+maintenance info bfds -- List the BFDs that are currently open.
+maintenance info breakpoints -- Status of all breakpoints, or breakpoint number NUMBER.
+maintenance info btrace -- Info about branch tracing data.
+maintenance info frame-unwinders -- List the frame unwinders currently in effect, starting with the highest priority.
+maintenance info jit -- Print information about JIT-ed code objects.
+maintenance info line-table -- List the contents of all line tables, from all symbol tables.
+maintenance info linux-lwps -- List the Linux LWPS.
+maintenance info program-spaces -- Info about currently known program spaces.
+maintenance info psymtabs -- List the partial symbol tables for all object files.
+maintenance info screen -- Show screen characteristics.
+maintenance info sections -- List the BFD sections of the exec and core files.
+maintenance info selftests -- List the registered selftests.
+maintenance info symtabs -- List the full symbol tables for all object files.
+maintenance info target-sections -- List GDB's internal section table.
+maintenance internal-error -- Give GDB an internal error.
+maintenance internal-warning -- Give GDB an internal warning.
+maintenance packet -- Send an arbitrary packet to a remote target.
+maintenance print -- Maintenance command for printing GDB internal state.
+maintenance print architecture -- Print the internal architecture configuration.
+maintenance print c-tdesc -- Print the current target description as a C source file.
+maintenance print cooked-registers -- Print the internal register configuration including cooked values.
+maintenance print core-file-backed-mappings -- Print core file's file-backed mappings.
+maintenance print dummy-frames -- Print the contents of the internal dummy-frame stack.
+maintenance print frame-id -- Print the current frame-id.
+maintenance print msymbols -- Print dump of current minimal symbol definitions.
+maintenance print objfiles -- Print dump of current object file definitions.
+maintenance print psymbols -- Print dump of current partial symbol definitions.
+maintenance print raw-registers -- Print the internal register configuration including raw values.
+maintenance print record-instruction -- Print a recorded instruction.
+maintenance print reggroups -- Print the internal register group names.
+maintenance print register-groups -- Print the internal register configuration including each register's group.
+maintenance print registers -- Print the internal register configuration.
+maintenance print remote-registers -- Print the internal register configuration including remote register number and g/G packets offset.
+maintenance print statistics -- Print statistics about internal gdb state.
+maintenance print symbol-cache -- Dump the symbol cache for each program space.
+maintenance print symbol-cache-statistics -- Print symbol cache statistics for each program space.
+maintenance print symbols -- Print dump of current symbol definitions.
+maintenance print target-stack -- Print the name of each layer of the internal target stack.
+maintenance print type -- Print a type chain for a given symbol.
+maintenance print user-registers -- List the names of the current user registers.
+maintenance print xml-tdesc -- Print the current target description as an XML file.
+maintenance selftest -- Run gdb's unit tests.
+maintenance set -- Set GDB internal variables used by the GDB maintainer.
+maintenance set ada -- Set Ada maintenance-related variables.
+maintenance set ada ignore-descriptive-types -- Set whether descriptive types generated by GNAT should be ignored.
+maintenance set backtrace-on-fatal-signal -- Set whether to produce a backtrace if GDB receives a fatal signal.
+maintenance set bfd-sharing -- Set whether gdb will share bfds that appear to be the same file.
+maintenance set btrace -- Set branch tracing specific variables.
+maintenance set btrace pt -- Set Intel Processor Trace specific variables.
+maintenance set btrace pt skip-pad -- Set whether PAD packets should be skipped in the btrace packet history.
+maintenance set catch-demangler-crashes -- Set whether to attempt to catch demangler crashes.
+maintenance set check-libthread-db -- Set whether to check libthread_db at load time.
+maintenance set debuginfod -- Set debuginfod specific variables.
+maintenance set debuginfod download-sections -- Set whether debuginfod may download individual ELF/DWARF sections.
+maintenance set demangler-warning -- Configure what GDB does when demangler-warning is detected.
+maintenance set demangler-warning quit -- Set whether GDB should quit when an demangler-warning is detected.
+maintenance set dwarf -- Set DWARF specific variables.
+maintenance set dwarf always-disassemble -- Set whether `info address' always disassembles DWARF expressions.
+maintenance set dwarf max-cache-age -- Set the upper bound on the age of cached DWARF compilation units.
+maintenance set dwarf synchronous -- Set whether DWARF is read synchronously.
+maintenance set dwarf unwinders -- Set whether the DWARF stack frame unwinders are used.
+maintenance set gnu-source-highlight -- Set gnu-source-highlight specific variables.
+maintenance set gnu-source-highlight enabled -- Set whether the GNU Source Highlight library should be used.
+maintenance set ignore-prologue-end-flag -- Set if the PROLOGUE-END flag is ignored.
+maintenance set internal-error -- Configure what GDB does when internal-error is detected.
+maintenance set internal-error backtrace -- Set whether GDB should print a backtrace of GDB when internal-error is detected.
+maintenance set internal-error corefile -- Set whether GDB should create a core file of GDB when internal-error is detected.
+maintenance set internal-error quit -- Set whether GDB should quit when an internal-error is detected.
+maintenance set internal-warning -- Configure what GDB does when internal-warning is detected.
+maintenance set internal-warning backtrace -- Set whether GDB should print a backtrace of GDB when internal-warning is detected.
+maintenance set internal-warning corefile -- Set whether GDB should create a core file of GDB when internal-warning is detected.
+maintenance set internal-warning quit -- Set whether GDB should quit when an internal-warning is detected.
+maintenance set libopcodes-styling -- Set libopcodes-styling specific variables.
+maintenance set libopcodes-styling enabled -- Set whether the libopcodes styling support should be used.
+maintenance set per-command -- Per-command statistics settings.
+maintenance set per-command space -- Set whether to display per-command space usage.
+maintenance set per-command symtab -- Set whether to display per-command symtab statistics.
+maintenance set per-command time -- Set whether to display per-command execution time.
+maintenance set profile -- Set internal profiling.
+maintenance set selftest -- Self tests-related settings.
+maintenance set selftest verbose -- Set whether selftests run in verbose mode.
+maintenance set show-debug-regs -- Set whether to show variables that mirror the x86 debug registers.
+maintenance set symbol-cache-size -- Set the size of the symbol cache.
+maintenance set target-async -- Set whether gdb controls the inferior in asynchronous mode.
+maintenance set target-non-stop -- Set whether gdb always controls the inferior in non-stop mode.
+maintenance set test-settings -- Set GDB internal variables used for set/show command infrastructure testing.
+maintenance set test-settings auto-boolean -- command used for internal testing.
+maintenance set test-settings boolean -- command used for internal testing.
+maintenance set test-settings enum -- command used for internal testing.
+maintenance set test-settings filename -- command used for internal testing.
+maintenance set test-settings integer -- command used for internal testing.
+maintenance set test-settings optional-filename -- command used for internal testing.
+maintenance set test-settings string -- command used for internal testing.
+maintenance set test-settings string-noescape -- command used for internal testing.
+maintenance set test-settings uinteger -- command used for internal testing.
+maintenance set test-settings zinteger -- command used for internal testing.
+maintenance set test-settings zuinteger -- command used for internal testing.
+maintenance set test-settings zuinteger-unlimited -- command used for internal testing.
+maintenance set tui-left-margin-verbose -- Set whether the left margin should use '_' and '0' instead of spaces.
+maintenance set tui-resize-message -- Set TUI resize messaging.
+maintenance set worker-threads -- Set the number of worker threads GDB can use.
+maintenance show -- Show GDB internal variables used by the GDB maintainer.
+maintenance show ada -- Show Ada maintenance-related variables.
+maintenance show ada ignore-descriptive-types -- Show whether descriptive types generated by GNAT should be ignored.
+maintenance show backtrace-on-fatal-signal -- Show whether GDB will produce a backtrace if it receives a fatal signal.
+maintenance show bfd-sharing -- Show whether gdb will share bfds that appear to be the same file.
+maintenance show btrace -- Show branch tracing specific variables.
+maintenance show btrace pt -- Show Intel Processor Trace specific variables.
+maintenance show btrace pt skip-pad -- Show whether PAD packets should be skipped in the btrace packet history.
+maintenance show catch-demangler-crashes -- Show whether to attempt to catch demangler crashes.
+maintenance show check-libthread-db -- Show whether to check libthread_db at load time.
+maintenance show debuginfod -- Show debuginfod specific variables.
+maintenance show debuginfod download-sections -- Show whether debuginfod may download individual ELF/DWARF sections.
+maintenance show demangler-warning -- Show what GDB does when demangler-warning is detected.
+maintenance show demangler-warning quit -- Show whether GDB will quit when an demangler-warning is detected.
+maintenance show dwarf -- Show DWARF specific variables.
+maintenance show dwarf always-disassemble -- Show whether `info address' always disassembles DWARF expressions.
+maintenance show dwarf max-cache-age -- Show the upper bound on the age of cached DWARF compilation units.
+maintenance show dwarf synchronous -- Show whether DWARF is read synchronously.
+maintenance show dwarf unwinders -- Show whether the DWARF stack frame unwinders are used.
+maintenance show gnu-source-highlight -- Show gnu-source-highlight specific variables.
+maintenance show gnu-source-highlight enabled -- Show whether the GNU Source Highlight library is being used.
+maintenance show ignore-prologue-end-flag -- Show if the PROLOGUE-END flag is ignored.
+maintenance show internal-error -- Show what GDB does when internal-error is detected.
+maintenance show internal-error backtrace -- Show whether GDB will print a backtrace of GDB when internal-error is detected.
+maintenance show internal-error corefile -- Show whether GDB will create a core file of GDB when internal-error is detected.
+maintenance show internal-error quit -- Show whether GDB will quit when an internal-error is detected.
+maintenance show internal-warning -- Show what GDB does when internal-warning is detected.
+maintenance show internal-warning backtrace -- Show whether GDB will print a backtrace of GDB when internal-warning is detected.
+maintenance show internal-warning corefile -- Show whether GDB will create a core file of GDB when internal-warning is detected.
+maintenance show internal-warning quit -- Show whether GDB will quit when an internal-warning is detected.
+maintenance show libopcodes-styling -- Show libopcodes-styling specific variables.
+maintenance show libopcodes-styling enabled -- Show whether the libopcodes styling support should be used.
+maintenance show per-command -- Show per-command statistics settings.
+maintenance show per-command space -- Show whether to display per-command space usage.
+maintenance show per-command symtab -- Show whether to display per-command symtab statistics.
+maintenance show per-command time -- Show whether to display per-command execution time.
+maintenance show profile -- Show internal profiling.
+maintenance show selftest -- Self tests-related settings.
+maintenance show selftest verbose -- Show whether selftests run in verbose mode.
+maintenance show show-debug-regs -- Show whether to show variables that mirror the x86 debug registers.
+maintenance show symbol-cache-size -- Show the size of the symbol cache.
+maintenance show target-async -- Show whether gdb controls the inferior in asynchronous mode.
+maintenance show target-non-stop -- Show whether gdb always controls the inferior in non-stop mode.
+maintenance show test-options-completion-result -- Show maintenance test-options completion result.
+maintenance show test-settings -- Show GDB internal variables used for set/show command infrastructure testing.
+maintenance show test-settings auto-boolean -- command used for internal testing.
+maintenance show test-settings boolean -- command used for internal testing.
+maintenance show test-settings enum -- command used for internal testing.
+maintenance show test-settings filename -- command used for internal testing.
+maintenance show test-settings integer -- command used for internal testing.
+maintenance show test-settings optional-filename -- command used for internal testing.
+maintenance show test-settings string -- command used for internal testing.
+maintenance show test-settings string-noescape -- command used for internal testing.
+maintenance show test-settings uinteger -- command used for internal testing.
+maintenance show test-settings zinteger -- command used for internal testing.
+maintenance show test-settings zuinteger -- command used for internal testing.
+maintenance show test-settings zuinteger-unlimited -- command used for internal testing.
+maintenance show tui-left-margin-verbose -- Show whether the left margin should use '_' and '0' instead of spaces.
+maintenance show tui-resize-message -- Show TUI resize messaging.
+maintenance show worker-threads -- Show the number of worker threads GDB can use.
+maintenance space -- Set the display of space usage.
+maintenance test-options -- Generic command for testing the options infrastructure.
+maintenance test-options require-delimiter -- Command used for testing options processing.
+maintenance test-options unknown-is-error -- Command used for testing options processing.
+maintenance test-options unknown-is-operand -- Command used for testing options processing.
+maintenance time -- Set the display of time usage.
+maintenance translate-address -- Translate a section name and address to a symbol.
+maintenance undeprecate -- Undeprecate a command (for testing purposes).
+maintenance wait-for-index-cache -- Wait until all pending writes to the index cache have completed.
+maintenance with -- Like "with", but works with "maintenance set" variables.
+
+Type "help" followed by command name for full documentation.
+Type "apropos word" to search for commands related to "word".
+Type "apropos -v word" for full documentation of commands related to "word".
+Command name abbreviations are allowed if unambiguous.

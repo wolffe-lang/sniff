@@ -1,0 +1,22 @@
+Set catchpoints to catch events.
+
+List of catch subcommands:
+
+catch assert -- Catch failed Ada assertions, when raised.
+catch catch -- Catch an exception, when caught.
+catch exception -- Catch Ada exceptions, when raised.
+catch exec -- Catch calls to exec.
+catch fork -- Catch calls to fork.
+catch handlers -- Catch Ada exceptions, when handled.
+catch load -- Catch loads of shared libraries.
+catch rethrow -- Catch an exception, when rethrown.
+catch signal -- Catch signals by their names and/or numbers.
+catch syscall -- Catch system calls by their names, groups and/or numbers.
+catch throw -- Catch an exception, when thrown.
+catch unload -- Catch unloads of shared libraries.
+catch vfork -- Catch calls to vfork.
+
+Type "help catch" followed by catch subcommand name for full documentation.
+Type "apropos word" to search for commands related to "word".
+Type "apropos -v word" for full documentation of commands related to "word".
+Command name abbreviations are allowed if unambiguous.

@@ -1,0 +1,10 @@
+Set a read watchpoint for EXPRESSION.
+Usage: rwatch [-location] EXPRESSION
+
+Options:
+  -location
+    This evaluates EXPRESSION and watches the memory to which is refers.
+    -l can be used as a short form of -location.
+
+A read watchpoint stops execution of your program whenever the value of
+an expression is read.

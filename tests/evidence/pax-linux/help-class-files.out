@@ -1,0 +1,33 @@
+Specifying and examining files.
+
+List of commands:
+
+add-symbol-file -- Load symbols from FILE, assuming FILE has been dynamically loaded.
+add-symbol-file-from-memory -- Load the symbols out of memory from a dynamically loaded object file.
+cd -- Set working directory to DIR for debugger.
+core-file -- Use FILE as core dump for examining memory and registers.
+directory -- Add directory DIR to beginning of search path for source files.
+edit -- Edit specified file or function.
+exec-file -- Use FILE as program for getting contents of pure memory.
+file -- Use FILE as program to be debugged.
+forward-search, fo, search -- Search for regular expression (see regex(3)) from last line listed.
+generate-core-file, gcore -- Save a core file with the current state of the debugged process.
+list, l -- List specified function or line.
+load -- Dynamically load FILE into the running program.
+nosharedlibrary -- Unload all shared object library symbols.
+path -- Add directory DIR(s) to beginning of search path for object files.
+pwd -- Print working directory.
+remote -- Manipulate files on the remote system.
+remote delete -- Delete a remote file.
+remote get -- Copy a remote file to the local system.
+remote put -- Copy a local file to the remote system.
+remove-symbol-file -- Remove a symbol file added via the add-symbol-file command.
+reverse-search, rev -- Search backward for regular expression (see regex(3)) from last line listed.
+section -- Change the base address of section SECTION of the exec file to ADDR.
+sharedlibrary -- Load shared object library symbols for files matching REGEXP.
+symbol-file -- Load symbol table from executable file FILE.
+
+Type "help" followed by command name for full documentation.
+Type "apropos word" to search for commands related to "word".
+Type "apropos -v word" for full documentation of commands related to "word".
+Command name abbreviations are allowed if unambiguous.

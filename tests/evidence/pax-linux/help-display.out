@@ -1,0 +1,9 @@
+Print value of expression EXP each time the program stops.
+Usage: display[/FMT] EXP
+/FMT may be used before EXP as in the "print" command.
+/FMT "i" or "s" or including a size-letter is allowed,
+as in the "x" command, and then EXP is used to get the address to examine
+and examining is done as in the "x" command.
+
+With no argument, display all currently requested auto-display expressions.
+Use "undisplay" to cancel display requests previously made.

@@ -1,0 +1,17 @@
+Reading symbols from /work/target/pax-fixtures/c/recursion-gone/clang-O0/prog...
+Breakpoint 1 at 0x4017fb: file /work/target/pax-fixtures/c/recursion-gone/clang-O0/src/main.c, line 3.
+Starting program: /work/target/pax-fixtures/c/recursion-gone/clang-O0/prog 
+
+Breakpoint 1, factorial (n=5) at /work/target/pax-fixtures/c/recursion-gone/clang-O0/src/main.c:3
+warning: 3	/work/target/pax-fixtures/c/recursion-gone/clang-O0/src/main.c: No such file or directory
+1	in /work/target/pax-fixtures/c/recursion-gone/clang-O0/src/main.c
+End of the file was already reached, use "list ." to list the current location again
+4	in /work/target/pax-fixtures/c/recursion-gone/clang-O0/src/main.c
+
+Breakpoint 1, factorial (n=4) at /work/target/pax-fixtures/c/recursion-gone/clang-O0/src/main.c:3
+3	in /work/target/pax-fixtures/c/recursion-gone/clang-O0/src/main.c
+1	in /work/target/pax-fixtures/c/recursion-gone/clang-O0/src/main.c
+#0  factorial (n=4) at /work/target/pax-fixtures/c/recursion-gone/clang-O0/src/main.c:3
+3	in /work/target/pax-fixtures/c/recursion-gone/clang-O0/src/main.c
+#1  0x000000000040181c in factorial (n=5) at /work/target/pax-fixtures/c/recursion-gone/clang-O0/src/main.c:4
+4	in /work/target/pax-fixtures/c/recursion-gone/clang-O0/src/main.c
