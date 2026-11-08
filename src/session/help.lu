@@ -37,7 +37,7 @@ fn help_info_name(word: str) -> str {
 
 fn help_entry(name: str) -> HelpCmd {
     for e in help_table() { if e.name == name { return e } }
-    help_cmd(name, [], "", "", [])
+    HelpCmd { name: name, aliases: [], class: "", summary: "", body: [] }
 }
 
 /// "NAME, ALIAS... -- SUMMARY", the line gdb's listings give a command.
