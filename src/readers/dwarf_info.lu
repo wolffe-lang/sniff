@@ -90,9 +90,9 @@ pub struct DwarfInfo {
     pub fuel_remaining: int,
 }
 
-/// Default caps: 2.67x the largest recorded DIE count (392124) and 2.94x the
-/// largest attribute count (1428600); 4.7x the largest Linux fixture's bytes;
-/// 5.27x the largest measured tree-reading work (12731754, wolf/shared-name).
+/// Default caps: 2.67x the largest recorded DIE count (392515) and 2.93x the
+/// largest attribute count (1429960); 4.7x the largest Linux fixture's bytes;
+/// 9.80x the largest measured tree-reading work (6847675, wolf/shared-name).
 /// tests/evidence/linux/reader-caps.json records the measurement.
 pub fn dwarf_info_limits() -> DwarfInfoLimits {
     DwarfInfoLimits {
