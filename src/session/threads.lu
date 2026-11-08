@@ -50,11 +50,12 @@ fn thread_db_form(s: Session) -> bool {
 
 /// A thread's thread pointer: the one read at its first stop, else its registers' now.
 fn thr_tls(mut s: Session, i: int) -> u64 {
-    if s.thr[i].tls == 0 { s.thr[i].tls = platform.target_thread_pointer(platform.target_thread(s.inferior, s.thr[i].tid)) }
+    if s.thr[i].tls == 0 { s.thr[i].tls = platform.target_thread_pointer_of(s.inferior, s.thr[i].tid) }
     s.thr[i].tls
 }
 
 /// gdb's target id of thread i: `Thread 0x7ffff7da16c0 (LWP 215)`, `LWP 215` or `process 212`.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
 fn thr_target_id(mut s: Session, i: int) -> str {
     if thread_db_form(s) {
         let tls = thr_tls(mut s, i)
@@ -62,6 +63,15 @@ fn thr_target_id(mut s: Session, i: int) -> str {
     }
     if s.thr_multi { return "LWP {s.thr[i].tid}" }
     "process {s.inferior.pid}"
+}
+
+/// sniff's own target id on macOS, where gdb is not the oracle: `Thread 0x16fe87000 (tid 17166451)`, the
+/// thread's handle and its system-wide id as the kernel reports them (THREAD_IDENTIFIER_INFO).
+#[cfg(target = "aarch64-apple-darwin")]
+fn thr_target_id(mut s: Session, i: int) -> str {
+    let h = thr_tls(mut s, i)
+    let id = platform.target_thread_tid(s.inferior, s.thr[i].tid)
+    "Thread 0x{h:x} (tid {id})"
 }
 
 /// A thread's name as gdb shows it: the kernel's (its comm); where the kernel keeps none to read, the name
@@ -77,7 +87,7 @@ fn thr_name(s: Session, i: int) -> str {
 /// A new thread, stopped at its first stop: numbered, its thread pointer read, `[New ...]` printed.
 fn thr_add(mut s: Session, tid: int) -> int {
     var t = Thr { num: s.thr_next, tid: tid, tls: 0, running: false, pending: 0 - 1, expect_stop: false }
-    t.tls = platform.target_thread_pointer(platform.target_thread(s.inferior, tid))
+    t.tls = platform.target_thread_pointer_of(s.inferior, tid)
     s.thr_next += 1
     (mut s.thr).push(t)
     s.thr_multi = true
@@ -247,7 +257,8 @@ fn wait_stop(mut s: Session) -> int {
     }
 }
 
-/// macOS: one exception port reports every thread's exceptions, and the session resumes the process.
+/// macOS: one exception port reports every thread's exceptions; the layer suspends the task at each stop
+/// and resumes it with the reply, so every thread stops and runs together.
 #[cfg(target = "aarch64-apple-darwin")]
 fn resume_all(mut s: Session, sig: int) -> bool {
     platform.target_cont(s.target, sig) >= 0
@@ -256,8 +267,34 @@ fn resume_all(mut s: Session, sig: int) -> bool {
 #[cfg(target = "aarch64-apple-darwin")]
 fn stop_others(mut s: Session) { }
 
+/// macOS has no thread events: the thread list is read at each stop (task_threads). A thread first seen is
+/// numbered and announced, one no longer listed has ended, and the thread that took the exception is selected.
 #[cfg(target = "aarch64-apple-darwin")]
-fn wait_stop(mut s: Session) -> int { platform.target_wait(s.target) }
+fn wait_stop(mut s: Session) -> int {
+    let st = platform.target_wait(s.target)
+    if st < 0 || !platform.status_stopped(st) { return st }
+    thr_refresh(mut s)
+    let k = thr_index(s, platform.target_event_thread(s.inferior))
+    if k >= 0 { thr_select(mut s, k) }
+    st
+}
+
+#[cfg(target = "aarch64-apple-darwin")]
+fn thr_refresh(mut s: Session) {
+    let now = platform.target_threads(s.inferior)
+    if now.len == 0 { return }
+    var i = 0
+    while i < s.thr.len {
+        var listed = false
+        for tid in now {
+            if tid == s.thr[i].tid { listed = true }
+        }
+        if listed { i += 1 } else { thr_gone(mut s, i) }
+    }
+    for tid in now {
+        if thr_index(s, tid) < 0 { let _ = thr_add(mut s, tid) }
+    }
+}
 
 /// The stop line's thread: `Thread 4 "prog" ` once the program has had more than one thread, else "".
 fn stop_thread_prefix(s: Session) -> str {

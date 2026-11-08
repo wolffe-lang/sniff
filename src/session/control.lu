@@ -297,10 +297,14 @@ fn step_others_over(mut s: Session) -> Event {
     let keep = s.thr[s.thr_cur].tid
     let sig = s.pending_signal
     let given = s.signal_given
+    // on macOS only the thread that took the exception can be at a breakpoint it reported; another thread
+    // stopped at a trap is still waiting to report it
+    let ev = platform.target_event_thread(s.inferior)
     var tids: List[int] = []
     var i = 0
     while i < s.thr.len {
-        if s.thr[i].tid != keep && !s.thr[i].running && s.thr[i].pending < 0 { (mut tids).push(s.thr[i].tid) }
+        let tid = s.thr[i].tid
+        if tid != keep && !s.thr[i].running && s.thr[i].pending < 0 && (ev == 0 || tid == ev) { (mut tids).push(tid) }
         i += 1
     }
     for tid in tids {

@@ -230,6 +230,18 @@ pub fn target_thread_pointer(t: Target) -> u64 {
     r[reg_fs_base]
 }
 
+/// A thread's thread pointer, the thread named by its id.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_thread_pointer_of(t: Target, tid: int) -> u64 { target_thread_pointer(target_thread(t, tid)) }
+
+/// A thread's id as the kernel numbers it: its LWP.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_thread_tid(t: Target, tid: int) -> u64 { tid as u64 }
+
+/// Linux reports each thread's stops as its own (wait_stop selects it): 0, no one thread holds the stop.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_event_thread(t: Target) -> int { 0 }
+
 /// The 27 user_regs_struct slots, or an empty list when the child cannot be read.
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 pub fn target_regs(t: Target) -> List[u64] {

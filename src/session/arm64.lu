@@ -165,10 +165,23 @@ fn add_sp_at(s: Session, at: u64) -> i64 {
     imm as i64
 }
 
+/// The instruction word at addr, or 0.
+fn insn_at(s: Session, addr: u64) -> u64 {
+    let r = platform.target_read(s.target, addr, 4)
+    if !r.ok { return 0 }
+    (r.data[0] as int as u64) + ((r.data[1] as int as u64) << 8) + ((r.data[2] as int as u64) << 16) + ((r.data[3] as int as u64) << 24)
+}
+
+/// A return address as code: a frame of the system's arm64e libraries may hold it signed (pointer
+/// authentication puts the signature in the bits above the 47 of a user address).
+fn code_addr(a: u64) -> u64 { a & 140737488355327 }
+
 /// Unwind one frame of arm64 code that DWARF CFI does not cover. Level 0 may be
 /// inside the prologue or the epilogue; every other frame is at a call. The basis
-/// is "prologue" for the instruction analysis, "compact" for __unwind_info and
-/// "frame-pointer" for the x29 chain.
+/// is "prologue" for the instruction analysis, "compact" for __unwind_info,
+/// "syscall" for a system call's stub outside the program (the instruction before
+/// the pc is `svc #0x80`: the stub keeps no frame, its caller's return address is
+/// still in the link register) and "frame-pointer" for the x29 chain.
 fn unwind_arm64(s: Session, f: Frame, level: int) -> Frame ! {no_caller} {
     let sp = f.regs[31]
     let fp = f.regs[29]
@@ -203,6 +216,18 @@ fn unwind_arm64(s: Session, f: Frame, level: int) -> Frame ! {no_caller} {
             }
         }
     }
+    let outside = fstart == 0 && !in_image(s.prog, file_pc)
+    if basis == "" && level == 0 && outside && insn_at(s, f.pc - 4) == 3556773889 {
+        cfa = sp
+        basis = "syscall"
+    }
+    if basis == "" && outside {
+        // no compact entry covers another image's code: the frame-pointer chain
+        cfa = fp + 16
+        fp_at = fp
+        lr_at = fp + 8
+        basis = "frame-pointer"
+    }
     if basis == "" {
         let enc = compact_encoding(s.prog, file_pc)
         let mode = enc & 251658240
@@ -222,8 +247,11 @@ fn unwind_arm64(s: Session, f: Frame, level: int) -> Frame ! {no_caller} {
             basis = "frame-pointer"
         }
     }
-    var ra = lr
-    if lr_at != 0 { ra = rd64(s.target, lr_at) else { return no_caller } }
+    var ra = code_addr(lr)
+    if lr_at != 0 {
+        let raw = rd64(s.target, lr_at) else { return no_caller }
+        ra = code_addr(raw)
+    }
     var nfp = fp
     if fp_at != 0 { nfp = rd64(s.target, fp_at) else { return no_caller } }
     var regs = copy f.regs

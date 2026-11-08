@@ -68,6 +68,16 @@ extern "c" fn waitpid(pid: i32, status: u64, options: i32) -> i32
 extern "c" fn kill(pid: i32, sig: i32) -> i32
 #[cfg(target = "aarch64-apple-darwin")]
 extern "c" fn sysctlbyname(name: u64, old: u64, oldlen: u64, new: u64, newlen: u64) -> i32
+#[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn task_suspend(task: u32) -> i32
+#[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn task_resume(task: u32) -> i32
+#[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn task_threads(task: u32, list: u64, count: u64) -> i32
+#[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn thread_info(thread: u32, flavor: i32, info: u64, count: u64) -> i32
+#[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn mach_vm_deallocate(task: u32, addr: u64, size: u64) -> i32
 
 /// Slots of the state block every Target shares (u64 each).
 #[cfg(target = "aarch64-apple-darwin")]
@@ -107,6 +117,16 @@ const st_fork_skip: int = 14
 /// The number of watch registers (hw.optional.watchpoint), read once; 0 until then.
 #[cfg(target = "aarch64-apple-darwin")]
 const st_watch_slots: int = 15
+/// The thread that took the pending exception (its port): the reply and a signal's delivery are its. st_thread
+/// is the selected thread, whose registers the session reads.
+#[cfg(target = "aarch64-apple-darwin")]
+const st_event_thread: int = 16
+/// 1 while the layer holds the task suspended (task_suspend at each reported stop): all-stop.
+#[cfg(target = "aarch64-apple-darwin")]
+const st_suspended: int = 17
+/// The thread whose step bit is set, while one is.
+#[cfg(target = "aarch64-apple-darwin")]
+const st_step_thread: int = 18
 
 /// Bytes of the message buffers (an exception request is 88 bytes plus a trailer).
 #[cfg(target = "aarch64-apple-darwin")]
@@ -196,7 +216,7 @@ fn translate_status(st: int) -> int {
 pub fn target_none() -> Target {
     unsafe {
         // # Safety: calloc'd blocks sized for the slots below.
-        let blk = c.calloc(16, 8) as *u64
+        let blk = c.calloc(20, 8) as *u64
         blk[st_msg] = c.calloc(1, msg_bytes as uint) as u64
         blk[st_msg2] = c.calloc(1, msg_bytes as uint) as u64
         Target {
@@ -261,6 +281,7 @@ fn decode_exception(t: Target, msg: u64) -> int {
         let c0 = (m[17] as u64) | ((m[18] as u64) << 32)
         let c1 = (m[19] as u64) | ((m[20] as u64) << 32)
         st[st_thread] = m[7] as u64
+        st[st_event_thread] = m[7] as u64
         st[st_code0] = c0
         st[st_code1] = c1
         st[st_pending] = 1
@@ -296,10 +317,12 @@ fn set_single_step(t: Target, on: bool) -> int {
     unsafe {
         // # Safety: the state buffer is calloc'd 130 words; the thread port is the stopped thread's.
         let st = t.word as *u64
+        var th = st[st_thread]
+        if !on && st[st_step_thread] != 0 { th = st[st_step_thread] }
         let ds = c.calloc(1, 520) as *u64
         let cnt = c.calloc(1, 8) as *u32
         cnt[0] = 130
-        let kr = thread_get_state(st[st_thread] as u32, 15, ds as u64, cnt as u64)
+        let kr = thread_get_state(th as u32, 15, ds as u64, cnt as u64)
         if kr != 0 { return -1 }
         var v: u64 = ds[64]
         if on { v = v | 1 } else { v = v & !(1 as u64) }
@@ -310,11 +333,12 @@ fn set_single_step(t: Target, on: bool) -> int {
             // (ESR class 0x32 with ISV 0, a step with no instruction run). The empty state lets the kernel
             // drop the thread's state and load the next one afresh (notes/sn05-the-repin-and-s5.md).
             let z = c.calloc(1, 520) as *u64
-            if thread_set_state(st[st_thread] as u32, 15, z as u64, 130) != 0 { return -1 }
+            if thread_set_state(th as u32, 15, z as u64, 130) != 0 { return -1 }
         }
-        let kr2 = thread_set_state(st[st_thread] as u32, 15, ds as u64, 130)
+        let kr2 = thread_set_state(th as u32, 15, ds as u64, 130)
         if kr2 != 0 { return -1 }
         st[st_stepping] = if on { 1 } else { 0 }
+        st[st_step_thread] = if on { th } else { 0 }
         0
     }
 }
@@ -345,11 +369,13 @@ pub fn target_wait(t: Target) -> int {
                 if (r >> 16) == kind_signal && (st[st_autopass] == sg as u64 || sg == 9) {
                     // the signal a fault turned into, or one nobody can intercept: let it through
                     st[st_autopass] = 0
-                    let _ = ptrace(13, t.pid as i32, st[st_thread], session_to_darwin(sg) as i32)
+                    let _ = ptrace(13, t.pid as i32, st[st_event_thread], session_to_darwin(sg) as i32)
                     st[st_pending] = 0
                     let _ = reply_to(msg, 0)
                     continue
                 }
+                // all-stop: the other threads stop too while the session has control
+                if st[st_suspended] == 0 && task_suspend(t.memfd as u32) == 0 { st[st_suspended] = 1 }
                 return r
             }
             let w = waitpid(t.pid as i32, t.status, 1)
@@ -431,6 +457,9 @@ fn resume(t: Target, sig: int, step: bool) -> int {
         var ret = 0
         if kind == kind_brk {
             // a BRK that is not ours is still in memory after the session restored its own: step past it
+            // (the thread that took the exception's pc, whichever thread is selected)
+            let sel = st[st_thread]
+            st[st_thread] = st[st_event_thread]
             let regs = target_regs(t)
             if regs.len == 34 {
                 let w = target_read(t, regs[32], 4)
@@ -443,11 +472,12 @@ fn resume(t: Target, sig: int, step: bool) -> int {
                     }
                 }
             }
+            st[st_thread] = sel
         }
         if set_single_step(t, step) < 0 { return -1 }
         if kind == kind_signal {
             // the signal the program was about to receive: pass it (darwin's number) or drop it
-            let _ = ptrace(13, t.pid as i32, st[st_thread], session_to_darwin(sig) as i32)
+            let _ = ptrace(13, t.pid as i32, st[st_event_thread], session_to_darwin(sig) as i32)
         } else if kind == kind_fault {
             if sig != 0 {
                 ret = 5
@@ -455,6 +485,10 @@ fn resume(t: Target, sig: int, step: bool) -> int {
             }
         }
         st[st_pending] = 0
+        if st[st_suspended] == 1 {
+            let _ = task_resume(t.memfd as u32)
+            st[st_suspended] = 0
+        }
         reply_to(st[st_msg], ret)
     }
 }
@@ -930,7 +964,7 @@ pub fn target_wait_any(t: Target) -> Waited {
     unsafe {
         // # Safety: the state block is calloc'd.
         let blk = t.word as *u64
-        Waited { tid: blk[st_thread] as int, status: st }
+        Waited { tid: blk[st_event_thread] as int, status: st }
     }
 }
 
@@ -942,9 +976,66 @@ pub fn target_tgkill(t: Target, pid: int, tid: int, sig: int) -> int { 0 - 1 }
 #[cfg(target = "aarch64-apple-darwin")]
 pub fn target_thread_name(t: Target, pid: int, tid: int) -> str { "" }
 
-/// The thread pointer (TPIDRRO_EL0) is not read yet on macOS.
+/// THREAD_IDENTIFIER_INFO of a thread (its port): the system-wide thread id and the thread's handle, or
+/// zeros when the kernel refuses (mach/thread_info.h).
 #[cfg(target = "aarch64-apple-darwin")]
-pub fn target_thread_pointer(t: Target) -> u64 { 0 }
+fn thread_ident(tid: int) -> List[u64] {
+    unsafe {
+        // # Safety: info is calloc'd 3 words (THREAD_IDENTIFIER_INFO_COUNT is 6 natural_t); tid is a thread port of ours.
+        let info = c.calloc(4, 8) as *u64
+        let cnt = c.calloc(1, 8) as *u32
+        cnt[0] = 6
+        var out: List[u64] = []
+        if thread_info(tid as u32, 4, info as u64, cnt as u64) != 0 { info[0] = 0; info[1] = 0 }
+        (mut out).push(info[0])
+        (mut out).push(info[1])
+        out
+    }
+}
+
+/// The selected thread's handle (THREAD_IDENTIFIER_INFO's thread_handle).
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_thread_pointer(t: Target) -> u64 { target_thread_pointer_of(t, target_current_thread(t)) }
+
+/// A thread's handle, the thread named by its port; the selection is not changed.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_thread_pointer_of(t: Target, tid: int) -> u64 { thread_ident(tid)[1] }
+
+/// A thread's system-wide id (THREAD_IDENTIFIER_INFO's thread_id), the thread named by its port.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_thread_tid(t: Target, tid: int) -> u64 { thread_ident(tid)[0] }
+
+/// The thread that took the pending exception (its port).
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_event_thread(t: Target) -> int {
+    unsafe {
+        // # Safety: the state block is calloc'd.
+        let st = t.word as *u64
+        st[st_event_thread] as int
+    }
+}
+
+/// The program's threads (their ports) in the kernel's order, the order they were made (task_threads).
+/// The list the kernel allocates in sniff's space is given back; the ports stay sniff's, one name each.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_threads(t: Target) -> List[int] {
+    var out: List[int] = []
+    unsafe {
+        // # Safety: lp and cnt are calloc'd; the kernel's array is cnt u32s, deallocated after the copy.
+        let lp = c.calloc(1, 8) as *u64
+        let cnt = c.calloc(1, 8) as *u32
+        if task_threads(t.memfd as u32, lp as u64, cnt as u64) != 0 { return out }
+        let arr = lp[0] as *u32
+        let n = cnt[0] as int
+        var i = 0
+        while i < n {
+            (mut out).push(arr[i] as int)
+            i += 1
+        }
+        let _ = mach_vm_deallocate(mach_task_self(), lp[0], (n * 4) as u64)
+    }
+    out
+}
 
 /// The thread the last exception named (its port).
 #[cfg(target = "aarch64-apple-darwin")]
