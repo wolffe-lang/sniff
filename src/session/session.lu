@@ -76,6 +76,16 @@ struct Session {
     pub watch_armed: bool,
     pub disps: List[Display],
     pub disp_next: int,
+    /// The last listing (`list`): its file (-1 for none), first and last lines; past the end when its
+    /// file could not be read.
+    pub lst_file: int,
+    pub lst_first: int,
+    pub lst_last: int,
+    pub lst_at_end: bool,
+    /// A frame's source line printed since the last listing (0 for none): a bare `list` centres on it.
+    pub lst_solitary: int,
+    /// Files whose missing source was warned about once.
+    pub src_warned: List[int],
 }
 
 /// Printed text goes to standard output through one buffer, flushed before
@@ -104,5 +114,6 @@ fn session_new(take p: Prog) -> Session {
         prog: p, target: platform.target_none(), alive: false, base: 0, args: [], out: [],
         script: "", lineno: 0, bps: [], bp_next: 1, pending_signal: 0, cfi: [], frames: [], frames_ok: false, sel: 0, src_file: [], src_lines: [], src_ok: [], hist: [], errmsg: "", tty: false, quit: false,
         watches: [], watch_armed: false, disps: [], disp_next: 1,
+        lst_file: -1, lst_first: 0, lst_last: 0, lst_at_end: false, lst_solitary: 0, src_warned: [],
     }
 }
