@@ -6,6 +6,7 @@
 // evaluator does not compute (a call, a range, a literal it has no type for) is refused by name.
 
 use platform
+use readers
 use std.math.float
 use std.fmt.decimal
 
@@ -925,7 +926,28 @@ fn list_element(s: Session, v: Val, n: i64) -> Val {
     Val { ok: true, why: "", ty: elem, bytes: r.data, addr: at, has_addr: true, reg: -1 }
 }
 
-/// A global variable: a unit-level DW_TAG_variable whose location is DW_OP_addr.
+/// A global's link-time address from its location expression: DW_OP_addr a, or DW_OP_addrx i
+/// through the unit's .debug_addr contribution (clang's DWARF 5). Not found for any other location.
+fn global_location(s: Session, ui: int, span: readers.ByteSpan) -> (bool, u64) {
+    if span.length == 9 && s.prog.data[span.start] as int == 3 {
+        var a: u64 = 0
+        var i = 0
+        while i < 8 { a = a | ((s.prog.data[span.start + 1 + i] as int as u64) << (8 * i) as u64); i += 1 }
+        return (true, a)
+    }
+    if span.length >= 2 && s.prog.data[span.start] as int == 161 && s.prog.units[ui].has_addr_base {
+        var c = readers.cursor(span.start + 1, span.start + span.length, 100000)
+        let index = readers.uleb64(s.prog.data, mut c) else { return (false, 0) }
+        if c.pos != span.start + span.length { return (false, 0) }
+        var work = readers.cursor(0, 0, 100000)
+        let a = readers.dwarf_index_address(s.prog.data, s.prog.secs.addr.span, s.prog.units[ui].addr_base,
+            index, s.prog.units[ui].offset_size, s.prog.units[ui].address_size, mut work) else { return (false, 0) }
+        return (true, a)
+    }
+    (false, 0)
+}
+
+/// A global variable: a unit-level DW_TAG_variable whose location is DW_OP_addr or DW_OP_addrx.
 fn find_global(s: Session, name: str) -> Val {
     var e = 0
     let n = s.prog.info.entries.len
@@ -935,11 +957,8 @@ fn find_global(s: Session, name: str) -> Val {
             if attr_text(s.prog, ui, e, 3) == name {
                 let la = attr_at(s.prog, e, 2)
                 if la >= 0 {
-                    let lv = copy s.prog.info.attributes[la].value
-                    if lv.bytes.length == 9 && s.prog.data[lv.bytes.start] as int == 3 {
-                        var a: u64 = 0
-                        var i = 0
-                        while i < 8 { a = a | ((s.prog.data[lv.bytes.start + 1 + i] as int as u64) << (8 * i) as u64); i += 1 }
+                    let (found, a) = global_location(s, ui, s.prog.info.attributes[la].value.bytes)
+                    if found {
                         let at = a + s.base
                         let ty = attr_ref(s.prog, e, 73)
                         let size = ty_size(s.prog, ty)
