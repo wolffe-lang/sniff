@@ -1,0 +1,10 @@
+Breakpoint 1 at 0x1179: file /work/fixtures/session/c/sorter/main.c, line 9.
+
+Breakpoint 1, order (a=0x7fffffffec00, b=0x7fffffffec04) at /work/fixtures/session/c/sorter/main.c:9
+9	    int x = *(const int *)a, y = *(const int *)b;
+#0  order (a=0x7fffffffec00, b=0x7fffffffec04) at /work/fixtures/session/c/sorter/main.c:9
+#1  0x00007ffff7dee868 in ?? () from /lib/x86_64-linux-gnu/libc.so.6
+#2  0x00007ffff7dee741 in ?? () from /lib/x86_64-linux-gnu/libc.so.6
+#3  0x00007ffff7deec1d in qsort_r () from /lib/x86_64-linux-gnu/libc.so.6
+#4  0x0000555555555208 in main () at /work/fixtures/session/c/sorter/main.c:16
+[Inferior 1 (process <PID>) exited normally]

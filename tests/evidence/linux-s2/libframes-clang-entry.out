@@ -1,0 +1,8 @@
+Breakpoint 1 at 0x11b3: file /work/fixtures/session/c/sorter/main.c, line 16.
+
+Breakpoint 1, main () at /work/fixtures/session/c/sorter/main.c:16
+16	    qsort(v, 3, sizeof v[0], order);
+0x00007ffff7fda2f0 in ?? () from /lib64/ld-linux-x86-64.so.2
+#0  0x00007ffff7fda2f0 in ?? () from /lib64/ld-linux-x86-64.so.2
+#1  0x00005555555551cd in main () at /work/fixtures/session/c/sorter/main.c:16
+[Inferior 1 (process <PID>) exited normally]

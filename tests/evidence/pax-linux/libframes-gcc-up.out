@@ -1,0 +1,8 @@
+Breakpoint 1 at 0x401875: file /work/fixtures/session/c/sorter/main.c, line 9.
+
+Breakpoint 1, order (a=<STACK>, b=<STACK>) at /work/fixtures/session/c/sorter/main.c:9
+9	    int x = *(const int *)a, y = *(const int *)b;
+#3  0x00000000004052fd in qsort_r ()
+#3  0x00000000004052fd in qsort_r ()
+#2  0x0000000000404e21 in msort_with_tmp.part ()
+[Inferior 1 (process <PID>) exited normally]

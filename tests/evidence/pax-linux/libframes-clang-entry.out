@@ -1,0 +1,8 @@
+Breakpoint 1 at 0x401865: file /work/fixtures/session/c/sorter/main.c, line 16.
+
+Breakpoint 1, main () at /work/fixtures/session/c/sorter/main.c:16
+16	    qsort(v, 3, sizeof v[0], order);
+0x00000000004051e5 in qsort_r ()
+#0  0x00000000004051e5 in qsort_r ()
+#1  0x0000000000401882 in main () at /work/fixtures/session/c/sorter/main.c:16
+[Inferior 1 (process <PID>) exited normally]
