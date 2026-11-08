@@ -194,7 +194,9 @@ def build_image(pax, kernel, inputs, sniff, fixtures, rows, work, label):
         print(r.stdout[-2000:], r.stderr[-2000:])
         raise SystemExit('FAIL session-pax-image mkimage')
     keys = work / (label + '.keys')
-    keys.write_text('/bin/sh /etc/rows.sh\nexit\n')
+    # one typed line: a second step would wait for the shell's second '$ ', and a row's own output can hold
+    # '$ ' (help print's "$ is the last value"), which typed `exit` into the middle of the rows
+    keys.write_text('/bin/sh /etc/rows.sh; exit\n')
     return iso, keys, sess
 
 
