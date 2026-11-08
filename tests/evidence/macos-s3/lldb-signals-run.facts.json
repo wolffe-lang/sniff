@@ -1,0 +1,1 @@
+[["signal", "SIGUSR1"], ["frame", 0, "deliver", "main.c", 24], ["frame", 1, "main", "main.c", 31], ["signal", "SIGUSR2"], ["signal", "SIGUSR1"], ["exit", 21]]

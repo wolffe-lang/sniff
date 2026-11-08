@@ -1,0 +1,82 @@
+(lldb) target create "/Users/mfwolffe/lanes/sn07/mcap-mcap1/target/session-fixtures/c/workers/clang-O0/prog"
+Current executable set to '/Users/mfwolffe/lanes/sn07/mcap-mcap1/target/session-fixtures/c/workers/clang-O0/prog' (arm64).
+(lldb) command source -s 0 '/Users/mfwolffe/lanes/sn07/mcap-mcap1/target/s3c/lldb-threads-next.lldb'
+Executing commands in '/Users/mfwolffe/lanes/sn07/mcap-mcap1/target/s3c/lldb-threads-next.lldb'.
+(lldb) breakpoint set -n work
+Breakpoint 1: where = prog`work + 8 at main.c:50:9, address = 0x0000000100000500
+(lldb) run
+Process 36645 launched: '/Users/mfwolffe/lanes/sn07/mcap-mcap1/target/session-fixtures/c/workers/clang-O0/prog' (arm64)
+Process 36645 stopped
+* thread #4, stop reason = breakpoint 1.1
+    frame #0: 0x0000000100000500 prog`work(n=4) at main.c:50:9
+   47  	}
+   48  	
+   49  	int work(int n) {
+-> 50  	    int total = 0;
+    	        ^
+   51  	    for (int i = 1; i <= n; i++)
+   52  	        total += i;
+   53  	    return total;
+Target 0: (prog) stopped.
+(lldb) next
+Process 36645 stopped
+* thread #4, stop reason = step over
+    frame #0: 0x0000000100000504 prog`work(n=4) at main.c:51:14
+   48  	
+   49  	int work(int n) {
+   50  	    int total = 0;
+-> 51  	    for (int i = 1; i <= n; i++)
+    	             ^
+   52  	        total += i;
+   53  	    return total;
+   54  	}
+Target 0: (prog) stopped.
+(lldb) next
+Process 36645 stopped
+* thread #4, stop reason = step over
+    frame #0: 0x0000000100000524 prog`work(n=4) at main.c:52:18
+   49  	int work(int n) {
+   50  	    int total = 0;
+   51  	    for (int i = 1; i <= n; i++)
+-> 52  	        total += i;
+    	                 ^
+   53  	    return total;
+   54  	}
+   55  	
+Target 0: (prog) stopped.
+(lldb) next
+Process 36645 stopped
+* thread #4, stop reason = step over
+    frame #0: 0x0000000100000538 prog`work(n=4) at main.c:51:30
+   48  	
+   49  	int work(int n) {
+   50  	    int total = 0;
+-> 51  	    for (int i = 1; i <= n; i++)
+    	                             ^
+   52  	        total += i;
+   53  	    return total;
+   54  	}
+Target 0: (prog) stopped.
+(lldb) bt
+* thread #4, stop reason = step over
+  * frame #0: 0x0000000100000538 prog`work(n=4) at main.c:51:30
+    frame #1: 0x0000000100000840 prog`worker(arg=0x000000016fdff59c) at main.c:60:14
+    frame #2: 0x000000018256fc58 libsystem_pthread.dylib`_pthread_start + 136
+(lldb) finish
+Process 36645 stopped
+* thread #4, stop reason = step out
+Return value: (int) $0 = 10
+
+    frame #0: 0x0000000100000840 prog`worker(arg=0x000000016fdff59c) at main.c:60:12
+   57  	    int n = *(int *)arg;
+   58  	    while (!(seen[0] && seen[1] && seen[2])) {}
+   59  	    if (signal_mode) deliver_here();
+-> 60  	    worked = work(n);
+    	           ^
+   61  	    return 0;
+   62  	}
+   63  	
+Target 0: (prog) stopped.
+(lldb) continue
+Process 36645 resuming
+Process 36645 exited with status = 0 (0x00000000)

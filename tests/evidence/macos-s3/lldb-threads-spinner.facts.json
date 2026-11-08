@@ -1,0 +1,1 @@
+[["bpset", 1, 4294968576, "main.c", 50], ["stopthread", 4], ["frame", 0, "spin", "main.c", 35], ["frame", 0, "spin", "main.c", 35], ["frame", 1, "spinner", "main.c", 45], ["frame", 1, "spinner", "main.c", 45], ["print", "1"], ["exit", 0]]
