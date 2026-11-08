@@ -374,6 +374,8 @@ fn ev_postfix(s: Session, mut x: Ex) -> Val {
             let _ = ex_next(mut x)
             let m = ex_next(mut x)
             if m.kind != tk_ident && m.kind != tk_num { return syntax_error(x) }
+            // wolf has no `->`: a member through a reference (a List's header, a `mut` parameter) reads the value
+            if x.wolf { v = wolf_value(s, v) }
             v = member(s, v, m.text)
         } else if ex_is(x, "->") && !x.wolf {
             let _ = ex_next(mut x)
@@ -827,6 +829,11 @@ fn member(s: Session, v: Val, name: str) -> Val {
 fn index(s: Session, x: Ex, v: Val, i: Val) -> Val {
     if !is_integer(s, i.ty) && i.ty != ty_lit_int { return val_fail("Argument to arithmetic operation not a number or boolean.") }
     let n = platform.bits_i64(int_bits(s, i))
+    if x.wolf {
+        // a List is reached through its header, by reference: index it as the language does
+        let l = list_element(s, wolf_value(s, v), n)
+        if l.ok || l.why.len() > 0 { return l }
+    }
     let st = if v.ty >= 0 { ty_strip(s.prog, v.ty) } else { 0 - 1 }
     if st >= 0 && s.prog.info.entries[st].tag == tag_array {
         let elem = attr_ref(s.prog, st, 73)
@@ -849,11 +856,20 @@ fn index(s: Session, x: Ex, v: Val, i: Val) -> Val {
         if !p.ok { return p }
         return deref(s, p)
     }
-    if x.wolf {
-        let l = list_element(s, v, n)
-        if l.ok || l.why.len() > 0 { return l }
-    }
     val_fail("cannot subscript something of type `{ty_name(s.prog, v.ty)}'")
+}
+
+/// In wolf, a reference to a struct is the struct: a pointer whose target is a structure is read.
+fn wolf_value(s: Session, v: Val) -> Val {
+    let (k, _) = num_class(s, v.ty)
+    if k != 5 { return copy v }
+    let t = pointee(s, v.ty)
+    if t == ty_none || t < 0 { return copy v }
+    let st = ty_strip(s.prog, t)
+    if st < 0 || (s.prog.info.entries[st].tag != tag_struct && s.prog.info.entries[st].tag != tag_union) { return copy v }
+    let d = deref(s, v)
+    if d.ok { return d }
+    copy v
 }
 
 /// A wolf List[T]'s element n: the header's data pointer plus n elements, when n is under its length.
