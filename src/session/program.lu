@@ -88,6 +88,8 @@ struct Prog {
     pub dsym: str,
     /// Whether the ELF file names an interpreter (an .interp section): a dynamically linked program.
     pub interp: bool,
+    /// The interpreter's path as the file names it (`/lib64/ld-linux-x86-64.so.2`), or "".
+    pub interp_path: str,
 }
 
 /// Bytes of a span as text; invalid UTF-8 yields the empty string.
@@ -120,7 +122,7 @@ fn prog_failed(why: str) -> Prog {
             line_str: copy sec, str_offsets: copy sec, addr: copy sec, ranges: copy sec, rnglists: copy sec,
             loc: copy sec, loclists: copy sec, frame: copy sec, eh_frame: copy sec, types: copy sec,
             has_split_dwarf: false, has_compact_unwind: false },
-        text_addr: 0, ui_off: 0, ui_size: 0, dsym: "", interp: false,
+        text_addr: 0, ui_off: 0, ui_size: 0, dsym: "", interp: false, interp_path: "",
     }
 }
 
@@ -356,7 +358,13 @@ fn prog_load(path: str) -> Prog {
         if (sec.flags & 2) != 0 && sec.kind != 8 && sec.size > 0 {
             (mut p.maps).push(SecMap { addr: sec.address, off: sec.offset, size: sec.size })
         }
-        if span_text(data, sec.name) == ".interp" { p.interp = true }
+        if span_text(data, sec.name) == ".interp" {
+            p.interp = true
+            // the path, without its terminating zero
+            var n = 0
+            while n < sec.size as int && sec.offset as int + n < data.len && data[sec.offset as int + n] as int != 0 { n += 1 }
+            p.interp_path = span_text(data, readers.ByteSpan { start: sec.offset as int, length: n })
+        }
         m += 1
     }
     // function symbols

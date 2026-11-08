@@ -205,6 +205,8 @@ fn solib_of(s: Session, pc: u64) -> str {
         let range = cols[0].split("-")
         if range.len < 2 { continue }
         if parse_hex(range[0]) <= pc && pc < parse_hex(range[1]) {
+            // the dynamic linker under the name the program gives it, as gdb names it
+            if s.prog.interp_path.len() > 0 && path_base_name(cols[5]) == path_base_name(s.prog.interp_path) { return s.prog.interp_path }
             if cols[5].starts_with("/usr/lib/") { return "/lib/{str_from(cols[5], 9)}" }
             if cols[5].starts_with("/") { return cols[5] }
         }
