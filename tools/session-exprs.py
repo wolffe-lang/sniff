@@ -32,11 +32,11 @@ CASES = [
     ]),
 ]
 
-# A watch on a wolf local, held to lupin: the New values sniff reports, in order, are the values the place
-# takes in lupin's trace of the function, each change once. The first is the initialisation's value, and a
-# write of the value the slot already held is silent, as any write of an unchanged value is.
+# A watch on a wolf local, held to lupin: set once the local is initialised (the stop before the loop), the New
+# values sniff reports, in order, are the values the place takes after that in lupin's trace of the function,
+# each change once.
 WATCHES = [
-    ('wolf/loops', 'sum', 'total', ['break sum', 'run', 'watch total'] + ['continue'] * 5),
+    ('wolf/loops', 'sum', 'total', ['tbreak main.lu:4', 'run', 'watch total'] + ['continue'] * 4),
 ]
 
 
@@ -55,7 +55,7 @@ def watch_join(a, env, values):
         run = subprocess.run([a.sniff, '-batch', '-x', str(script), str(prog)], cwd=a.cwd, env=env,
                              capture_output=True, text=True, timeout=60)
         news = re.findall(r'^New value = (.*)$', run.stdout, re.M)
-        if not seq or not news or (news != seq and news != seq[1:]):
+        if len(seq) < 2 or news != seq[1:]:
             print('FAIL watch-join %s `%s` lupin=%s sniff=%s' % (case, place, seq, news))
             bad += 1
         else:
