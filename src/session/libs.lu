@@ -50,9 +50,12 @@ fn mapped_at(pid: int, addr: u64) -> Mapped {
 /// Whether library l holds runtime address addr in one of its sections.
 fn lib_covers(l: Lib, addr: u64) -> bool { addr >= l.base && in_image(l.prog, addr - l.base) }
 
+/// macOS's system libraries are in the dyld shared cache, with no file to read: no file is named.
+#[cfg(target = "aarch64-apple-darwin")]
+fn mapped_at(pid: int, addr: u64) -> Mapped { Mapped { path: "", base: 0 } }
+
 /// Index in s.libs of the library holding runtime address addr, read at first sight; -1 for an address in
 /// no file, in the program, or in a file sniff cannot read as ELF.
-#[cfg(target = "x86_64-unknown-linux-gnu")]
 fn lib_at(mut s: Session, addr: u64) -> int {
     var i = 0
     while i < s.libs.len {
@@ -75,10 +78,6 @@ fn lib_at(mut s: Session, addr: u64) -> int {
     if lib_covers(s.libs[k], addr) { return k }
     0 - 1
 }
-
-/// macOS's system libraries are in the dyld shared cache, with no file to read: none.
-#[cfg(target = "aarch64-apple-darwin")]
-fn lib_at(mut s: Session, addr: u64) -> int { 0 - 1 }
 
 /// Index into p.syms of the function symbol whose extent holds file address addr, or -1. Of aliases, the
 /// name that sorts last (as sym_at). A symbol of no size covers nothing: gdb prints `??` past a library's

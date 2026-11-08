@@ -261,17 +261,25 @@ fn wait_stop(mut s: Session) -> int {
 /// and resumes it with the reply, so every thread stops and runs together.
 #[cfg(target = "aarch64-apple-darwin")]
 fn resume_all(mut s: Session, sig: int) -> bool {
-    platform.target_cont(s.target, sig) >= 0
+    if platform.target_cont(s.target, sig) < 0 { return false }
+    var i = 0
+    while i < s.thr.len {
+        s.thr[i].running = true
+        i += 1
+    }
+    true
 }
-
-#[cfg(target = "aarch64-apple-darwin")]
-fn stop_others(mut s: Session) { }
 
 /// macOS has no thread events: the thread list is read at each stop (task_threads). A thread first seen is
 /// numbered and announced, one no longer listed has ended, and the thread that took the exception is selected.
 #[cfg(target = "aarch64-apple-darwin")]
 fn wait_stop(mut s: Session) -> int {
     let st = platform.target_wait(s.target)
+    var i = 0
+    while i < s.thr.len {
+        s.thr[i].running = false
+        i += 1
+    }
     if st < 0 || !platform.status_stopped(st) { return st }
     thr_refresh(mut s)
     let k = thr_index(s, platform.target_event_thread(s.inferior))
