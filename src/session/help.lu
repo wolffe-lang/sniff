@@ -1,0 +1,142 @@
+// The help command over the table in helptext.lu: `help`, `help all`, `help CLASS`, `help COMMAND`
+// (an alias answers with its command), `help info SUB` and `help maintenance SUB`.
+
+/// The command a word names in sniff's dispatcher, as the table names it ("" for none). sniff's own
+/// aliases (cont, k, wa, tb, disp, undisp, maint) are gdb's unambiguous prefixes of the same commands.
+fn help_command_name(word: str) -> str {
+    if word == "cont" { return "continue" }
+    if word == "k" { return "kill" }
+    if word == "wa" { return "watch" }
+    if word == "tb" { return "tbreak" }
+    if word == "disp" { return "display" }
+    if word == "undisp" { return "undisplay" }
+    if word == "maint" { return "maintenance" }
+    for e in help_table() {
+        if e.name.contains(" ") { continue }
+        if e.name == word { return e.name }
+        for a in e.aliases { if a == word { return e.name } }
+    }
+    ""
+}
+
+/// The info subcommand a word names ("" for none), with sniff's own prefixes of them.
+fn help_info_name(word: str) -> str {
+    var w = word
+    if w == "break" || w == "breakpoint" { w = "breakpoints" }
+    if w == "wat" || w == "watch" { w = "watchpoints" }
+    if w == "lo" { w = "locals" }
+    if w == "ar" { w = "args" }
+    if w == "reg" { w = "registers" }
+    let full = "info {w}"
+    for e in help_table() {
+        if e.name == full { return e.name }
+        for a in e.aliases { if a == full { return e.name } }
+    }
+    ""
+}
+
+fn help_entry(name: str) -> HelpCmd {
+    for e in help_table() { if e.name == name { return e } }
+    help_cmd(name, [], "", "", [])
+}
+
+/// "NAME, ALIAS... -- SUMMARY", the line gdb's listings give a command.
+fn help_listing_line(e: HelpCmd) -> str {
+    var names = e.name
+    for a in e.aliases { names = "{names}, {a}" }
+    "{names} -- {e.summary}"
+}
+
+fn not_implemented(name: str) -> str { "\"{name}\" is a gdb command that sniff does not implement yet." }
+
+/// Whether a word is a gdb command (or alias) that sniff does not implement.
+fn gdb_only(word: str) -> bool {
+    for w in gdb_only_commands() { if w == word { return true } }
+    false
+}
+
+fn gdb_only_info_sub(word: str) -> bool {
+    for w in gdb_only_info() { if w == word { return true } }
+    false
+}
+
+/// help with no argument: the classes of sniff's commands.
+fn help_classes_text(mut s: Session) {
+    emit_line(mut s, "List of classes of commands:")
+    emit_line(mut s, "")
+    for c in help_classes() { emit_line(mut s, "{c.name} -- {c.doc}") }
+    emit_line(mut s, "")
+    emit_line(mut s, "Type \"help\" followed by a class name for a list of commands in that class.")
+    emit_line(mut s, "Type \"help all\" for the list of all commands.")
+    emit_line(mut s, "Type \"help\" followed by command name for full documentation.")
+}
+
+/// help CLASS: the class's commands and subcommands, one line each.
+fn help_class_text(mut s: Session, c: HelpClass) {
+    emit_line(mut s, c.doc)
+    if c.name == "internals" { emit_line(mut s, "sniff's maintenance commands are its own, not gdb's.") }
+    emit_line(mut s, "")
+    emit_line(mut s, "List of commands:")
+    emit_line(mut s, "")
+    for e in help_table() { if e.class == c.name { emit_line(mut s, help_listing_line(e)) } }
+    emit_line(mut s, "")
+    emit_line(mut s, "Type \"help\" followed by command name for full documentation.")
+}
+
+/// help all: every class's commands.
+fn help_all_text(mut s: Session) {
+    emit_line(mut s, "")
+    for c in help_classes() {
+        emit_line(mut s, "Command class: {c.name}")
+        emit_line(mut s, "")
+        for e in help_table() { if e.class == c.name { emit_line(mut s, help_listing_line(e)) } }
+        emit_line(mut s, "")
+    }
+}
+
+/// help COMMAND: the names line (when gdb registers aliases), the summary and the paragraph; a prefix
+/// command (info, maintenance) adds its subcommands.
+fn help_command_text(mut s: Session, e: HelpCmd) {
+    if e.aliases.len > 0 {
+        var names = e.name
+        for a in e.aliases { names = "{names}, {a}" }
+        emit_line(mut s, names)
+    }
+    emit_line(mut s, e.summary)
+    for l in e.body { emit_line(mut s, l) }
+    if e.name == "info" || e.name == "maintenance" {
+        emit_line(mut s, "")
+        emit_line(mut s, "List of {e.name} subcommands:")
+        emit_line(mut s, "")
+        let prefix = "{e.name} "
+        for sub in help_table() { if sub.name.starts_with(prefix) { emit_line(mut s, help_listing_line(sub)) } }
+        emit_line(mut s, "")
+        emit_line(mut s, "Type \"help {e.name}\" followed by {e.name} subcommand name for full documentation.")
+    }
+}
+
+/// The help command.
+fn cmd_help(mut s: Session, rest: str) -> str {
+    let words = rest.trim().words()
+    if words.len == 0 { help_classes_text(mut s); return "" }
+    let w = words[0]
+    if w == "all" { help_all_text(mut s); return "" }
+    for c in help_classes() { if c.name == w { help_class_text(mut s, c); return "" } }
+    let name = help_command_name(w)
+    if name.len() == 0 {
+        if gdb_only(w) { emit_line(mut s, not_implemented(w)); return "" }
+        return "Undefined command: \"{w}\".  Try \"help\"."
+    }
+    if words.len > 1 && name == "info" {
+        let sub = help_info_name(words[1])
+        if sub.len() > 0 { help_command_text(mut s, help_entry(sub)); return "" }
+        if gdb_only_info_sub(words[1]) { emit_line(mut s, not_implemented("info {words[1]}")); return "" }
+        return "Undefined info command: \"{words[1]}\".  Try \"help info\"."
+    }
+    if words.len > 1 && name == "maintenance" {
+        if words[1] == "frames" { help_command_text(mut s, help_entry("maintenance frames")); return "" }
+        return "Undefined maintenance command: \"{words[1]}\".  Try \"help maintenance\"."
+    }
+    help_command_text(mut s, help_entry(name))
+    ""
+}
