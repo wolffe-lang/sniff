@@ -13,7 +13,9 @@ step() { # name cmd...
   local name=$1 start=$SECONDS r=0; shift
   printf 'START %s\n' "$name"
   "$@" > "$out/$name.log" 2>&1 || r=$?
-  grep -E '^(PASS|FAIL|SKIP|SUMMARY|KERNEL|SNIFF)' "$out/$name.log"
+  # the rows' lines go under the step, indented as tools/gate's steps print theirs: a row's SKIP is not a
+  # step's SKIP to the recorder. FAIL stays at column 0, where a record and a plant name the red row.
+  grep -E '^(PASS|FAIL|SKIP|SUMMARY|KERNEL|SNIFF)' "$out/$name.log" | sed -E 's/^(PASS|SKIP|SUMMARY|KERNEL|SNIFF)/  \1/'
   printf 'END %s exit=%s secs=%s\n' "$name" "$r" "$((SECONDS-start))"
   [ "$r" = 0 ] || rc=1
 }
