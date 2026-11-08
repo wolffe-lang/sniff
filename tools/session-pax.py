@@ -128,9 +128,12 @@ def sources_for(rows):
     for row in rows:
         parts = row['prog'].split('/')
         if parts[0] == 'c':
-            d = ROOT / 'fixtures/session/c' / parts[1]
-            for f in sorted(d.glob('*.c')):
-                seen['/work/fixtures/session/c/%s/%s' % (parts[1], f.name)] = f
+            # a session program, or one of the S1 corpus's (build-session.py's CORPUS_C); a c/NAME-gone build's
+            # source was removed by its build, so nothing is put at the path its line table names
+            for base in ('fixtures/session/c', 'fixtures/c'):
+                d = ROOT / base / parts[1]
+                for f in sorted(d.glob('*.c')):
+                    seen['/work/%s/%s/%s' % (base, parts[1], f.name)] = f
         else:
             name = parts[1]
             for base in ('fixtures/session/wolf', 'fixtures/wolf'):
