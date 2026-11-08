@@ -96,9 +96,15 @@ def hexint(text):
 
 
 def facts_sniff(text):
-    """Facts from sniff's (gdb-language) output."""
+    """Facts from sniff's (gdb-language) output. The frame `thread N` prints under its switch line is the
+    thread's status, not a frame fact: lldb prints `thread select`'s status when it pleases (see facts_lldb)."""
     facts = []
-    for line in text.splitlines():
+    lines = text.splitlines()
+    status = {i + 1 for i, ln in enumerate(lines[:-1])
+              if re.match(r'^\[Switching to thread \d+ \(', ln) and re.match(r'^#\d+\s', lines[i + 1])}
+    for i, line in enumerate(lines):
+        if i in status:
+            continue
         m = re.match(r'^Breakpoint (\d+) at (0x[0-9a-f]+): file (.*), line (\d+)\.$', line)
         if m:
             facts.append(('bpset', int(m[1]), hexint(m[2]) & 0xffffffffffff, base(m[3]), int(m[4])))
@@ -159,7 +165,17 @@ def facts_lldb(text):
     facts = []
     expect_print = False
     cur = ''
-    for line in text.splitlines():
+    lines = text.splitlines()
+    # A thread's status block (a `* thread #N` header, one unstarred frame line, then its source or its
+    # disassembly) is what `thread select` prints, and lldb prints it asynchronously: in one take it came
+    # after the next command's own output, under that command's prompt. Its frame is no fact; a backtrace
+    # starts the same way but goes on frame after frame.
+    status = {i + 1 for i, ln in enumerate(lines[:-2])
+              if re.match(r'^\* thread #\d+', ln) and re.match(r'^ {4}frame #\d+: ', lines[i + 1])
+              and not re.match(r'^[* ]*\s*frame #\d+: ', lines[i + 2])}
+    for i, line in enumerate(lines):
+        if i in status:
+            continue
         if line.startswith('(lldb) '):
             cur = line[7:]
             expect_print = cur.startswith('print ') or cur.startswith('p ')

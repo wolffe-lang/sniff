@@ -16,6 +16,9 @@ TOOL = ROOT / 'tools/session.py'
 spec = importlib.util.spec_from_file_location('session_tool', TOOL)
 session = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(session)
+mspec = importlib.util.spec_from_file_location('session_mac_tool', ROOT / 'tools/session-mac.py')
+smac = importlib.util.module_from_spec(mspec)
+mspec.loader.exec_module(smac)
 
 REPLAY = '''#!/usr/bin/env python3
 import sys
@@ -60,6 +63,45 @@ class Normalise(unittest.TestCase):
         out = session.normalize_tty(raw, fired)
         self.assertEqual(out, 'Run till exit from #0  f (n=3) at /work/a.c:6\n')
         self.assertEqual(fired, {'tty', 'wrap80'})
+
+
+class MacThreadFacts(unittest.TestCase):
+    """A thread's status block is no frame fact on either side: lldb prints `thread select`'s when it pleases."""
+    STATUS1 = ('* thread #1, queue = \'com.apple.main-thread\'\n'
+               '    frame #0: 0x0000000100000870 prog`spin(flag=0x1, want=1, slot=0) at main.c:35:12\n'
+               '   34  \tstatic void spin(volatile int *flag, int want, int slot) {\n')
+    BT1 = ('* thread #1, queue = \'com.apple.main-thread\'\n'
+           '  * frame #0: 0x0000000100000870 prog`spin(flag=0x1, want=1, slot=0) at main.c:35:12\n'
+           '    frame #1: 0x0000000100000684 prog`main(argc=1, argv=0x2) at main.c:72:5\n')
+    STATUS4 = ('* thread #4, stop reason = breakpoint 1.1\n'
+               '    frame #0: 0x0000000100000500 prog`work(n=4) at main.c:50:9\n'
+               '-> 50  \t    int total = 0;\n')
+    BT4 = ('* thread #4, stop reason = breakpoint 1.1\n'
+           '  * frame #0: 0x0000000100000500 prog`work(n=4) at main.c:50:9\n'
+           '    frame #1: 0x0000000100000840 prog`worker(arg=0x3) at main.c:60:14\n')
+    WANT = [('frame', 0, 'spin', 'main.c', 35), ('frame', 1, 'main', 'main.c', 72)]
+    WANT4 = [('frame', 0, 'work', 'main.c', 50), ('frame', 1, 'worker', 'main.c', 60)]
+
+    def test_lldb_status_block_in_either_place(self):
+        timely = ('(lldb) thread select 1\n' + self.STATUS1 + '(lldb) bt\n' + self.BT1 +
+                  '(lldb) thread select 4\n' + self.STATUS4 + '(lldb) bt\n' + self.BT4)
+        # as one take printed it: both selections' status blocks under the second bt's prompt
+        late = ('(lldb) thread select 1\n(lldb) bt\n' + self.BT1 +
+                '(lldb) thread select 4\n(lldb) bt\n' + self.STATUS1 + self.STATUS4 + self.BT4)
+        self.assertEqual(smac.facts_lldb(timely), self.WANT + self.WANT4)
+        self.assertEqual(smac.facts_lldb(late), self.WANT + self.WANT4)
+        # a backtrace whose second frame is unstarred is still a backtrace
+        bt_late_first = '(lldb) bt\n' + self.BT1.replace('  * frame #0', '    frame #0')
+        self.assertEqual(smac.facts_lldb(bt_late_first), self.WANT)
+
+    def test_sniff_thread_command_frame_is_status(self):
+        out = ('[Switching to thread 1 (Thread 0x16fe87000 (tid 77))]\n'
+               '#0  spin (flag=0x1, want=1, slot=0) at /w/main.c:35\n35\t    while (*flag < want) seen[slot] = 1;\n'
+               '#0  spin (flag=0x1, want=1, slot=0) at /w/main.c:35\n#1  0x0000000100000684 in main (argc=1, argv=0x2) at /w/main.c:72\n')
+        self.assertEqual(smac.facts_sniff(out), self.WANT)
+        # a frame after a stop's switch line (capital T) is not a thread command's
+        stop = '[Switching to Thread 0x16fe87000 (tid 77)]\n#0  spin (flag=0x1, want=1, slot=0) at /w/main.c:35\n'
+        self.assertEqual(smac.facts_sniff(stop), self.WANT[:1])
 
 
 class ThreadsAndAttach(unittest.TestCase):

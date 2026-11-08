@@ -1,1 +1,1 @@
-[["bpset", 1, 4294968576, "main.c", 50], ["stopthread", 4], ["frame", 0, "spin", "main.c", 35], ["frame", 1, "main", "main.c", 72], ["frame", 0, "spin", "main.c", 35], ["frame", 0, "work", "main.c", 50], ["frame", 0, "work", "main.c", 50], ["frame", 1, "worker", "main.c", 60], ["print", "4"], ["exit", 0]]
+[["bpset", 1, 4294968576, "main.c", 50], ["stopthread", 4], ["frame", 0, "spin", "main.c", 35], ["frame", 1, "main", "main.c", 72], ["frame", 0, "work", "main.c", 50], ["frame", 1, "worker", "main.c", 60], ["print", "4"], ["exit", 0]]
