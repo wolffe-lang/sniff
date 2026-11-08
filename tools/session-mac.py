@@ -213,12 +213,23 @@ def sniff_run(sniff, prog, script, args, work, name, timeout=120):
     return run(argv, work, timeout)
 
 
+S2 = []
+
+
+def s2mod():
+    """tools/session.py, loaded once: its pty runner and its compare modes."""
+    if not S2:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('s2_session', ROOT / 'tools/session.py')
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        S2.append(mod)
+    return S2[0]
+
+
 def tty_run(sniff, prog, script, args, work):
     """Run sniff in a pty (the S2 harness's own runner) the way a terminal user does."""
-    import importlib.util
-    spec = importlib.util.spec_from_file_location('s2_session', ROOT / 'tools/session.py')
-    s2 = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(s2)
+    s2 = s2mod()
     s2.ENV_BASE = dict(ENV_BASE)
     Path(work).mkdir(parents=True, exist_ok=True)
     argv = [sniff, prog] + (['--args'] + args if args else [])
@@ -332,11 +343,19 @@ def cmd_check(a):
                     gl = [x for x in gl if not rx.search(x)]
                     wl = [x for x in wl if not rx.search(x)]
                     dropped.append(d['why'])
-            if bad is None and gl == wl:
+            # the row's compare mode (tools/session.py): bytes, or the head, subset and own forms of the help rows
+            mode_row = lin[r['name']]
+            if mode_row.get('compare') == 'own':
+                wl = normalize(''.join(x + '\n' for x in mode_row['expect']), roots, fired).splitlines()
+                mode_row = {}
+            why = '' if bad is None and gl == wl else (bad or s2mod().lines_verdict(mode_row, wl, gl))
+            if not why:
                 print('PASS %s [normalised: %s]%s' % (r['name'], ','.join(sorted(fired)), ' [dropped lines: %s]' % ' | '.join(dropped) if dropped else ''))
             else:
                 i = next((i for i in range(max(len(gl), len(wl))) if (gl[i] if i < len(gl) else '<end>') != (wl[i] if i < len(wl) else '<end>')), 0)
-                print('FAIL %s %s' % (r['name'], bad or 'line %d: want %r got %r' % (i + 1, wl[i] if i < len(wl) else '<end>', gl[i] if i < len(gl) else '<end>')))
+                if mode_row.get('compare', 'bytes') == 'bytes' and not bad:
+                    why = 'line %d: want %r got %r' % (i + 1, wl[i] if i < len(wl) else '<end>', gl[i] if i < len(gl) else '<end>')
+                print('FAIL %s %s' % (r['name'], why))
                 fails += 1
         else:
             want = json.loads((EVID / (r['name'] + '.facts.json')).read_text())
