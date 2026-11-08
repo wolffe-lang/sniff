@@ -913,6 +913,10 @@
    "kind": "linux"
   },
   {
+   "name": "watch-wolf-local",
+   "kind": "linux"
+  },
+  {
    "name": "wolf-mut-reference",
    "kind": "linux"
   }

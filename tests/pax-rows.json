@@ -56,6 +56,9 @@
   },
   "awatch-clang-global": {
    "skip": "hardware watchpoints on PAX wait for its debug registers through ptrace (the px lane drafted in notes/sn05-the-repin-and-s5.md)"
+  },
+  "watch-wolf-local": {
+   "skip": "hardware watchpoints on PAX wait for its debug registers through ptrace (the px lane drafted in notes/sn05-the-repin-and-s5.md)"
   }
  }
 }

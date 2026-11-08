@@ -1890,6 +1890,21 @@
    ]
   },
   {
+   "name": "watch-wolf-local",
+   "prog": "wolf/loops/wolf-debug/prog",
+   "script": [
+    "break sum",
+    "run",
+    "watch total",
+    "continue",
+    "continue",
+    "continue",
+    "continue",
+    "continue",
+    "continue"
+   ]
+  },
+  {
    "name": "wolf-mut-reference",
    "prog": "wolf/aggregates/wolf-debug/prog",
    "script": [
