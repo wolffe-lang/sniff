@@ -1,0 +1,20 @@
+struct Point {
+    x: int,
+    y: int,
+    hist: List[int],
+}
+
+fn bump(mut p: Point, by: int) -> int {
+    p.x = p.x + by
+    p.x
+}
+
+fn main() -> int {
+    var p = Point { x: 1, y: 2, hist: [10, 20, 30, 40] }
+    var count = 0
+    count = count + bump(mut p, 3)
+    p.hist[2] = 31
+    p.y = 5
+    count = count + p.hist[2]
+    count - 35
+}
