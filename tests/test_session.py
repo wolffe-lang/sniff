@@ -158,5 +158,52 @@ class Comparator(unittest.TestCase):
             session.ROWS = old
 
 
+class CompareModes(unittest.TestCase):
+    """The head, subset and own comparisons, each shown red on the break it exists to catch."""
+    GDB = ['list, l', 'List specified function or line.', 'With no argument, lists ten more lines.', '',
+           'By default, ten lines.']
+
+    def test_bytes_is_the_default(self):
+        self.assertEqual(session.lines_verdict({}, ['a', 'b'], ['a', 'b']), '')
+        self.assertNotEqual(session.lines_verdict({}, ['a', 'b'], ['a', 'c']), '')
+
+    def test_head_holds_the_names_and_summary(self):
+        row = {'compare': 'head', 'head': 2, 'why': 'listsize'}
+        self.assertEqual(session.lines_verdict(row, self.GDB, self.GDB[:2] + ['sniff lists ten lines.']), '')
+        self.assertIn('held lines', session.lines_verdict(row, self.GDB, ['list', self.GDB[1], 'x']))
+        self.assertIn('held lines', session.lines_verdict(row, self.GDB, [self.GDB[0], 'List a function.', 'x']))
+        self.assertIn('nothing of its own', session.lines_verdict(row, self.GDB, self.GDB[:2]))
+
+    def test_subset_keeps_gdb_order_and_names_own_lines(self):
+        row = {'compare': 'subset', 'why': 'restricted', 'own': ['sniff only']}
+        self.assertEqual(session.lines_verdict(row, self.GDB, [self.GDB[0], self.GDB[3], 'sniff only', self.GDB[4]]), '')
+        self.assertIn('in order', session.lines_verdict(row, self.GDB, [self.GDB[4], self.GDB[0], 'sniff only']))
+        self.assertIn('in order', session.lines_verdict(row, self.GDB, [self.GDB[0], 'an invented line', 'sniff only']))
+        self.assertIn('own line is missing', session.lines_verdict(row, self.GDB, [self.GDB[0]]))
+        self.assertIn('prints nothing', session.lines_verdict(row, self.GDB, []))
+
+    def test_own_is_the_expected_text_and_gdb_has_the_command(self):
+        row = {'compare': 'own', 'why': 'lacking', 'expect': ['"tui" is a gdb command that sniff does not implement yet.']}
+        good = row['expect'][0] + '\n'
+        self.assertEqual(session.judge(row, good, '', 0, 'Text User Interface commands.\n', '', '0\n'), [])
+        self.assertTrue(session.judge(row, 'Undefined command: "tui".\n', '', 0, 'Text User Interface commands.\n', '', '0\n'))
+        self.assertTrue(session.judge(row, good, '', 0, '', 'Undefined command: "tui".\n', '1\n'))
+
+    def test_stderr_and_status_are_always_compared(self):
+        row = {'compare': 'head', 'head': 1, 'why': 'x'}
+        self.assertEqual(session.judge(row, 'a\nmine\n', '', 0, 'a\nb\n', '', '0\n'), [])
+        self.assertTrue(session.judge(row, 'a\nmine\n', 'Undefined command: "help".\n', 1, 'a\nb\n', '', '0\n'))
+
+    def test_row_form(self):
+        self.assertEqual(session.row_form({'name': 'r'}), '')
+        self.assertTrue(session.row_form({'name': 'r', 'head': 2}))
+        self.assertTrue(session.row_form({'name': 'r', 'compare': 'head', 'head': 2}))
+        self.assertTrue(session.row_form({'name': 'r', 'compare': 'head', 'why': 'w'}))
+        self.assertTrue(session.row_form({'name': 'r', 'compare': 'own', 'why': 'w'}))
+        self.assertTrue(session.row_form({'name': 'r', 'compare': 'subset', 'why': 'w', 'tty': True}))
+        self.assertTrue(session.row_form({'name': 'r', 'compare': 'sideways', 'why': 'w'}))
+        self.assertEqual(session.row_form({'name': 'r', 'compare': 'subset', 'why': 'w', 'own': ['x']}), '')
+
+
 if __name__ == '__main__':
     unittest.main()
