@@ -225,6 +225,7 @@ def compare(sess, rows, got):
 
 def cmd_run(a):
     sess = load_session()
+    sess.FIXTURES = a.fixtures
     rows = [r for r in sess.load_rows(a.only) if not r.get('tty')]
     skipped = [r for r in rows if r.get('skip')]
     for r in skipped:
@@ -294,6 +295,7 @@ def tty_extract(text, row):
 
 def cmd_tty(a):
     sess = load_session()
+    sess.FIXTURES = a.fixtures
     rows = [r for r in sess.load_rows(a.only) if r.get('tty')]
     out = Path(a.out)
     fails = 0

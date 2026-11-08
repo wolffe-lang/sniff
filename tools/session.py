@@ -13,6 +13,11 @@ Normalisations, each named in every PASS/FAIL line only when it fired:
   banner  gdb's two thread_db lines are dropped from the golden
   tty     (tty rows) carriage returns and the prompt text
   wrap80  (tty rows) gdb's 80-column wrap of a long frame line ("\n    at ")
+  heap    (PAX set) an address in the program's break becomes <HEAP>. A static program's break starts
+          at the page above its highest loaded byte on Linux (its random offset is off under both
+          debuggers) and on PAX (kernel/vm's `start`), and PAX refuses a break more than 64 MiB above
+          that. What the runtime allocated there first depends on the arguments and environment it
+          was given, which gdb's inferior on Linux and PAX's console do not share.
 Terminal rows run both debuggers in a pseudo-terminal with echo off and send
 one command per prompt, as R-sn02-1 specifies.
 """
@@ -22,6 +27,7 @@ import os
 from pathlib import Path
 import re
 import select
+import struct
 import subprocess
 import sys
 import termios
@@ -37,6 +43,10 @@ PAX_ROWS = ROOT / 'tests/pax-rows.json'
 PAX_MODE = False
 STACK_HEX = re.compile(r'0x7ff[0-9a-f]{9}\b')
 STACK_DEC = re.compile(r'\b140[67][0-9]{11}\b')
+HEX = re.compile(r'\b0x[0-9a-f]+\b')
+# where each row's prog is (set by main and by session-pax.py), for the heap normalisation
+FIXTURES = None
+HEAPS = {}
 SCRIPTS = 'target/s2'
 ENV_BASE = {'PATH': '/usr/local/bin:/usr/bin:/bin', 'HOME': '/work/target/home', 'LC_ALL': 'C', 'TZ': 'UTC', 'TERM': 'dumb'}
 
@@ -68,15 +78,49 @@ def load_rows(only=None):
     return rows
 
 
+def heap_range(prog):
+    """The break's range of a static ELF64 ET_EXEC: the page above its highest PT_LOAD byte, and 64 MiB up.
+    None for anything else."""
+    if prog in HEAPS:
+        return HEAPS[prog]
+    r = None
+    try:
+        with open(prog, 'rb') as f:
+            h = f.read(64)
+            if len(h) == 64 and h[:4] == b'\x7fELF' and h[4] == 2 and h[5] == 1 and struct.unpack_from('<H', h, 16)[0] == 2:
+                phoff = struct.unpack_from('<Q', h, 32)[0]
+                phentsize, phnum = struct.unpack_from('<HH', h, 54)
+                f.seek(phoff)
+                ph = f.read(phentsize * phnum)
+                top = 0
+                for i in range(phnum):
+                    p_type, _, _, vaddr, _, _, memsz = struct.unpack_from('<IIQQQQQ', ph, i * phentsize)
+                    if p_type == 1:
+                        top = max(top, vaddr + memsz)
+                if top:
+                    lo = (top + 0xfff) & ~0xfff
+                    r = (lo, lo + 0x4000000)
+    except (OSError, struct.error):
+        r = None
+    HEAPS[prog] = r
+    return r
+
+
 def normalize(text, fired, row=None):
     out = []
     drops = [re.compile(d) for d in (row or {}).get('drop', [])] if PAX_MODE else []
+    heap = heap_range(str(Path(FIXTURES) / row['prog'])) if PAX_MODE and FIXTURES and row and row.get('prog') else None
     for line in text.splitlines(keepends=True):
         if PAX_MODE:
             m = STACK_DEC.sub('<STACK>', STACK_HEX.sub('<STACK>', line))
             if m != line:
                 fired.add('stack')
                 line = m
+            if heap:
+                m = HEX.sub(lambda x: '<HEAP>' if heap[0] <= int(x.group(0), 16) < heap[1] else x.group(0), line)
+                if m != line:
+                    fired.add('heap')
+                    line = m
         if any(d.search(line) for d in drops):
             fired.add('drop')
             continue
@@ -333,6 +377,8 @@ def main():
     a = p.parse_args()
     if a.set == 'pax':
         use_pax()
+    global FIXTURES
+    FIXTURES = getattr(a, 'fixtures', None)
     return {'capture': cmd_capture, 'check': cmd_check, 'oracle': cmd_oracle, 'verify': cmd_verify}[a.cmd](a)
 
 

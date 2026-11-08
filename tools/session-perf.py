@@ -33,10 +33,11 @@ FLOOR = 0.02  # seconds of CPU below which a figure is timer grain
 ROWS = [
     # name, program, script, margin (sniff/gdb CPU ratio must stay at or below)
     ('startup-to-first-breakpoint', 'c/calls/gcc-O0/prog', ['break depth_sum', 'run'], 1.0),
-    # sniff reads every unit eagerly through the S1 reader (about 0.3 s of the 0.5 s is
-    # dwarf_info_read over the linked runtime's Rust units); gdb reads lazily. Measured
-    # 4.2-4.8x; the margin is stated at 6.0 and lazy per-unit loading is the follow-up.
-    ('startup-wolf-large-dwarf', 'wolf/scalars/wolf-debug/prog', ['break helper', 'run'], 6.0),
+    # sniff reads every unit eagerly through the S1 reader; gdb reads lazily. Measured 1.90x
+    # locally after sniff#10's cuts (from 4.75x). The margin is that local ratio times 1.43,
+    # the worst hosted-to-local factor seen, times 1.25 headroom, rounded up to a half: 3.5
+    # (notes/sn05-the-repin-and-s5.md).
+    ('startup-wolf-large-dwarf', 'wolf/scalars/wolf-debug/prog', ['break helper', 'run'], 3.5),
     ('ten-thousand-hit-loop', 'c/hits/gcc-O0/prog', ['break tick', 'ignore 1 9999', 'run', 'info breakpoints'], 2.0),
 ]
 
