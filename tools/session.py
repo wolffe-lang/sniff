@@ -9,8 +9,17 @@ rows and goldens agree. A row that did not run is reported as SKIP and is
 never a pass.
 
 Normalisations, each named in every PASS/FAIL line only when it fired:
-  pid     the N of '(process N)' and 'child process N'
+  pid     the N of 'process N' ('(process N)', 'child process N', a Target Id, the attach, detach and
+          already-traced lines): an allocation order, not a debugger fact
   banner  gdb's two thread_db lines are dropped from the golden
+  lwp     an LWP id becomes <Ln>, n counting the distinct ids in the order they first appear, so a
+          thread's lines still name one thread
+  spin    the workers fixture's spinning threads stop anywhere in a one-line loop, so 'spin (' may follow
+          '0x... in ' or not; the address is dropped
+  threads-table  'info threads': the header's and the Target Id column's padding, which follows the
+          ids' digits, become one space
+  ticks   (rows that name it in "normalise") the tick a breakpoint after an attach lands on: the
+          sleeper's progress when the debugger arrived
   tty     (tty rows) carriage returns and the prompt text
   wrap80  (tty rows) gdb's 80-column wrap of a long frame line ("\n    at ")
   heap    (PAX set) an address in the program's break becomes <HEAP>. A static program's break starts
@@ -21,6 +30,14 @@ Normalisations, each named in every PASS/FAIL line only when it fired:
 Terminal rows run both debuggers in a pseudo-terminal with echo off and send
 one command per prompt, as R-sn02-1 specifies.
 
+Attach rows ("attach": {...}) start the row's program, the sleeper, as this harness's own child with
+address randomisation off (as both debuggers start their own programs), read its 'ready PID' line, put
+the pid in the script for {pid}, run the debugger, and append how the sleeper ended to stdout:
+'[sleeper exited with code N: LAST LINE]' or '[sleeper killed by signal N]'. "ticks" is the sleeper's
+argument; "form" is "script" (the default), "dash-p" (-p PID before the program) or "positional"
+(PROG PID); "held" first starts the holder fixture of the same build on the sleeper, so that another
+tracer has it.
+
 A row compares standard output byte for byte unless its "compare" says otherwise
 (standard error and the exit status are always compared with the golden's):
   head    the first "head" lines are gdb's, byte for byte, and sniff prints more after
@@ -29,7 +46,8 @@ A row compares standard output byte for byte unless its "compare" says otherwise
           "own" lines, each of which sniff must print; sniff prints something
   own     sniff's text is the row's "expect" lines (and "expect_err", "expect_rc" when
           given), and the golden shows gdb answering the command with text and status 0
-          (or, with "gdb": "lacks", refusing it: a command of sniff's own)
+          (or, with "gdb": "lacks", refusing it: a command of sniff's own; with "gdb": "refuses",
+          refusing it too, in words sniff does not share: "why" says whose words differ and why)
 """
 import argparse
 import json
@@ -116,8 +134,16 @@ def heap_range(prog):
     return r
 
 
+LWP = re.compile(r'\bLWP (\d+)\b')
+SPIN = re.compile(r'\b0x[0-9a-f]+ in spin \(')
+THREADS_HEAD = re.compile(r'^  Id +Target Id +Frame ?$', re.M)
+THREADS_ROW = re.compile(r'^([* ]) (\d+) +(Thread (?:0x[0-9a-f]+|<STACK>) \(LWP <L\d+>\)|LWP <L\d+>|process <PID>)( "[^"]*")? +(\S.*)$', re.M)
+TICK = re.compile(r'\btick \(n=\d+\)')
+
+
 def normalize(text, fired, row=None):
     out = []
+    lwps = {}
     drops = [re.compile(d) for d in (row or {}).get('drop', [])] if PAX_MODE else []
     heap = heap_range(str(Path(FIXTURES) / row['prog'])) if PAX_MODE and FIXTURES and row and row.get('prog') else None
     for line in text.splitlines(keepends=True):
@@ -138,11 +164,28 @@ def normalize(text, fired, row=None):
            line.startswith('Using host libthread_db library'):
             fired.add('banner')
             continue
-        n = re.sub(r'(\[Inferior \d+ \(process )\d+(\))', r'\1<PID>\2', line)
-        n = re.sub(r'(Detaching after fork from child process )\d+', r'\1<PID>', n)
+        n = re.sub(r'\bprocess \d+\b', 'process <PID>', line)
         if n != line:
             fired.add('pid')
-        out.append(n)
+        line = n
+        n = LWP.sub(lambda m: 'LWP <L%d>' % lwps.setdefault(m.group(1), len(lwps) + 1), line)
+        if n != line:
+            fired.add('lwp')
+        line = n
+        n = SPIN.sub('spin (', line)
+        if n != line:
+            fired.add('spin')
+        line = n
+        n = THREADS_ROW.sub(r'\1 \2 \3\4 \5', THREADS_HEAD.sub('  Id Target Id Frame', line))
+        if n != line:
+            fired.add('threads-table')
+        line = n
+        if 'ticks' in (row or {}).get('normalise', []):
+            n = TICK.sub('tick (n=<N>)', line)
+            if n != line:
+                fired.add('ticks')
+            line = n
+        out.append(line)
     return ''.join(out)
 
 
@@ -239,6 +282,66 @@ def sniff_argv(sniff, row, script, prog):
     return [sniff, '-batch', '-x', script, prog] + (['--args'] + row['args'] if row.get('args') else [])
 
 
+def no_randomization():
+    """personality(2) ADDR_NO_RANDOMIZE in the sleeper before its exec: it starts as both debuggers start theirs."""
+    if sys.platform.startswith('linux'):
+        import ctypes
+        ctypes.CDLL(None).personality(0x0040000)
+
+
+def sleeper_line(p, timeout=60):
+    """How the sleeper ended, as the line an attach row appends to stdout."""
+    try:
+        out, _ = p.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        p.kill()
+        p.communicate()
+        return '[sleeper did not end in %d s]\n' % timeout
+    if p.returncode < 0:
+        return '[sleeper killed by signal %d]\n' % -p.returncode
+    last = (out.strip().splitlines() or [''])[-1]
+    return '[sleeper exited with code %d: %s]\n' % (p.returncode, last)
+
+
+def attach_run(tool, row, prog, work, gdb, timeout=120):
+    """An attach row: the sleeper started as this harness's child, the debugger given its pid. Returns
+    (stdout with the sleeper's line, stderr, status); a terminal row's stdout is the raw pty text."""
+    a = row['attach']
+    env = dict(ENV_BASE)
+    s = subprocess.Popen([prog, str(a.get('ticks', 100))], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+                         env=env, cwd=work, preexec_fn=no_randomization)
+    first = s.stdout.readline()
+    m = re.match(r'ready (\d+)$', first.strip())
+    if not m:
+        s.kill()
+        s.communicate()
+        return '', 'the sleeper did not say ready: %r\n' % first, 99
+    pid = m.group(1)
+    holder = None
+    if a.get('held'):
+        holder = subprocess.Popen([prog.replace('/c/sleeper/', '/c/holder/'), pid, '3000'], stdout=subprocess.PIPE, text=True,
+                                  env=env, cwd=work)
+        holder.stdout.readline()
+    script = [x.replace('{pid}', pid) for x in row['script']]
+    try:
+        if row.get('tty'):
+            out, err, rc = run_pty(tty_argv(tool, row, prog, gdb), script, '(gdb) ' if gdb else '(sniff) ', work, timeout)
+        else:
+            path = write_script(dict(row, script=script), work)
+            if gdb:
+                base = [tool, '-nx', '-q', '-batch', '-iex', 'set confirm off', '-iex', 'set pagination off', '-x', path]
+            else:
+                base = [tool, '-batch', '-x', path]
+            form = a.get('form', 'script')
+            argv = base + (['-p', pid, prog] if form == 'dash-p' else [prog, pid] if form == 'positional' else [prog])
+            out, err, rc = run_tool(argv, work, timeout)
+    finally:
+        tail = sleeper_line(s)
+        if holder:
+            holder.wait(timeout=30)
+    return out + tail, err, rc
+
+
 def prog_path(fixtures, row):
     return str(Path(fixtures) / row['prog'])
 
@@ -255,14 +358,20 @@ def cmd_capture(a):
             print('SKIP ' + row['name'] + ' reason=' + row['skip'])
             continue
         if row.get('tty'):
-            out, err, rc = run_pty(tty_argv(a.gdb, row, prog_path(a.fixtures, row), True), row['script'], '(gdb) ', work)
+            if row.get('attach'):
+                out, err, rc = attach_run(a.gdb, row, prog_path(a.fixtures, row), work, True)
+            else:
+                out, err, rc = run_pty(tty_argv(a.gdb, row, prog_path(a.fixtures, row), True), row['script'], '(gdb) ', work)
             fired = set()
             o = normalize(normalize_tty(out, fired), fired, row)
             e = ''
             rc = 0
         else:
-            script = write_script(row, work)
-            out, err, rc = run_tool(gdb_argv(a.gdb, row, script, prog_path(a.fixtures, row)), work, 120)
+            if row.get('attach'):
+                out, err, rc = attach_run(a.gdb, row, prog_path(a.fixtures, row), work, True)
+            else:
+                script = write_script(row, work)
+                out, err, rc = run_tool(gdb_argv(a.gdb, row, script, prog_path(a.fixtures, row)), work, 120)
             fired = set()
             o = normalize(out, fired, row)
             e = normalize(err, fired, row)
@@ -326,6 +435,8 @@ def judge(row, out, err, rc, want_o, want_e, want_rc):
             bad.append('golden: gdb does not answer this command with text and status 0')
         if row.get('gdb') == 'lacks' and want_rc.strip() == '0':
             bad.append('golden: gdb answers this command, which the row says it lacks')
+        if row.get('gdb') == 'refuses' and want_rc.strip() == '0':
+            bad.append('golden: gdb does not refuse this command, as the row says it does')
         # sniff's own answer: its stderr and status are the row's (none and 0 unless it says otherwise)
         want_e = ''.join(x + '\n' for x in row.get('expect_err', []))
         want_rc = str(row.get('expect_rc', 0))
@@ -361,10 +472,15 @@ def cmd_check(a):
             continue
         try:
             if row.get('tty'):
-                out, err, rc = run_pty(tty_argv(a.sniff, row, prog_path(a.fixtures, row), False), row['script'], '(sniff) ', work)
+                if row.get('attach'):
+                    out, err, rc = attach_run(a.sniff, row, prog_path(a.fixtures, row), work, False)
+                else:
+                    out, err, rc = run_pty(tty_argv(a.sniff, row, prog_path(a.fixtures, row), False), row['script'], '(sniff) ', work)
                 fired = set()
                 out = normalize_tty(out, fired)
                 rc = 0
+            elif row.get('attach'):
+                out, err, rc = attach_run(a.sniff, row, prog_path(a.fixtures, row), work, False, row.get('timeout', 120))
             else:
                 script = write_script(row, work)
                 out, err, rc = run_tool(sniff_argv(a.sniff, row, script, prog_path(a.fixtures, row)), work, row.get('timeout', 120))
@@ -397,11 +513,17 @@ def cmd_oracle(a):
             continue
         fired = set()
         if row.get('tty'):
-            out, err, rc = run_pty(tty_argv(a.gdb, row, prog_path(a.fixtures, row), True), row['script'], '(gdb) ', work)
+            if row.get('attach'):
+                out, err, rc = attach_run(a.gdb, row, prog_path(a.fixtures, row), work, True)
+            else:
+                out, err, rc = run_pty(tty_argv(a.gdb, row, prog_path(a.fixtures, row), True), row['script'], '(gdb) ', work)
             got = (normalize(normalize_tty(out, fired), fired, row), '', '0\n')
         else:
-            script = write_script(row, work)
-            out, err, rc = run_tool(gdb_argv(a.gdb, row, script, prog_path(a.fixtures, row)), work, 120)
+            if row.get('attach'):
+                out, err, rc = attach_run(a.gdb, row, prog_path(a.fixtures, row), work, True)
+            else:
+                script = write_script(row, work)
+                out, err, rc = run_tool(gdb_argv(a.gdb, row, script, prog_path(a.fixtures, row)), work, 120)
             got = (normalize(out, fired, row), normalize(err, fired, row), str(rc) + '\n')
         want = tuple(p.read_text() for p in golden_paths(row))
         if got != want:
@@ -430,8 +552,8 @@ def row_form(r):
         own = r.get('own', [])
         return '' if isinstance(own, list) and all(isinstance(x, str) for x in own) else 'own must be a list of lines'
     if mode == 'own':
-        if r.get('gdb', 'has') not in ('has', 'lacks'):
-            return 'gdb must be has or lacks'
+        if r.get('gdb', 'has') not in ('has', 'lacks', 'refuses'):
+            return 'gdb must be has, lacks or refuses'
         if not isinstance(r.get('expect'), list) or not (r['expect'] or r.get('expect_err')):
             return 'own needs its expect lines'
         return ''
