@@ -1,0 +1,155 @@
+{
+  "schema": 1,
+  "lane": "sn05",
+  "written_before_code": "2026-11-08",
+  "scope": "Three items, red first: (1) the re-pin to wolf 0.2.38 and lupin 0.1.60 with every wolf fixture built -g; (2) sniff#10, the startup margin of startup-wolf-large-dwarf; (3) S5 on Linux x86-64 and macOS arm64: hardware watchpoints (watch, rwatch, awatch) and expressions (field access, indexing, arithmetic). Two PRs: the re-pin and #10 first, S5 second. The PAX half of S5 is drafted for a px lane, not built.",
+
+  "measured_before_code": {
+    "what": "where sniff's startup goes on the large-DWARF fixture, before any change",
+    "how": "sniff built by wolf 0.2.37 at the base 5ceae8e; fixtures/wolf/scalars built by 0.2.37 (default), 0.2.38 (default) and 0.2.38 -g; the script is `break helper` alone (load and resolve, no process started). CPU from the child rusage, minimum of 9; attribution by valgrind 3.27.1 callgrind instruction counts (Ir), which a shared host cannot perturb. A Linux host, native, single-threaded light slot; no process was traced.",
+    "fixture": {
+      "file_bytes": {"0.2.37": 14258984, "0.2.38": 14286712, "0.2.38 -g": 14287008},
+      "sections_0.2.38_g_hex": {".text": "040756", ".debug_info": "49a855", ".debug_abbrev": "009b29", ".debug_line": "0f738d", ".debug_str": "3beefd", ".debug_loc": "29d86d", ".debug_ranges": "1256a0", ".debug_aranges": "00e7c0", ".debug_frame": "0000b8", ".eh_frame": "005af0"},
+      "units": 190, "dies": 392499, "entries_with_nulls": 553175, "attributes": 1429912, "references_validated": 325582, "line_tables": 190, "line_sequences": 3513, "line_rows": 129077, "line_row_descents_in_table_order": 3055, "file_entries": 3583,
+      "note": "the wolf units are a few hundred bytes; the size is the linked runtime's Rust DWARF (DWARF 4), as R-sn02-5 said. 0.2.38 grows .debug_info by 0.07% and .debug_frame is 184 bytes: the re-pin does not move this row."
+    },
+    "cpu_break_only_min_s": {"0.2.37": 0.542, "0.2.38": 0.544, "0.2.38 -g": 0.544},
+    "callgrind_total_Ir": 4239921601,
+    "breakdown_inclusive": [
+      {"phase": "prog_load", "share": 0.9999},
+      {"phase": "load_dwarf", "share": 0.9938},
+      {"phase": "dwarf_info_read (the eager DIE tree)", "share": 0.5603, "parts": {
+        "dwarf_info_unit (decode every DIE and attribute)": 0.3445,
+        "  of which dwarf_form": 0.1969,
+        "reference validation (a binary search per reference attribute, 325582 of them)": 0.1506,
+        "dwarf_info_read itself": 0.0496}},
+      {"phase": "load_dwarf's subprogram scan, program.lu:385 (`!p.info.entries[e].is_null && p.info.entries[e].tag == 46`, about 1190 Ir per entry over 553175 entries)", "share": 0.1547},
+      {"phase": "sort_by(line_order) over 129077 LineEnt", "share": 0.1162},
+      {"phase": "dwarf_line_read (190 line programs)", "share": 0.1028},
+      {"phase": "everything else (ELF, sections, qualified names, file interning)", "share": 0.0298}
+    ],
+    "conclusion": "the cost is in sniff: 99.4% of startup is load_dwarf, and three eager passes that need no laziness (the subprogram scan, the reference validation and the line sort) are 42% of it."
+  },
+
+  "rulings_asked": {
+    "R-sn05-1": {
+      "question": "#10: cut sniff's startup on large DWARF (A), or set the margin from measured runner spread (B)?",
+      "options": {
+        "A": "cut it in sniff, with no change to what is read or printed: (1) the subprogram scan over a local view of the entries (or the DIE pass records subprogram indexes), (2) reference validation by a bitset of entry starts instead of a binary search per reference, (3) the line sort by ascending runs (3056 runs in 129077 rows; the order (addr, ord) is total, so any correct sort gives the same list), (4) fast paths in dwarf_form and uint_le for the fixed-width forms. Then re-derive the margin from the measured spread.",
+        "A-lazy": "per-unit lazy DIE loading. Every session use of an entry index (values, types, frames, locals) changes, and S5 adds type walking on top. Held back unless (A) misses its target.",
+        "B": "keep the code; raise the margin to about 7.0 (the hosted maximum 6.06 times 1.15). It leaves a 6x-slower-than-gdb startup in place and stops the row from catching a regression of less than 15%.",
+        "C": "run the row on the local record only (issue option 2). It hides the hosted signal the row exists to give.",
+        "D": "compare with sniff's own earlier time (issue option 3). Hosted runners differ in CPU model; sniff's own minimum moved 0.72-0.99 s across five hosted runs, a wider spread than the ratio's 4.80-6.06."
+      },
+      "recommend": "A, then the margin re-derived. The cost is in sniff, and (1)-(3) are 42% of it with no semantic change.",
+      "margin_derivation": "hosted over local, from five hosted runs (4.80, 5.36, 5.83, 6.06, 6.02) against the local record 4.25 of the same code: a factor of 1.13 to 1.43. The new margin is the local ratio after the cut times 1.43 (the worst hosted runner seen) times 1.25 (headroom for a runner type not yet seen), rounded up to the next 0.5. It is written in the note with the numbers it came from, and checked against the PR's hosted run."
+    },
+    "R-sn05-2": {
+      "question": "S5's scope in this lane",
+      "options": {
+        "a": "the contract's two items only (watchpoints; print with field access, indexing and arithmetic)",
+        "b": "(a) plus the index's thin additions over the same evaluator: conditional breakpoints (`break X if E`, `condition N E`) and `display`, and printing wolf's aggregates as 0.2.38's DWARF describes them"
+      },
+      "recommend": "b, built in that order, with (a) the part that must land for the second PR; whatever of (b) does not fit is listed in the note as S5's remainder."
+    },
+    "R-sn05-3": {
+      "question": "the expression grammar for C frames and for wolf frames",
+      "options": {
+        "a": "one grammar for both: sniff's own C-subset parser grown with `.`, `->`, `[]` and comparisons",
+        "b": "fenrir's front end (vendored at a pin) for frames whose unit's producer is wolf, and sniff's C-subset parser for C frames. 0.2.38 keeps DW_LANG_C11 on wolf units, so the language is taken from DW_AT_producer, not DW_AT_language"
+      },
+      "recommend": "b: the track ruled that wolf expressions go through fenrir's front end and that what it does not cover is refused by name; C rows are held to gdb's C."
+    }
+  },
+
+  "repin": {
+    "pins": {
+      "wolf": {"version": "0.2.38", "rev": "95ae0827a8ad4d0bbed9302df7811caaa7009fa1",
+        "aarch64-apple-darwin": "66a2c31324e9e4c4cbb6f103e4014e36b400366c198598b67c71491a65cffba4",
+        "x86_64-unknown-linux-gnu": "8447a57944da67ba8e76f5b4e88c2f38a32f39466f44b65e5817dcc276394f39",
+        "aarch64-unknown-linux-gnu": "e0a6763095cf99cb60a18f260966c96dd62be826076aa0ea22e4ad4f141a60e6"},
+      "lupin": {"version": "0.1.60", "rev": "17bd522382373b361fe035a5cc61f9e136e1caba",
+        "aarch64-apple-darwin": "f3cae16fdb88a94702c0fd816d5eb90cdc8e8636c028dcf40f03868c5dc36bb8",
+        "x86_64-unknown-linux-gnu": "e7d4c4f1534736c9262f4ccd01a631f03ff70e3b8122eefe6e9ec1e15c02637e",
+        "aarch64-unknown-linux-gnu": "dc19e519c77e3b830965ba1516cecf3ef0097d658bc8dfd12ae96f2693d3373c"},
+      "std": {"rev": "d4a4d4cab358e1e8c174f0206f9e13ad5cfe6c61", "how": "the STD-REV file inside the 0.2.38 Linux archive"},
+      "read_twice": "tag objects and their commits read twice through the API on 2026-11-08; the Linux archives' sha256 read twice after download. tests/pin-read-1.json and -2.json are re-read the same way.",
+      "sniff_builds_with_0.2.38": "observed: src/main.lu builds unchanged (no new warning stops it)"
+    },
+    "build_flag": "every wolf fixture (reader corpus, session, static PAX builds, macOS) is built with `-g`, which 0.2.38 adds; the default tier already carries the source types, and -g adds a non-allocated .debug_frame.",
+    "dwarf_changes_seen_in_the_types_fixture": [
+      "base types are named for wolf's types and u8, u64 and uint are DW_ATE_unsigned (R-sn00-1 is fixed by the producer)",
+      "a second `main` subprogram, DW_AT_artificial, for the entry shim the runtime links (0xa317-0xa32f in types)",
+      "base_type attributes in a new order (byte_size before encoding)",
+      ".debug_frame: one CIE (version 1, code align 1, data align -8, RA column 16) and an FDE for every wolf function, the shim included; DW_CFA_def_cfa, DW_CFA_offset and DW_CFA_same_value only",
+      ".text is byte-for-byte the same size; the breakpoint addresses sniff prints for `break helper` are unchanged"
+    ],
+    "goldens_predicted_to_move": {
+      "linux-s2 wolf-types": "c, narrow and $1 read `255 '\\377'` for `-1 '\\377'`; d, wide and $2 read `18446744073709551615` for `-1`; e unchanged at 6. gdb prints what the DWARF now says.",
+      "pax-linux wolf-types": "the same lines, on the static build",
+      "macos-s3 wolf-types facts and tests/evidence/macos/wolf-types-excerpt.txt": "lldb's values for c and d become unsigned in the same way",
+      "census (linux and macos)": "the producer string, the new attribute order, DW_AT_artificial, the unsigned encodings and the .debug_frame section",
+      "builds.json, toolchain.json, values.json (linux and macos)": "re-recorded by the gate for the new pins and -g; lupin 0.1.60 values for the corpus are predicted unchanged",
+      "reader-caps": "the measured maxima move by under 1% and the caps hold"
+    },
+    "goldens_predicted_to_hold": "all 124 C rows; and of the 17 wolf rows every one but wolf-types, including every bt (now unwound through .debug_frame by gdb and by sniff, with the same frames). If wolf-break-main-two-locations moves, the cause is the artificial main DIE.",
+    "sniff_changes_predicted": {
+      "unwind basis": "session-unwind-basis goes red by name, as designed: wolf frames are now `cfi` (from .debug_frame) on Linux and on macOS (dsymutil keeps __debug_frame in the dSYM), and the shim too. The expectation rows are updated to cfi with the cause named.",
+      "break main": "sniff's resolve_function now sees two DWARF functions named main; the shim's has no line rows, so skip_prologue must fall back to the prologue analysis it already uses for an ELF symbol without DWARF. Predicted red at wolf-break-main-two-locations on Linux and on PAX until then.",
+      "the unsigned gap": "the lupin join's reinterpretation of unsigned locals (R-sn00-1) has nothing left to count; its counter reads 0 and the special case is removed."
+    },
+    "plant": "a branch sn05-plant-* from the green head that rebuilds the wolf fixtures without -g (or keeps 0.2.37's signed u8): red by name at the re-pin's golden, session row wolf-types, and at unwind-basis-wolf-recursion."
+  },
+
+  "startup_margin": {
+    "row": "perf startup-wolf-large-dwarf (break helper; run) against the pinned gdb, child CPU, minimum of 9 interleaved",
+    "before": {"local_record_ratio": 4.25, "hosted_ratios": [4.80, 5.36, 5.83, 6.06, 6.02], "linux_host_break_only_cpu_s": 0.544},
+    "each_cut_measured_separately": "one commit per cut, each with its callgrind Ir and CPU minimum on the same host, so the note can say what each bought",
+    "predicted_Ir_after": {"subprogram scan": "-15%", "reference bitset": "-14%", "line sort by runs": "-9%", "form fast paths": "-5 to -10%", "total": "from 4.24 G to at most 2.4 G"},
+    "predicted_after": {"linux_host_break_only_cpu_s": "at most 0.32", "local_record_ratio": "at most 2.6", "hosted_ratio": "at most 3.5", "margin": "re-derived by R-sn05-1's rule: 4.0 to 5.0"},
+    "guard": "no output of any row changes; dump-matrix, hostile-inputs and the reader rows hold byte for byte. A malformed reference is still refused by name at load."
+  },
+
+  "s5": {
+    "watchpoints_linux": {
+      "mechanism": "DR0-DR3 hold addresses, DR7 enables them, DR6 says which fired (Intel SDM vol. 3, ch. 18). Written through PTRACE_POKEUSER and read through PTRACE_PEEKUSER at offsetof(struct user, u_debugreg[i]), measured by tools/abi-probe.c (a new `user u_debugreg N` line), never read from header text (R-sn02-3).",
+      "dr7": "L0-L3 enable bits 0, 2, 4, 6; R/W at bits 16+4n (01 write, 11 read or write); LEN at bits 18+4n (00 one byte, 01 two, 11 four, 10 eight); the address aligned to its length. x86 has no read-only data breakpoint, so rwatch is R/W 11.",
+      "stop": "a data breakpoint traps after the access with SIGTRAP; DR6 B0-B3 name the slot, and sniff clears DR6 before resuming.",
+      "commands": "watch, rwatch, awatch on a variable (a local or a global, a field or an element); info watchpoints; delete; info breakpoints lists them; a watch on a local is deleted when its frame returns, with gdb's message.",
+      "output_predicted": "gdb's words: `Hardware watchpoint N: x`, then at a hit a blank line, `Old value = ...`, `New value = ...` and the frame line; `Hardware read watchpoint N: x` and `Value = ...`; `Hardware access (read/write) watchpoint N: x` with `Value = ...` or Old/New. What gdb does when an rwatch'd variable is written (x86 cannot tell a read from a write) is taken from its transcript, not predicted.",
+      "refused_by_name": "a fifth hardware slot, an expression wider than the slots can cover, and every software watchpoint (`set can-use-hw-watchpoints 0`): sniff has no single-stepping watcher.",
+      "rows": "a new C fixture (c/watch: a global, a local in a loop, a struct field, an array element, a write of the same value) by gcc and clang -O0, each row held to the pinned gdb; a wolf fixture (wolf/watch) held to gdb's text and to lupin's values at each stop"
+    },
+    "watchpoints_macos": {
+      "mechanism": "ARM_DEBUG_STATE64's __wvr/__wcr through thread_set_state (the state block single step already uses). WCR from the Arm ARM: E, PAC (EL0), LSC (01 load, 10 store, 11 both), BAS (the bytes of an 8-byte aligned doubleword).",
+      "stop": "EXC_BREAKPOINT with the data-abort code and the address in the subcode, before the access completes. sniff disables the slot, single-steps, re-enables and reports after the access, so Old/New values match the Linux rows.",
+      "slots": "the count is probed from the state the kernel keeps, never assumed",
+      "rows": "the Linux watch rows run on the Mac (the S3 mechanism, named drops only), plus lldb-fact rows (watchpoint set variable, the stop reason, old and new values)"
+    },
+    "expressions": {
+      "front_end": "fenrir's front end vendored at a recorded pin under src/vendor/, its licence and pin beside it; a wolf frame's `print` text is parsed by it as an expression. Node kinds it parses that sniff does not evaluate are refused by name.",
+      "evaluated": "names (locals, args, globals), integer, float and bool literals, `.field`, `[index]`, unary - and !, binary + - * / % and the comparisons, parentheses, $N history; in C frames also `*`, `&` and `->`.",
+      "c_rows": "held to the pinned gdb byte for byte: `p a.b[2]`, `p x + 1`, `p a.b[1] * 3 - x`, `p ptr->b[0]`, `p *ptr`, `p a.nosuch` (`There is no member named nosuch.`), `p x[0]` on a scalar (`cannot subscript something of type `int'`), `p 1/0` (`Division by zero`)",
+      "wolf_rows": "a struct with scalar fields and a List[int] field: gdb prints what the DWARF describes (fields by name); `p a.count + 1` and field access held to gdb; `p a.items[2]` (an index through a List's header) is something gdb cannot do on a header struct, so its value is held to lupin's at the same stop",
+      "conditional_and_display": "if R-sn05-2 (b): `break X if E` and `condition N E` evaluate E at each hit and stop when it is nonzero; `display E` prints `N: E = V` at each stop. Held to gdb on C."
+    },
+    "pax_half_drafted_for_a_px_lane": [
+      "PTRACE_PEEKUSER and PTRACE_POKEUSER at the u_debugreg offsets, with the Linux ABI's validation (no R/W 10, no GD, aligned lengths)",
+      "DR0-DR3 and DR7 saved and restored per task on every switch, cleared on exec",
+      "#DB from a data breakpoint delivered to the task as SIGTRAP (si_code TRAP_HWBKPT), DR6 readable then and cleared by the debugger",
+      "the procfs gaps sn04 witnessed that S5 rows touch: /proc/PID/maps and auxv",
+      "then sniff's watch rows typed at PAX's console under KVM, held to the Linux goldens on static builds, as S4 did"
+    ],
+    "plant": "a branch sn05-plant-* from the S5 head that sets the wrong R/W bits (write for access): red by name at a watch row (the awatch row)."
+  },
+
+  "honesty": {
+    "not_known_before_code": [
+      "whether gdb's text for any wolf row other than wolf-types moves under 0.2.38 -g; the oracle decides and every move is explained in the note",
+      "whether the pinned llvm-dwarfdump prints wolf's DW_CFA_same_value rows as sniff's dump does today (`RBP=same`); dump-matrix decides",
+      "the exact ratio after the cut on hosted runners; one hosted sample arrives with the PR's run",
+      "how many hardware watchpoint slots the Mac's kernel exposes"
+    ],
+    "clean_room": "the Intel SDM, the Arm ARM, ptrace(2), the GDB manual, the macOS SDK headers' declarations; gdb and lldb only as binaries. fenrir is org code."
+  }
+}
