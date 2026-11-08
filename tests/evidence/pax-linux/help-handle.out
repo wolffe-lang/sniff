@@ -1,0 +1,23 @@
+Specify how to handle signals.
+Usage: handle SIGNAL [ACTIONS]
+Args are signals and actions to apply to those signals.
+If no actions are specified, the current settings for the specified signals
+will be displayed instead.
+
+Symbolic signals (e.g. SIGSEGV) are recommended but numeric signals
+from 1-15 are allowed for compatibility with old versions of GDB.
+Numeric ranges may be specified with the form LOW-HIGH (e.g. 1-5).
+The special arg "all" is recognized to mean all signals except those
+used by the debugger, typically SIGTRAP and SIGINT.
+
+Recognized actions include "stop", "nostop", "print", "noprint",
+"pass", "nopass", "ignore", or "noignore".
+Stop means reenter debugger if this signal happens (implies print).
+Print means print a message if this signal happens.
+Pass means let program see this signal; otherwise program doesn't know.
+Ignore is a synonym for nopass and noignore is a synonym for pass.
+Pass and Stop may be combined.
+
+Multiple signals may be specified.  Signal numbers and signal names
+may be interspersed with actions, with the actions being performed for
+all signals cumulatively specified.

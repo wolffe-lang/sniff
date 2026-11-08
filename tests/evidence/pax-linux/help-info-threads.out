@@ -1,0 +1,8 @@
+Display currently known threads.
+Usage: info threads [OPTION]... [ID]...
+If ID is given, it is a space-separated list of IDs of threads to display.
+Otherwise, all threads are displayed.
+
+Options:
+  -gid
+    Show global thread IDs.

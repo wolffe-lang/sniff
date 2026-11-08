@@ -1,0 +1,10 @@
+Continue program with the specified signal.
+Usage: signal SIGNAL
+The SIGNAL argument is processed the same as the handle command.
+
+An argument of "0" means continue the program without sending it a signal.
+This is useful in cases where the program stopped because of a signal,
+and you want to resume the program while discarding the signal.
+
+In a multi-threaded program the signal is delivered to, or discarded from,
+the current thread only.

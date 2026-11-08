@@ -1,0 +1,14 @@
+thread, t
+Use this command to switch between threads.
+The new thread ID must be currently known.
+
+List of thread subcommands:
+
+thread apply -- Apply a command to a list of threads.
+thread find -- Find threads that match a regular expression.
+thread name -- Set the current thread's name.
+
+Type "help thread" followed by thread subcommand name for full documentation.
+Type "apropos word" to search for commands related to "word".
+Type "apropos -v word" for full documentation of commands related to "word".
+Command name abbreviations are allowed if unambiguous.

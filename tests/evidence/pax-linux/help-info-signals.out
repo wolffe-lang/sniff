@@ -1,0 +1,3 @@
+info signals, info handle
+What debugger does when program gets various signals.
+Specify a signal as argument to print info on that signal only.
