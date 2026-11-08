@@ -86,6 +86,14 @@ struct Session {
     pub lst_solitary: int,
     /// Files whose missing source was warned about once.
     pub src_warned: List[int],
+    /// What an empty line at the terminal runs: the previous line, as gdb repeats it ("" for nothing).
+    pub repeat: str,
+    /// The last `x`: where it stopped, its count, format and size (a bare `x` goes on from there).
+    pub x_ok: bool,
+    pub x_next: u64,
+    pub x_count: int,
+    pub x_fmt: str,
+    pub x_size: int,
 }
 
 /// Printed text goes to standard output through one buffer, flushed before
@@ -115,5 +123,6 @@ fn session_new(take p: Prog) -> Session {
         script: "", lineno: 0, bps: [], bp_next: 1, pending_signal: 0, cfi: [], frames: [], frames_ok: false, sel: 0, src_file: [], src_lines: [], src_ok: [], hist: [], errmsg: "", tty: false, quit: false,
         watches: [], watch_armed: false, disps: [], disp_next: 1,
         lst_file: -1, lst_first: 0, lst_last: 0, lst_at_end: false, lst_solitary: 0, src_warned: [],
+        repeat: "", x_ok: false, x_next: 0, x_count: 1, x_fmt: "x", x_size: 4,
     }
 }
