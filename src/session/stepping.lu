@@ -305,28 +305,34 @@ fn is_stmt_at(s: Session, file_pc: u64) -> bool {
     stmt_start(s.prog, file_pc)
 }
 
-/// stepi and nexti.
-fn step_insns(mut s: Session, over: bool) -> str {
+/// stepi and nexti, n times. As the pinned gdb does for `stepi 9`, the place is shown once, where the
+/// last step stops, against the function the command started in; a breakpoint, a signal or the program's
+/// end on the way ends the count there and is reported as such.
+fn step_insns(mut s: Session, over: bool, n: int) -> str {
     if !s.alive { return "The program is not being run." }
     compute_frames(mut s)
     let start_func = func_start(s.prog, s.frames[0].pc - s.base)
     let start_cfa = s.frames[0].cfa
-    let prev_pc = current_pc(s)
-    let prev_sp = rsp_now(s)
-    let e = step_insn(mut s)
-    if e.kind != ev_stepped {
-        let _ = report_event_if_stop(mut s, e)
-        return ""
-    }
-    var pc = current_pc(s)
-    let hit = user_bp_at(s, pc)
-    if hit >= 0 && pc != prev_pc {
-        report_bp_hit(mut s, hit)
-        return ""
-    }
-    if over && call_made(s, prev_pc, prev_sp, pc, rsp_now(s)) {
-        let ret = return_addr(s, rsp_now(s))
-        if run_to(mut s, ret, prev_sp) { return "" }
+    var k = 0
+    while k < n {
+        let prev_pc = current_pc(s)
+        let prev_sp = rsp_now(s)
+        let e = step_insn(mut s)
+        if e.kind != ev_stepped {
+            let _ = report_event_if_stop(mut s, e)
+            return ""
+        }
+        let pc = current_pc(s)
+        let hit = user_bp_at(s, pc)
+        if hit >= 0 && pc != prev_pc {
+            report_bp_hit(mut s, hit)
+            return ""
+        }
+        if over && call_made(s, prev_pc, prev_sp, pc, rsp_now(s)) {
+            let ret = return_addr(s, rsp_now(s))
+            if run_to(mut s, ret, prev_sp) { return "" }
+        }
+        k += 1
     }
     print_step_stop(mut s, start_func, start_cfa, true)
     ""

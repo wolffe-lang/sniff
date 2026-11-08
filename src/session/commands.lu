@@ -116,15 +116,16 @@ fn repeat_cmd(mut s: Session, rest: str, kind: int) -> str {
         let v = parse_uint(t)
         if v.ok { n = v.addr as int }
     }
+    // stepi N and nexti N show only where the last step stops
+    if kind == 4 { return step_insns(mut s, false, n) }
+    if kind == 5 { return step_insns(mut s, true, n) }
     var i = 0
     while i < n {
         if !s.alive { return "The program is not being run." }
         var err = ""
         if kind == 1 { err = step_lines(mut s, false, false) }
         else if kind == 2 { err = step_lines(mut s, true, false) }
-        else if kind == 3 { err = step_lines(mut s, true, true) }
-        else if kind == 4 { err = step_insns(mut s, false) }
-        else { err = step_insns(mut s, true) }
+        else { err = step_lines(mut s, true, true) }
         if err.len() > 0 { return err }
         i += 1
     }
