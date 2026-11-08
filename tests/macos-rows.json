@@ -1802,6 +1802,153 @@
    "name": "help-info-handle",
    "kind": "linux",
    "stderr": true
+  },
+  {
+   "name": "attach-gcc-nosuch",
+   "kind": "linux",
+   "stderr": true
+  },
+  {
+   "name": "attach-gcc-noarg",
+   "kind": "linux",
+   "stderr": true
+  },
+  {
+   "name": "attach-gcc-word",
+   "kind": "linux",
+   "stderr": true
+  },
+  {
+   "name": "detach-gcc-norun",
+   "kind": "linux",
+   "stderr": true
+  },
+  {
+   "name": "lldb-attach-detach",
+   "kind": "lldb",
+   "prog": "c/sleeper/clang-O0/prog",
+   "attach": {
+    "ticks": 100
+   },
+   "script": [
+    "attach {pid}",
+    "bt",
+    "detach"
+   ],
+   "lldb": [
+    "process attach --pid {pid}",
+    "bt",
+    "process detach"
+   ]
+  },
+  {
+   "name": "lldb-attach-break",
+   "kind": "lldb",
+   "prog": "c/sleeper/clang-O0/prog",
+   "attach": {
+    "ticks": 100
+   },
+   "script": [
+    "attach {pid}",
+    "break tick",
+    "continue",
+    "print n - ticks",
+    "bt",
+    "delete",
+    "detach"
+   ],
+   "lldb": [
+    "process attach --pid {pid}",
+    "breakpoint set -n tick",
+    "continue",
+    "print n - ticks",
+    "bt",
+    "breakpoint delete -f",
+    "process detach"
+   ]
+  },
+  {
+   "name": "lldb-attach-kill",
+   "kind": "lldb",
+   "prog": "c/sleeper/clang-O0/prog",
+   "attach": {
+    "ticks": 100
+   },
+   "script": [
+    "attach {pid}",
+    "bt",
+    "kill"
+   ],
+   "lldb": [
+    "process attach --pid {pid}",
+    "bt",
+    "process kill"
+   ]
+  },
+  {
+   "name": "lldb-attach-quit",
+   "kind": "lldb",
+   "prog": "c/sleeper/clang-O0/prog",
+   "attach": {
+    "ticks": 100
+   },
+   "script": [
+    "attach {pid}",
+    "bt"
+   ],
+   "lldb": [
+    "process attach --pid {pid}",
+    "bt"
+   ]
+  },
+  {
+   "name": "lldb-attach-continue",
+   "kind": "lldb",
+   "prog": "c/sleeper/clang-O0/prog",
+   "attach": {
+    "ticks": 60
+   },
+   "script": [
+    "attach {pid}",
+    "continue"
+   ],
+   "lldb": [
+    "process attach --pid {pid}",
+    "continue"
+   ]
+  },
+  {
+   "name": "lldb-attach-dash-p",
+   "kind": "lldb",
+   "prog": "c/sleeper/clang-O0/prog",
+   "attach": {
+    "ticks": 100,
+    "form": "dash-p"
+   },
+   "script": [
+    "bt",
+    "detach"
+   ],
+   "lldb": [
+    "bt",
+    "process detach"
+   ]
+  },
+  {
+   "name": "attach-mac-hardened",
+   "kind": "expect",
+   "prog": "c/sleeper/clang-O0/prog",
+   "sign": "hardened",
+   "attach": {
+    "ticks": 100
+   },
+   "script": [
+    "attach {pid}"
+   ],
+   "contains": [
+    "ptrace: Operation not permitted.",
+    "[sleeper exited with code 0: done 100]"
+   ]
   }
  ],
  "excluded": {
@@ -1826,6 +1973,8 @@
   "signals-clang-replace": "darwin numbers its signals its own way (the handler's sig is 30, not 10) and the system call that sends one is arm64's (svc, at line 24): the lldb-signals-* rows hold the stops and the exit code, and the signals-mac-* rows the exit code where lldb has no continue-with-a-signal",
   "libframes-clang-bt": "macOS's system libraries are in the dyld shared cache, with no file for a frame's `from LIB` and no .eh_frame to read; the lldb rows' frames through libsystem hold sniff's own unwinding there",
   "libframes-clang-up": "macOS's system libraries are in the dyld shared cache, with no file for a frame's `from LIB` and no .eh_frame to read; the lldb rows' frames through libsystem hold sniff's own unwinding there",
-  "libframes-clang-entry": "macOS's system libraries are in the dyld shared cache, with no file for a frame's `from LIB` and no .eh_frame to read; the lldb rows' frames through libsystem hold sniff's own unwinding there"
+  "libframes-clang-entry": "macOS's system libraries are in the dyld shared cache, with no file for a frame's `from LIB` and no .eh_frame to read; the lldb rows' frames through libsystem hold sniff's own unwinding there",
+  "attach-clang-detach": "the attach stop is in nap's arm64 system call (svc, line 28) and the frames are arm64's: the lldb-attach-* rows hold the frames, the breakpoint and how the sleeper ended",
+  "attach-clang-break": "the attach stop is in nap's arm64 system call (svc, line 28) and the frames are arm64's: the lldb-attach-* rows hold the frames, the breakpoint and how the sleeper ended"
  }
 }
