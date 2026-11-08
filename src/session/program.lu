@@ -70,6 +70,8 @@ struct Prog {
     pub lines: List[LineEnt],
     pub funcs: List[Func],
     pub syms: List[Sym],
+    /// Data symbols (ELF STT_OBJECT; Mach-O symbols outside __text), for gdb's <sym+off> after a data pointer.
+    pub dsyms: List[Sym],
     pub entry: u64,
     pub pie: bool,
     pub maps: List[SecMap],
@@ -111,7 +113,7 @@ fn prog_failed(why: str) -> Prog {
             has_split_dwarf: false, has_compact_unwind: false },
         info: readers.DwarfInfo { info: copy none, abbrev: copy none, units: [], entries: [], attributes: [],
             tables: [], die_count: 0, abbreviation_tables_read: 0, fuel_remaining: 0 },
-        has_info: false, units: [], files: [], lines: [], funcs: [], syms: [], entry: 0, pie: false, maps: [],
+        has_info: false, units: [], files: [], lines: [], funcs: [], syms: [], dsyms: [], entry: 0, pie: false, maps: [],
         img: [], isecs: readers.DebugSections { format: 0, info: copy sec, abbrev: copy sec, line: copy sec, str: copy sec,
             line_str: copy sec, str_offsets: copy sec, addr: copy sec, ranges: copy sec, rnglists: copy sec,
             loc: copy sec, loclists: copy sec, frame: copy sec, eh_frame: copy sec, types: copy sec,
@@ -361,6 +363,9 @@ fn prog_load(path: str) -> Prog {
         if (s.info & 15) == 2 && s.value != 0 && s.section_index != 0 {
             (mut p.syms).push(Sym { name: span_text(data, s.name), addr: s.value, size: s.size })
         }
+        if (s.info & 15) == 1 && s.value != 0 && s.section_index != 0 && s.size > 0 {
+            (mut p.dsyms).push(Sym { name: span_text(data, s.name), addr: s.value, size: s.size })
+        }
         i += 1
     }
     load_dwarf(mut p, data)
@@ -538,10 +543,20 @@ fn prog_load_macho(path: str, data: List[byte]) -> Prog {
                 let shown = name.strip_prefix("_") else { name }
                 (mut p.syms).push(Sym { name: shown, addr: sy.value, size: 0 })
             }
+        } else if (sy.kind & 224) == 0 && (sy.kind & 14) == 14 && sy.section != 0 && sy.value != 0 && !name.starts_with("ltmp") && !name.starts_with("l_") && name != "__mh_execute_header" {
+            let shown = name.strip_prefix("_") else { name }
+            (mut p.dsyms).push(Sym { name: shown, addr: sy.value, size: 0 })
         }
         i += 1
     }
     (mut p.syms).sort_by(sym_order)
+    (mut p.dsyms).sort_by(sym_order)
+    // a Mach-O data symbol runs to the next one
+    var d = 0
+    while d + 1 < p.dsyms.len {
+        if p.dsyms[d + 1].addr > p.dsyms[d].addr { p.dsyms[d].size = p.dsyms[d + 1].addr - p.dsyms[d].addr }
+        d += 1
+    }
     // the linker records no sizes: a symbol runs to the next one, the last to the end of __text
     var text_end: u64 = 0
     if text_index >= 0 { text_end = mach.sections[text_index].address + mach.sections[text_index].size }

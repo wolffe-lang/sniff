@@ -221,12 +221,48 @@ fn split_format(rest: str) -> (str, str) {
     ("", t)
 }
 
-fn show_value(mut s: Session, v: Val, fmt: str) {
-    var text = text_with_format(s, v, fmt, true)
-    if v.ty == ty_codep && fmt.len() == 0 {
-        let sym = symbolize(s, as_u64(v.bytes))
-        if sym.len() > 0 { text = "{text} {sym}" }
+/// "<sym+off>" for a runtime address inside a data symbol, else "".
+fn data_symbolize(s: Session, addr: u64) -> str {
+    if addr < s.base { return "" }
+    let file = addr - s.base
+    var i = 0
+    while i < s.prog.dsyms.len {
+        let d = copy s.prog.dsyms[i]
+        if d.addr <= file && file < d.addr + d.size {
+            let off = file - d.addr
+            if off == 0 { return "<{d.name}>" }
+            return "<{d.name}+{off}>"
+        }
+        i += 1
     }
+    ""
+}
+
+/// The text of a top-level value, with gdb's <sym+off> after a code or data pointer.
+fn top_value_text(s: Session, v: Val, fmt: str) -> str {
+    var text = text_with_format(s, v, fmt, true)
+    if fmt.len() == 0 {
+        if v.ty == ty_codep {
+            let sym = symbolize(s, as_u64(v.bytes))
+            if sym.len() > 0 { text = "{text} {sym}" }
+        } else {
+            let (k, _) = num_class(s, v.ty)
+            if k == 5 && !is_char_pointer(s, v.ty) {
+                let sym = data_symbolize(s, as_u64(v.bytes))
+                if sym.len() > 0 { text = "{text} {sym}" }
+            }
+        }
+    }
+    text
+}
+
+fn is_char_pointer(s: Session, ty: int) -> bool {
+    let t = pointee(s, ty)
+    t >= 0 && is_char_type(s.prog, t)
+}
+
+fn show_value(mut s: Session, v: Val, fmt: str) {
+    let text = top_value_text(s, v, fmt)
     (mut s.hist).push(copy v)
     emit_line(mut s, "${s.hist.len} = {text}")
 }
@@ -250,7 +286,7 @@ fn cmd_output(mut s: Session, rest: str) -> str {
     let (fmt, expr) = split_format(rest)
     let v = eval_expr(s, expr)
     if !v.ok { return v.why }
-    emit(mut s, text_with_format(s, v, fmt, true))
+    emit(mut s, top_value_text(s, v, fmt))
     ""
 }
 
