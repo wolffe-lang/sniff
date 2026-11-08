@@ -4045,6 +4045,201 @@
     "delete",
     "continue"
    ]
+  },
+  {
+   "name": "attach-gcc-detach",
+   "prog": "c/sleeper/gcc-O0/prog",
+   "script": [
+    "attach {pid}",
+    "bt",
+    "detach"
+   ],
+   "attach": {
+    "ticks": 100
+   }
+  },
+  {
+   "name": "attach-gcc-break",
+   "prog": "c/sleeper/gcc-O0/prog",
+   "script": [
+    "attach {pid}",
+    "break tick",
+    "continue",
+    "print ticks == n - 1",
+    "bt",
+    "delete",
+    "detach"
+   ],
+   "attach": {
+    "ticks": 100
+   },
+   "normalise": [
+    "ticks"
+   ]
+  },
+  {
+   "name": "attach-clang-detach",
+   "prog": "c/sleeper/clang-O0/prog",
+   "script": [
+    "attach {pid}",
+    "bt",
+    "detach"
+   ],
+   "attach": {
+    "ticks": 100
+   }
+  },
+  {
+   "name": "attach-clang-break",
+   "prog": "c/sleeper/clang-O0/prog",
+   "script": [
+    "attach {pid}",
+    "break tick",
+    "continue",
+    "print ticks == n - 1",
+    "bt",
+    "delete",
+    "detach"
+   ],
+   "attach": {
+    "ticks": 100
+   },
+   "normalise": [
+    "ticks"
+   ]
+  },
+  {
+   "name": "attach-gcc-info",
+   "prog": "c/sleeper/gcc-O0/prog",
+   "script": [
+    "attach {pid}",
+    "info threads",
+    "frame",
+    "detach"
+   ],
+   "attach": {
+    "ticks": 100
+   }
+  },
+  {
+   "name": "attach-gcc-kill",
+   "prog": "c/sleeper/gcc-O0/prog",
+   "script": [
+    "attach {pid}",
+    "kill"
+   ],
+   "attach": {
+    "ticks": 100
+   }
+  },
+  {
+   "name": "attach-gcc-quit",
+   "prog": "c/sleeper/gcc-O0/prog",
+   "script": [
+    "attach {pid}",
+    "bt"
+   ],
+   "attach": {
+    "ticks": 100
+   }
+  },
+  {
+   "name": "attach-gcc-continue",
+   "prog": "c/sleeper/gcc-O0/prog",
+   "script": [
+    "attach {pid}",
+    "continue"
+   ],
+   "attach": {
+    "ticks": 60
+   }
+  },
+  {
+   "name": "attach-gcc-signal",
+   "prog": "c/sleeper/gcc-O0/prog",
+   "script": [
+    "attach {pid}",
+    "signal SIGTERM"
+   ],
+   "attach": {
+    "ticks": 100
+   }
+  },
+  {
+   "name": "attach-gcc-dash-p",
+   "prog": "c/sleeper/gcc-O0/prog",
+   "script": [
+    "bt",
+    "detach"
+   ],
+   "attach": {
+    "ticks": 100,
+    "form": "dash-p"
+   }
+  },
+  {
+   "name": "attach-gcc-held",
+   "prog": "c/sleeper/gcc-O0/prog",
+   "script": [
+    "attach {pid}"
+   ],
+   "attach": {
+    "ticks": 200,
+    "held": true
+   },
+   "compare": "own",
+   "gdb": "refuses",
+   "why": "the pinned gdb prints a distribution's ptrace-scope paragraph on stdout and, after reading /proc, an errno that is not the attach's (\"Inappropriate ioctl for device\"); sniff prints gdb's already-traced warning and the errno the kernel gave",
+   "expect": [
+    "[sleeper exited with code 0: done 200]"
+   ],
+   "expect_err": [
+    "/work/target/s2/attach-gcc-held.cmd:1: Error in sourced command file:",
+    "warning: process <PID> is already traced by process <PID>",
+    "ptrace: Operation not permitted."
+   ],
+   "expect_rc": 1
+  },
+  {
+   "name": "attach-gcc-nosuch",
+   "prog": "c/sleeper/gcc-O0/prog",
+   "script": [
+    "attach 4000000"
+   ]
+  },
+  {
+   "name": "attach-gcc-noarg",
+   "prog": "c/sleeper/gcc-O0/prog",
+   "script": [
+    "attach"
+   ]
+  },
+  {
+   "name": "attach-gcc-word",
+   "prog": "c/sleeper/gcc-O0/prog",
+   "script": [
+    "attach x"
+   ]
+  },
+  {
+   "name": "detach-gcc-norun",
+   "prog": "c/sleeper/gcc-O0/prog",
+   "script": [
+    "detach"
+   ]
+  },
+  {
+   "name": "tty-gcc-attach",
+   "prog": "c/sleeper/gcc-O0/prog",
+   "script": [
+    "attach {pid}",
+    "bt",
+    "detach"
+   ],
+   "attach": {
+    "ticks": 100
+   },
+   "tty": true
   }
  ]
 }

@@ -64,6 +64,9 @@
    "drop": [
     "\\b0x00007fff[0-9a-f]{8}\\b"
    ]
+  },
+  "tty-gcc-attach": {
+   "skip": "the console's terminal rows run sniff as init, with no shell to start the sleeper it attaches to; the batch attach rows hold attach and detach at PAX's console"
   }
  }
 }
