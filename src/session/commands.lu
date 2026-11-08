@@ -149,6 +149,7 @@ fn cmd_info(mut s: Session, rest: str) -> str {
     if what == "locals" || what == "lo" { return cmd_info_locals(mut s) }
     if what == "args" || what == "ar" { return cmd_info_args(mut s) }
     if what == "registers" || what == "r" || what == "reg" || what == "all-registers" { return cmd_info_registers(mut s, more) }
+    if gdb_only_info_sub(what) { return not_implemented("info {what}") }
     "Undefined info command: \"{rest.trim()}\".  Try \"help info\"."
 }
 
@@ -208,6 +209,7 @@ fn dispatch(mut s: Session, word: str, rest: str, text: str) -> str {
     if word == "maint" || word == "maintenance" || word == "mt" { return cmd_maint(mut s, rest) }
     if word == "list" || word == "l" { return cmd_list(mut s, rest) }
     if word == "help" || word == "h" { return cmd_help(mut s, rest) }
+    if gdb_only(word) { return not_implemented(word) }
     "Undefined command: \"{word}\".  Try \"help\"."
 }
 
