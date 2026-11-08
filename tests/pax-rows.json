@@ -20,6 +20,42 @@
    "drop": [
     "^(rbx|rcx|rdx|rsi|r8|r9|r10|r11|r12|r13|r14|r15|fs_base|eflags)\\s"
    ]
+  },
+  "watch-gcc-global": {
+   "skip": "hardware watchpoints on PAX wait for its debug registers through ptrace (the px lane drafted in notes/sn05-the-repin-and-s5.md)"
+  },
+  "watch-gcc-local-scope": {
+   "skip": "hardware watchpoints on PAX wait for its debug registers through ptrace (the px lane drafted in notes/sn05-the-repin-and-s5.md)"
+  },
+  "watch-gcc-members": {
+   "skip": "hardware watchpoints on PAX wait for its debug registers through ptrace (the px lane drafted in notes/sn05-the-repin-and-s5.md)"
+  },
+  "watch-gcc-delete": {
+   "skip": "hardware watchpoints on PAX wait for its debug registers through ptrace (the px lane drafted in notes/sn05-the-repin-and-s5.md)"
+  },
+  "rwatch-gcc-global": {
+   "skip": "hardware watchpoints on PAX wait for its debug registers through ptrace (the px lane drafted in notes/sn05-the-repin-and-s5.md)"
+  },
+  "awatch-gcc-global": {
+   "skip": "hardware watchpoints on PAX wait for its debug registers through ptrace (the px lane drafted in notes/sn05-the-repin-and-s5.md)"
+  },
+  "watch-clang-global": {
+   "skip": "hardware watchpoints on PAX wait for its debug registers through ptrace (the px lane drafted in notes/sn05-the-repin-and-s5.md)"
+  },
+  "watch-clang-local-scope": {
+   "skip": "hardware watchpoints on PAX wait for its debug registers through ptrace (the px lane drafted in notes/sn05-the-repin-and-s5.md)"
+  },
+  "watch-clang-members": {
+   "skip": "hardware watchpoints on PAX wait for its debug registers through ptrace (the px lane drafted in notes/sn05-the-repin-and-s5.md)"
+  },
+  "watch-clang-delete": {
+   "skip": "hardware watchpoints on PAX wait for its debug registers through ptrace (the px lane drafted in notes/sn05-the-repin-and-s5.md)"
+  },
+  "rwatch-clang-global": {
+   "skip": "hardware watchpoints on PAX wait for its debug registers through ptrace (the px lane drafted in notes/sn05-the-repin-and-s5.md)"
+  },
+  "awatch-clang-global": {
+   "skip": "hardware watchpoints on PAX wait for its debug registers through ptrace (the px lane drafted in notes/sn05-the-repin-and-s5.md)"
   }
  }
 }
