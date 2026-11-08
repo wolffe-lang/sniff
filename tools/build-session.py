@@ -11,7 +11,8 @@ named compiler at -O0 with DWARF 5 and no prefix maps, so a debugger finds
 the sources where the line table says they are. A file named plain*.c is
 compiled without -g: a callee with no line information. c/exits also gets a
 stripped link. Wolf programs (the session tree's and the S1 corpus's) are
-built by the pinned wolf, whose default tier emits DWARF.
+built by the pinned wolf with -g: the default tier's DWARF (source types
+since 0.2.38) plus a non-allocated .debug_frame.
 """
 import argparse
 import hashlib
@@ -110,7 +111,7 @@ def main():
         directory = out / ident
         directory.mkdir(parents=True, exist_ok=True)
         exe = directory / 'prog'
-        run([args.wolf, 'build', source, '--no-cache', '-o', exe], wolf_env, source.parent)
+        run([args.wolf, 'build', source, '-g', '--no-cache', '-o', exe], wolf_env, source.parent)
         if mac:
             mac_sign(exe, env)
         rows.append({'id': ident, 'producer': 'wolf', 'source': str(source.relative_to(ROOT)),

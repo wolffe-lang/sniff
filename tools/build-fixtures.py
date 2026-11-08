@@ -57,8 +57,8 @@ def main():
                 if old.is_dir(): shutil.rmtree(old)
                 else: old.unlink()
             if producer == 'wolf':
-                # wolf 0.2.37's default tier emits DWARF; it has no -g option.
-                commands = [[args.wolf, 'build', source, '--no-cache', '-o', exe]]
+                # wolf 0.2.38's default tier emits DWARF with source types; -g adds .debug_frame.
+                commands = [[args.wolf, 'build', source, '-g', '--no-cache', '-o', exe]]
             else:
                 obj = directory / 'main.o'
                 commands = [[producer, '-g', '-gdwarf-5', '-' + opt, '-pthread',
@@ -85,7 +85,7 @@ def main():
     result = {'schema': 1, 'platform': platform.system() + '-' + platform.machine(),
               'versions': versions, 'source_date_epoch': 1700000000,
               'c_object_mtime': 1700000000, 'macho_link_control': '-Wl,-reproducible' if mac else None,
-              'wolf_debug_mode': 'default emits DWARF; -g is not a supported flag',
+              'wolf_debug_mode': '-g: the default tier\'s DWARF plus .debug_frame',
               'fixtures': rows}
     (args.out / 'builds.json').write_text(json.dumps(result, indent=2) + '\n')
     if not all(row['reproducible'] for row in rows): return 1
