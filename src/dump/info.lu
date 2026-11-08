@@ -434,9 +434,12 @@ fn info_value(mut o: Out, n: Names, data: List[byte], x: InfoCtx, u: InfoUnit, h
         put(mut o, "\"")
         put_escaped(mut o, data, span)
         put(mut o, "\"")
-    } else if form == 12 || form == 25 {
-        let flag = if value.raw != 0 { "true" } else { "false" }
-        put(mut o, flag)
+    } else if form == 25 {
+        put(mut o, "true")
+    } else if form == 12 {
+        // DW_FORM_flag is a stored byte, printed as one (wolf 0.2.38's DW_AT_artificial);
+        // only DW_FORM_flag_present prints as true.
+        put(mut o, "0x{hex2(value.raw)}")
     } else if form == 1 || form >= 41 && form <= 44 || form == 27 {
         let address = info_addr_value(data, x, u, header, value)?
         put(mut o, hex_address(address, header.address_size))
