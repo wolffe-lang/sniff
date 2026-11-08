@@ -3647,6 +3647,18 @@
    ]
   },
   {
+   "name": "threads-gcc-again",
+   "prog": "c/workers/gcc-O0/prog",
+   "script": [
+    "break work",
+    "run",
+    "break 52",
+    "continue",
+    "delete",
+    "continue"
+   ]
+  },
+  {
    "name": "signals-gcc-run",
    "prog": "c/sigusr/gcc-O0/prog",
    "script": [
