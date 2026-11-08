@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Which frames unwind through CFI and which through the frame-pointer fallback.
 
-`maint frames` is sniff's own command. The claims checked here are the ones
-notes/sn02-the-linux-core.md states: C programs built by gcc and clang unwind
-every frame through .eh_frame; wolf 0.2.37 emits no CFI for its own functions
-and none for the runtime's `main` shim either, so every wolf frame that is
-unwound uses the fallback. The row goes red by name the day s283 lands, rather
-than letting the note go stale.
+`maint frames` is sniff's own command. C programs built by gcc and clang unwind
+every frame through .eh_frame (notes/sn02-the-linux-core.md). wolf 0.2.38 built
+with -g writes a .debug_frame FDE for every wolf function and for the entry shim
+(notes/sn05-the-repin-and-s5.md), so every wolf frame now unwinds through CFI on
+both platforms; until 0.2.37 each used the frame-pointer fallback, and this row
+went red by name when the producer changed, as it was written to.
 """
 import argparse
 from pathlib import Path
@@ -20,15 +20,16 @@ ROWS = [
     # name, program, break location, expected (function, basis) per frame, innermost first
     ('c-gcc-recursion', 'c/calls/gcc-O0/prog', 'main.c:6', [('depth_sum', 'cfi'), ('main', 'outermost')], True),
     ('c-clang-recursion', 'c/calls/clang-O0/prog', 'main.c:6', [('depth_sum', 'cfi'), ('main', 'outermost')], True),
-    ('wolf-recursion', 'wolf/recursion/wolf-debug/prog', 'depth', [('depth', 'frame-pointer'), ('main', 'frame-pointer'), ('main', 'outermost')], True),
-    ('wolf-nested', 'wolf/nested/wolf-debug/prog', 'inner', [('inner', 'frame-pointer'), ('outer', 'frame-pointer'), ('main', 'frame-pointer'), ('main', 'outermost')], True),
+    ('wolf-recursion', 'wolf/recursion/wolf-debug/prog', 'depth', [('depth', 'cfi'), ('main', 'cfi'), ('main', 'outermost')], True),
+    ('wolf-nested', 'wolf/nested/wolf-debug/prog', 'inner', [('inner', 'cfi'), ('outer', 'cfi'), ('main', 'cfi'), ('main', 'outermost')], True),
 ]
 
-# macOS arm64: the C binaries carry compact unwind and no DWARF CFI (R-sn00-2); wolf carries neither.
+# macOS arm64: the C binaries carry compact unwind and no DWARF CFI (R-sn00-2); wolf's dSYM carries
+# the .debug_frame that -g writes.
 ROWS_MAC = [
     ('c-clang-recursion', 'c/calls/clang-O0/prog', 'main.c:6', [('depth_sum', 'compact'), ('main', 'outermost')], True),
-    ('wolf-recursion', 'wolf/recursion/wolf-debug/prog', 'depth', [('depth', 'frame-pointer'), ('main', 'frame-pointer'), ('main', 'outermost')], True),
-    ('wolf-nested', 'wolf/nested/wolf-debug/prog', 'inner', [('inner', 'frame-pointer'), ('outer', 'frame-pointer'), ('main', 'frame-pointer'), ('main', 'outermost')], True),
+    ('wolf-recursion', 'wolf/recursion/wolf-debug/prog', 'depth', [('depth', 'cfi'), ('main', 'cfi'), ('main', 'outermost')], True),
+    ('wolf-nested', 'wolf/nested/wolf-debug/prog', 'inner', [('inner', 'cfi'), ('outer', 'cfi'), ('main', 'cfi'), ('main', 'outermost')], True),
 ]
 
 
