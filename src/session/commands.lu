@@ -245,8 +245,27 @@ fn run_script(mut s: Session, path: str) -> int {
     0
 }
 
+/// What an empty line repeats after `line` ran (err its error, "" for none), as gdb repeats it:
+/// run, delete, display, undisplay, condition and quit do not repeat, and a comment repeats as
+/// nothing. A `list` that printed repeats as a bare `list` (`list -` as itself), and an `x` as a bare
+/// `x`, which goes on from where it stopped; one that failed repeats as typed.
+fn repeat_of(line: str, err: str) -> str {
+    let text = line.trim()
+    if text.starts_with("#") { return "" }
+    let word = text.splitn(" ", 2)[0]
+    if word == "run" || word == "r" || word == "delete" || word == "d" || word == "del" || word == "display" ||
+       word == "disp" || word.starts_with("display/") || word == "undisplay" || word == "undisp" ||
+       word == "condition" || word == "quit" || word == "q" || word == "exit" { return "" }
+    if err.len() == 0 && (word == "list" || word == "l") {
+        if str_from(text, word.len()).trim() == "-" { return "list -" }
+        return "list"
+    }
+    if err.len() == 0 && (word == "x" || word.starts_with("x/")) { return "x" }
+    text
+}
+
 /// Terminal mode: prompt, read a command, run it. An error is printed and the
-/// loop goes on, as in an interactive gdb.
+/// loop goes on, as in an interactive gdb. An empty line repeats the previous one.
 fn run_interactive(mut s: Session) -> int {
     s.tty = true
     emit_line(mut s, "Reading symbols from {s.prog.path}...")
@@ -254,7 +273,10 @@ fn run_interactive(mut s: Session) -> int {
         emit(mut s, "(sniff) ")
         flush_out(mut s)
         let ln = io.input_line() else { break }
-        let err = exec_line(mut s, ln)
+        var line = ln
+        if ln.trim().len() == 0 { line = s.repeat }
+        let err = exec_line(mut s, line)
+        if line.trim().len() > 0 { s.repeat = repeat_of(line, err) }
         flush_out(mut s)
         if err.len() > 0 { eprint(err) }
     }
