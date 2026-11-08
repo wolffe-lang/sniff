@@ -3910,9 +3910,9 @@
    "script": [
     "break order",
     "run",
-    "up",
-    "up",
+    "up 3",
     "frame",
+    "down",
     "delete",
     "continue"
    ]
@@ -3934,9 +3934,9 @@
    "script": [
     "break order",
     "run",
-    "up",
-    "up",
+    "up 3",
     "frame",
+    "down",
     "delete",
     "continue"
    ]
