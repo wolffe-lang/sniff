@@ -1888,6 +1888,21 @@
     "undisplay 1",
     "next"
    ]
+  },
+  {
+   "name": "wolf-mut-reference",
+   "prog": "wolf/aggregates/wolf-debug/prog",
+   "script": [
+    "break main.lu:10",
+    "run",
+    "info args",
+    "print p",
+    "print p.x",
+    "print p.y",
+    "print *p.hist",
+    "print p.x + by",
+    "finish"
+   ]
   }
  ]
 }
