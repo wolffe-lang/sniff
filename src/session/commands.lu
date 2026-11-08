@@ -207,6 +207,7 @@ fn dispatch(mut s: Session, word: str, rest: str, text: str) -> str {
     if word == "echo" { emit(mut s, unescape_echo(rest)); return "" }
     if word == "info" || word == "i" { return cmd_info(mut s, rest) }
     if word == "maint" || word == "maintenance" { return cmd_maint(mut s, rest) }
+    if word == "list" || word == "l" { return cmd_list(mut s, rest) }
     // no `help` yet, so the line names no command to try (sniff#11)
     "Undefined command: \"{word}\"."
 }
