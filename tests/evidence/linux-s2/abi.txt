@@ -46,6 +46,8 @@ regs ds 23
 regs es 24
 regs fs 25
 regs gs 26
+user u_debugreg 848
+user u_debugreg_size 8
 wait exit0 raw=0 exited=1 exitstatus=0 signaled=0 termsig=-1
 wait exit3 raw=768 exited=1 exitstatus=3 signaled=0 termsig=-1
 wait exit255 raw=65280 exited=1 exitstatus=255 signaled=0 termsig=-1

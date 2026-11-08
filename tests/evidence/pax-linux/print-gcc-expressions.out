@@ -1,0 +1,22 @@
+Breakpoint 1 at 0x401923: file /work/fixtures/session/c/watch/main.c, line 41.
+
+Breakpoint 1, main () at /work/fixtures/session/c/watch/main.c:41
+41	    origin.x = sum + seen;
+$1 = 31
+$2 = 4
+$3 = 57
+$4 = {x = 1, y = 5, hist = {10, 20, 31, 40}}
+$5 = {10, 20, 31, 40}
+$6 = 1
+$7 = -3
+$8 = 0
+$9 = 6
+$10 = 2
+$11 = 10 '\n'
+$12 = 4.5
+$13 = (int *) 0x4aa0d4 <origin+4>
+$14 = 5
+$15 = 1
+$16 = 100
+$17 = 10
+4

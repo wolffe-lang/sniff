@@ -1,0 +1,20 @@
+Breakpoint 1 at 0x11bf: file /work/fixtures/session/c/watch/main.c, line 35.
+
+Breakpoint 1, main () at /work/fixtures/session/c/watch/main.c:35
+35	    bump(3);
+Hardware watchpoint 2: counter
+
+Hardware watchpoint 2: counter
+
+Old value = 0
+New value = 3
+bump (by=3) at /work/fixtures/session/c/watch/main.c:18
+18	    return counter;
+
+Hardware watchpoint 2: counter
+
+Old value = 3
+New value = 4
+bump (by=1) at /work/fixtures/session/c/watch/main.c:18
+18	    return counter;
+[Inferior 1 (process <PID>) exited normally]

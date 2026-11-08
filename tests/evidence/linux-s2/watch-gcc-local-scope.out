@@ -1,0 +1,32 @@
+Breakpoint 1 at 0x1178: file /work/fixtures/session/c/watch/main.c, line 28.
+
+Breakpoint 1, walk (n=4) at /work/fixtures/session/c/watch/main.c:28
+28	    for (int i = 0; i < n; i++) {
+Hardware watchpoint 2: total
+
+Hardware watchpoint 2: total
+
+Old value = 0
+New value = 1
+walk (n=4) at /work/fixtures/session/c/watch/main.c:28
+28	    for (int i = 0; i < n; i++) {
+
+Hardware watchpoint 2: total
+
+Old value = 1
+New value = 3
+walk (n=4) at /work/fixtures/session/c/watch/main.c:28
+28	    for (int i = 0; i < n; i++) {
+
+Hardware watchpoint 2: total
+
+Old value = 3
+New value = 6
+walk (n=4) at /work/fixtures/session/c/watch/main.c:28
+28	    for (int i = 0; i < n; i++) {
+
+Watchpoint 2 deleted because the program has left the block in
+which its expression is valid.
+0x00005555555551e4 in main () at /work/fixtures/session/c/watch/main.c:40
+40	    int sum = walk(4);
+[Inferior 1 (process <PID>) exited normally]

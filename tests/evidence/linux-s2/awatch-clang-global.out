@@ -1,0 +1,55 @@
+Breakpoint 1 at 0x11bf: file /work/fixtures/session/c/watch/main.c, line 35.
+
+Breakpoint 1, main () at /work/fixtures/session/c/watch/main.c:35
+35	    bump(3);
+Hardware access (read/write) watchpoint 2: counter
+
+Hardware access (read/write) watchpoint 2: counter
+
+Value = 0
+0x0000555555555140 in bump (by=3) at /work/fixtures/session/c/watch/main.c:17
+17	    counter += by;
+
+Hardware access (read/write) watchpoint 2: counter
+
+Old value = 0
+New value = 3
+bump (by=3) at /work/fixtures/session/c/watch/main.c:18
+18	    return counter;
+
+Hardware access (read/write) watchpoint 2: counter
+
+Value = 3
+0x000055555555514c in bump (by=3) at /work/fixtures/session/c/watch/main.c:18
+18	    return counter;
+
+Hardware access (read/write) watchpoint 2: counter
+
+Value = 3
+0x00005555555551e7 in main () at /work/fixtures/session/c/watch/main.c:38
+38	    counter = counter;
+
+Hardware access (read/write) watchpoint 2: counter
+
+Value = 3
+main () at /work/fixtures/session/c/watch/main.c:39
+39	    int seen = peek();
+
+Hardware access (read/write) watchpoint 2: counter
+
+Value = 3
+0x000055555555515a in peek () at /work/fixtures/session/c/watch/main.c:22
+22	    int seen = counter;
+
+Hardware access (read/write) watchpoint 2: counter
+
+Value = 3
+0x0000555555555140 in bump (by=1) at /work/fixtures/session/c/watch/main.c:17
+17	    counter += by;
+
+Hardware access (read/write) watchpoint 2: counter
+
+Old value = 3
+New value = 4
+bump (by=1) at /work/fixtures/session/c/watch/main.c:18
+18	    return counter;

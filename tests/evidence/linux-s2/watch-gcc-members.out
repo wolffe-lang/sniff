@@ -1,0 +1,24 @@
+Breakpoint 1 at 0x11a4: file /work/fixtures/session/c/watch/main.c, line 35.
+
+Breakpoint 1, main () at /work/fixtures/session/c/watch/main.c:35
+35	    bump(3);
+Hardware watchpoint 2: origin.hist[2]
+Hardware watchpoint 3: cursor->y
+Num     Type           Disp Enb Address            What
+2       hw watchpoint  keep y                      origin.hist[2]
+3       hw watchpoint  keep y                      cursor->y
+
+Hardware watchpoint 2: origin.hist[2]
+
+Old value = 30
+New value = 31
+main () at /work/fixtures/session/c/watch/main.c:37
+37	    cursor->y = 5;
+
+Hardware watchpoint 3: cursor->y
+
+Old value = 2
+New value = 5
+main () at /work/fixtures/session/c/watch/main.c:38
+38	    counter = counter;
+[Inferior 1 (process <PID>) exited normally]

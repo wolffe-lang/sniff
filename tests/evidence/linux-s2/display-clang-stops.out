@@ -1,0 +1,15 @@
+Breakpoint 1 at 0x1137: file /work/fixtures/session/c/watch/main.c, line 17.
+
+Breakpoint 1, bump (by=3) at /work/fixtures/session/c/watch/main.c:17
+17	    counter += by;
+
+Breakpoint 1, bump (by=1) at /work/fixtures/session/c/watch/main.c:17
+17	    counter += by;
+1: counter = 3
+2: /x by = 0x1
+Auto-display expressions now in effect:
+Num Enb Expression
+1:   y  counter
+2:   y  /x by
+18	    return counter;
+2: /x by = 0x1

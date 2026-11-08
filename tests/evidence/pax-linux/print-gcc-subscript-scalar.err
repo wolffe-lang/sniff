@@ -1,0 +1,2 @@
+/work/target/s2/print-gcc-subscript-scalar.cmd:3: Error in sourced command file:
+cannot subscript something of type `int'

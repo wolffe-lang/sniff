@@ -1,0 +1,4 @@
+Breakpoint 1 at 0x401923: file /work/fixtures/session/c/watch/main.c, line 41.
+
+Breakpoint 1, main () at /work/fixtures/session/c/watch/main.c:41
+41	    origin.x = sum + seen;

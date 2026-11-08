@@ -1,0 +1,14 @@
+Breakpoint 1 at 0x1191: file /work/fixtures/session/c/watch/main.c, line 29.
+
+Breakpoint 1, walk (n=4) at /work/fixtures/session/c/watch/main.c:29
+29	        total += i;
+$1 = 1
+Num     Type           Disp Enb Address            What
+1       breakpoint     keep y   0x0000555555555191 in walk at /work/fixtures/session/c/watch/main.c:29
+	stop only if i == 2
+	breakpoint already hit 1 time
+
+Breakpoint 1, walk (n=4) at /work/fixtures/session/c/watch/main.c:29
+29	        total += i;
+$2 = 3
+[Inferior 1 (process <PID>) exited normally]

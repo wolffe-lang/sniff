@@ -1,0 +1,10 @@
+Breakpoint 1 at 0x11bf: file /work/fixtures/session/c/watch/main.c, line 35.
+
+Breakpoint 1, main () at /work/fixtures/session/c/watch/main.c:35
+35	    bump(3);
+Hardware watchpoint 2: counter
+Num     Type           Disp Enb Address            What
+1       breakpoint     keep y   0x00005555555551bf in main at /work/fixtures/session/c/watch/main.c:35
+	breakpoint already hit 1 time
+2       hw watchpoint  keep y                      counter
+[Inferior 1 (process <PID>) exited normally]
