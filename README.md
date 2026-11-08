@@ -22,8 +22,8 @@ capabilities from measured ones.
 | Reader oracles | Ubuntu llvm-dwarfdump 18.1.3 and readelf 2.42, binary SHA-256 pinned; SDK llvm-dwarfdump on macOS |
 | macOS symbol oracle | SDK llvm-nm, Apple LLVM 21.0.0; version and binary SHA-256 pinned |
 | C producers | GCC 13.3.0 and clang 18.1.3 on Linux; Apple clang 21.0.0 on macOS |
-| Wolf value oracle | lupin 0.1.59 |
-| Bootstrap compiler | wolf 0.2.37, whole release archives pinned by SHA-256 |
+| Wolf value oracle | lupin 0.1.60 |
+| Bootstrap compiler | wolf 0.2.38, whole release archives pinned by SHA-256 |
 
 `wolf-toolchain.toml` pins archive bytes, including wolf's bundled standard
 library and runtime. `sniff-oracle.toml`, `ci/packages.txt` and
@@ -57,8 +57,10 @@ S0 supplies the reproducible corpus builder,
 producer-separated DWARF census, scripted debugger capture and comparison,
 and lupin's statement-boundary local-value recorder. The corpus contains five
 wolf programs and six C programs. Linux builds every C program with GCC and
-clang at `-g -gdwarf-5 -O0` and `-O2`; macOS uses its SDK clang. Wolf 0.2.37
-emits DWARF in its default tier and has no `-g` option.
+clang at `-g -gdwarf-5 -O0` and `-O2`; macOS uses its SDK clang. Every wolf
+program is built with `-g`: wolf 0.2.38's default tier describes its source
+types in DWARF, and `-g` adds a non-allocated `.debug_frame`, so wolf frames
+unwind through CFI.
 
 ```sh
 bash tools/gate unit                 # parser/comparator/tier contracts and saved transcript replay
