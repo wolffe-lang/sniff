@@ -128,6 +128,63 @@ class MacAttachFacts(unittest.TestCase):
         self.assertNotEqual(smac.comparable({}, lldb), smac.comparable({}, sniff))
 
 
+class SleeperBlocked(unittest.TestCase):
+    """A debugger is started on the sleeper only once it blocks in its nap: its ready line is written by a
+    system call it may not have returned from, and an attach there stops it in write(), not in nap."""
+
+    def states(self, seq):
+        calls = []
+        def state(pid):
+            calls.append(pid)
+            return seq[min(len(calls), len(seq)) - 1]
+        return state, calls
+
+    def test_waits_for_the_nap(self):
+        for mod in (session, smac):
+            state, calls = self.states(['R', 'R', 'S'])
+            self.assertTrue(mod.wait_blocked('42', state, tries=10, nap=0))
+            self.assertEqual(calls, ['42', '42', '42'])
+            # bounded: a sleeper that never blocks is given up on, and a system that keeps no state is not waited on
+            state, calls = self.states(['R'])
+            self.assertFalse(mod.wait_blocked('42', state, tries=5, nap=0))
+            self.assertEqual(len(calls), 5)
+            state, calls = self.states([''])
+            self.assertFalse(mod.wait_blocked('42', state, tries=5, nap=0))
+            self.assertEqual(len(calls), 1)
+
+    def test_state_letters(self):
+        self.assertEqual(session.status_state('Name:\tprog\nState:\tS (sleeping)\nTgid:\t7\n'), 'S')
+        self.assertEqual(session.status_state('State:\tR (running)\n'), 'R')
+        self.assertEqual(session.status_state(''), '')
+        self.assertEqual(smac.ps_letter('S    \n'), 'S')
+        self.assertEqual(smac.ps_letter('R+\n'), 'R')
+        self.assertEqual(smac.ps_letter(''), '')
+
+    def test_attach_run_waits_before_the_debugger(self):
+        seen = []
+        old = session.wait_blocked
+        session.wait_blocked = lambda pid, *a, **k: seen.append(pid) or True
+        try:
+            with tempfile.TemporaryDirectory() as t:
+                d = Path(t)
+                sleeper = d / 'prog'
+                sleeper.write_text('#!%s\nimport os\nprint("ready %%d" %% os.getpid(), flush=True)\n' % sys.executable)
+                sleeper.chmod(0o755)
+                dbg = d / 'dbg'
+                dbg.write_text('#!/bin/sh\nexit 0\n')
+                dbg.chmod(0o755)
+                old_scripts = session.SCRIPTS
+                session.SCRIPTS = 'scripts'
+                try:
+                    session.attach_run(str(dbg), {'name': 'r', 'script': ['detach'], 'attach': {}}, str(sleeper), str(d), False)
+                finally:
+                    session.SCRIPTS = old_scripts
+        finally:
+            session.wait_blocked = old
+        self.assertEqual(len(seen), 1)
+        self.assertRegex(seen[0], r'^\d+$')
+
+
 class ThreadsAndAttach(unittest.TestCase):
     """S6's normalisations and the attach runner, each red on the break it exists to catch."""
     TABLE = ('  Id   Target Id                              Frame \n'
