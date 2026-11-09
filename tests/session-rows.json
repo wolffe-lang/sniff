@@ -3103,7 +3103,7 @@
    ],
    "compare": "head",
    "head": 1,
-   "why": "provisional"
+   "why": "the held line is gdb's summary; sniff attaches to a process id only and says so"
   },
   {
    "name": "help-detach",
@@ -3113,7 +3113,7 @@
    ],
    "compare": "head",
    "head": 1,
-   "why": "provisional"
+   "why": "the held line is gdb's summary; sniff names detach's subcommands as not implemented yet"
   },
   {
    "name": "undefined-command",
