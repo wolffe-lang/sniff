@@ -131,5 +131,5 @@ time; the stops are the worker's alone; no row lists threads after one has ended
 - [x] signals: the stop and its frame line, `handle`, `info signals`, `signal SIG`, `continue` passing the
   signal, the program's own SIGSEGV at the faulting line
 - [x] PAX: the rows at PAX's console under KVM, the procfs gap filed as pax#322
-- [ ] attach and detach: the second PR
-- [ ] the gauntlet, the plant and the macOS record at the head: in the PR
+- [x] attach and detach: the second PR, sniff#17 (`notes/sn07-attach-and-detach.md`)
+- [x] the gauntlet, the plant and the macOS record at the head: in sniff#15
