@@ -62,17 +62,35 @@ def sh_double(text):
     return t.replace('{pid}', '$pid')
 
 
+# How many reads a row's shell lines make while they wait for the sleeper's or the holder's first line. pelt's
+# read loop takes memory each time round, and a wait that never ends ran the console out of frames and ended
+# every row after it; a bounded wait ends one row instead.
+WAIT_READS = 400
+
+
+def holder_prog(prog):
+    """The holder fixture beside a sleeper fixture, for the same compiler: c/holder/CC-O0/prog."""
+    return prog.replace('c/sleeper/', 'c/holder/', 1)
+
+
+def image_progs(rows):
+    """The fixtures an image carries for its rows: each row's program, and the holder of a held attach row."""
+    progs = {r['prog'] for r in rows}
+    progs |= {holder_prog(r['prog']) for r in rows if r.get('attach', {}).get('held')}
+    return sorted(progs)
+
+
 def attach_block(row, scripts_dir, fx_guest, prog):
     """The shell lines that start an attach row's sleeper and give sniff its pid, as tools/session.py's attach_run
     does on Linux: the sleeper in the background, its 'ready PID' line awaited, the holder first if the row says
     so, the script written with the pid, sniff run, then the sleeper's end appended to stdout."""
     a = row['attach']
     script = '%s/%s.cmd' % (scripts_dir, row['name'])
-    out = ['%s %d > /tmp/sl 2> /dev/null &' % (prog, a.get('ticks', 100)), 'sp=$!', 'r=',
-           'while [ -z "$r" ]; do read r < /tmp/sl; done', 'pid=${r#ready }']
+    out = ['%s %d > /tmp/sl 2> /dev/null &' % (prog, a.get('ticks', 100)), 'sp=$!', 'r=', 'n=0',
+           'while [ -z "$r" ] && [ $n -lt %d ]; do read r < /tmp/sl; n=$((n + 1)); done' % WAIT_READS, 'pid=${r#ready }']
     if a.get('held'):
-        holder = prog.replace('/c/sleeper/', '/c/holder/')
-        out += ['%s $pid 3000 > /tmp/hl &' % holder, 'hp=$!', 'h=', 'while [ -z "$h" ]; do read h < /tmp/hl; done']
+        out += ['%s $pid 3000 > /tmp/hl &' % holder_prog(prog), 'hp=$!', 'h=', 'n=0',
+                'while [ -z "$h" ] && [ $n -lt %d ]; do read h < /tmp/hl; n=$((n + 1)); done' % WAIT_READS]
     out.append(': > %s' % script)
     for ln in row['script']:
         out.append('printf \'%%s\\n\' "%s" >> %s' % (sh_double(ln), script))
@@ -209,8 +227,7 @@ def build_image(pax, kernel, inputs, sniff, fixtures, rows, work, label):
         f = scripts / (row['name'] + '.cmd')
         f.write_text('\n'.join(row['script']) + '\n')
         files.append(('/work/target/s2/%s.cmd' % row['name'], f, 644))
-    progs = {r['prog'] for r in rows} | {r['prog'].replace('/c/sleeper/', '/c/holder/') for r in rows if r.get('attach', {}).get('held')}
-    for prog in sorted(progs):
+    for prog in image_progs(rows):
         files.append(('/work/target/pax-fixtures/' + prog, Path(fixtures) / prog, 755))
     for dest, src in sources_for(rows).items():
         files.append((dest, src, 644))
