@@ -201,6 +201,8 @@ fn dispatch(mut s: Session, word: str, rest: str, text: str) -> str {
     if word == "frame" || word == "f" { return cmd_frame(mut s, rest) }
     if word == "thread" || word == "t" { return cmd_thread(mut s, rest) }
     if word == "handle" { return cmd_handle(mut s, rest) }
+    if word == "attach" { return cmd_attach(mut s, rest) }
+    if word == "detach" { return cmd_detach(mut s, rest) }
     if word == "signal" { return cmd_signal(mut s, rest) }
     if word == "up" { return cmd_up(mut s, rest) }
     if word == "down" || word == "dow" || word == "do" { return cmd_down(mut s, rest) }
@@ -293,6 +295,7 @@ fn run_interactive(mut s: Session) -> int {
 /// The debugger entry: sniff -batch -x SCRIPT PROG [--args A...].
 pub fn session_main(args: List[str]) -> int {
     var script = ""
+    var attach_pid = ""
     var prog = ""
     var run_args: List[str] = []
     var i: int = 0
@@ -302,6 +305,9 @@ pub fn session_main(args: List[str]) -> int {
         } else if a == "-x" && i + 1 < args.len {
             i += 1
             script = args[i]
+        } else if a == "-p" && i + 1 < args.len {
+            i += 1
+            attach_pid = args[i]
         } else if a == "--args" {
             i += 1
             if i < args.len { prog = args[i] }
@@ -314,7 +320,7 @@ pub fn session_main(args: List[str]) -> int {
         i += 1
     }
     if prog.len() == 0 {
-        eprint("usage: sniff -batch -x SCRIPT PROG [--args ARGS...]")
+        eprint("usage: sniff -batch -x SCRIPT [-p PID] PROG [--args ARGS...]")
         return 2
     }
     let p = prog_load(prog)
@@ -325,8 +331,16 @@ pub fn session_main(args: List[str]) -> int {
     var s = session_new(take p)
     s.args = run_args
     var rc = 0
+    if attach_pid.len() > 0 {
+        // -p PID: gdb attaches before it reads the command file
+        let why = cmd_attach(mut s, attach_pid)
+        flush_out(mut s)
+        if why.len() > 0 { eprint(why) }
+    }
     if script.len() > 0 { rc = run_script(mut s, script) }
     else { rc = run_interactive(mut s) }
+    // a process sniff attached to goes on; a program it started is killed
+    if s.alive && s.attached { detach_process(mut s) }
     if s.alive { kill_process(mut s) }
     flush_out(mut s)
     rc

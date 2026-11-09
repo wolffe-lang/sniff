@@ -1,0 +1,92 @@
+// Attaching to a running process and detaching from it (the GDB manual's "Debugging an Already-running
+// Process"). `attach PID` and `sniff -p PID` trace the process and every thread it has, stop it where it is
+// and show that place; `detach` lets it go on untraced, as it was. A session that ends with a process it
+// attached to detaches from it, where a program it started is killed.
+
+use platform
+
+/// attach PID.
+fn cmd_attach(mut s: Session, rest: str) -> str {
+    let t = rest.trim()
+    if t.len() == 0 { return "Argument required (process-id to attach)." }
+    if !all_digits(t) { return "Illegal process-id: {t}." }
+    // sniff's own: gdb asks whether to kill the program it has, which a command file cannot answer
+    if s.alive { return "A program is being debugged already." }
+    attach_to(mut s, parse_number(t))
+}
+
+/// Trace process pid and show where it stopped. Returns "" or the refusal: the kernel's errno as
+/// `ptrace: TEXT.`, after gdb's already-traced warning when another tracer holds the process.
+fn attach_to(mut s: Session, pid: int) -> str {
+    if s.tty { emit_line(mut s, "Attaching to program: {s.prog.path}, process {pid}") }
+    let t = platform.target_attach(pid)
+    if t.pid == 0 {
+        let err = platform.target_attach_errno(t)
+        let text = "ptrace: {platform.errno_text(err)}."
+        let by = platform.target_tracer_of(pid)
+        if by > 0 { return "warning: process {pid} is already traced by process {by}\n{text}" }
+        return text
+    }
+    s.target = copy t
+    s.inferior = copy t
+    thr_reset(mut s)
+    for tid in platform.target_task_ids(t) {
+        // the other threads it had, numbered in the order of their ids
+        if thr_index(s, tid) < 0 { thr_attached(mut s, tid) }
+    }
+    s.libs = []
+    s.alive = true
+    s.attached = true
+    s.watch_armed = false
+    s.pending_signal = 0
+    s.signal_given = false
+    s.frames = []
+    s.frames_ok = false
+    s.base = image_base(s, t)
+    if s.tty { reading_libraries(mut s) }
+    print_stop_frame(mut s, true, "")
+    ""
+}
+
+/// A thread the process had when sniff attached: numbered, no `[New ...]` line.
+fn thr_attached(mut s: Session, tid: int) {
+    var th = Thr { num: s.thr_next, tid: tid, tls: 0, running: false, pending: 0 - 1, expect_stop: false }
+    th.tls = platform.target_thread_pointer_of(s.inferior, tid)
+    s.thr_next += 1
+    (mut s.thr).push(th)
+    s.thr_multi = true
+}
+
+/// At a terminal, gdb's lines for the shared libraries a process it attached to has mapped: `Reading symbols
+/// from LIB...` and, for a library without DWARF, `(No debugging symbols found in LIB)`, in the order of
+/// their addresses.
+fn reading_libraries(mut s: Session) {
+    for l in mapped_libraries(s) {
+        emit_line(mut s, "Reading symbols from {l.name}...")
+        let p = prog_load(l.file)
+        if !p.has_info { emit_line(mut s, "(No debugging symbols found in {l.name})") }
+    }
+}
+
+/// detach.
+fn cmd_detach(mut s: Session, rest: str) -> str {
+    if !s.alive { return "The program is not being run." }
+    detach_process(mut s)
+    ""
+}
+
+/// Let the process go on untraced: `Detaching from program: ...` at a terminal, then `[Inferior 1 (process N)
+/// detached]`. Breakpoints are out of memory whenever the session has control, so nothing is left behind.
+fn detach_process(mut s: Session) {
+    let pid = s.inferior.pid
+    if s.tty { emit_line(mut s, "Detaching from program: {s.prog.path}, process {pid}") }
+    let _ = platform.target_release(s.inferior)
+    s.alive = false
+    s.attached = false
+    s.target = platform.target_none()
+    s.inferior = platform.target_none()
+    s.thr = []
+    s.frames = []
+    s.frames_ok = false
+    emit_line(mut s, "[Inferior 1 (process {pid}) detached]")
+}

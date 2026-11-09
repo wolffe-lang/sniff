@@ -83,6 +83,8 @@ struct Session {
     pub sig_pass: List[bool],
     /// The pending signal was given by `signal`: it is delivered whatever `handle` says of passing it.
     pub signal_given: bool,
+    /// The process was attached to (attach.lu), not started: the session ends by detaching from it.
+    pub attached: bool,
     pub alive: bool,
     pub base: u64,
     pub args: List[str],
@@ -155,7 +157,7 @@ fn session_new(take p: Prog) -> Session {
     Session {
         prog: p, target: platform.target_none(), inferior: platform.target_none(), thr: [], thr_cur: 0, thr_next: 1,
         thr_multi: false, thr_prev: 0, early: [], sig_stop: sig_default_stop(), sig_print: sig_default_print(),
-        sig_pass: sig_default_pass(), signal_given: false, alive: false, base: 0, args: [], out: [],
+        sig_pass: sig_default_pass(), signal_given: false, attached: false, alive: false, base: 0, args: [], out: [],
         script: "", lineno: 0, bps: [], bp_next: 1, pending_signal: 0, cfi: [], libs: [], frames: [], frames_ok: false, sel: 0, src_file: [], src_lines: [], src_ok: [], hist: [], errmsg: "", tty: false, quit: false,
         watches: [], watch_armed: false, disps: [], disp_next: 1,
         lst_file: -1, lst_first: 0, lst_last: 0, lst_at_end: false, lst_solitary: 0, src_warned: [],
