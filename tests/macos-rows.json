@@ -1949,6 +1949,16 @@
     "ptrace: Operation not permitted.",
     "[sleeper exited with code 0: done 100]"
    ]
+  },
+  {
+   "name": "help-attach",
+   "kind": "linux",
+   "stderr": true
+  },
+  {
+   "name": "help-detach",
+   "kind": "linux",
+   "stderr": true
   }
  ],
  "excluded": {

@@ -3096,6 +3096,26 @@
    ]
   },
   {
+   "name": "help-attach",
+   "prog": "c/sigusr/gcc-O0/prog",
+   "script": [
+    "help attach"
+   ],
+   "compare": "head",
+   "head": 1,
+   "why": "provisional"
+  },
+  {
+   "name": "help-detach",
+   "prog": "c/sigusr/gcc-O0/prog",
+   "script": [
+    "help detach"
+   ],
+   "compare": "head",
+   "head": 1,
+   "why": "provisional"
+  },
+  {
    "name": "undefined-command",
    "prog": "wolf/nested/wolf-debug/prog",
    "script": [
