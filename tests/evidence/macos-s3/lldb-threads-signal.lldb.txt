@@ -1,11 +1,11 @@
-(lldb) target create "/Users/mfwolffe/lanes/sn07/mcap-mcap1/target/session-fixtures/c/workers/clang-O0/prog"
-Current executable set to '/Users/mfwolffe/lanes/sn07/mcap-mcap1/target/session-fixtures/c/workers/clang-O0/prog' (arm64).
-(lldb) command source -s 0 '/Users/mfwolffe/lanes/sn07/tmp/s3c/lldb-threads-signal.lldb'
-Executing commands in '/Users/mfwolffe/lanes/sn07/tmp/s3c/lldb-threads-signal.lldb'.
+(lldb) target create "/Users/mfwolffe/lanes/sn07/mcap-mcap3/target/session-fixtures/c/workers/clang-O0/prog"
+Current executable set to '/Users/mfwolffe/lanes/sn07/mcap-mcap3/target/session-fixtures/c/workers/clang-O0/prog' (arm64).
+(lldb) command source -s 0 '/Users/mfwolffe/lanes/sn07/mcap-mcap3/target/s3c/lldb-threads-signal.lldb'
+Executing commands in '/Users/mfwolffe/lanes/sn07/mcap-mcap3/target/s3c/lldb-threads-signal.lldb'.
 (lldb) settings set -- target.run-args signal
 (lldb) run
-Process 75822 launched: '/Users/mfwolffe/lanes/sn07/mcap-mcap1/target/session-fixtures/c/workers/clang-O0/prog' (arm64)
-Process 75822 stopped
+Process 4218 launched: '/Users/mfwolffe/lanes/sn07/mcap-mcap3/target/session-fixtures/c/workers/clang-O0/prog' (arm64)
+Process 4218 stopped
 * thread #4, stop reason = signal SIGUSR1
     frame #0: 0x00000001825345e8 libsystem_kernel.dylib`__pthread_kill + 8
 libsystem_kernel.dylib`__pthread_kill:
@@ -18,14 +18,14 @@ Target 0: (prog) stopped.
 * thread #4, stop reason = signal SIGUSR1
   * frame #0: 0x00000001825345e8 libsystem_kernel.dylib`__pthread_kill + 8
     frame #1: 0x000000018256f8d8 libsystem_pthread.dylib`pthread_kill + 296
-    frame #2: 0x00000001000008f8 prog`deliver_here at main.c:29:5
-    frame #3: 0x0000000100000834 prog`worker(arg=0x000000016fdff58c) at main.c:59:22
+    frame #2: 0x0000000100000a08 prog`deliver_here at main.c:40:5
+    frame #3: 0x000000010000087c prog`worker(arg=0x000000016fdff58c) at main.c:72:22
     frame #4: 0x000000018256fc58 libsystem_pthread.dylib`_pthread_start + 136
 (lldb) thread list
-Process 75822 stopped
-  thread #1: tid = 0x104f063, 0x0000000100000884 prog`spin(flag=0x0000000100008004, want=1, slot=0) at main.c:35:31, queue = 'com.apple.main-thread'
-  thread #2: tid = 0x104f073, 0x0000000100000874 prog`spin(flag=0x0000000100008008, want=1, slot=1) at main.c:35:20
-  thread #3: tid = 0x104f074, 0x0000000100000874 prog`spin(flag=0x0000000100008008, want=2, slot=2) at main.c:35:20
-* thread #4: tid = 0x104f075, 0x00000001825345e8 libsystem_kernel.dylib`__pthread_kill + 8, stop reason = signal SIGUSR1
+Process 4218 stopped
+  thread #1: tid = 0x11158c2, 0x00000001000008bc prog`spin(flag=0x0000000100008004, want=1, slot=0) at main.c:46:20, queue = 'com.apple.main-thread'
+  thread #2: tid = 0x11158ce, 0x00000001000008b8 prog`spin(flag=0x0000000100008020, want=1, slot=1) at main.c:46:12
+  thread #3: tid = 0x11158cf, 0x00000001000008bc prog`spin(flag=0x0000000100008020, want=2, slot=2) at main.c:46:20
+* thread #4: tid = 0x11158d0, 0x00000001825345e8 libsystem_kernel.dylib`__pthread_kill + 8, stop reason = signal SIGUSR1
 (lldb) process kill
-Process 75822 exited with status = 9 (0x00000009) killed
+Process 4218 exited with status = 9 (0x00000009) killed

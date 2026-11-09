@@ -1,51 +1,51 @@
-(lldb) target create "/Users/mfwolffe/lanes/sn07/mcap-mcap1/target/session-fixtures/c/workers/clang-O0/prog"
-Current executable set to '/Users/mfwolffe/lanes/sn07/mcap-mcap1/target/session-fixtures/c/workers/clang-O0/prog' (arm64).
-(lldb) command source -s 0 '/Users/mfwolffe/lanes/sn07/mcap-mcap1/target/s3c/lldb-threads-spinner.lldb'
-Executing commands in '/Users/mfwolffe/lanes/sn07/mcap-mcap1/target/s3c/lldb-threads-spinner.lldb'.
+(lldb) target create "/Users/mfwolffe/lanes/sn07/mcap-mcap3/target/session-fixtures/c/workers/clang-O0/prog"
+Current executable set to '/Users/mfwolffe/lanes/sn07/mcap-mcap3/target/session-fixtures/c/workers/clang-O0/prog' (arm64).
+(lldb) command source -s 0 '/Users/mfwolffe/lanes/sn07/mcap-mcap3/target/s3c/lldb-threads-spinner.lldb'
+Executing commands in '/Users/mfwolffe/lanes/sn07/mcap-mcap3/target/s3c/lldb-threads-spinner.lldb'.
 (lldb) breakpoint set -n work
-Breakpoint 1: where = prog`work + 8 at main.c:50:9, address = 0x0000000100000500
+Breakpoint 1: where = prog`work + 8 at main.c:62:9, address = 0x0000000100000500
 (lldb) run
-Process 36612 launched: '/Users/mfwolffe/lanes/sn07/mcap-mcap1/target/session-fixtures/c/workers/clang-O0/prog' (arm64)
-Process 36612 stopped
+Process 4178 launched: '/Users/mfwolffe/lanes/sn07/mcap-mcap3/target/session-fixtures/c/workers/clang-O0/prog' (arm64)
+Process 4178 stopped
 * thread #4, stop reason = breakpoint 1.1
-    frame #0: 0x0000000100000500 prog`work(n=4) at main.c:50:9
-   47  	}
-   48  	
-   49  	int work(int n) {
--> 50  	    int total = 0;
+    frame #0: 0x0000000100000500 prog`work(n=4) at main.c:62:9
+   59  	}
+   60  	
+   61  	int work(int n) {
+-> 62  	    int total = 0;
     	        ^
-   51  	    for (int i = 1; i <= n; i++)
-   52  	        total += i;
-   53  	    return total;
+   63  	    for (int i = 1; i <= n; i++)
+   64  	        total += i;
+   65  	    return total;
 Target 0: (prog) stopped.
 (lldb) thread select 2
 (lldb) bt
 * thread #2
-    frame #0: 0x0000000100000874 prog`spin(flag=0x0000000100008008, want=1, slot=1) at main.c:35:20
-   32  	
-   33  	/* Loop until *flag reaches want. seen[slot] says the loop has been entered. */
-   34  	static void spin(volatile int *flag, int want, int slot) {
--> 35  	    while (*flag < want) seen[slot] = 1;
+    frame #0: 0x00000001000008bc prog`spin(flag=0x0000000100008020, want=1, slot=1) at main.c:46:20
+   43  	
+   44  	/* Loop until *flag reaches want. seen[slot] says the loop has been entered. */
+   45  	static void spin(volatile int *flag, int want, int slot) {
+-> 46  	    while (*flag < want) seen[slot] = 1;
     	                   ^
-   36  	}
-   37  	
-   38  	static void pause_ms(long ms) {
-* thread #2
-  * frame #0: 0x0000000100000874 prog`spin(flag=0x0000000100008008, want=1, slot=1) at main.c:35:20
-    frame #1: 0x0000000100000790 prog`spinner(arg=0x000000016fdff5a4) at main.c:45:5
-    frame #2: 0x000000018256fc58 libsystem_pthread.dylib`_pthread_start + 136
-(lldb) frame select 1
-frame #1: 0x0000000100000790 prog`spinner(arg=0x000000016fdff5a4) at main.c:45:5
-   42  	
-   43  	static void *spinner(void *arg) {
-   44  	    int id = *(int *)arg;
--> 45  	    spin(&released, id, id);
-    	    ^
-   46  	    return 0;
    47  	}
    48  	
+   49  	static void pause_ms(long ms) {
+* thread #2
+  * frame #0: 0x00000001000008bc prog`spin(flag=0x0000000100008020, want=1, slot=1) at main.c:46:20
+    frame #1: 0x00000001000007c8 prog`spinner(arg=0x000000016fdff5a4) at main.c:57:5
+    frame #2: 0x000000018256fc58 libsystem_pthread.dylib`_pthread_start + 136
+(lldb) frame select 1
+frame #1: 0x00000001000007c8 prog`spinner(arg=0x000000016fdff5a4) at main.c:57:5
+   54  	static void *spinner(void *arg) {
+   55  	    int id = *(int *)arg;
+   56  	    ids[id - 1] = self_id();
+-> 57  	    spin(&released, id, id);
+    	    ^
+   58  	    return 0;
+   59  	}
+   60  	
 (lldb) print id
 (int) 1
 (lldb) continue
-Process 36612 resuming
-Process 36612 exited with status = 0 (0x00000000)
+Process 4178 resuming
+Process 4178 exited with status = 0 (0x00000000)

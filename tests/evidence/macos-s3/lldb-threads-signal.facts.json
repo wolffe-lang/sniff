@@ -1,1 +1,1 @@
-[["stopthread", 4], ["signal", "SIGUSR1"], ["frame", 2, "deliver_here", "main.c", 29], ["frame", 3, "worker", "main.c", 59], ["thread", 1, "spin", "main.c", 35], ["thread", 2, "spin", "main.c", 35], ["thread", 3, "spin", "main.c", 35]]
+[["stopthread", 4], ["signal", "SIGUSR1"], ["frame", 2, "deliver_here", "main.c", 40], ["frame", 3, "worker", "main.c", 72], ["thread", 1, "spin", "main.c", 46], ["thread", 2, "spin", "main.c", 46], ["thread", 3, "spin", "main.c", 46]]

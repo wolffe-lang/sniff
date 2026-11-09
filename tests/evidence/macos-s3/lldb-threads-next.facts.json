@@ -1,1 +1,1 @@
-[["bpset", 1, 4294968576, "main.c", 50], ["stopthread", 4], ["frame", 0, "work", "main.c", 51], ["frame", 1, "worker", "main.c", 60], ["retval", "10"], ["exit", 0]]
+[["bpset", 1, 4294968576, "main.c", 62], ["stopthread", 4], ["frame", 0, "work", "main.c", 63], ["frame", 1, "worker", "main.c", 73], ["retval", "10"], ["exit", 0]]

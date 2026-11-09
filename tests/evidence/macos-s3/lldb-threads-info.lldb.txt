@@ -1,29 +1,29 @@
-(lldb) target create "/Users/mfwolffe/lanes/sn07/mcap-mcap1/target/session-fixtures/c/workers/clang-O0/prog"
-Current executable set to '/Users/mfwolffe/lanes/sn07/mcap-mcap1/target/session-fixtures/c/workers/clang-O0/prog' (arm64).
-(lldb) command source -s 0 '/Users/mfwolffe/lanes/sn07/mcap-mcap1/target/s3c/lldb-threads-info.lldb'
-Executing commands in '/Users/mfwolffe/lanes/sn07/mcap-mcap1/target/s3c/lldb-threads-info.lldb'.
+(lldb) target create "/Users/mfwolffe/lanes/sn07/mcap-mcap3/target/session-fixtures/c/workers/clang-O0/prog"
+Current executable set to '/Users/mfwolffe/lanes/sn07/mcap-mcap3/target/session-fixtures/c/workers/clang-O0/prog' (arm64).
+(lldb) command source -s 0 '/Users/mfwolffe/lanes/sn07/mcap-mcap3/target/s3c/lldb-threads-info.lldb'
+Executing commands in '/Users/mfwolffe/lanes/sn07/mcap-mcap3/target/s3c/lldb-threads-info.lldb'.
 (lldb) breakpoint set -n work
-Breakpoint 1: where = prog`work + 8 at main.c:50:9, address = 0x0000000100000500
+Breakpoint 1: where = prog`work + 8 at main.c:62:9, address = 0x0000000100000500
 (lldb) run
-Process 36578 launched: '/Users/mfwolffe/lanes/sn07/mcap-mcap1/target/session-fixtures/c/workers/clang-O0/prog' (arm64)
-Process 36578 stopped
+Process 4145 launched: '/Users/mfwolffe/lanes/sn07/mcap-mcap3/target/session-fixtures/c/workers/clang-O0/prog' (arm64)
+Process 4145 stopped
 * thread #4, stop reason = breakpoint 1.1
-    frame #0: 0x0000000100000500 prog`work(n=4) at main.c:50:9
-   47  	}
-   48  	
-   49  	int work(int n) {
--> 50  	    int total = 0;
+    frame #0: 0x0000000100000500 prog`work(n=4) at main.c:62:9
+   59  	}
+   60  	
+   61  	int work(int n) {
+-> 62  	    int total = 0;
     	        ^
-   51  	    for (int i = 1; i <= n; i++)
-   52  	        total += i;
-   53  	    return total;
+   63  	    for (int i = 1; i <= n; i++)
+   64  	        total += i;
+   65  	    return total;
 Target 0: (prog) stopped.
 (lldb) thread list
-Process 36578 stopped
-  thread #1: tid = 0x103bb99, 0x0000000100000874 prog`spin(flag=0x0000000100008004, want=1, slot=0) at main.c:35:20, queue = 'com.apple.main-thread'
-  thread #2: tid = 0x103bbb2, 0x0000000100000870 prog`spin(flag=0x0000000100008008, want=1, slot=1) at main.c:35:12
-  thread #3: tid = 0x103bbb3, 0x0000000100000874 prog`spin(flag=0x0000000100008008, want=2, slot=2) at main.c:35:20
-* thread #4: tid = 0x103bbb4, 0x0000000100000500 prog`work(n=4) at main.c:50:9, stop reason = breakpoint 1.1
+Process 4145 stopped
+  thread #1: tid = 0x11156b0, 0x00000001000008bc prog`spin(flag=0x0000000100008004, want=1, slot=0) at main.c:46:20, queue = 'com.apple.main-thread'
+  thread #2: tid = 0x11156c6, 0x00000001000008bc prog`spin(flag=0x0000000100008020, want=1, slot=1) at main.c:46:20
+  thread #3: tid = 0x11156c7, 0x00000001000008bc prog`spin(flag=0x0000000100008020, want=2, slot=2) at main.c:46:20
+* thread #4: tid = 0x11156c8, 0x0000000100000500 prog`work(n=4) at main.c:62:9, stop reason = breakpoint 1.1
 (lldb) continue
-Process 36578 resuming
-Process 36578 exited with status = 0 (0x00000000)
+Process 4145 resuming
+Process 4145 exited with status = 0 (0x00000000)
