@@ -28,7 +28,8 @@ Two kinds of row (tests/macos-rows.json):
          gdb's; only these facts are compared.
 
 Attach rows (an lldb or expect row with "attach": {"ticks": N, "form": "script" or "dash-p"}) start the row's
-program, the sleeper, as this harness's own child, read its 'ready PID' line, put the pid in both scripts for
+program, the sleeper, as this harness's own child, read its 'ready PID' line, wait until it blocks in its nap
+(ps(1)'s state S; tools/session.py says why), put the pid in both scripts for
 {pid}, and append how the sleeper ended to the output, '[sleeper exited with code N: LAST LINE]' or
 '[sleeper killed by signal N]', which both extractions read as a sleeper fact. An expect row's "sign":
 "hardened" runs a copy signed with the hardened runtime and no get-task-allow: macOS refuses its task port
@@ -47,6 +48,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import time
 
 ROOT = Path(__file__).resolve().parents[1]
 ROWS = ROOT / 'tests/macos-rows.json'
@@ -312,6 +314,30 @@ def lldb_run(lldb, prog, script, work, name, timeout=120, pre=()):
     return run([lldb, '-b', '-s', str(path)] + list(pre) + [prog], work, timeout)
 
 
+def ps_letter(text):
+    """The state letter of `ps -o stat=` output (ps(1)), or ''."""
+    t = text.strip()
+    return t[0] if t else ''
+
+
+def ps_state(pid):
+    r = subprocess.run(['ps', '-o', 'stat=', '-p', str(pid)], capture_output=True, text=True, env=dict(ENV_BASE))
+    return ps_letter(r.stdout)
+
+
+def wait_blocked(pid, state=ps_state, tries=400, nap=0.005):
+    """Wait until the sleeper blocks (S) in its nap, as tools/session.py does on Linux: its ready line is
+    written by a system call it may not have returned from yet. Bounded; no wait where no state is read."""
+    for _ in range(tries):
+        st = state(pid)
+        if st == 'S':
+            return True
+        if st == '':
+            return False
+        time.sleep(nap)
+    return False
+
+
 def sleeper_start(prog, ticks):
     s = subprocess.Popen([prog, str(ticks)], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, env=dict(ENV_BASE))
     m = re.match(r'ready (\d+)$', s.stdout.readline().strip())
@@ -319,6 +345,7 @@ def sleeper_start(prog, ticks):
         s.kill()
         s.communicate()
         raise SystemExit('FAIL the sleeper %s did not say ready' % prog)
+    wait_blocked(m.group(1))
     return s, m.group(1)
 
 
