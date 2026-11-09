@@ -250,7 +250,9 @@ def facts_lldb(text):
             continue
         m = re.search(r'stop reason = signal (SIG\w+)', line)
         if m:
-            if in_stop_cmd:
+            # the SIGSTOP an attach stops the process with is lldb's stop reason, not a signal the program
+            # received: gdb prints the place only
+            if in_stop_cmd and not (m[1] == 'SIGSTOP' and cur.startswith('process attach')):
                 facts.append(('signal', m[1]))
             continue
         m = re.match(r'^Process \d+ exited with signal (SIG\w+)', line)
@@ -343,6 +345,15 @@ def with_sleeper(r, prog, run_one):
     finally:
         tail = sleeper_line(s)
     return out + tail, err, rc
+
+
+def comparable(row, facts):
+    """Facts as a row compares them. A process attached to was mapped where macOS chose (address-space
+    randomisation, which a debugger turns off only for a program it starts), so an attach row's breakpoint
+    addresses differ from take to take; its breakpoint number, file and line are compared."""
+    if not row.get('attach'):
+        return [list(f) for f in facts]
+    return [list(f[:2]) + list(f[3:]) if f[0] == 'bpset' else list(f) for f in facts]
 
 
 def lldb_script_rows(rows):
@@ -489,8 +500,8 @@ def cmd_check(a):
                 print('FAIL %s %s' % (r['name'], why))
                 fails += 1
         else:
-            want = json.loads((EVID / (r['name'] + '.facts.json')).read_text())
-            got = [list(f) for f in facts_sniff(out)]
+            want = comparable(r, json.loads((EVID / (r['name'] + '.facts.json')).read_text()))
+            got = comparable(r, facts_sniff(out))
             if got == want:
                 print('PASS %s facts=%d' % (r['name'], len(got)))
             else:
