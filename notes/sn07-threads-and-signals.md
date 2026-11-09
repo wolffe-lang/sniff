@@ -48,6 +48,8 @@ holds them. Every new row was red at trunk on all three sets but the guards `sig
     measured rules;
   - PAX maps a thread's stack below Linux's `0x7ff…` range, which the PAX set's stack rule did not reach, and a
     host's stack limit moves every thread's address on Linux too (see "After the merge");
+  - the thread ends came in the fixture's order on the hosts that took them, but not on every host (see "After the
+    merge");
   - lldb prints `thread select`'s status block asynchronously: in one take it came after the next
     command's output, under that command's prompt;
   - under lldb, the threaded signal row's `continue` ended the program with status 1, where it exits 0 natively
@@ -104,6 +106,20 @@ thread's target id (`[New Thread …]`, `[Switching to …]`, `info threads`, `[
 is …]`). The rule replaces the PAX set's `<STACK>` for thread addresses, so both sets read alike. sniff still prints
 the real address, and a thread shown at another thread's address is still told apart. The macOS rows hold no
 thread address (lldb fact rows), so nothing there moved.
+
+The same runner then showed a second host dependence: the order of the `[Thread … exited]` lines. The prediction
+said they come in the fixture's order, and they did on the two hosts that took them, but on the runner the main
+thread's end came before the second spinner's on 17 rows. `pthread_join` returns once a thread has left its
+code, before a tracer is told of the end, and main returned right after joining the last spinner: the process's
+end and the spinner's raced. Under `taskset -c 0` in the oracle image the pinned gdb showed the runner's order in
+each of five takes (`want '[Thread <T2> (LWP <L2>) exited]' got '[Thread <T4> (LWP <L4>) exited]'`, 85 lines),
+while sniff's rows held. The fix is in the fixture, so gdb's own transcript has one order: after each join, main
+waits until the thread's `/proc/self/task` entry is gone, which for a traced thread is once the tracer has waited
+for it, and only then lets the next thread go or returns. The wait is bounded, for a system whose procfs keeps
+no such entry, and is a short pause on macOS, where lldb prints no thread ends. The threads goldens and lldb's
+thread evidence were re-captured on it, and the second-stop row's breakpoint moved with work's loop to line 64.
+No other row depends on threads running in a given order: new threads are announced as main makes them, one at a
+time; the stops are the worker's alone; no row lists threads after one has ended or selects an ended thread.
 
 ## Done-when
 
