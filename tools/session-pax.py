@@ -371,6 +371,14 @@ def cmd_selftest(a):
     assert '/bin/sniff -batch -x /s/a1.cmd /f/c/sleeper/gcc-O0/prog > /tmp/o 2> /tmp/e' in text, text
     dash = guest_script([dict(held, attach={'form': 'dash-p'})], '/s', '/f')
     assert '-x /s/a1.cmd -p $pid /f/c/sleeper/gcc-O0/prog >' in dash and 'holder' not in dash, dash
+    # the image carries the holder a held row starts, at the path the row's shell lines run it from
+    progs = image_progs([held, {'name': 'r', 'prog': 'c/hits/gcc-O0/prog', 'script': []}])
+    assert progs == ['c/hits/gcc-O0/prog', 'c/holder/gcc-O0/prog', 'c/sleeper/gcc-O0/prog'], progs
+    assert image_progs([dict(held, attach={'ticks': 7})]) == ['c/sleeper/gcc-O0/prog']
+    # every wait for a line is bounded: pelt's read loop cannot spin the console out of memory
+    for ln in text.splitlines():
+        if ln.startswith('while '):
+            assert '-lt %d' % WAIT_READS in ln, ln
     print('PASS session-pax-selftest')
     return 0
 
