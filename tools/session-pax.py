@@ -29,7 +29,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-BEGIN, RC, OUT, ERR, END = '@@BEGIN ', '@@RC ', '@@OUT', '@@ERR', '@@END'
+BEGIN, RC, OUT, ERR, END, WAIT = '@@BEGIN ', '@@RC ', '@@OUT', '@@ERR', '@@END', '@@WAIT '
 MAX_CHUNK_BYTES = 70_000_000
 
 
@@ -87,7 +87,13 @@ def attach_block(row, scripts_dir, fx_guest, prog):
     a = row['attach']
     script = '%s/%s.cmd' % (scripts_dir, row['name'])
     out = ['%s %d > /tmp/sl 2> /dev/null &' % (prog, a.get('ticks', 100)), 'sp=$!', 'r=', 'n=0',
-           'while [ -z "$r" ] && [ $n -lt %d ]; do read r < /tmp/sl; n=$((n + 1)); done' % WAIT_READS, 'pid=${r#ready }']
+           'while [ -z "$r" ] && [ $n -lt %d ]; do read r < /tmp/sl; n=$((n + 1)); done' % WAIT_READS, 'pid=${r#ready }',
+           # sniff starts once the sleeper blocks in its nap (tools/session.py says why); the state seen is
+           # printed before the row's result, where the console's reader ignores it
+           'st=', 'n=0',
+           'while [ "$st" != S ] && [ $n -lt %d ]; do st=; while read k v rest; do [ "$k" = State: ] && st=$v; done '
+           '< /proc/$pid/status; n=$((n + 1)); done' % WAIT_READS,
+           "printf '%s\\n' \"" + WAIT + "$st $n\""]
     if a.get('held'):
         out += ['%s $pid 3000 > /tmp/hl &' % holder_prog(prog), 'hp=$!', 'h=', 'n=0',
                 'while [ -z "$h" ] && [ $n -lt %d ]; do read h < /tmp/hl; n=$((n + 1)); done' % WAIT_READS]
