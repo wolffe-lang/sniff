@@ -34,7 +34,9 @@ Attach rows ("attach": {...}) start the row's program, the sleeper, as this harn
 address randomisation off (as both debuggers start their own programs), read its 'ready PID' line, put
 the pid in the script for {pid}, run the debugger, and append how the sleeper ended to stdout:
 '[sleeper exited with code N: LAST LINE]' or '[sleeper killed by signal N]'. "ticks" is the sleeper's
-argument; "form" is "script" (the default), "dash-p" (-p PID before the program) or "positional"
+argument; the debugger starts once the sleeper blocks in its nap (State S in /proc/PID/status): the ready
+line is written by a system call the sleeper may not have returned from yet, and an attach there stops it in
+write(), where sniff, quicker to start than gdb, stopped it on one CPU. "form" is "script" (the default), "dash-p" (-p PID before the program) or "positional"
 (PROG PID); "held" first starts the holder fixture of the same build on the sleeper, so that another
 tracer has it.
 
@@ -58,6 +60,7 @@ import select
 import struct
 import subprocess
 import sys
+import time
 import termios
 import time
 
@@ -314,6 +317,33 @@ def sleeper_line(p, timeout=60):
     return '[sleeper exited with code %d: %s]\n' % (p.returncode, last)
 
 
+def status_state(text):
+    """The state letter of a /proc/PID/status text (proc_pid_status(5)), or ''."""
+    for ln in text.splitlines():
+        if ln.startswith('State:') and len(ln.split()) > 1:
+            return ln.split()[1]
+    return ''
+
+
+def proc_state(pid):
+    try:
+        return status_state(Path('/proc/%s/status' % pid).read_text())
+    except OSError:
+        return ''
+
+
+def wait_blocked(pid, state=proc_state, tries=2000, nap=0.001):
+    """Wait until the sleeper blocks (S): only its nap blocks it. Bounded; no wait where no state is kept."""
+    for _ in range(tries):
+        st = state(pid)
+        if st == 'S':
+            return True
+        if st == '':
+            return False
+        time.sleep(nap)
+    return False
+
+
 def attach_run(tool, row, prog, work, gdb, timeout=120):
     """An attach row: the sleeper started as this harness's child, the debugger given its pid. Returns
     (stdout with the sleeper's line, stderr, status); a terminal row's stdout is the raw pty text."""
@@ -328,6 +358,7 @@ def attach_run(tool, row, prog, work, gdb, timeout=120):
         s.communicate()
         return '', 'the sleeper did not say ready: %r\n' % first, 99
     pid = m.group(1)
+    wait_blocked(pid)
     holder = None
     if a.get('held'):
         holder = subprocess.Popen([prog.replace('/c/sleeper/', '/c/holder/'), pid, '3000'], stdout=subprocess.PIPE, text=True,
