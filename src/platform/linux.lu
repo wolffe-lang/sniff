@@ -39,6 +39,8 @@ extern "c" fn getenv(name: *u8) -> *u8
 extern "c" fn getcwd(buf: *u8, size: u64) -> *u8
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 extern "c" fn syscall(number: i64, ...) -> i64
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+extern "c" fn strerror(errnum: i32) -> *u8
 
 /// Heap bytes holding text and a terminating zero, for the C calls.
 #[cfg(target = "x86_64-unknown-linux-gnu")]
@@ -123,6 +125,126 @@ pub fn target_spawn(path: str, args: List[str], env_lines: str, env_columns: str
         // TRACECLONE (every new thread traced from its start and reported by a clone event).
         let _ = ptrace(req_setoptions as i32, pid, 0 as u64, (opt_exitkill + opt_tracefork + opt_tracevfork + opt_traceclone) as u64)
         Target { pid: pid as int, memfd: fd as int, status: tgt.status, regs: tgt.regs, word: tgt.word }
+    }
+}
+
+/// The thread ids /proc/PID/task lists (proc_pid_task(5)), in increasing order; empty when it cannot be read.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+fn task_ids(pid: int) -> List[int] {
+    var out: List[int] = []
+    let names = fs_read_dir("/proc/{pid}/task") else { return out }
+    for n in names {
+        var v = 0
+        var ok = n.len() > 0
+        for b in n.bytes() {
+            let c = b as int
+            if c < 48 || c > 57 { ok = false } else { v = v * 10 + (c - 48) }
+        }
+        if !ok { continue }
+        // insert in order
+        var k = 0
+        while k < out.len && out[k] < v { k += 1 }
+        var next: List[int] = []
+        var j = 0
+        while j < out.len {
+            if j == k { (mut next).push(v) }
+            (mut next).push(out[j])
+            j += 1
+        }
+        if k == out.len { (mut next).push(v) }
+        out = next
+    }
+    out
+}
+
+/// Attach to a running process (PTRACE_ATTACH, ptrace(2)): the leader, then every other thread
+/// /proc/PID/task lists, each awaited at its attach stop and traced with the options a started program has,
+/// but EXITKILL (a process sniff attached to outlives sniff). A refused leader gives pid 0 and memfd
+/// -(1000 + errno).
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_attach(pid: int) -> Target {
+    let tgt = target_none()
+    unsafe {
+        // # Safety: the status buffer is calloc'd; the pids are the process being attached and its threads.
+        let tstatus = tgt.status as *i32
+        let e = __errno_location()
+        e[0] = 0
+        if ptrace(req_attach as i32, pid as i32, 0 as u64, 0 as u64) < 0 {
+            let err = e[0] as int
+            return Target { pid: 0, memfd: 0 - (1000 + err), status: tgt.status, regs: tgt.regs, word: tgt.word }
+        }
+        let opts = (opt_tracefork + opt_tracevfork + opt_traceclone) as u64
+        let _ = waitpid(pid as i32, tstatus, wait_all as i32)
+        let _ = ptrace(req_setoptions as i32, pid as i32, 0 as u64, opts)
+        for tid in task_ids(pid) {
+            if tid == pid { continue }
+            if ptrace(req_attach as i32, tid as i32, 0 as u64, 0 as u64) >= 0 {
+                let _ = waitpid(tid as i32, tstatus, wait_all as i32)
+                let _ = ptrace(req_setoptions as i32, tid as i32, 0 as u64, opts)
+            }
+        }
+        let fd = open(cstr("/proc/{pid}/mem"), 0)
+        Target { pid: pid, memfd: fd as int, status: tgt.status, regs: tgt.regs, word: tgt.word }
+    }
+}
+
+/// The threads of the traced process, by id (/proc/PID/task).
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_task_ids(t: Target) -> List[int] { task_ids(t.pid) }
+
+/// The errno a refused attach carried, or 0.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_attach_errno(t: Target) -> int {
+    if t.pid == 0 && t.memfd <= 0 - 1000 { return 0 - t.memfd - 1000 }
+    0
+}
+
+/// The C library's text for an errno (strerror(3)).
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn errno_text(err: int) -> str {
+    unsafe {
+        // # Safety: strerror returns a zero-terminated string the C library owns.
+        let p = strerror(err as i32)
+        var b: List[byte] = []
+        var i = 0
+        while i < 256 && p[i] as int != 0 {
+            (mut b).push(p[i] as int as byte)
+            i += 1
+        }
+        str_from_utf8(b) else { "errno {err}" }
+    }
+}
+
+/// The process that traces pid, from /proc/PID/status's TracerPid (proc_pid_status(5)); 0 for none or when
+/// the file cannot be read.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_tracer_of(pid: int) -> int {
+    let raw = fs_read_bytes("/proc/{pid}/status") else { return 0 }
+    let text = str_from_utf8(raw) else { return 0 }
+    for ln in text.lines() {
+        if !ln.starts_with("TracerPid:") { continue }
+        var v = 0
+        for b in ln.bytes() {
+            let c = b as int
+            if c >= 48 && c <= 57 { v = v * 10 + (c - 48) }
+        }
+        return v
+    }
+    0
+}
+
+/// Let the whole process go on untraced: PTRACE_DETACH of every thread /proc/PID/task lists, the leader
+/// last, and the memory handle closed. Returns the leader's result.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_release(t: Target) -> int {
+    unsafe {
+        // # Safety: the pids are the traced process and its threads; every pointer argument is a calloc'd buffer.
+        for tid in task_ids(t.pid) {
+            if tid != t.pid { let _ = ptrace(req_detach as i32, tid as i32, 0 as u64, 0 as u64) }
+        }
+        let r = ptrace(req_detach as i32, t.pid as i32, 0 as u64, 0 as u64) as int
+        let _ = close(t.memfd as i32)
+        r
     }
 }
 
