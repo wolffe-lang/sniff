@@ -17,6 +17,13 @@ struct HelpCmd {
 /// sniff's commands and subcommands, in gdb's (alphabetical) order.
 fn help_table() -> List[HelpCmd] {
     [
+        HelpCmd { name: "attach", aliases: [], class: "running", summary: "Attach to a process or file outside of GDB.",
+            body: [
+                "Usage: attach PID",
+                "The process stops where it is, every thread of it, and is shown where it stopped. sniff reads its",
+                "program from the file named on sniff's command line. A device file, as gdb takes, is not implemented",
+                "yet. sniff -p PID attaches before the command file is read.",
+            ] },
         HelpCmd { name: "awatch", aliases: [], class: "breakpoints", summary: "Set an access watchpoint for EXPRESSION.",
             body: [
                 "Usage: awatch EXPRESSION",
@@ -72,6 +79,12 @@ fn help_table() -> List[HelpCmd] {
                 "To delete all breakpoints and watchpoints, give no argument.",
                 "",
                 "\"delete display\" and gdb's other delete subcommands are not implemented yet.",
+            ] },
+        HelpCmd { name: "detach", aliases: [], class: "running", summary: "Detach a process or file previously attached.",
+            body: [
+                "Usage: detach",
+                "The process is no longer traced and goes on as it was. detach checkpoint and detach inferiors are",
+                "not implemented yet.",
             ] },
         HelpCmd { name: "display", aliases: [], class: "data", summary: "Print value of expression EXP each time the program stops.",
             body: [
@@ -389,9 +402,9 @@ fn gdb_only_commands() -> List[str] {
 [
     "!", "+", "-", "<", ">", "actions", "add-auto-load-safe-path", "add-auto-load-scripts-directory",
     "add-inferior", "add-symbol-file", "add-symbol-file-from-memory", "advance", "agent-printf", "alias",
-    "append", "apropos", "attach", "break-range", "catch", "cd", "checkpoint", "cl", "clear", "clone-inferior",
+    "append", "apropos", "break-range", "catch", "cd", "checkpoint", "cl", "clear", "clone-inferior",
     "collect", "commands", "compare-sections", "compile", "complete", "core-file", "define", "define-prefix",
-    "demangle", "detach", "directory", "dis", "disa", "disable", "disassemble", "disconnect", "document",
+    "demangle", "directory", "dis", "disa", "disable", "disassemble", "disconnect", "document",
     "dont-repeat", "down-silently", "dprintf", "dump", "edit", "en", "enable", "end", "eval", "exec-file",
     "explore", "expression", "faas", "file", "find", "flash-erase", "fo", "focus", "forward-search", "fs",
     "ftrace", "function", "gcore", "generate-core-file", "gr", "gu", "guile", "guile-repl", "hbreak",
