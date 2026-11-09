@@ -104,6 +104,30 @@ class MacThreadFacts(unittest.TestCase):
         self.assertEqual(smac.facts_sniff(stop), self.WANT[:1])
 
 
+class MacAttachFacts(unittest.TestCase):
+    """An attach's own stop is no signal fact, and an attached process's addresses are the system's."""
+    ATTACH = ('(lldb) process attach --pid 4242\nProcess 4242 stopped\n'
+              "* thread #1, queue = 'com.apple.main-thread', stop reason = signal SIGSTOP\n"
+              '    frame #0: 0x000000010083869c prog`nap at main.c:28:5\n')
+
+    def test_attach_stop_is_no_signal(self):
+        self.assertEqual(smac.facts_lldb(self.ATTACH), [])
+        # a SIGSTOP the program takes after the attach is still one, and another signal at an attach is too
+        later = self.ATTACH + '(lldb) continue\nProcess 4242 stopped\n* thread #1, stop reason = signal SIGSTOP\n'
+        self.assertEqual(smac.facts_lldb(later), [('signal', 'SIGSTOP')])
+        other = self.ATTACH.replace('signal SIGSTOP', 'signal SIGUSR1')
+        self.assertEqual(smac.facts_lldb(other), [('signal', 'SIGUSR1')])
+
+    def test_attached_breakpoint_address_is_not_compared(self):
+        lldb = [['bpset', 1, 4364338512, 'main.c', 13], ['frame', 0, 'tick', 'main.c', 13]]
+        sniff = [['bpset', 1, 4310000000, 'main.c', 13], ['frame', 0, 'tick', 'main.c', 13]]
+        attach = {'attach': {'ticks': 100}}
+        self.assertEqual(smac.comparable(attach, lldb), smac.comparable(attach, sniff))
+        # the file and line still are, and a started program's address still is
+        self.assertNotEqual(smac.comparable(attach, lldb), smac.comparable(attach, [['bpset', 1, 4310000000, 'main.c', 14], lldb[1]]))
+        self.assertNotEqual(smac.comparable({}, lldb), smac.comparable({}, sniff))
+
+
 class ThreadsAndAttach(unittest.TestCase):
     """S6's normalisations and the attach runner, each red on the break it exists to catch."""
     TABLE = ('  Id   Target Id                              Frame \n'
