@@ -47,6 +47,38 @@ fn mapped_at(pid: int, addr: u64) -> Mapped {
     Mapped { path: path, base: base }
 }
 
+/// A shared library a process has mapped: the name gdb gives it and the file mapped.
+struct LibName {
+    pub name: str,
+    pub file: str,
+}
+
+/// The shared libraries the process has mapped, in the order of their addresses (/proc/PID/maps), the
+/// program's own file left out.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+fn mapped_libraries(s: Session) -> List[LibName] {
+    var out: List[LibName] = []
+    let raw = fs_read_bytes("/proc/{s.inferior.pid}/maps") else { return out }
+    let text = str_from_utf8(raw) else { return out }
+    for ln in text.lines() {
+        let cols = ln.words()
+        if cols.len < 6 || !cols[5].starts_with("/") { continue }
+        let file = cols[5]
+        if file == s.prog.path || file.ends_with(s.prog.path) { continue }
+        var seen = false
+        for l in out { if l.file == file { seen = true } }
+        if !seen { (mut out).push(LibName { name: solib_name(s, file), file: file }) }
+    }
+    out
+}
+
+/// macOS's system libraries are in the dyld shared cache: no file to name.
+#[cfg(target = "aarch64-apple-darwin")]
+fn mapped_libraries(s: Session) -> List[LibName] {
+    var out: List[LibName] = []
+    out
+}
+
 /// Whether library l holds runtime address addr in one of its sections.
 fn lib_covers(l: Lib, addr: u64) -> bool { addr >= l.base && in_image(l.prog, addr - l.base) }
 

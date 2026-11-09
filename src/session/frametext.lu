@@ -204,14 +204,17 @@ fn solib_of(s: Session, pc: u64) -> str {
         if cols.len < 6 { continue }
         let range = cols[0].split("-")
         if range.len < 2 { continue }
-        if parse_hex(range[0]) <= pc && pc < parse_hex(range[1]) {
-            // the dynamic linker under the name the program gives it, as gdb names it
-            if s.prog.interp_path.len() > 0 && path_base_name(cols[5]) == path_base_name(s.prog.interp_path) { return s.prog.interp_path }
-            if cols[5].starts_with("/usr/lib/") { return "/lib/{str_from(cols[5], 9)}" }
-            if cols[5].starts_with("/") { return cols[5] }
-        }
+        if parse_hex(range[0]) <= pc && pc < parse_hex(range[1]) && cols[5].starts_with("/") { return solib_name(s, cols[5]) }
     }
     ""
+}
+
+/// The name gdb gives a mapped library file: the dynamic linker under the name the program gives it, a
+/// library under /usr/lib by the /lib path the dynamic linker found it at.
+fn solib_name(s: Session, file: str) -> str {
+    if s.prog.interp_path.len() > 0 && path_base_name(file) == path_base_name(s.prog.interp_path) { return s.prog.interp_path }
+    if file.starts_with("/usr/lib/") { return "/lib/{str_from(file, 9)}" }
+    file
 }
 
 /// "[0x... in ]func (args) at file:line" for frame `level`; print_pc forces the address.
