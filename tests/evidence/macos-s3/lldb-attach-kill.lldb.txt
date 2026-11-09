@@ -1,0 +1,25 @@
+(lldb) target create "/Users/mfwolffe/lanes/sn07/mcap-mcap2/target/session-fixtures/c/sleeper/clang-O0/prog"
+Current executable set to '/Users/mfwolffe/lanes/sn07/mcap-mcap2/target/session-fixtures/c/sleeper/clang-O0/prog' (arm64).
+(lldb) command source -s 0 '/Users/mfwolffe/lanes/sn07/mcap-mcap2/target/s3c/lldb-attach-kill.lldb'
+Executing commands in '/Users/mfwolffe/lanes/sn07/mcap-mcap2/target/s3c/lldb-attach-kill.lldb'.
+(lldb) process attach --pid 39691
+Process 39691 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = signal SIGSTOP
+    frame #0: 0x000000010496869c prog`nap at main.c:28:5
+   25  	    register long x3 __asm__("x3") = 0;
+   26  	    register long x4 __asm__("x4") = (long)&tv;
+   27  	    register long x16 __asm__("x16") = 93;
+-> 28  	    __asm__ volatile("svc #0x80" : "+r"(x0), "+r"(x1) : "r"(x2), "r"(x3), "r"(x4), "r"(x16) : "memory", "cc");
+    	    ^
+   29  	#endif
+   30  	}
+   31  	
+Target 0: (prog) stopped.
+(lldb) bt
+* thread #1, queue = 'com.apple.main-thread', stop reason = signal SIGSTOP
+  * frame #0: 0x000000010496869c prog`nap at main.c:28:5
+    frame #1: 0x0000000104968604 prog`main(argc=2, argv=0x000000016b497ca0) at main.c:37:9
+    frame #2: 0x00000001821b3da4 dyld`start + 6992
+(lldb) process kill
+Process 39691 exited with status = 9 (0x00000009) killed
+[sleeper killed by signal 9]
