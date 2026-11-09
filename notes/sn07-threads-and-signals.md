@@ -111,7 +111,7 @@ The same runner then showed a second host dependence: the order of the `[Thread 
 said they come in the fixture's order, and they did on the two hosts that took them, but on the runner the main
 thread's end came before the second spinner's on 17 rows. `pthread_join` returns once a thread has left its
 code, before a tracer is told of the end, and main returned right after joining the last spinner: the process's
-end and the spinner's raced. Under `taskset -c 0` in the oracle image the pinned gdb showed the runner's order in
+end and the spinner's raced. Pinned to one CPU in the oracle image, the pinned gdb showed the runner's order in
 each of five takes (`want '[Thread <T2> (LWP <L2>) exited]' got '[Thread <T4> (LWP <L4>) exited]'`, 85 lines),
 while sniff's rows held. The fix is in the fixture, so gdb's own transcript has one order: after each join, main
 waits until the thread's `/proc/self/task` entry is gone, which for a traced thread is once the tracer has waited
