@@ -69,6 +69,10 @@ extern "c" fn kill(pid: i32, sig: i32) -> i32
 #[cfg(target = "aarch64-apple-darwin")]
 extern "c" fn sysctlbyname(name: u64, old: u64, oldlen: u64, new: u64, newlen: u64) -> i32
 #[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn __error() -> *i32
+#[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn strerror(errnum: i32) -> *u8
+#[cfg(target = "aarch64-apple-darwin")]
 extern "c" fn task_suspend(task: u32) -> i32
 #[cfg(target = "aarch64-apple-darwin")]
 extern "c" fn task_resume(task: u32) -> i32
@@ -558,6 +562,154 @@ pub fn target_spawn(path: str, args: List[str], env_lines: str, env_columns: str
     }
 }
 
+/// Attach to a running process: its task port (task_for_pid, which macOS grants for a target carrying
+/// get-task-allow), sniff's exception port on the task, then ptrace(PT_ATTACHEXC), whose SIGSTOP comes back as
+/// the first exception: the attach stop. A refusal gives pid 0 and memfd -(1000 + errno): ESRCH where no such
+/// process exists (kill(2) with signal 0 tells), EPERM where macOS will not give its task.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_attach(pid: int) -> Target {
+    let tgt = target_none()
+    unsafe {
+        // # Safety: buffers are calloc'd and sized for each call; pid is the process being attached.
+        let st = tgt.word as *u64
+        let e = __error()
+        let tbuf = c.calloc(1, 8) as *u32
+        let kr = task_for_pid(mach_task_self(), pid as i32, tbuf as u64)
+        if kr != 0 {
+            e[0] = 0
+            var err = 1
+            if kill(pid as i32, 0) != 0 && e[0] as int == 3 { err = 3 }
+            return Target { pid: 0, memfd: 0 - (1000 + err), status: tgt.status, regs: tgt.regs, word: tgt.word }
+        }
+        let task = tbuf[0] as int
+        let pbuf = c.calloc(1, 8) as *u32
+        let _ = mach_port_allocate(mach_task_self(), 1, pbuf as u64)
+        let port = pbuf[0]
+        let _ = mach_port_insert_right(mach_task_self(), port, port, 20)
+        st[st_exc_port] = port as u64
+        if task_set_exception_ports(task as u32, 110, port, 2147483649, 6) != 0 {
+            return Target { pid: 0, memfd: 0 - 1001, status: tgt.status, regs: tgt.regs, word: tgt.word }
+        }
+        e[0] = 0
+        if ptrace(14, pid as i32, 0, 0) != 0 {
+            let err = e[0] as int
+            return Target { pid: 0, memfd: 0 - (1000 + err), status: tgt.status, regs: tgt.regs, word: tgt.word }
+        }
+        let t = Target { pid: pid, memfd: task, status: tgt.status, regs: tgt.regs, word: tgt.word }
+        let w = target_wait(t)
+        if w < 0 || (w & 255) != 127 {
+            return Target { pid: 0, memfd: 0 - 1003, status: tgt.status, regs: tgt.regs, word: tgt.word }
+        }
+        t
+    }
+}
+
+/// The threads of the traced process (their ports, task_threads).
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_task_ids(t: Target) -> List[int] { target_threads(t) }
+
+/// The errno a refused attach carried, or 0.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_attach_errno(t: Target) -> int {
+    if t.pid == 0 && t.memfd <= 0 - 1000 { return 0 - t.memfd - 1000 }
+    0
+}
+
+/// The C library's text for an errno (strerror(3)).
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn errno_text(err: int) -> str {
+    unsafe {
+        // # Safety: strerror returns a zero-terminated string the C library owns.
+        let p = strerror(err as i32)
+        var b: List[byte] = []
+        var i = 0
+        while i < 256 && p[i] as int != 0 {
+            (mut b).push(p[i] as int as byte)
+            i += 1
+        }
+        str_from_utf8(b) else { "errno {err}" }
+    }
+}
+
+/// macOS keeps no tracer's pid a debugger reads: 0.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_tracer_of(pid: int) -> int { 0 }
+
+/// Answer the pending exception (its signal dropped when it is one) and resume the task.
+#[cfg(target = "aarch64-apple-darwin")]
+fn answer_and_resume(t: Target) {
+    unsafe {
+        // # Safety: the state block and its buffers are the layer's; the pid is the traced process.
+        let st = t.word as *u64
+        if st[st_pending] == 1 {
+            if st[st_kind] as int == kind_signal { let _ = ptrace(13, t.pid as i32, st[st_event_thread], 0) }
+            st[st_pending] = 0
+            let _ = reply_to(st[st_msg], 0)
+        }
+        if st[st_suspended] == 1 {
+            let _ = task_resume(t.memfd as u32)
+            st[st_suspended] = 0
+        }
+    }
+}
+
+/// True when the pending exception is a SIGSTOP the process took.
+#[cfg(target = "aarch64-apple-darwin")]
+fn at_sigstop(t: Target) -> bool {
+    unsafe {
+        // # Safety: the state block is the layer's.
+        let st = t.word as *u64
+        st[st_pending] == 1 && st[st_kind] as int == kind_signal && st[st_code1] == 17
+    }
+}
+
+/// Let the process go on untraced. PT_DETACH, like every request but PT_ATTACHEXC, needs a process stopped by
+/// a signal (ptrace(2), EBUSY); a breakpoint, step or fault exception, or one already answered, leaves it
+/// running as the kernel sees it. So unless the pending exception is a SIGSTOP, one is sent, the pending
+/// exception answered, and the SIGSTOP's exception taken (any other that comes first is answered, its signal
+/// dropped). PT_DETACH then goes first, while that stop is still pending, before the port is taken off and the
+/// exception answered: answered first, the stop is gone and PT_DETACH refuses, and a process still traced
+/// when its tracer exits is killed (SIGKILL; notes/sn07-attach-and-detach.md, "Attach on macOS").
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_release(t: Target) -> int {
+    unsafe {
+        // # Safety: the state block and its buffers are the layer's; the pid is the traced process.
+        let st = t.word as *u64
+        if st[st_stepping] == 1 { let _ = set_single_step(t, false) }
+        if !at_sigstop(t) {
+            let _ = kill(t.pid as i32, 17)
+            answer_and_resume(t)
+            var n = 0
+            while n < 100 && !at_sigstop(t) {
+                let kr = mach_msg(st[st_msg], 258, 0, msg_bytes as u32, st[st_exc_port] as u32, 50, 0)
+                if kr == 0 {
+                    let m = st[st_msg] as *u32
+                    if m[10] as u64 == t.memfd as u64 {
+                        let _ = decode_exception(t, st[st_msg])
+                        if !at_sigstop(t) { answer_and_resume(t) }
+                    } else {
+                        let _ = reply_to(st[st_msg], 0)
+                    }
+                }
+                n += 1
+            }
+            if at_sigstop(t) && st[st_suspended] == 0 && task_suspend(t.memfd as u32) == 0 { st[st_suspended] = 1 }
+        }
+        let r = ptrace(11, t.pid as i32, 1, 0) as int
+        let _ = task_set_exception_ports(t.memfd as u32, 110, 0, 2147483649, 6)
+        if st[st_pending] == 1 {
+            st[st_pending] = 0
+            let _ = reply_to(st[st_msg], 0)
+        }
+        if st[st_suspended] == 1 {
+            let _ = task_resume(t.memfd as u32)
+            st[st_suspended] = 0
+        }
+        let _ = mach_port_deallocate(mach_task_self(), t.memfd as u32)
+        r
+    }
+}
+
 /// Resume, delivering sig (0 for none).
 #[cfg(target = "aarch64-apple-darwin")]
 pub fn target_cont(t: Target, sig: int) -> int {
@@ -570,13 +722,27 @@ pub fn target_step(t: Target, sig: int) -> int {
     resume(t, sig, true)
 }
 
-/// Kill the child with SIGKILL and reap it. Returns the final raw status.
+/// Kill the process with SIGKILL and reap it. Returns the final raw status. The exception port comes off
+/// first, so the SIGKILL is not turned into an exception the layer would have to answer, and the pending
+/// exception is answered and the task resumed, as a suspended task does not run to its end. Left
+/// suspended, a process attached to was reaped by nobody until sniff exited, and its parent then saw it
+/// exit with status 0 (notes/sn07-attach-and-detach.md, "Attach on macOS").
 #[cfg(target = "aarch64-apple-darwin")]
 pub fn target_kill(t: Target) -> int {
     unsafe {
-        // # Safety: the pid is the traced child; the status buffer is calloc'd.
+        // # Safety: the pid is the traced process; the status buffer is calloc'd; the state block is the layer's.
+        let st = t.word as *u64
         let wst = t.status as *i32
+        let _ = task_set_exception_ports(t.memfd as u32, 110, 0, 2147483649, 6)
         let _ = kill(t.pid as i32, 9)
+        if st[st_pending] == 1 {
+            st[st_pending] = 0
+            let _ = reply_to(st[st_msg], 0)
+        }
+        if st[st_suspended] == 1 {
+            let _ = task_resume(t.memfd as u32)
+            st[st_suspended] = 0
+        }
         var last: int = -1
         var n = 0
         while n < 200 {
@@ -587,7 +753,6 @@ pub fn target_kill(t: Target) -> int {
             }
             n += 1
             if n > 20 {
-                let st = t.word as *u64
                 let mm = st[st_msg] as u64
                 let _ = mach_msg(mm, 258, 0, msg_bytes as u32, st[st_exc_port] as u32, 10, 0)
             }
