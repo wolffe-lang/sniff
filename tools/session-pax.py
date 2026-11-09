@@ -396,6 +396,12 @@ def cmd_selftest(a):
     for ln in text.splitlines():
         if ln.startswith('while '):
             assert '-lt %d' % WAIT_READS in ln, ln
+    # sniff starts once the sleeper blocks in its nap (State S in its status), bounded, and the state is printed
+    i_wait = [i for i, ln in enumerate(text.splitlines()) if '/proc/$pid/status' in ln]
+    i_sniff = [i for i, ln in enumerate(text.splitlines()) if ln.startswith('/bin/sniff ')]
+    assert i_wait and i_sniff and i_wait[0] < i_sniff[0], text
+    assert '"$st" != S' in text.splitlines()[i_wait[0]], text
+    assert "printf '%s\\n' \"" + WAIT + "$st $n\"" in text, text
     print('PASS session-pax-selftest')
     return 0
 
