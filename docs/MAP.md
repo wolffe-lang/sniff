@@ -232,5 +232,13 @@ Linux and PAX and in sniff's own on macOS. `src/session/signals.lu` answers `han
 over gdb's signal table (`src/session/sigtable.lu`, generated from the pinned gdb's `info signals`), with pass
 read at the resume. `src/session/libs.lu` unwinds a frame in a shared library by the library's own `.eh_frame` and
 names it from the library's symbols. The macOS thread rows are lldb fact rows; the PAX rows run at PAX's console,
-where a thread's name is the program's base name until PAX keeps procfs `comm` (pax#322). Attach and detach are
-the second part of S6. Boundaries that remain are listed in `notes/sn07-threads-and-signals.md`.
+where a thread's name is the program's base name until PAX keeps procfs `comm` (pax#322). Boundaries that remain
+are listed in `notes/sn07-threads-and-signals.md`.
+
+`src/session/attach.lu` answers `attach PID`, `detach` and `sniff -p PID`: on Linux and PAX by `PTRACE_ATTACH` of
+every thread in `/proc/PID/task` and `PTRACE_DETACH` of each, on macOS by the task port, sniff's exception port and
+`PT_ATTACHEXC`, with the detach and kill orders a probe measured. A refused attach prints the errno the kernel
+gave, after gdb's already-traced warning when another tracer holds the process. A session that ends attached
+detaches. The attach rows start the sleeper fixture as the harness's own child and start the debugger once it
+blocks; the macOS rows are lldb fact rows, and the PAX rows run at PAX's console. Boundaries that remain are listed
+in `notes/sn07-attach-and-detach.md`.
