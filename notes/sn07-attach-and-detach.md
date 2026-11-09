@@ -89,6 +89,10 @@ was in state S at the first read (`@@WAIT S 1`), 17 of 17 with the terminal row 
 attach rows ran three times, 13 of 13 each. The tick a breakpoint after an attach lands on is timing, and the rows
 that name it normalise it by name, as planned.
 
+The development wrapper that ran these takes reported a job green over a failing row: each step's own END line
+said `exit=1`, but the job's ended `exit=0`. Its steps now record the worst status and the job ends with it; on the
+plant's head it ended `exit=1` at `attach-gcc-quit`.
+
 ## Decisions
 
 - The not-permitted refusal. The pinned gdb prints a distribution's three-line ptrace-scope paragraph
@@ -126,4 +130,7 @@ pinned binary in the oracle image and lldb only as the system binary. No debugge
 - [x] PAX: the batch rows at PAX's console under KVM, the terminal row skipped there by name
 - [x] the rows, red against trunk on the Linux, macOS and PAX sets
 - [x] determinism: one CPU and many, before the records
-- [ ] the gauntlet, the plant and the macOS record at the head: in the PR
+- [x] the gauntlet, the plant and the macOS record at the head: in sniff#17, with the hosted full gate green
+
+**S6 is met:** multi-threaded programs all-stop, `info threads` and `thread N`, signal stops and `handle`,
+`attach PID`, `detach` and `sniff -p PID`, on Linux x86-64, macOS arm64 and PAX (sniff#15, sniff#16 and sniff#17).
