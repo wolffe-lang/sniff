@@ -1,0 +1,3 @@
+/work/target/s2/attach-gcc-held.cmd:1: Error in sourced command file:
+warning: process <PID> is already traced by process <PID>
+ptrace: Inappropriate ioctl for device.

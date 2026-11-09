@@ -1,0 +1,6 @@
+0x000000000040190a in nap () at /work/fixtures/session/c/sleeper/main.c:19
+19	    __asm__ volatile("syscall" : "=a"(ret) : "a"(35L), "D"(ts), "S"(0L) : "rcx", "r11", "memory");
+
+Program terminated with signal SIGTERM, Terminated.
+The program no longer exists.
+[sleeper killed by signal 15]

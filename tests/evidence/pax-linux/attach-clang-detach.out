@@ -1,0 +1,6 @@
+0x000000000040194b in nap () at /work/fixtures/session/c/sleeper/main.c:19
+19	    __asm__ volatile("syscall" : "=a"(ret) : "a"(35L), "D"(ts), "S"(0L) : "rcx", "r11", "memory");
+#0  0x000000000040194b in nap () at /work/fixtures/session/c/sleeper/main.c:19
+#1  0x00000000004018e5 in main (argc=2, argv=<STACK>) at /work/fixtures/session/c/sleeper/main.c:37
+[Inferior 1 (process <PID>) detached]
+[sleeper exited with code 0: done 100]

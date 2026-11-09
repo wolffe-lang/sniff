@@ -1,0 +1,11 @@
+0x000000000040190a in nap () at /work/fixtures/session/c/sleeper/main.c:19
+19	    __asm__ volatile("syscall" : "=a"(ret) : "a"(35L), "D"(ts), "S"(0L) : "rcx", "r11", "memory");
+Breakpoint 1 at 0x4018c0: file /work/fixtures/session/c/sleeper/main.c, line 13.
+
+Breakpoint 1, tick (n=<N>) at /work/fixtures/session/c/sleeper/main.c:13
+13	    ticks = n;
+$1 = 1
+#0  tick (n=<N>) at /work/fixtures/session/c/sleeper/main.c:13
+#1  0x0000000000401998 in main (argc=2, argv=<STACK>) at /work/fixtures/session/c/sleeper/main.c:38
+[Inferior 1 (process <PID>) detached]
+[sleeper exited with code 0: done 100]

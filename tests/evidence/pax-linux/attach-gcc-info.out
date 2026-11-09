@@ -1,0 +1,8 @@
+0x000000000040190a in nap () at /work/fixtures/session/c/sleeper/main.c:19
+19	    __asm__ volatile("syscall" : "=a"(ret) : "a"(35L), "D"(ts), "S"(0L) : "rcx", "r11", "memory");
+  Id Target Id Frame
+* 1 process <PID> "prog" 0x000000000040190a in nap () at /work/fixtures/session/c/sleeper/main.c:19
+#0  0x000000000040190a in nap () at /work/fixtures/session/c/sleeper/main.c:19
+19	    __asm__ volatile("syscall" : "=a"(ret) : "a"(35L), "D"(ts), "S"(0L) : "rcx", "r11", "memory");
+[Inferior 1 (process <PID>) detached]
+[sleeper exited with code 0: done 100]

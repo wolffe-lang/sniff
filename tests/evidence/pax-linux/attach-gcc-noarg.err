@@ -1,0 +1,2 @@
+/work/target/s2/attach-gcc-noarg.cmd:1: Error in sourced command file:
+Argument required (process-id to attach).

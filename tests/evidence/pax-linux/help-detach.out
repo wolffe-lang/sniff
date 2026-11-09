@@ -1,0 +1,13 @@
+Detach a process or file previously attached.
+If a process, it is no longer traced, and it continues its execution.  If
+you were debugging a file, the file is closed and gdb no longer accesses it.
+
+List of detach subcommands:
+
+detach checkpoint -- Detach from a checkpoint (experimental).
+detach inferiors -- Detach from inferior ID (or list of IDS).
+
+Type "help detach" followed by detach subcommand name for full documentation.
+Type "apropos word" to search for commands related to "word".
+Type "apropos -v word" for full documentation of commands related to "word".
+Command name abbreviations are allowed if unambiguous.
