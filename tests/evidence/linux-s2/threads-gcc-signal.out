@@ -4,17 +4,17 @@
 
 Thread 4 "prog" received signal SIGUSR1, User defined signal 1.
 [Switching to Thread <T3> (LWP <L3>)]
-0x000055555555525c in deliver_here () at /work/fixtures/session/c/workers/main.c:27
-27	    __asm__ volatile("syscall" : "=a"(ret) : "a"(234L), "D"(pid), "S"(tid), "d"(10L) : "rcx", "r11", "memory");
-#0  0x000055555555525c in deliver_here () at /work/fixtures/session/c/workers/main.c:27
-#1  0x00005555555553af in worker (arg=0x7fffffffebdc) at /work/fixtures/session/c/workers/main.c:59
+0x00005555555552bb in deliver_here () at /work/fixtures/session/c/workers/main.c:38
+38	    __asm__ volatile("syscall" : "=a"(ret) : "a"(234L), "D"(pid), "S"(tid), "d"(10L) : "rcx", "r11", "memory");
+#0  0x00005555555552bb in deliver_here () at /work/fixtures/session/c/workers/main.c:38
+#1  0x0000555555555440 in worker (arg=0x7fffffffebdc) at /work/fixtures/session/c/workers/main.c:72
 #2  0x00007ffff7e41b84 in ?? () from /lib/x86_64-linux-gnu/libc.so.6
 #3  0x00007ffff7eceecc in ?? () from /lib/x86_64-linux-gnu/libc.so.6
   Id Target Id Frame
-  1 Thread <T4> (LWP <L4>) "prog" spin (flag=0x555555558018 <worked>, want=1, slot=0) at /work/fixtures/session/c/workers/main.c:35
-  2 Thread <T1> (LWP <L1>) "prog" spin (flag=0x55555555801c <released>, want=1, slot=1) at /work/fixtures/session/c/workers/main.c:35
-  3 Thread <T2> (LWP <L2>) "prog" spin (flag=0x55555555801c <released>, want=2, slot=2) at /work/fixtures/session/c/workers/main.c:35
-* 4 Thread <T3> (LWP <L3>) "prog" 0x000055555555525c in deliver_here () at /work/fixtures/session/c/workers/main.c:27
+  1 Thread <T4> (LWP <L4>) "prog" spin (flag=0x555555558020 <worked>, want=1, slot=0) at /work/fixtures/session/c/workers/main.c:46
+  2 Thread <T1> (LWP <L1>) "prog" spin (flag=0x555555558024 <released>, want=1, slot=1) at /work/fixtures/session/c/workers/main.c:46
+  3 Thread <T2> (LWP <L2>) "prog" spin (flag=0x555555558024 <released>, want=2, slot=2) at /work/fixtures/session/c/workers/main.c:46
+* 4 Thread <T3> (LWP <L3>) "prog" 0x00005555555552bb in deliver_here () at /work/fixtures/session/c/workers/main.c:38
 [Thread <T3> (LWP <L3>) exited]
 [Thread <T1> (LWP <L1>) exited]
 [Thread <T2> (LWP <L2>) exited]

@@ -1,20 +1,20 @@
-Breakpoint 1 at 0x401847: file /work/fixtures/session/c/workers/main.c, line 50.
+Breakpoint 1 at 0x401847: file /work/fixtures/session/c/workers/main.c, line 62.
 [New Thread <T1> (LWP <L1>)]
 [New Thread <T2> (LWP <L2>)]
 [New Thread <T3> (LWP <L3>)]
 [Switching to Thread <T3> (LWP <L3>)]
 
-Thread 4 "prog" hit Breakpoint 1, work (n=4) at /work/fixtures/session/c/workers/main.c:50
-50	    int total = 0;
-51	    for (int i = 1; i <= n; i++)
-52	        total += i;
-51	    for (int i = 1; i <= n; i++)
-#0  work (n=4) at /work/fixtures/session/c/workers/main.c:51
-#1  0x0000000000401b23 in worker (arg=<STACK>) at /work/fixtures/session/c/workers/main.c:60
-#2  0x0000000000405e3c in start_thread ()
-#3  0x000000000041967c in clone3 ()
-0x0000000000401b23 in worker (arg=<STACK>) at /work/fixtures/session/c/workers/main.c:60
-60	    worked = work(n);
+Thread 4 "prog" hit Breakpoint 1, work (n=4) at /work/fixtures/session/c/workers/main.c:62
+62	    int total = 0;
+63	    for (int i = 1; i <= n; i++)
+64	        total += i;
+63	    for (int i = 1; i <= n; i++)
+#0  work (n=4) at /work/fixtures/session/c/workers/main.c:63
+#1  0x0000000000401b50 in worker (arg=<STACK>) at /work/fixtures/session/c/workers/main.c:73
+#2  0x00000000004061fc in start_thread ()
+#3  0x0000000000419a6c in clone3 ()
+0x0000000000401b50 in worker (arg=<STACK>) at /work/fixtures/session/c/workers/main.c:73
+73	    worked = work(n);
 Value returned is $1 = 10
 [Thread <T3> (LWP <L3>) exited]
 [Thread <T1> (LWP <L1>) exited]

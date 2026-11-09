@@ -1,30 +1,30 @@
-Breakpoint 1 at 0x401847: file /work/fixtures/session/c/workers/main.c, line 50.
+Breakpoint 1 at 0x401847: file /work/fixtures/session/c/workers/main.c, line 62.
 [New Thread <T1> (LWP <L1>)]
 [New Thread <T2> (LWP <L2>)]
 [New Thread <T3> (LWP <L3>)]
 [Switching to Thread <T3> (LWP <L3>)]
 
-Thread 4 "prog" hit Breakpoint 1, work (n=4) at /work/fixtures/session/c/workers/main.c:50
-50	    int total = 0;
+Thread 4 "prog" hit Breakpoint 1, work (n=4) at /work/fixtures/session/c/workers/main.c:62
+62	    int total = 0;
 [Switching to thread 1 (Thread <T4> (LWP <L4>))]
-#0  spin (flag=0x4cab34 <worked>, want=1, slot=0) at /work/fixtures/session/c/workers/main.c:35
-35	    while (*flag < want) seen[slot] = 1;
-#0  spin (flag=0x4cab34 <worked>, want=1, slot=0) at /work/fixtures/session/c/workers/main.c:35
-#1  0x000000000040199e in main (argc=1, argv=<STACK>) at /work/fixtures/session/c/workers/main.c:72
-#0  spin (flag=0x4cab34 <worked>, want=1, slot=0) at /work/fixtures/session/c/workers/main.c:35
-35	    while (*flag < want) seen[slot] = 1;
+#0  spin (flag=0x4cab34 <worked>, want=1, slot=0) at /work/fixtures/session/c/workers/main.c:46
+46	    while (*flag < want) seen[slot] = 1;
+#0  spin (flag=0x4cab34 <worked>, want=1, slot=0) at /work/fixtures/session/c/workers/main.c:46
+#1  0x000000000040199e in main (argc=1, argv=<STACK>) at /work/fixtures/session/c/workers/main.c:99
+#0  spin (flag=0x4cab34 <worked>, want=1, slot=0) at /work/fixtures/session/c/workers/main.c:46
+46	    while (*flag < want) seen[slot] = 1;
   Id Target Id Frame
-* 1 Thread <T4> (LWP <L4>) "prog" spin (flag=0x4cab34 <worked>, want=1, slot=0) at /work/fixtures/session/c/workers/main.c:35
-  2 Thread <T1> (LWP <L1>) "prog" spin (flag=0x4cab38 <released>, want=1, slot=1) at /work/fixtures/session/c/workers/main.c:35
-  3 Thread <T2> (LWP <L2>) "prog" spin (flag=0x4cab38 <released>, want=2, slot=2) at /work/fixtures/session/c/workers/main.c:35
-  4 Thread <T3> (LWP <L3>) "prog" work (n=4) at /work/fixtures/session/c/workers/main.c:50
+* 1 Thread <T4> (LWP <L4>) "prog" spin (flag=0x4cab34 <worked>, want=1, slot=0) at /work/fixtures/session/c/workers/main.c:46
+  2 Thread <T1> (LWP <L1>) "prog" spin (flag=0x4cab58 <released>, want=1, slot=1) at /work/fixtures/session/c/workers/main.c:46
+  3 Thread <T2> (LWP <L2>) "prog" spin (flag=0x4cab58 <released>, want=2, slot=2) at /work/fixtures/session/c/workers/main.c:46
+  4 Thread <T3> (LWP <L3>) "prog" work (n=4) at /work/fixtures/session/c/workers/main.c:62
 [Switching to thread 4 (Thread <T3> (LWP <L3>))]
-#0  work (n=4) at /work/fixtures/session/c/workers/main.c:50
-50	    int total = 0;
-#0  work (n=4) at /work/fixtures/session/c/workers/main.c:50
-#1  0x0000000000401b23 in worker (arg=<STACK>) at /work/fixtures/session/c/workers/main.c:60
-#2  0x0000000000405e3c in start_thread ()
-#3  0x000000000041967c in clone3 ()
+#0  work (n=4) at /work/fixtures/session/c/workers/main.c:62
+62	    int total = 0;
+#0  work (n=4) at /work/fixtures/session/c/workers/main.c:62
+#1  0x0000000000401b50 in worker (arg=<STACK>) at /work/fixtures/session/c/workers/main.c:73
+#2  0x00000000004061fc in start_thread ()
+#3  0x0000000000419a6c in clone3 ()
 $1 = 4
 [Thread <T3> (LWP <L3>) exited]
 [Thread <T1> (LWP <L1>) exited]

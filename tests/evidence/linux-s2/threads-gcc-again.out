@@ -1,15 +1,15 @@
-Breakpoint 1 at 0x1341: file /work/fixtures/session/c/workers/main.c, line 50.
+Breakpoint 1 at 0x13c6: file /work/fixtures/session/c/workers/main.c, line 62.
 [New Thread <T1> (LWP <L1>)]
 [New Thread <T2> (LWP <L2>)]
 [New Thread <T3> (LWP <L3>)]
 [Switching to Thread <T3> (LWP <L3>)]
 
-Thread 4 "prog" hit Breakpoint 1, work (n=4) at /work/fixtures/session/c/workers/main.c:50
-50	    int total = 0;
-Breakpoint 2 at 0x555555555351: file /work/fixtures/session/c/workers/main.c, line 52.
+Thread 4 "prog" hit Breakpoint 1, work (n=4) at /work/fixtures/session/c/workers/main.c:62
+62	    int total = 0;
+Breakpoint 2 at 0x5555555553d6: file /work/fixtures/session/c/workers/main.c, line 64.
 
-Thread 4 "prog" hit Breakpoint 2, work (n=4) at /work/fixtures/session/c/workers/main.c:52
-52	        total += i;
+Thread 4 "prog" hit Breakpoint 2, work (n=4) at /work/fixtures/session/c/workers/main.c:64
+64	        total += i;
 [Thread <T3> (LWP <L3>) exited]
 [Thread <T1> (LWP <L1>) exited]
 [Thread <T2> (LWP <L2>) exited]
