@@ -2,6 +2,9 @@
 # closure and every named oracle's version and binary digest, not just its tag.
 [container]
 base = "docker.io/library/ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55"
+apt_snapshot = "20261106T000000Z"
+bootstrap_ca_version = "20260816ubuntu0.24.04.2"
+bootstrap_ca_sha256 = "f9fbacd417b515450b831032cc39d18059e9874e67525679a43c16071dabf9a0"
 bootstrap_image_sha256 = "ed9faeb7275e795b09d6e945c86dff0ba4cc6d55b65db3e32e94a17f7742d84f"
 packages_sha256 = "fa1287e475e359b52d248aed073f82531050dce2dc17d19ccc0f38d228faf5b4"
 binary_manifest_sha256 = "73d53beb3699ec100ed72de28ed04e45e7d2d92e53ac2c523dedff4610951647"

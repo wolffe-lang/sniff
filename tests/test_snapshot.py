@@ -18,7 +18,7 @@ esac
 ''')
     apt.chmod(0o755)
     env = dict(os.environ, PATH=str(work) + os.pathsep + os.environ['PATH'])
-    result = subprocess.run(['sh', str(root / 'ci/snapshot-update.sh')], env=env, text=True, capture_output=True)
+    result = subprocess.run(['sh', str(root / 'ci/snapshot-update.sh'), '20261106T000000Z'], env=env, text=True, capture_output=True)
     assert result.returncode != 0, 'failed snapshot was ignored or not selected'
     assert 'FAIL oracle-snapshot' in result.stderr, result.stderr
 print('PASS oracle-snapshot index failure')

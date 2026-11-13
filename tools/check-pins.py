@@ -29,6 +29,16 @@ def main():
             raise ValueError('oracle metadata digest mismatch: ' + file)
     base = (ROOT / 'ci/oracle.Containerfile').read_text().splitlines()[0].removeprefix('FROM ')
     if base != oracle['container']['base']: raise ValueError('container base differs from pin')
+    c = oracle['container']
+    if (ROOT / 'ci/apt-snapshot').read_text().strip() != c['apt_snapshot']:
+        raise ValueError('snapshot differs from pin')
+    content = (ROOT / 'ci/oracle.Containerfile').read_text()
+    filename = 'ca-certificates_%s_all.deb' % c['bootstrap_ca_version']
+    url = 'https://snapshot.ubuntu.com/ubuntu/%s/pool/main/c/ca-certificates/%s' % (c['apt_snapshot'], filename)
+    if ('ADD --checksum=sha256:%s %s ' % (c['bootstrap_ca_sha256'], url)) not in content:
+        raise ValueError('certificate bootstrap differs from pin')
+    if 'ca-certificates=%s' % c['bootstrap_ca_version'] not in (ROOT / 'ci/packages.txt').read_text().splitlines():
+        raise ValueError('certificate bootstrap differs from package lock')
     manifest = (ROOT / 'ci/oracle-binaries.lock').read_text()
     for name in ('gdb', 'llvm_dwarfdump', 'readelf', 'gcc', 'clang'):
         if oracle[name]['sha256'] not in manifest:
