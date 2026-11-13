@@ -29,7 +29,9 @@ capabilities from measured ones.
 `wolf-toolchain.toml` pins archive bytes, including wolf's bundled standard
 library and runtime. `sniff-oracle.toml`, `ci/packages.txt` and
 `ci/oracle-binaries.lock` bind the Linux image recipe, its complete package
-closure and the five oracle/producer binaries. The macOS symbol oracle is
+closure and the five oracle/producer binaries. The Linux image uses a dated
+archive snapshot and a digest-checked certificate bootstrap; an index failure
+stops the build. The macOS symbol oracle is
 also pinned in `sniff-oracle.toml`. The symbol guard checks `--version` and
 SHA-256 before fixture work on either platform; a mismatched PATH binary is
 refused by name. Nothing is installed globally. Built fixture binaries and
