@@ -14,12 +14,12 @@ fi
 key=$(python3 -I - "$root" <<'PY'
 import hashlib, pathlib, sys
 r=pathlib.Path(sys.argv[1]); h=hashlib.sha256()
-for name in ('ci/oracle.Containerfile', 'ci/packages.txt'):
+for name in ('ci/oracle.Containerfile', 'ci/packages.txt', 'ci/apt-snapshot', 'ci/snapshot-update.sh'):
     h.update((r/name).read_bytes())
 print(h.hexdigest()[:20])
 PY
 )
-image="sn00-oracle:$key"
+image="${SNIFF_IMAGE_PREFIX:-sn00-oracle}:$key"
 build_args=(--build-arg "BUILD_CPUS=$cpus")
 if [ -n "${SNIFF_BUILD_MEMORY:-}" ]; then build_args+=(--memory "$SNIFF_BUILD_MEMORY"); fi
 "$engine" build "${build_args[@]}" -f "$root/ci/oracle.Containerfile" -t "$image" "$root"

@@ -12,6 +12,8 @@ export TMPDIR="$root/target/tmp"
 export LC_ALL=C TZ=UTC TERM=dumb
 source "$root/tools/gate-steps.sh"
 step pin-metadata python3 -I tools/check-pins.py
+step snapshot-index python3 -I tests/test_snapshot.py
+step image-prefix python3 -I tests/test_image_prefix.py
 step harness-unit python3 -I tests/test_harness.py
 step census-unit python3 -I tests/test_census.py
 step symbol-oracle-unit python3 -I tests/test_symbol_oracle.py
