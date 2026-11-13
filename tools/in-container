@@ -14,7 +14,7 @@ fi
 key=$(python3 -I - "$root" <<'PY'
 import hashlib, pathlib, sys
 r=pathlib.Path(sys.argv[1]); h=hashlib.sha256()
-for name in ('ci/oracle.Containerfile', 'ci/packages.txt', 'ci/apt-snapshot', 'ci/snapshot-update.sh'):
+for name in ('ci/oracle.Containerfile', 'ci/packages.txt', 'ci/apt-snapshot', 'ci/snapshot-update.sh', 'ci/snapshot-install.sh'):
     h.update((r/name).read_bytes())
 print(h.hexdigest()[:20])
 PY
