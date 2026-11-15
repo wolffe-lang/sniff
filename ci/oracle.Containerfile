@@ -2,7 +2,9 @@ FROM docker.io/library/ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d
 ARG BUILD_CPUS=0
 ENV DEBIAN_FRONTEND=noninteractive
 COPY ci/packages.txt ci/apt-snapshot ci/snapshot-update.sh ci/snapshot-install.sh /pins/
-ADD --checksum=sha256:f9fbacd417b515450b831032cc39d18059e9874e67525679a43c16071dabf9a0 https://snapshot.ubuntu.com/ubuntu/20261106T000000Z/pool/main/c/ca-certificates/ca-certificates_20260816ubuntu0.24.04.2_all.deb /pins/bootstrap-ca.deb
+# TLS trust for the snapshot: its own ca-certificates package, kept in the tree
+# by digest (sniff-oracle.toml names the source). Nothing is fetched before apt.
+COPY ci/bootstrap/ca-certificates_20260816ubuntu0.24.04.2_all.deb /pins/bootstrap-ca.deb
 RUN taskset -c "$BUILD_CPUS" sh -ec ' \
   for read in 1 2; do printf "%s  %s\n" f9fbacd417b515450b831032cc39d18059e9874e67525679a43c16071dabf9a0 /pins/bootstrap-ca.deb | sha256sum -c -; done; \
   dpkg-deb -x /pins/bootstrap-ca.deb /pins/bootstrap-ca; \
