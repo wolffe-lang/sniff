@@ -35,8 +35,21 @@ def main():
     content = (ROOT / 'ci/oracle.Containerfile').read_text()
     filename = 'ca-certificates_%s_all.deb' % c['bootstrap_ca_version']
     url = 'https://snapshot.ubuntu.com/ubuntu/%s/pool/main/c/ca-certificates/%s' % (c['apt_snapshot'], filename)
-    if ('ADD --checksum=sha256:%s %s ' % (c['bootstrap_ca_sha256'], url)) not in content:
-        raise ValueError('certificate bootstrap differs from pin')
+    if c['bootstrap_ca_source'] != url:
+        raise ValueError('certificate bootstrap source differs from pin')
+    # The image build fetches nothing before apt: the bootstrap is in the tree, by digest.
+    if any(line.split()[:1] == ['ADD'] for line in content.splitlines()):
+        raise ValueError('image recipe fetches with ADD; keep the file in the tree by digest')
+    vendored = ROOT / 'ci/bootstrap' / filename
+    if not vendored.is_file():
+        raise ValueError('certificate bootstrap not in the tree: ci/bootstrap/' + filename)
+    for _ in range(2):
+        if hashlib.sha256(vendored.read_bytes()).hexdigest() != c['bootstrap_ca_sha256']:
+            raise ValueError('certificate bootstrap digest differs from pin')
+    if ('COPY ci/bootstrap/%s /pins/bootstrap-ca.deb' % filename) not in content.splitlines():
+        raise ValueError('certificate bootstrap copy differs from pin')
+    if ('printf "%%s  %%s\\n" %s /pins/bootstrap-ca.deb | sha256sum -c -' % c['bootstrap_ca_sha256']) not in content:
+        raise ValueError('certificate bootstrap check differs from pin')
     if 'ca-certificates=%s' % c['bootstrap_ca_version'] not in (ROOT / 'ci/packages.txt').read_text().splitlines():
         raise ValueError('certificate bootstrap differs from package lock')
     manifest = (ROOT / 'ci/oracle-binaries.lock').read_text()
@@ -46,4 +59,8 @@ def main():
     print('PASS pin-metadata toolchains=2 oracle_binaries=5')
 
 
-if __name__ == '__main__': main()
+if __name__ == '__main__':
+    try: main()
+    except (ValueError, KeyError, OSError) as error:
+        print('FAIL pin-metadata ' + str(error))
+        raise SystemExit(1)
