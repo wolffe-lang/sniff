@@ -1,0 +1,12 @@
+first stop SIGSTOP
+pokeuser dr7 off -> 0 errno 0
+pokeuser dr0 place -> 0 errno 0
+pokeuser dr7 write-4 -> 0 errno 0
+peekuser dr7 as written
+write watch: stop SIGTRAP dr6.b0 1 counter 1
+pokeuser dr6 clear -> 0 errno 0
+pokeuser dr7 access-4 -> 0 errno 0
+access watch: stop SIGTRAP dr6.b0 1 counter 1
+pokeuser dr6 clear -> 0 errno 0
+pokeuser dr7 off -> 0 errno 0
+watch off: exited 0
