@@ -229,9 +229,14 @@ def run(cmd, **kw):
     return subprocess.run([str(c) for c in cmd], **kw)
 
 
-def boot(pax, kernel, iso, serial, keys, timeout, mem, leg='bios'):
+def smp_args(n):
+    """QEMU's processor count for a boot, passed through tools/qemu-halt: none for one processor."""
+    return ['--qemu', '-smp', '--qemu', str(n)] if n > 1 else []
+
+
+def boot(pax, kernel, iso, serial, keys, timeout, mem, leg='bios', smp=1):
     cmd = [pax / 'tools/qemu-halt', '--firmware', leg, '--serial', serial, '--timeout', str(timeout),
-           '--qemu', '-m', '--qemu', mem, '--elf', kernel, '--marker', 'halt|PANIC .*',
+           '--qemu', '-m', '--qemu', mem] + smp_args(smp) + ['--elf', kernel, '--marker', 'halt|PANIC .*',
            '--type', keys, '--prompt', '$ ', iso]
     r = run(cmd, capture_output=True, text=True)
     Path(str(serial) + '.verdict').write_text(r.stdout + r.stderr)
@@ -373,6 +378,7 @@ def cmd_run(a):
     kernel = Path(a.kernel)
     print('KERNEL sha256=%s' % sha(kernel))
     print('SNIFF sha256=%s' % sha(a.sniff))
+    print('SMP %d' % a.smp)
     total_ran = total_fail = 0
     for i, chunk in enumerate(chunk_rows(rows, a.fixtures) or [[]]):
         label = 'boot%02d' % i
@@ -380,7 +386,7 @@ def cmd_run(a):
         iso, keys, _ = build_image(pax, kernel, Path(a.inputs), a.sniff, a.fixtures, chunk, out / label, label, first)
         serial = out / (label + '.serial')
         print('START %s rows=%d iso_sha256=%s' % (label, len(chunk), sha(iso)), flush=True)
-        rc = boot(pax, kernel, iso, serial, keys, a.timeout, a.memory)
+        rc = boot(pax, kernel, iso, serial, keys, a.timeout, a.memory, smp=a.smp)
         print('END %s-qemu-halt exit=%d' % (label, rc), flush=True)
         text = serial.read_text(errors='replace') if serial.exists() else ''
         got = split_console(text)
@@ -420,8 +426,8 @@ def tty_boot(a, sess, pax, kernel, row, work):
         raise SystemExit('FAIL session-pax-image tty ' + row['name'])
     keys.write_text('\n'.join(row['script'] + ['quit']) + '\n')
     serial = work / 'tty.serial'
-    cmd = [pax / 'tools/qemu-halt', '--firmware', 'bios', '--serial', serial, '--timeout', str(a.timeout), '--qemu', '-m', '--qemu', a.memory,
-           '--elf', kernel, '--marker', 'halt|PANIC .*', '--type', keys, '--prompt', '(sniff) ', iso]
+    cmd = [pax / 'tools/qemu-halt', '--firmware', 'bios', '--serial', serial, '--timeout', str(a.timeout), '--qemu', '-m', '--qemu', a.memory]
+    cmd += smp_args(a.smp) + ['--elf', kernel, '--marker', 'halt|PANIC .*', '--type', keys, '--prompt', '(sniff) ', iso]
     rc = run(cmd, capture_output=True, text=True).returncode
     return rc, serial.read_text(errors='replace') if serial.exists() else ''
 
@@ -552,6 +558,8 @@ def cmd_selftest(a):
     assert probe_verdicts([], {'dr': ('0', 'a 1\nb 2\n', '')}, linux) == [('PASS', 'probe-dr', '')]
     assert probe_verdicts([], {'dr': ('0', 'a 1\n', '')}, linux)[0][:2] == ('FAIL', 'probe-dr')
     assert probe_verdicts([watch], {}, linux)[0][:2] == ('FAIL', 'probe-dr')
+    # the processor count reaches QEMU through qemu-halt only when it is more than one
+    assert smp_args(1) == [] and smp_args(4) == ['--qemu', '-smp', '--qemu', '4']
     print('PASS session-pax-selftest')
     return 0
 
@@ -565,12 +573,14 @@ def main():
     r.add_argument('--only')
     r.add_argument('--timeout', type=int, default=1800)
     r.add_argument('--memory', default='4096M')
+    r.add_argument('--smp', type=int, default=1, help='processors QEMU gives the guest')
     t = sub.add_parser('tty')
     for k in ('pax', 'kernel', 'sniff', 'fixtures', 'out'):
         t.add_argument('--' + k, required=True)
     t.add_argument('--only')
     t.add_argument('--timeout', type=int, default=600)
     t.add_argument('--memory', default='4096M')
+    t.add_argument('--smp', type=int, default=1, help='processors QEMU gives the guest')
     pr = sub.add_parser('probes')
     pr.add_argument('--fixtures', required=True)
     pr.add_argument('--cc', default='gcc')
