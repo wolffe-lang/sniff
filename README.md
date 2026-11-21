@@ -4,7 +4,7 @@ A debugger written in [wolf](https://github.com/wolffe-lang/wolf-lang),
 for x86-64 Linux and PAX, and macOS arm64. The command language is GDB's;
 a Debug Adapter Protocol server is planned for editor integration.
 
-**Status: S4, sniff on PAX beside the S2 Linux core and the S3 macOS backend.** `sniff -batch -x SCRIPT PROG` starts PROG
+**Status: milestones S0 to S6 are met on Linux x86-64, macOS arm64 and PAX; core files (S7) are next.** `sniff -batch -x SCRIPT PROG` starts PROG
 (under `ptrace(2)` on Linux; as a suspended child with its task port and exception port on macOS) and debugs it with gdb's command language (breakpoints,
 stepping, frames, values, registers, watchpoints, threads (all-stop) and signals, `list` and `help`); `attach PID`, `detach` and
 `sniff -p PID PROG` take a running process instead. It is held to transcripts of the pinned gdb
