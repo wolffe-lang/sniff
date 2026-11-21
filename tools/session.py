@@ -27,6 +27,9 @@ Normalisations, each named in every PASS/FAIL line only when it fired:
           debuggers) and on PAX (kernel/vm's `start`), and PAX refuses a break more than 64 MiB above
           that. What the runtime allocated there first depends on the arguments and environment it
           was given, which gdb's inferior on Linux and PAX's console do not share.
+A row with "golden_of" is held to another row's golden: capture and oracle pass it by (SHARED), and check
+runs sniff on its own script against that golden. sniff's bare `info registers` is held so to the named form's
+26 lines, which gdb's bare form exceeds on AVX-512 hosts (k0-k7).
 Terminal rows run both debuggers in a pseudo-terminal with echo off and send
 one command per prompt, as R-sn02-1 specifies.
 
@@ -389,7 +392,28 @@ def prog_path(fixtures, row):
 
 
 def golden_paths(row):
-    return [GOLD / (row['name'] + ext) for ext in ('.out', '.err', '.rc')]
+    """A row's golden files; a row with "golden_of" is held to that row's golden (its own command would give gdb
+    lines sniff does not print, as gdb's bare `info registers` adds k0-k7 on AVX-512 hosts)."""
+    return [GOLD / (row.get('golden_of', row['name']) + ext) for ext in ('.out', '.err', '.rc')]
+
+
+def golden_of_problems(rows):
+    """What is wrong with the rows' "golden_of" fields: each names another row that runs, has its own golden, and
+    compares bytes; [] when nothing is."""
+    by = {r['name']: r for r in rows}
+    bad = []
+    for r in rows:
+        g = r.get('golden_of')
+        if g is None:
+            continue
+        t = by.get(g)
+        if not isinstance(g, str) or t is None or g == r['name']:
+            bad.append('%s: golden_of names no other row' % r['name'])
+        elif t.get('golden_of') or t.get('skip'):
+            bad.append('%s: golden_of names a row without its own golden' % r['name'])
+        elif r.get('tty') or r.get('compare', 'bytes') != 'bytes':
+            bad.append('%s: a golden_of row is a batch row that compares bytes' % r['name'])
+    return bad
 
 
 def cmd_capture(a):
@@ -398,6 +422,9 @@ def cmd_capture(a):
     for row in load_rows(a.only):
         if row.get('skip'):
             print('SKIP ' + row['name'] + ' reason=' + row['skip'])
+            continue
+        if row.get('golden_of'):
+            print('SHARED %s golden=%s' % (row['name'], row['golden_of']))
             continue
         if row.get('tty'):
             if row.get('attach'):
@@ -553,6 +580,10 @@ def cmd_oracle(a):
         if row.get('skip'):
             print('SKIP ' + row['name'] + ' reason=' + row['skip'])
             continue
+        if row.get('golden_of'):
+            # the golden is another row's, re-derived when that row runs here
+            print('SHARED %s golden=%s' % (row['name'], row['golden_of']))
+            continue
         fired = set()
         if row.get('tty'):
             if row.get('attach'):
@@ -604,7 +635,7 @@ def row_form(r):
 
 def cmd_verify(a):
     rows = load_rows()
-    bad = ['%s: %s' % (r['name'], row_form(r)) for r in rows if row_form(r)]
+    bad = ['%s: %s' % (r['name'], row_form(r)) for r in rows if row_form(r)] + golden_of_problems(rows)
     if bad:
         print('FAIL session-rows-form: ' + '; '.join(bad))
         return 1
