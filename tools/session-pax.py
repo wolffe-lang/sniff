@@ -16,7 +16,14 @@ name and never a pass.
   session-pax.py run --pax PAXTREE --kernel ELF --inputs DIR --sniff BIN
                      --fixtures DIR --out DIR [--only RE] [--timeout S]
   session-pax.py tty --pax PAXTREE ...      the terminal rows, typed key by key
+  session-pax.py probes --fixtures DIR [--capture]   build the kernel probes static and run them on Linux
   session-pax.py selftest                   the marker splitter, no machine
+
+The kernel probes ("probes" in tests/pax-rows.json) run first in the first image, between markers of their own
+(probe:NAME), and are held to their Linux answers (tests/evidence/pax-linux/probe-NAME.out, .rc). A row skipped
+for a gap in PAX names its probe; while PAX answers that probe differently from Linux the row is SKIP with the first
+differing line as its witness, and once PAX answers alike the row is FAIL skip-stale: the skip is no longer true.
+A probe no skip names is a capability rows rely on, PASS or FAIL against Linux.
 """
 import argparse
 import hashlib
@@ -115,9 +122,20 @@ def attach_block(row, scripts_dir, fx_guest, prog):
     return out
 
 
-def guest_script(rows, scripts_dir, fx_guest):
-    """The text of /etc/rows.sh: one block per row; markers on lines of their own."""
+def probe_block(name, fx_guest):
+    """A kernel probe's lines: its answer between the markers a row's has, under the name probe:NAME."""
+    return ["printf '%s\\n' '" + BEGIN + "probe:" + name + "'",
+            '%s/probe/%s > /tmp/o 2> /tmp/e' % (fx_guest, name),
+            "printf '%s\\n' \"" + RC + "$?\"",
+            "printf '%s\\n' '" + OUT + "'", 'cat /tmp/o', "printf '\\n%s\\n' '" + ERR + "'", 'cat /tmp/e',
+            "printf '\\n%s\\n' '" + END + "'"]
+
+
+def guest_script(rows, scripts_dir, fx_guest, probes=()):
+    """The text of /etc/rows.sh: the probes, then one block per row; markers on lines of their own."""
     lines = []
+    for name in probes:
+        lines += probe_block(name, fx_guest)
     for row in rows:
         args = ''
         if row.get('args'):
@@ -220,7 +238,7 @@ def boot(pax, kernel, iso, serial, keys, timeout, mem, leg='bios'):
     return r.returncode
 
 
-def build_image(pax, kernel, inputs, sniff, fixtures, rows, work, label):
+def build_image(pax, kernel, inputs, sniff, fixtures, rows, work, label, probes=()):
     work.mkdir(parents=True, exist_ok=True)
     env = dict(os.environ)
     files = [('/bin/sh', inputs / 'pelt/pelt', 755), ('/bin/sniff', sniff, 755)]
@@ -235,10 +253,12 @@ def build_image(pax, kernel, inputs, sniff, fixtures, rows, work, label):
         files.append(('/work/target/s2/%s.cmd' % row['name'], f, 644))
     for prog in image_progs(rows):
         files.append(('/work/target/pax-fixtures/' + prog, Path(fixtures) / prog, 755))
+    for name in probes:
+        files.append(('/work/target/pax-fixtures/probe/' + name, Path(fixtures) / 'probe' / name, 755))
     for dest, src in sources_for(rows).items():
         files.append((dest, src, 644))
     rows_sh = work / 'rows.sh'
-    rows_sh.write_text(guest_script(rows, '/work/target/s2', '/work/target/pax-fixtures'))
+    rows_sh.write_text(guest_script(rows, '/work/target/s2', '/work/target/pax-fixtures', probes))
     files.append(('/etc/rows.sh', rows_sh, 644))
     run_line = work / 'pax-run'
     run_line.write_text('/bin/env HOME=/ /bin/sh -i\n')
@@ -260,6 +280,60 @@ def build_image(pax, kernel, inputs, sniff, fixtures, rows, work, label):
     # '$ ' (help print's "$ is the last value"), which typed `exit` into the middle of the rows
     keys.write_text('/bin/sh /etc/rows.sh; exit\n')
     return iso, keys, sess
+
+
+def first_line_diff(want, got):
+    wl, gl = want.splitlines(), got.splitlines()
+    for i in range(max(len(wl), len(gl))):
+        w = wl[i] if i < len(wl) else '<end>'
+        g = gl[i] if i < len(gl) else '<end>'
+        if w != g:
+            return 'line %d: want %r got %r' % (i + 1, w, g)
+    return 'equal'
+
+
+def probe_verdicts(skipped, got, linux):
+    """(verdict, name, why) for every probe and every skipped row. got: probe name -> (rc, out, err) from the
+    console; linux: probe name -> (out, rc), the golden. A skip whose gap is a probe PAX answers as Linux does is
+    FAIL skip-stale; one PAX answers otherwise is SKIP, witnessed by the first differing line; a harness skip is
+    SKIP; a probe no skip names is PASS or FAIL against Linux; a probe with no answer is FAIL."""
+    res = []
+    named = {r['gap'] for r in skipped if r.get('gap') not in (None, 'harness')}
+    for name in sorted(linux):
+        want_o, want_rc = linux[name]
+        if name not in got:
+            res.append(('FAIL', 'probe-' + name, 'no-result: the console shows no complete block for this probe'))
+            for r in skipped:
+                if r.get('gap') == name:
+                    res.append(('SKIP', r['name'], 'reason=%s gap=%s witness=none' % (r['skip'], name)))
+            continue
+        rc, out, err = got[name]
+        same = out == want_o and str(rc).strip() == str(want_rc).strip() and err == ''
+        why = 'equal' if same else (first_line_diff(want_o, out) if out != want_o else
+                                    'exit want %s got %s' % (str(want_rc).strip(), rc) if str(rc).strip() != str(want_rc).strip()
+                                    else 'stderr %r' % err[:80])
+        for r in skipped:
+            if r.get('gap') != name:
+                continue
+            if same:
+                res.append(('FAIL', r['name'], 'skip-stale: PAX answers the %s probe as Linux does, so "%s" is no '
+                            'longer true' % (name, r['skip'])))
+            else:
+                res.append(('SKIP', r['name'], 'reason=%s gap=%s witness=%s' % (r['skip'], name, why)))
+        if name not in named:
+            res.append(('PASS', 'probe-' + name, '') if same else ('FAIL', 'probe-' + name, why))
+    for r in skipped:
+        if r.get('gap') == 'harness':
+            res.append(('SKIP', r['name'], 'reason=' + r['skip']))
+    return res
+
+
+def linux_probe_goldens(sess):
+    gold = {}
+    for name in sess.load_probes():
+        o, rc = sess.probe_golden_paths(name)
+        gold[name] = (o.read_text(), rc.read_text())
+    return gold
 
 
 def compare(sess, rows, got):
@@ -289,9 +363,10 @@ def cmd_run(a):
     sess.FIXTURES = a.fixtures
     rows = [r for r in sess.load_rows(a.only) if not r.get('tty')]
     skipped = [r for r in rows if r.get('skip')]
-    for r in skipped:
-        print('SKIP %s reason=%s' % (r['name'], r['skip']))
     rows = [r for r in rows if not r.get('skip')]
+    linux = linux_probe_goldens(sess)
+    probes = sorted(linux)
+    probe_got = {}
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     pax = Path(a.pax)
@@ -299,21 +374,30 @@ def cmd_run(a):
     print('KERNEL sha256=%s' % sha(kernel))
     print('SNIFF sha256=%s' % sha(a.sniff))
     total_ran = total_fail = 0
-    for i, chunk in enumerate(chunk_rows(rows, a.fixtures)):
+    for i, chunk in enumerate(chunk_rows(rows, a.fixtures) or [[]]):
         label = 'boot%02d' % i
-        iso, keys, _ = build_image(pax, kernel, Path(a.inputs), a.sniff, a.fixtures, chunk, out / label, label)
+        first = probes if i == 0 else ()
+        iso, keys, _ = build_image(pax, kernel, Path(a.inputs), a.sniff, a.fixtures, chunk, out / label, label, first)
         serial = out / (label + '.serial')
         print('START %s rows=%d iso_sha256=%s' % (label, len(chunk), sha(iso)), flush=True)
         rc = boot(pax, kernel, iso, serial, keys, a.timeout, a.memory)
         print('END %s-qemu-halt exit=%d' % (label, rc), flush=True)
         text = serial.read_text(errors='replace') if serial.exists() else ''
         got = split_console(text)
+        for name in first:
+            if 'probe:' + name in got:
+                probe_got[name] = got['probe:' + name]
         ran, fails = compare(sess, chunk, got)
         total_ran += ran
         total_fail += fails
         if rc != 0 and not got:
             print('FAIL %s machine did not halt and no row finished: %s' % (label, Path(str(serial) + '.verdict').read_text()[-300:].replace('\n', ' | ')))
-    print('SUMMARY ran=%d failed=%d skipped=%d' % (total_ran, total_fail, len(skipped)))
+    nskip = 0
+    for verdict, name, why in probe_verdicts(skipped, probe_got, linux):
+        print('%s %s%s' % (verdict, name, (' ' + why) if why else ''))
+        total_fail += verdict == 'FAIL'
+        nskip += verdict == 'SKIP'
+    print('SUMMARY ran=%d failed=%d skipped=%d' % (total_ran, total_fail, nskip))
     return 1 if total_fail else 0
 
 
@@ -375,6 +459,46 @@ def cmd_tty(a):
         else:
             print('PASS %s%s' % (row['name'], (' [normalised: ' + ','.join(sorted(fired)) + ']') if fired else ''))
     print('SUMMARY tty failed=%d' % fails)
+    return 1 if fails else 0
+
+
+def cmd_probes(a):
+    """Build each kernel probe static (the PAX image's copy) and run it here, on Linux: --capture writes its
+    golden, otherwise it is held to it."""
+    sess = load_session()
+    fails = 0
+    outdir = Path(a.fixtures) / 'probe'
+    outdir.mkdir(parents=True, exist_ok=True)
+    env = dict(sess.ENV_BASE)
+    for name, src in sorted(sess.load_probes().items()):
+        exe = outdir / name
+        b = subprocess.run([a.cc, '-O0', '-fno-pie', '-static', '-no-pie', '-o', str(exe), str(ROOT / src)], capture_output=True, text=True)
+        if b.returncode != 0:
+            print('FAIL probe-linux-%s build %s' % (name, (b.stderr or b.stdout).strip()[-300:]))
+            fails += 1
+            continue
+        try:
+            r = subprocess.run([str(exe)], capture_output=True, text=True, timeout=60, env=env, cwd=str(outdir))
+        except subprocess.TimeoutExpired:
+            print('FAIL probe-linux-%s timeout' % name)
+            fails += 1
+            continue
+        o, rc = sess.probe_golden_paths(name)
+        if a.capture:
+            o.write_text(r.stdout)
+            rc.write_text('%d\n' % r.returncode)
+            print('CAPTURE probe-linux-%s rc=%d sha256=%s' % (name, r.returncode, sha(exe)))
+            continue
+        if not (o.exists() and rc.exists()):
+            print('FAIL probe-linux-%s no-golden' % name)
+            fails += 1
+            continue
+        if r.stdout != o.read_text() or str(r.returncode) != rc.read_text().strip() or r.stderr:
+            why = first_line_diff(o.read_text(), r.stdout) if r.stdout != o.read_text() else 'exit %d stderr %r' % (r.returncode, r.stderr[:80])
+            print('FAIL probe-linux-%s %s' % (name, why))
+            fails += 1
+        else:
+            print('PASS probe-linux-%s sha256=%s' % (name, sha(exe)))
     return 1 if fails else 0
 
 
@@ -447,9 +571,13 @@ def main():
     t.add_argument('--only')
     t.add_argument('--timeout', type=int, default=600)
     t.add_argument('--memory', default='4096M')
+    pr = sub.add_parser('probes')
+    pr.add_argument('--fixtures', required=True)
+    pr.add_argument('--cc', default='gcc')
+    pr.add_argument('--capture', action='store_true')
     sub.add_parser('selftest')
     a = p.parse_args()
-    return {'run': cmd_run, 'tty': cmd_tty, 'selftest': cmd_selftest}[a.cmd](a)
+    return {'run': cmd_run, 'tty': cmd_tty, 'probes': cmd_probes, 'selftest': cmd_selftest}[a.cmd](a)
 
 
 if __name__ == '__main__':
