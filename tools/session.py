@@ -27,6 +27,10 @@ Normalisations, each named in every PASS/FAIL line only when it fired:
           debuggers) and on PAX (kernel/vm's `start`), and PAX refuses a break more than 64 MiB above
           that. What the runtime allocated there first depends on the arguments and environment it
           was given, which gdb's inferior on Linux and PAX's console do not share.
+In the PAX set a skipped row names its "gap": "harness" for the harness's own limit, or a probe ("probes" in
+tests/pax-rows.json, a static C program under tests/pax-probe/) whose Linux answer is its golden
+(probe-NAME.out, .rc). tools/session-pax.py runs each probe at PAX's console; a skip that blames PAX stands only
+while PAX answers its probe differently from Linux, and is red by name (skip-stale) once PAX answers alike.
 A row with "golden_of" is held to another row's golden: capture and oracle pass it by (SHARED), and check
 runs sniff on its own script against that golden. sniff's bare `info registers` is held so to the named form's
 26 lines, which gdb's bare form exceeds on AVX-512 hosts (k0-k7).
@@ -115,6 +119,32 @@ def load_rows(only=None):
     if len(set(names)) != len(names):
         raise SystemExit('FAIL session-rows: duplicate row names')
     return rows
+
+
+def load_probes():
+    """The PAX set's kernel probes, tests/pax-rows.json "probes": name -> C source. Each is built static and run
+    on Linux (its answer there is its golden) and at PAX's console; none in the S2 set."""
+    if not PAX_MODE:
+        return {}
+    return json.loads(PAX_ROWS.read_text()).get('probes', {})
+
+
+def probe_golden_paths(name):
+    return [PAX_GOLD / ('probe-' + name + ext) for ext in ('.out', '.rc')]
+
+
+def skip_problems(rows, probes):
+    """What is wrong with the PAX set's skips: a skipped row says why with "gap", either "harness" (the harness's
+    own limit) or the name of the probe that witnesses a gap in PAX, and a gap goes with a skip; [] when nothing is."""
+    bad = []
+    for r in rows:
+        if 'gap' in r and not r.get('skip'):
+            bad.append('%s: a gap without a skip' % r['name'])
+        elif r.get('skip') and 'gap' not in r:
+            bad.append('%s: a skip that names no gap (a probe, or harness)' % r['name'])
+        elif r.get('skip') and r['gap'] != 'harness' and r['gap'] not in probes:
+            bad.append('%s: gap %s names no probe' % (r['name'], r['gap']))
+    return bad
 
 
 def heap_range(prog):
@@ -635,12 +665,17 @@ def row_form(r):
 
 def cmd_verify(a):
     rows = load_rows()
+    probes = load_probes()
     bad = ['%s: %s' % (r['name'], row_form(r)) for r in rows if row_form(r)] + golden_of_problems(rows)
+    if PAX_MODE:
+        bad += skip_problems(rows, probes)
+        bad += ['probe %s: no source %s' % (n, src) for n, src in sorted(probes.items()) if not (ROOT / src).is_file()]
     if bad:
         print('FAIL session-rows-form: ' + '; '.join(bad))
         return 1
     have = {p.name for p in GOLD.glob('*') if p.is_file() and p.suffix in ('.out', '.err', '.rc')}
     want = {p.name for r in rows if not r.get('skip') for p in golden_paths(r)}
+    want |= {p.name for n in probes for p in probe_golden_paths(n)}
     if want - have:
         print('FAIL session-goldens-missing: ' + ', '.join(sorted(want - have)))
         return 1
