@@ -450,7 +450,7 @@ def cmd_capture(a):
     work = a.work
     GOLD.mkdir(parents=True, exist_ok=True)
     for row in load_rows(a.only):
-        if row.get('skip'):
+        if row.get('skip') and not a.include_skipped:
             print('SKIP ' + row['name'] + ' reason=' + row['skip'])
             continue
         if row.get('golden_of'):
@@ -679,8 +679,10 @@ def cmd_verify(a):
     if want - have:
         print('FAIL session-goldens-missing: ' + ', '.join(sorted(want - have)))
         return 1
-    if have - want:
-        print('FAIL session-goldens-extra: ' + ', '.join(sorted(have - want)))
+    # a skipped row may keep its golden, captured on Linux, ready for the day its gap closes
+    ready = {p.name for r in rows if r.get('skip') for p in golden_paths(r)}
+    if have - want - ready:
+        print('FAIL session-goldens-extra: ' + ', '.join(sorted(have - want - ready)))
         return 1
     print('PASS session-rows rows=%d goldens=%d' % (len(rows), len(want)))
     return 0
@@ -697,6 +699,9 @@ def main():
         s.add_argument('--only')
         if name in ('capture', 'oracle'):
             s.add_argument('--gdb', default='gdb')
+        if name == 'capture':
+            s.add_argument('--include-skipped', action='store_true',
+                           help="capture skipped rows' goldens too (on Linux, before a PAX gap closes)")
         if name == 'check':
             s.add_argument('--sniff', default='/work/target/sniff')
     sub.add_parser('verify')
