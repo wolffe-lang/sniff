@@ -91,6 +91,7 @@ if [ "$mode" = linux ]; then
   # Linux; tools/gate-pax runs it on PAX under KVM (it needs the PAX tree, a kernel and QEMU, not this image).
   step pax-fixtures python3 -I tools/build-session.py --wolf "$wolf" --out "$root/target/pax-fixtures" --static
   find "$root/target/pax-fixtures" -type f -exec touch {} +
+  step pax-probes python3 -I tools/session-pax.py probes --fixtures "$root/target/pax-fixtures"
   step pax-rows-linux python3 -I tools/session.py --set pax check --sniff "$root/target/sniff" --fixtures "$root/target/pax-fixtures" --work "$root"
   step pax-sniff-static bash tools/build-static-sniff.sh "$wolf" "$root/target/sniff-static"
 else
