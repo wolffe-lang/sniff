@@ -26,58 +26,6 @@
     "^(rbx|rcx|rdx|rsi|r8|r9|r10|r11|r12|r13|r14|r15|fs_base|eflags)\\s"
    ]
   },
-  "watch-gcc-global": {
-   "skip": "hardware watchpoints on PAX wait for its debug registers through ptrace (the px lane drafted in notes/sn05-the-repin-and-s5.md)",
-   "gap": "dr"
-  },
-  "watch-gcc-local-scope": {
-   "skip": "hardware watchpoints on PAX wait for its debug registers through ptrace (the px lane drafted in notes/sn05-the-repin-and-s5.md)",
-   "gap": "dr"
-  },
-  "watch-gcc-members": {
-   "skip": "hardware watchpoints on PAX wait for its debug registers through ptrace (the px lane drafted in notes/sn05-the-repin-and-s5.md)",
-   "gap": "dr"
-  },
-  "watch-gcc-delete": {
-   "skip": "hardware watchpoints on PAX wait for its debug registers through ptrace (the px lane drafted in notes/sn05-the-repin-and-s5.md)",
-   "gap": "dr"
-  },
-  "rwatch-gcc-global": {
-   "skip": "hardware watchpoints on PAX wait for its debug registers through ptrace (the px lane drafted in notes/sn05-the-repin-and-s5.md)",
-   "gap": "dr"
-  },
-  "awatch-gcc-global": {
-   "skip": "hardware watchpoints on PAX wait for its debug registers through ptrace (the px lane drafted in notes/sn05-the-repin-and-s5.md)",
-   "gap": "dr"
-  },
-  "watch-clang-global": {
-   "skip": "hardware watchpoints on PAX wait for its debug registers through ptrace (the px lane drafted in notes/sn05-the-repin-and-s5.md)",
-   "gap": "dr"
-  },
-  "watch-clang-local-scope": {
-   "skip": "hardware watchpoints on PAX wait for its debug registers through ptrace (the px lane drafted in notes/sn05-the-repin-and-s5.md)",
-   "gap": "dr"
-  },
-  "watch-clang-members": {
-   "skip": "hardware watchpoints on PAX wait for its debug registers through ptrace (the px lane drafted in notes/sn05-the-repin-and-s5.md)",
-   "gap": "dr"
-  },
-  "watch-clang-delete": {
-   "skip": "hardware watchpoints on PAX wait for its debug registers through ptrace (the px lane drafted in notes/sn05-the-repin-and-s5.md)",
-   "gap": "dr"
-  },
-  "rwatch-clang-global": {
-   "skip": "hardware watchpoints on PAX wait for its debug registers through ptrace (the px lane drafted in notes/sn05-the-repin-and-s5.md)",
-   "gap": "dr"
-  },
-  "awatch-clang-global": {
-   "skip": "hardware watchpoints on PAX wait for its debug registers through ptrace (the px lane drafted in notes/sn05-the-repin-and-s5.md)",
-   "gap": "dr"
-  },
-  "watch-wolf-local": {
-   "skip": "hardware watchpoints on PAX wait for its debug registers through ptrace (the px lane drafted in notes/sn05-the-repin-and-s5.md)",
-   "gap": "dr"
-  },
   "tty-wolf-loops-repeat-x": {
    "drop": [
     "\\b0x00007fff[0-9a-f]{8}\\b"
