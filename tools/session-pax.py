@@ -408,6 +408,26 @@ def cmd_selftest(a):
     assert i_wait and i_sniff and i_wait[0] < i_sniff[0], text
     assert '"$st" != S' in text.splitlines()[i_wait[0]], text
     assert "printf '%s\\n' \"" + WAIT + "$st $n\"" in text, text
+    # a kernel probe runs first in the image, between its own markers, and its answer is split like a row's
+    probed = guest_script([], '/s', '/f', probes=['dr'])
+    assert probed.splitlines()[0] == "printf '%s\\n' '" + BEGIN + "probe:dr'", probed
+    assert '/f/probe/dr > /tmp/o 2> /tmp/e' in probed, probed
+    assert split_console('@@BEGIN probe:dr\n@@RC 0\n@@OUT\na 1\nb 2\n\n@@ERR\n\n@@END\n')['probe:dr'] == ('0', 'a 1\nb 2\n', '')
+    # a skip that blames PAX stands only while PAX answers its probe unlike Linux: the same answer makes the
+    # skipped row red by name; another answer keeps the SKIP and names the first line that differs
+    linux = {'dr': ('a 1\nb 2\n', '0')}
+    watch = {'name': 'watch-x', 'skip': 'no debug registers', 'gap': 'dr'}
+    tty = {'name': 'tty-x', 'skip': 'no shell', 'gap': 'harness'}
+    same = probe_verdicts([watch, tty], {'dr': ('0', 'a 1\nb 2\n', '')}, linux)
+    assert ('FAIL', 'watch-x') in [(v, n) for v, n, _ in same], same
+    assert ('SKIP', 'tty-x') in [(v, n) for v, n, _ in same], same
+    assert [w for v, n, w in same if n == 'watch-x'][0].startswith('skip-stale'), same
+    other = probe_verdicts([watch], {'dr': ('0', 'a 1\nb -1\n', '')}, linux)
+    assert other[0][:2] == ('SKIP', 'watch-x') and "line 2: want 'b 2' got 'b -1'" in other[0][2], other
+    # a probe no skip names is held to Linux's answer: a capability a row relies on
+    assert probe_verdicts([], {'dr': ('0', 'a 1\nb 2\n', '')}, linux) == [('PASS', 'probe-dr', '')]
+    assert probe_verdicts([], {'dr': ('0', 'a 1\n', '')}, linux)[0][:2] == ('FAIL', 'probe-dr')
+    assert probe_verdicts([watch], {}, linux)[0][:2] == ('FAIL', 'probe-dr')
     print('PASS session-pax-selftest')
     return 0
 

@@ -328,6 +328,58 @@ class Inventory(unittest.TestCase):
         self.assertIn('gcc', builder)
 
 
+class SharedGoldens(unittest.TestCase):
+    """A row held to another row's golden ("golden_of"): sniff's bare `info registers` against the named form."""
+
+    def test_golden_paths_follow_golden_of(self):
+        self.assertEqual(session.golden_paths({'name': 'b', 'golden_of': 'a'}), session.golden_paths({'name': 'a'}))
+
+    def test_golden_of_problems(self):
+        rows = [{'name': 'a'}, {'name': 'b', 'golden_of': 'a'}]
+        self.assertEqual(session.golden_of_problems(rows), [])
+        self.assertTrue(session.golden_of_problems(rows + [{'name': 'c', 'golden_of': 'nowhere'}]))
+        self.assertTrue(session.golden_of_problems(rows + [{'name': 'c', 'golden_of': 'b'}]))  # no chains
+        self.assertTrue(session.golden_of_problems(rows + [{'name': 'c', 'golden_of': 'c'}]))
+        self.assertTrue(session.golden_of_problems([{'name': 'a', 'skip': 'x'}, {'name': 'b', 'golden_of': 'a'}]))
+        self.assertTrue(session.golden_of_problems(rows + [{'name': 'c', 'golden_of': 'a', 'tty': True}]))
+
+    def test_the_bare_registers_row(self):
+        rows = {r['name']: r for r in session.load_rows()}
+        bare, named = rows['value-gcc-registers-bare'], rows['value-gcc-registers']
+        self.assertEqual(bare['golden_of'], 'value-gcc-registers')
+        self.assertEqual(bare['prog'], named['prog'])
+        self.assertEqual(bare['script'], named['script'][:-1] + ['info registers'])
+        self.assertTrue(named['script'][-1].startswith('info registers rax '))
+
+
+class PaxGaps(unittest.TestCase):
+    """A PAX-set row skipped for a gap in PAX names the probe that witnesses the gap; one skipped for the harness's
+    own limit says so. A skip blaming PAX stands only while PAX answers its probe differently from Linux."""
+
+    def test_skip_problems(self):
+        probes = {'dr': 'tests/pax-probe/dr.c'}
+        self.assertEqual(session.skip_problems([{'name': 'r', 'skip': 'x', 'gap': 'dr'}], probes), [])
+        self.assertEqual(session.skip_problems([{'name': 'r', 'skip': 'x', 'gap': 'harness'}], probes), [])
+        self.assertEqual(session.skip_problems([{'name': 'r'}], probes), [])
+        self.assertTrue(session.skip_problems([{'name': 'r', 'skip': 'x'}], probes))
+        self.assertTrue(session.skip_problems([{'name': 'r', 'skip': 'x', 'gap': 'maps'}], probes))
+        self.assertTrue(session.skip_problems([{'name': 'r', 'gap': 'dr'}], probes))  # a gap without a skip
+
+    def test_every_pax_skip_names_its_gap(self):
+        old = (session.GOLD, session.PAX_MODE)
+        try:
+            session.use_pax()
+            self.assertEqual(session.skip_problems(session.load_rows(), session.load_probes()), [])
+            for name, src in session.load_probes().items():
+                self.assertTrue((ROOT / src).is_file(), name)
+        finally:
+            session.GOLD, session.PAX_MODE = old
+
+    def test_probe_goldens_are_pax_set_files(self):
+        self.assertEqual([p.name for p in session.probe_golden_paths('dr')], ['probe-dr.out', 'probe-dr.rc'])
+        self.assertTrue(all(p.parent == session.PAX_GOLD for p in session.probe_golden_paths('dr')))
+
+
 class Comparator(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

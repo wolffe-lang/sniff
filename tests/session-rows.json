@@ -566,6 +566,17 @@
    ]
   },
   {
+   "name": "value-gcc-registers-bare",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "break count",
+    "run",
+    "info registers"
+   ],
+   "golden_of": "value-gcc-registers",
+   "why": "gdb's bare info registers adds k0-k7 on AVX-512 hosts; sniff prints the general registers only, so its bare form is held to the named form's golden, the same 26 lines"
+  },
+  {
    "name": "value-gcc-noproc",
    "prog": "c/calls/gcc-O0/prog",
    "script": [
