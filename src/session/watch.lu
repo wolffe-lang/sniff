@@ -62,7 +62,8 @@ fn names_a_local(s: Session, text: str) -> bool {
 fn cmd_watch(mut s: Session, rest: str, kind: int) -> str {
     let text = rest.trim()
     if text.len() == 0 { return "Argument required (expression to compute)." }
-    if !s.alive { return "sniff sets watchpoints on a running program only." }
+    // gdb sets one over a core too: it is kept for the run that replaces the core
+    if !has_stack(s) { return "sniff sets watchpoints on a running program only." }
     compute_frames(mut s)
     let v = eval_expr(s, text)
     if !v.ok { return v.why }
