@@ -251,3 +251,19 @@ gave, after gdb's already-traced warning when another tracer holds the process. 
 detaches. The attach rows start the sleeper fixture as the harness's own child and start the debugger once it
 blocks; the macOS rows are lldb fact rows, and the PAX rows run at PAX's console. Boundaries that remain are listed
 in `notes/sn07-attach-and-detach.md`.
+
+### Core files (S7, Linux)
+
+`src/readers/core.lu` reads an ELF64 x86-64 core: its PT_LOAD segments and the notes of its PT_NOTEs, as spans into
+the file, every read bounded and charged. Notes are laid at 8 when the PT_NOTE's p_align says 8 and at 4 otherwise
+(gdb's gcore writes p_align 1 and pads at 4); any other alignment is refused by name. The descriptors are decoded
+only when a caller asks: threads (NT_PRSTATUS), the process (NT_PRPSINFO), the auxiliary vector and the mapped
+files (NT_FILE), at the offsets `tools/abi-probe.c` measures against the C library. `sniff dump --notes` lists a
+core's notes as the pinned readelf does. `src/session/core.lu` reads a core as a stopped program, given as
+`PROG CORE`, `-c CORE [PROG]` or `core-file CORE`: every memory, register and thread-pointer read goes through
+`src/session/source.lu`, which answers from the core when there is one. Memory is a PT_LOAD's bytes, else the bytes
+of the file NT_FILE maps there (gcore leaves a library's unmodified text out of the core), else unreadable. A
+position-independent program whose build ID is not the core's is not placed (no symbol of it is shown), where a
+program loaded at its own addresses keeps its symbols, as gdb does. The rows take every core afresh with the
+pinned gdb's `gcore` and hold sniff to gdb's session over the same core, on the Linux set and, for the static
+builds' cores, at PAX's console.
