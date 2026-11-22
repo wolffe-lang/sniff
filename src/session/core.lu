@@ -152,11 +152,12 @@ fn core_text(s: Session, span: readers.ByteSpan) -> str {
     str_from_utf8(b[0..n]) else { "" }
 }
 
-/// Whether the core holds the build ID the program carries, at the program's load address: gdb does not place
-/// a position-independent program whose build ID is not the core's (it shows no symbol of it), where a program
-/// loaded at its own addresses keeps its symbols whatever the core holds. A program with no build ID is kept.
+/// Whether the core holds the build ID the program carries, at the program's load address. gdb places a
+/// position-independent program over a core only when it does (a copy of the program under another path is
+/// placed; another program under the core's path, or the program with its build ID taken out, is not, and no
+/// symbol of it is shown), where a program loaded at its own addresses keeps its symbols whatever the core holds.
 fn core_build_id_matches(s: Session) -> bool {
-    if s.prog.build_id.length == 0 { return true }
+    if s.prog.build_id.length == 0 { return false }
     let r = core_mem(s, s.prog.build_id_addr + s.base, s.prog.build_id.length)
     if !r.ok { return false }
     var i = 0
@@ -254,6 +255,18 @@ fn core_load(mut s: Session, path: str) -> str {
         s.cfi = []
         s.base = 0
     }
+    // without a program, the program's own ranges are read from the file the note names, as the others are
+    if s.prog.data.len == 0 {
+        i = 0
+        while i < s.core_files.len {
+            if s.core_files[i].prog {
+                let bytes = fs_read_bytes(s.core_files[i].name) else { [] }
+                s.core_files[i].data = bytes
+                s.core_files[i].prog = false
+            }
+            i += 1
+        }
+    }
     // the threads, numbered in note order: the first is the one that stopped
     i = 0
     while i < threads.len {
@@ -280,6 +293,28 @@ fn core_load(mut s: Session, path: str) -> str {
     if threads.len > 1 {
         let id = thr_target_id(mut s, 0)
         emit_line(mut s, "[Current thread is 1 ({id})]")
+    }
+    ""
+}
+
+/// A number as gdb's `info proc mappings` prints it: 0x and lowercase hex, right-aligned in width.
+fn mapping_field(v: u64, width: int) -> str {
+    var t = "0x{v:x}"
+    while t.len() < width { t = " {t}" }
+    t
+}
+
+/// info proc mappings over a core: the ranges NT_FILE names, gdb's table.
+fn core_mappings(mut s: Session) -> str {
+    emit_line(mut s, "Mapped address spaces:")
+    emit_line(mut s, "")
+    emit_line(mut s, "          Start Addr           End Addr       Size     Offset objfile")
+    var i = 0
+    while i < s.core_maps.len {
+        let m = copy s.core_maps[i]
+        let name = core_text(s, m.name)
+        emit_line(mut s, "{mapping_field(m.start, 20)}{mapping_field(m.end, 19)}{mapping_field(m.end - m.start, 11)}{mapping_field(m.offset, 11)} {name}")
+        i += 1
     }
     ""
 }
