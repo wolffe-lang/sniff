@@ -13,6 +13,12 @@ macOS: the SDK's llvm-dwarfdump (Apple LLVM 21.0.0) and llvm-nm, pinned.
 over every core in each --cores directory (the cores tools/session.py wrote in this take: NAME.core; the
 truncated copies hostile rows read are not dump rows). A core's NT_X86_XSTATE follows the processor that wrote
 it, so no dump golden is stored: both run on the same core in the same take.
+
+NT_FILE: the pinned readelf declines to decode gcore's mapped-files note, printing NT_DECLINED after the type.
+Where it declines, that one phrase is taken off readelf's line before the comparison (sniff prints the type
+line alone), the row says so (nt-file=declined), and the table is held instead by gdb's `info proc mappings`
+over the same core (the core-*-mappings session rows). Where readelf decodes the note, its text is compared as
+it is: sniff does not decode it, so the row is red by name rather than falling back to the declined form.
 """
 import argparse
 import hashlib
@@ -29,6 +35,25 @@ DWARF_MODES = ['debug-info', 'debug-abbrev', 'debug-line', 'debug-addr', 'debug-
 FRAME_MODES = ['eh-frame', 'debug-frame']
 ALL_MODES = DWARF_MODES + FRAME_MODES + ['symbols']
 CORE_MODES = ['notes']
+NT_FILE_LINE = b'\tNT_FILE (mapped files)\t'
+NT_DECLINED = b'    Cannot decode 64-bit note in 32-bit build'
+
+
+def nt_file_rule(text):
+    """readelf's notes text with its declined NT_FILE phrase taken off, and what readelf did with NT_FILE:
+    'declined' (every NT_FILE line ends in the phrase), 'decoded' (one has anything else after its type) or 'none'."""
+    out, seen = [], set()
+    for line in text.split(b'\n'):
+        if NT_FILE_LINE in line:
+            head, _, tail = line.partition(NT_FILE_LINE)
+            if tail == NT_DECLINED:
+                seen.add('declined')
+                line = head + NT_FILE_LINE
+            else:
+                seen.add('decoded')
+        out.append(line)
+    state = 'decoded' if 'decoded' in seen else 'declined' if seen else 'none'
+    return b'\n'.join(out), state
 
 
 def sha256(path):
@@ -147,8 +172,15 @@ def main():
             want_rc, _ = run(oracle_command(mode, args.platform, tools) + [str(target)], want)
             got_rc, got_err = run([str(args.sniff), 'dump', '--' + mode, str(target)], got)
             row = 'dump-%s %s' % (mode, fid)
+            note = ''
+            if mode == 'notes':
+                text, state = nt_file_rule(want.read_bytes())
+                want.write_bytes(text)
+                note = ' nt-file=' + state
+                if state == 'decoded':
+                    row += ' nt-file-decoded-by-readelf'
             if want_rc == got_rc and sha256(want) == sha256(got):
-                print('PASS %s bytes=%d exit=%d' % (row, want.stat().st_size, want_rc))
+                print('PASS %s bytes=%d exit=%d%s' % (row, want.stat().st_size, want_rc, note))
                 want.unlink()
                 got.unlink()
                 continue
