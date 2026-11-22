@@ -44,6 +44,7 @@ downloads are not committed, apart from that one package.
 ```sh
 wolf build src/main.lu -o target/sniff
 target/sniff dump --debug-info prog            # or prog.dSYM on macOS
+target/sniff --version                         # sniff 0.1.0; src/wolf.pkg names the number
 ```
 
 Modes: `--debug-info`, `--debug-abbrev`, `--debug-line`, `--debug-addr`,
