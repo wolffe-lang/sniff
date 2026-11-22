@@ -299,9 +299,46 @@ def facts_lldb(text):
 ENV_BASE = {'PATH': '/usr/bin:/bin:/usr/sbin:/sbin', 'LC_ALL': 'C', 'TZ': 'UTC', 'TERM': 'dumb'}
 
 
-def run(argv, cwd, timeout, env=None):
-    p = subprocess.run(argv, cwd=cwd, env=env or ENV_BASE, capture_output=True, timeout=timeout, text=True, errors='replace')
-    return p.stdout, p.stderr, p.returncode
+class Hung(subprocess.TimeoutExpired):
+    """A process this harness started (lldb, sniff) that did not finish in its time. A system prompt (an
+    authorization dialog for a debugger) can hold a debugger forever with no CPU: the process is ended by the
+    process id this harness started it with, and the row fails by name."""
+
+    def __init__(self, argv, timeout, pid):
+        super().__init__(argv, timeout)
+        self.pid = pid
+
+    def why(self):
+        return '%s did not finish within %d s (a system prompt can hold a debugger); ended its pid %d' % (
+            Path(str(self.cmd[0])).name, self.timeout, self.pid)
+
+
+# the take's deadline (time.time()), set from --deadline: no process starts after it, and each one's time is cut to it
+DEADLINE = [None]
+
+
+def bounded(timeout):
+    """A process's time: its own, cut to what is left of the take's."""
+    if DEADLINE[0] is None:
+        return timeout
+    return max(1, min(timeout, int(DEADLINE[0] - time.time())))
+
+
+def past_deadline():
+    return DEADLINE[0] is not None and time.time() >= DEADLINE[0]
+
+
+def run(argv, cwd, timeout, env=None, preexec=None):
+    t = bounded(timeout)
+    p = subprocess.Popen(argv, cwd=cwd, env=env or ENV_BASE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                         errors='replace', preexec_fn=preexec)
+    try:
+        out, err = p.communicate(timeout=t)
+    except subprocess.TimeoutExpired:
+        p.kill()
+        p.communicate()
+        raise Hung(argv, t, p.pid)
+    return out, err, p.returncode
 
 
 def sniff_run(sniff, prog, script, args, work, name, timeout=120, pre=(), post=(), with_prog=True):
@@ -339,15 +376,19 @@ def cap_file_size():
     resource.setrlimit(resource.RLIMIT_FSIZE, (CORE_CAP, CORE_CAP))
 
 
-def make_cores(rows, lldb, fixtures, work):
+def make_cores(rows, lldb, fixtures, work, timeout=120):
     """Write the cores the rows read, afresh: lldb runs the fixture to the core's stop (or until it faults) and saves
-    it under WORK/cores. Returns {name: path} for the cores written; a core not written is FAIL by name."""
+    it under WORK/cores, in at most timeout seconds each. Returns {name: path} for the cores written; a core not
+    written is FAIL by name."""
     table = load().get('cores', {})
     want = sorted({r['core'] for r in rows if r.get('core')})
     d = Path(work) / 'cores'
     d.mkdir(parents=True, exist_ok=True)
     made = {}
     for name in want:
+        if past_deadline():
+            print('FAIL core-%s take-deadline: the take passed its deadline before this core' % name)
+            continue
         c = table[name]
         prog = str(Path(fixtures) / c['prog'])
         path = d / (name + '.core')
@@ -361,10 +402,10 @@ def make_cores(rows, lldb, fixtures, work):
             argv += sum([['-o', x] for x in c['stop']], []) + ['-o', save, '-o', 'process kill']
         start = time.time()
         try:
-            rc = subprocess.run(argv + [prog], cwd=work, env=core_env(work), capture_output=True, text=True, errors='replace',
-                                timeout=300, preexec_fn=cap_file_size).returncode
-        except subprocess.TimeoutExpired:
-            rc = 'timeout'
+            rc = run(argv + [prog], work, timeout, core_env(work), cap_file_size)[2]
+        except Hung as e:
+            print('FAIL core-%s %s' % (name, e.why()))
+            rc = 'hung'
         size = path.stat().st_size if path.exists() else 0
         if size == 0 or size >= CORE_CAP:
             print('FAIL core-%s save-core exit=%s bytes=%d (a core is under %d)' % (name, rc, size, CORE_CAP))
@@ -509,22 +550,44 @@ def cmd_capture(a):
     spec = load()
     EVID.mkdir(parents=True, exist_ok=True)
     rows = select(lldb_script_rows(spec['rows']), a.only)
-    made = make_cores(rows, a.lldb, a.fixtures, a.work)
+    DEADLINE[0] = time.time() + a.deadline
+    made = make_cores(rows, a.lldb, a.fixtures, a.work, a.lldb_timeout)
+    try:
+        fails = capture_rows(a, rows, made)
+    finally:
+        # every core goes, however the rows ended
+        left = delete_cores(a.work)
+    return 1 if fails or left else 0
+
+
+def capture_rows(a, rows, made):
+    fails = 0
     for r in rows:
+        if past_deadline():
+            print('FAIL %s take-deadline: the take passed its %d s' % (r['name'], a.deadline))
+            fails += 1
+            continue
         prog = str(Path(a.fixtures) / r['prog'])
-        if r.get('core'):
-            if r['core'] not in made:
-                print('FAIL %s no-core %s' % (r['name'], r['core']))
-                continue
-            (lpre, lprog) = core_argv(r, core_file(r, made, a.work))[1]
-            out, err, rc = lldb_run(a.lldb, prog, r['lldb'], a.work, r['name'], pre=lpre, with_prog=lprog)
-        else:
-            out, err, rc = with_sleeper(r, prog, lambda sub, pre: lldb_run(a.lldb, prog, sub(r['lldb']), a.work, r['name'], pre=pre))
+        try:
+            if r.get('core'):
+                if r['core'] not in made:
+                    print('FAIL %s no-core %s' % (r['name'], r['core']))
+                    fails += 1
+                    continue
+                (lpre, lprog) = core_argv(r, core_file(r, made, a.work))[1]
+                out, err, rc = lldb_run(a.lldb, prog, r['lldb'], a.work, r['name'], a.lldb_timeout, pre=lpre, with_prog=lprog)
+            else:
+                out, err, rc = with_sleeper(r, prog, lambda sub, pre: lldb_run(a.lldb, prog, sub(r['lldb']), a.work, r['name'],
+                                                                               a.lldb_timeout, pre=pre))
+        except Hung as e:
+            print('FAIL %s %s' % (r['name'], e.why()))
+            fails += 1
+            continue
         (EVID / (r['name'] + '.lldb.txt')).write_text(out)
         facts = facts_lldb(out)
         (EVID / (r['name'] + '.facts.json')).write_text(json.dumps(facts) + '\n')
         print('CAPTURE %s facts=%d' % (r['name'], len(facts)))
-    return 1 if delete_cores(a.work) else 0
+    return fails
 
 
 SCRIPT = re.compile(r'(?m)^\S*/([\w.-]+)\.cmd:(\d+): Error in sourced command file:$')
@@ -571,14 +634,59 @@ def sniff_core_run(a, r, prog, script, args, made, timeout):
     return sniff_run(a.sniff, prog, script, args, a.work, r['name'], timeout, pre, post, with_prog)
 
 
+def apply_drops(drops, wl, gl):
+    """A linux row's named drops, applied to gdb's golden lines (wl) and sniff's (gl) alike: a "line" drop removes
+    that line of the golden (and the same line of sniff's) when it is the drop's text; a "match" drop removes every
+    line its pattern finds on either side. Returns the lines, one note per drop with the lines it removed from each
+    side, and the reason a line drop is stale ('' when none is)."""
+    notes = []
+    bad = ''
+    for d in sorted(drops, key=lambda d: -d.get('line', 0)):
+        if 'line' in d:
+            i = d['line'] - 1
+            if i >= len(wl) or wl[i] != d['text']:
+                bad = 'stale drop of line %d: %r' % (d['line'], wl[i] if i < len(wl) else '<end>')
+                break
+            del wl[i]
+            if i < len(gl):
+                del gl[i]
+            notes.append('%s (1 golden line)' % d['why'])
+    for d in drops:
+        if 'match' in d:
+            rx = re.compile(d['match'])
+            g2 = [x for x in gl if not rx.search(x)]
+            w2 = [x for x in wl if not rx.search(x)]
+            notes.append('%s (%d golden, %d sniff)' % (d['why'], len(wl) - len(w2), len(gl) - len(g2)))
+            gl, wl = g2, w2
+    return wl, gl, notes, bad
+
+
 def cmd_check(a):
     spec = load()
     lin = linux_rows()
     roots = [str(ROOT), '/work', str(Path(a.fixtures).parent)]
     fails = ran = 0
     rows = select(spec['rows'], a.only)
-    made = make_cores([r for r in rows if r.get('core')], a.lldb, a.fixtures, a.work)
+    DEADLINE[0] = time.time() + a.deadline
+    made = make_cores([r for r in rows if r.get('core')], a.lldb, a.fixtures, a.work, a.lldb_timeout)
+    try:
+        ran, fails = check_rows(a, rows, made, lin, roots)
+    finally:
+        # every core goes, however the rows ended
+        left = delete_cores(a.work) if made else 0
+    if left:
+        fails += 1
+    print('SUMMARY ran=%d failed=%d' % (ran, fails))
+    return 1 if fails else 0
+
+
+def check_rows(a, rows, made, lin, roots):
+    fails = ran = 0
     for r in rows:
+        if past_deadline():
+            print('FAIL %s take-deadline: the take passed its %d s' % (r['name'], a.deadline))
+            fails += 1
+            continue
         if r.get('core') and r['core'] not in made:
             print('FAIL %s no-core %s' % (r['name'], r['core']))
             fails += 1
@@ -595,8 +703,8 @@ def cmd_check(a):
                 else:
                     out, err, rc = with_sleeper(r, prog, lambda sub, pre: sniff_run(a.sniff, prog, sub(r['script']), r.get('args', []), a.work,
                                                                                     r['name'], r.get('timeout', 60), pre))
-            except subprocess.TimeoutExpired:
-                print('FAIL %s timeout (sniff hung)' % r['name'])
+            except subprocess.TimeoutExpired as e:
+                print('FAIL %s %s' % (r['name'], e.why() if isinstance(e, Hung) else 'timeout (sniff hung)'))
                 fails += 1
                 continue
             ran += 1
@@ -620,8 +728,8 @@ def cmd_check(a):
             else:
                 out, err, rc = with_sleeper(r, prog, lambda sub, pre: sniff_run(a.sniff, prog, sub(script), args, a.work, r['name'],
                                                                                 r.get('timeout', 120), pre))
-        except subprocess.TimeoutExpired:
-            print('FAIL %s timeout' % r['name'])
+        except subprocess.TimeoutExpired as e:
+            print('FAIL %s %s' % (r['name'], e.why() if isinstance(e, Hung) else 'timeout'))
             fails += 1
             continue
         ran += 1
@@ -632,30 +740,13 @@ def cmd_check(a):
             want = (LINUX_GOLD / (r['name'] + '.out')).read_text()
             gl = normalize(out, roots, fired).splitlines()
             wl = normalize(want, roots, fired).splitlines()
-            dropped = []
-            bad = None
-            for d in sorted(r.get('drop', []), key=lambda d: -d.get('line', 0)):
-                if 'line' in d:
-                    i = d['line'] - 1
-                    if i >= len(wl) or wl[i] != d['text']:
-                        bad = 'stale drop of line %d: %r' % (d['line'], wl[i] if i < len(wl) else '<end>')
-                        break
-                    del wl[i]
-                    if i < len(gl):
-                        del gl[i]
-                    dropped.append(d['why'])
-            for d in r.get('drop', []):
-                if 'match' in d:
-                    rx = re.compile(d['match'])
-                    gl = [x for x in gl if not rx.search(x)]
-                    wl = [x for x in wl if not rx.search(x)]
-                    dropped.append(d['why'])
+            wl, gl, dropped, bad = apply_drops(r.get('drop', []), wl, gl)
             # the row's compare mode (tools/session.py): bytes, or the head, subset and own forms of the help rows
             mode_row = lin[r['name']]
             if mode_row.get('compare') == 'own':
                 wl = normalize(''.join(x + '\n' for x in mode_row['expect']), roots, fired).splitlines()
                 mode_row = {}
-            why = '' if bad is None and gl == wl else (bad or s2mod().lines_verdict(mode_row, wl, gl))
+            why = '' if not bad and gl == wl else (bad or s2mod().lines_verdict(mode_row, wl, gl))
             if not why and r.get('stderr'):
                 why = stderr_verdict(lin[r['name']], err, rc, roots, fired)
             if not why:
@@ -675,10 +766,7 @@ def cmd_check(a):
                 i = next((i for i in range(max(len(got), len(want))) if (got[i] if i < len(got) else None) != (want[i] if i < len(want) else None)), 0)
                 print('FAIL %s fact %d: lldb %r sniff %r' % (r['name'], i + 1, want[i] if i < len(want) else None, got[i] if i < len(got) else None))
                 fails += 1
-    if made and delete_cores(a.work):
-        fails += 1
-    print('SUMMARY ran=%d failed=%d' % (ran, fails))
-    return 1 if fails else 0
+    return ran, fails
 
 
 def cmd_reextract(a):
@@ -761,6 +849,8 @@ def main():
         s.add_argument('--fixtures', default=str(ROOT / 'target/session-fixtures'))
         s.add_argument('--only')
         s.add_argument('--lldb', default='lldb')
+        s.add_argument('--lldb-timeout', type=int, default=120, help='seconds each lldb may take before it is ended')
+        s.add_argument('--deadline', type=int, default=2400, help="seconds the take may take: no process starts after")
         if name == 'check':
             s.add_argument('--sniff', default=str(ROOT / 'target/sniff'))
     sub.add_parser('replay')
