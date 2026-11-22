@@ -191,6 +191,27 @@ pub struct MachCoreFile {
     pub high_bits: int,
 }
 
+fn mc_uint(data: List[byte], mut c: Cursor, at: int, width: int) -> u64 ! MachCoreError {
+    c.pos = at
+    let result = uint_le(data, mut c, width) else |failure| {
+        if "{failure}" == "resource_limit" { return macho_core_resource_limit }
+        return macho_core_truncated
+    }
+    result
+}
+
+fn mc_charge(mut c: Cursor) -> () ! MachCoreError {
+    if c.fuel < 1 { return macho_core_resource_limit }
+    c.fuel -= 1
+}
+
+/// A fixed-size name field: the bytes up to its first NUL, at most size.
+fn mc_name(data: List[byte], at: int, size: int) -> ByteSpan {
+    var len: int = 0
+    while len < size && data[at + len] as int != 0 { len += 1 }
+    ByteSpan { start: at, length: len }
+}
+
 /// Whether span's bytes are text.
 pub fn macho_core_name_is(data: List[byte], span: ByteSpan, text: str) -> bool {
     let want = text.bytes()
@@ -203,11 +224,196 @@ pub fn macho_core_name_is(data: List[byte], span: ByteSpan, text: str) -> bool {
     true
 }
 
-/// Read a little-endian arm64 MH_CORE within caps. Not yet: every core is refused as not a core until the reader
-/// that walks its load commands lands.
+/// [offset, offset + size) inside [lo, hi), as an index.
+fn mc_inside(offset: u64, size: u64, lo: u64, hi: u64) -> bool {
+    offset >= lo && offset <= hi && size <= hi - offset
+}
+
+/// One LC_THREAD's flavours, walked as (flavour, count) pairs each followed by count 32-bit words.
+fn mc_thread(
+    data: List[byte],
+    mut c: Cursor,
+    at: int,
+    size: int,
+    caps: MachCoreCaps,
+) -> MachCoreThread ! MachCoreError {
+    var t = MachCoreThread { regs: [], far: 0, esr: 0, exception: 0 }
+    var k: int = at + 8
+    let end = at + size
+    var flavours: int = 0
+    while k < end {
+        mc_charge(mut c)?
+        if end - k < 8 { return macho_core_invalid_thread }
+        let flavour = mc_uint(data, mut c, k, 4)?
+        let count = mc_uint(data, mut c, k + 4, 4)?
+        if flavours >= caps.flavours { return macho_core_resource_limit }
+        if count > caps.flavour_words as u64 { return macho_core_resource_limit }
+        let words = k + 8
+        if count * 4 > (end - words) as u64 { return macho_core_invalid_thread }
+        if flavour == macho_core_thread_state64 as u64 {
+            if count != macho_core_thread_state64_count as u64 || t.regs.len > 0 { return macho_core_invalid_thread }
+            var r: int = 0
+            while r < 33 {
+                let v = mc_uint(data, mut c, words + 8 * r, 8)?
+                (mut t.regs).push(v)
+                r += 1
+            }
+            let cpsr = mc_uint(data, mut c, words + macho_core_state_cpsr, 4)?
+            (mut t.regs).push(cpsr)
+        } else if flavour == macho_core_exception_state64 as u64 {
+            if count != macho_core_exception_state64_count as u64 { return macho_core_invalid_thread }
+            t.far = mc_uint(data, mut c, words + macho_core_exception_far, 8)?
+            t.esr = mc_uint(data, mut c, words + macho_core_exception_esr, 4)?
+            t.exception = mc_uint(data, mut c, words + macho_core_exception_exception, 4)?
+        }
+        flavours += 1
+        k = words + count as int * 4
+    }
+    if t.regs.len == 0 { return macho_core_invalid_thread }
+    t
+}
+
+/// `all image infos`: the images, each inside the note's payload.
+fn mc_images(
+    data: List[byte],
+    mut c: Cursor,
+    n: MachCoreNote,
+    caps: MachCoreCaps,
+) -> List[MachCoreImage] ! MachCoreError {
+    let lo = n.offset
+    let hi = n.offset + n.size
+    if n.size < macho_core_images_header as u64 { return macho_core_invalid_note }
+    let at = n.offset as int
+    let version = mc_uint(data, mut c, at, 4)?
+    let count = mc_uint(data, mut c, at + 4, 4)?
+    let entries = mc_uint(data, mut c, at + 8, 8)?
+    let entry_size = mc_uint(data, mut c, at + 16, 4)?
+    if version != 1 || entry_size != macho_core_image_entry as u64 { return macho_core_invalid_note }
+    if count > caps.images as u64 { return macho_core_resource_limit }
+    if !mc_inside(entries, count * entry_size, lo, hi) { return macho_core_invalid_note }
+    var out: List[MachCoreImage] = []
+    var i: int = 0
+    while i < count as int {
+        mc_charge(mut c)?
+        let e = entries as int + i * macho_core_image_entry
+        let path_at = mc_uint(data, mut c, e, 8)?
+        let load = mc_uint(data, mut c, e + 24, 8)?
+        let segs_at = mc_uint(data, mut c, e + 32, 8)?
+        let nsegs = mc_uint(data, mut c, e + 40, 4)?
+        let flag = mc_uint(data, mut c, e + 44, 4)?
+        if !mc_inside(path_at, 0, lo, hi) || path_at == hi { return macho_core_invalid_note }
+        var len: int = 0
+        while path_at + len as u64 < hi && data[path_at as int + len] as int != 0 {
+            mc_charge(mut c)?
+            if len >= caps.path_bytes { return macho_core_resource_limit }
+            len += 1
+        }
+        if path_at + len as u64 >= hi { return macho_core_invalid_note }
+        if nsegs > caps.image_segments as u64 { return macho_core_resource_limit }
+        if !mc_inside(segs_at, nsegs * macho_core_image_segment_entry as u64, lo, hi) { return macho_core_invalid_note }
+        var segs: List[MachCoreImageSegment] = []
+        var k: int = 0
+        while k < nsegs as int {
+            mc_charge(mut c)?
+            let s = segs_at as int + k * macho_core_image_segment_entry
+            let vmaddr = mc_uint(data, mut c, s + 16, 8)?
+            (mut segs).push(MachCoreImageSegment { name: mc_name(data, s, 16), vmaddr: vmaddr })
+            k += 1
+        }
+        (mut out).push(MachCoreImage {
+            path: ByteSpan { start: path_at as int, length: len },
+            uuid: ByteSpan { start: e + 8, length: 16 },
+            load: load,
+            flag: flag,
+            segments: segs,
+        })
+        i += 1
+    }
+    out
+}
+
+/// Read a little-endian arm64 MH_CORE within caps: its segments, threads and notes, the image list of its
+/// `all image infos` note and the addressable bits of its `addrable bits` note.
 pub fn macho_core_read(data: List[byte], caps: MachCoreCaps) -> MachCoreFile ! MachCoreError {
-    if caps.work < 0 || data.len < 0 { return macho_core_resource_limit }
-    macho_core_not_core
+    if caps.work < 0 || caps.work > 100000000 { return macho_core_resource_limit }
+    if data.len < 4 { return macho_core_truncated }
+    var c = cursor(0, data.len, caps.work)
+    let magic = mc_uint(data, mut c, 0, 4)?
+    if magic != macho_core_mh_magic_64 as u64 { return macho_core_bad_magic }
+    if data.len < macho_core_header_size { return macho_core_truncated }
+    let cpu = mc_uint(data, mut c, macho_core_header_cputype, 4)?
+    let subtype = mc_uint(data, mut c, macho_core_header_cpusubtype, 4)?
+    // arm64e programs sign their pointers: a new measurement before this reader accepts their cores
+    if cpu != macho_core_cpu_type_arm64 as u64 || subtype & 16777215 > 1 { return macho_core_unsupported_cpu }
+    let filetype = mc_uint(data, mut c, macho_core_header_filetype, 4)?
+    if filetype != macho_core_mh_core as u64 { return macho_core_not_core }
+    let ncmds = mc_uint(data, mut c, macho_core_header_ncmds, 4)?
+    let sizeofcmds = mc_uint(data, mut c, macho_core_header_sizeofcmds, 4)?
+    if ncmds > caps.commands as u64 || sizeofcmds > caps.commands_bytes as u64 { return macho_core_resource_limit }
+    if sizeofcmds > (data.len - macho_core_header_size) as u64 { return macho_core_truncated }
+    let end = macho_core_header_size + sizeofcmds as int
+    let bound = data.len as u64
+    var core = MachCoreFile { segments: [], threads: [], notes: [], images: [], low_bits: 0, high_bits: 0 }
+    var at: int = macho_core_header_size
+    var i: int = 0
+    while i < ncmds as int {
+        mc_charge(mut c)?
+        if end - at < 8 { return macho_core_invalid_command }
+        let cmd = mc_uint(data, mut c, at, 4)?
+        let size = mc_uint(data, mut c, at + 4, 4)?
+        if size < 8 || size % 4 != 0 || size > (end - at) as u64 { return macho_core_invalid_command }
+        if cmd == macho_core_lc_segment_64 as u64 {
+            if size < macho_core_segment_size as u64 { return macho_core_invalid_command }
+            let vmaddr = mc_uint(data, mut c, at + macho_core_segment_vmaddr, 8)?
+            let vmsize = mc_uint(data, mut c, at + macho_core_segment_vmsize, 8)?
+            let fileoff = mc_uint(data, mut c, at + macho_core_segment_fileoff, 8)?
+            let filesize = mc_uint(data, mut c, at + macho_core_segment_filesize, 8)?
+            let initprot = mc_uint(data, mut c, at + macho_core_segment_initprot, 4)?
+            if !mc_inside(fileoff, filesize, 0, bound) || filesize > vmsize { return macho_core_invalid_segment }
+            if vmsize > 18446744073709551615 - vmaddr { return macho_core_invalid_segment }
+            if core.segments.len >= caps.segments { return macho_core_resource_limit }
+            (mut core.segments).push(MachCoreSegment {
+                vmaddr: vmaddr,
+                vmsize: vmsize,
+                fileoff: fileoff,
+                filesize: filesize,
+                initprot: initprot as int,
+            })
+        } else if cmd == macho_core_lc_thread as u64 {
+            if core.threads.len >= caps.threads { return macho_core_resource_limit }
+            let t = mc_thread(data, mut c, at, size as int, caps)?
+            (mut core.threads).push(t)
+        } else if cmd == macho_core_lc_note as u64 {
+            if size < macho_core_note_size as u64 { return macho_core_invalid_command }
+            let offset = mc_uint(data, mut c, at + macho_core_note_offset, 8)?
+            let payload = mc_uint(data, mut c, at + macho_core_note_payload_size, 8)?
+            if !mc_inside(offset, payload, 0, bound) { return macho_core_invalid_note }
+            if core.notes.len >= caps.notes { return macho_core_resource_limit }
+            (mut core.notes).push(MachCoreNote {
+                owner: mc_name(data, at + macho_core_note_owner, macho_core_note_owner_size),
+                offset: offset,
+                size: payload,
+            })
+        }
+        at += size as int
+        i += 1
+    }
+    var k: int = 0
+    while k < core.notes.len {
+        let n = copy core.notes[k]
+        if macho_core_name_is(data, n.owner, "all image infos") {
+            core.images = mc_images(data, mut c, n, caps)?
+        } else if macho_core_name_is(data, n.owner, "addrable bits") {
+            if n.size < 12 { return macho_core_invalid_note }
+            let low = mc_uint(data, mut c, n.offset as int + 4, 4)?
+            let high = mc_uint(data, mut c, n.offset as int + 8, 4)?
+            if low > 64 || high > 64 { return macho_core_invalid_note }
+            core.low_bits = low as int
+            core.high_bits = high as int
+        }
+        k += 1
+    }
+    core
 }
 
 /// The index of the segment whose file bytes hold [addr, addr + n), or -1.
