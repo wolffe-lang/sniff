@@ -263,7 +263,8 @@ core's notes as the pinned readelf does. `src/session/core.lu` reads a core as a
 `PROG CORE`, `-c CORE [PROG]` or `core-file CORE`: every memory, register and thread-pointer read goes through
 `src/session/source.lu`, which answers from the core when there is one. Memory is a PT_LOAD's bytes, else the bytes
 of the file NT_FILE maps there (gcore leaves a library's unmodified text out of the core), else unreadable. A
-position-independent program whose build ID is not the core's is not placed (no symbol of it is shown), where a
-program loaded at its own addresses keeps its symbols, as gdb does. The rows take every core afresh with the
+position-independent program is placed only when its build ID is the core's (no symbol of it is shown otherwise),
+where a program loaded at its own addresses keeps its symbols, as gdb does. `info proc mappings` lists NT_FILE
+over a core, which the pinned readelf declines to decode. The rows take every core afresh with the
 pinned gdb's `gcore` and hold sniff to gdb's session over the same core, on the Linux set and, for the static
 builds' cores, at PAX's console.
