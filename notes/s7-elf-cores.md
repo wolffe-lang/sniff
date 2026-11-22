@@ -27,6 +27,12 @@ The prediction (`tests/s7-prediction.json`) was committed before any code, on tr
   - the program with its build ID taken out is not
 
   A program loaded at its own addresses keeps its symbols over any core.
+- The Address column of gdb's breakpoint tables is 18 characters wide when a row the table lists has an address,
+  and 10 otherwise. Every breakpoint has one. A watchpoint has one only while a process is live. So over a core,
+  `info watchpoints` is narrow even when a breakpoint exists, and `info breakpoints` is wide once it lists one. A live
+  session's table of watchpoints alone is wide, with or without an earlier breakpoint. Three rows hold this:
+  `watch-gcc-only-live`, `watch-gcc-only-fault` and `core-gcc-watch-unlisted-break`. A watchpoint set before `run`,
+  and one left after the process exits, are not measured.
 - Two cores of the same stop differ in thread and process ids (normalised by `lwp` and `pid`), in thread pointers
   where hosts' stacks differ (`thread-addr`), and in the stack left from before the stop. A local that is not yet set
   at the stop is therefore never printed.
