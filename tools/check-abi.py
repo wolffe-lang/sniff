@@ -2,10 +2,12 @@
 """R-sn02-3: the platform constants come from a compiled probe, not from header text.
 
   capture  compile tools/abi-probe.c with the container's gcc, run it, and write
-           (or, with --compare, diff against) tests/evidence/linux-s2/abi.txt
-  check    compare src/platform/types.lu with the recorded probe output, and
-           check the wait-status truth table that the wolf decoders are tested
-           against (src/platform_test.lu)
+           (or, with --compare, diff against) tests/evidence/linux-s2/abi.txt;
+           with --platform macos, compile tools/abi-probe-macos.c with the SDK's
+           clang for arm64 and write tests/evidence/macos-s3/abi.txt
+  check    compare src/platform/types.lu and the core readers' constants with the
+           recorded probe outputs, and check the wait-status truth table that the
+           wolf decoders are tested against (src/platform_test.lu)
 """
 import argparse
 from pathlib import Path
@@ -18,6 +20,8 @@ ROOT = Path(__file__).resolve().parents[1]
 RECORD = ROOT / 'tests/evidence/linux-s2/abi.txt'
 TYPES = ROOT / 'src/platform/types.lu'
 CORE_READER = ROOT / 'src/readers/core.lu'
+MACOS_RECORD = ROOT / 'tests/evidence/macos-s3/abi.txt'
+MACHO_CORE_READER = ROOT / 'src/readers/macho_core.lu'
 
 REQUESTS = {
     'PTRACE_TRACEME': 'req_traceme', 'PTRACE_PEEKDATA': 'req_peekdata', 'PTRACE_POKEDATA': 'req_pokedata',
@@ -40,31 +44,45 @@ USER = {'u_debugreg': 'user_debugreg_offset', 'u_debugreg_size': 'user_debugreg_
 CORE = ['prstatus_size', 'prstatus_cursig', 'prstatus_pid', 'prstatus_reg', 'prstatus_reg_size', 'prpsinfo_size',
         'prpsinfo_pid', 'prpsinfo_fname', 'prpsinfo_fname_size', 'prpsinfo_psargs', 'prpsinfo_psargs_size',
         'fpregset_size']
+# the Mach-O core reader's layouts (S7, macOS): probe name -> macho_core_NAME in src/readers/macho_core.lu
+MACHCORE = ['mh_magic_64', 'mh_core', 'cpu_type_arm64', 'header_size', 'header_cputype', 'header_cpusubtype',
+            'header_filetype', 'header_ncmds', 'header_sizeofcmds', 'lc_segment_64', 'lc_thread', 'lc_note',
+            'segment_size', 'segment_vmaddr', 'segment_vmsize', 'segment_fileoff', 'segment_filesize',
+            'segment_initprot', 'note_size', 'note_owner', 'note_owner_size', 'note_offset', 'note_payload_size',
+            'thread_state64', 'thread_state64_count', 'exception_state64', 'exception_state64_count', 'state_fp',
+            'state_lr', 'state_sp', 'state_pc', 'state_cpsr', 'exception_far', 'exception_esr',
+            'exception_exception']
 REGS = ['r15', 'r14', 'r13', 'r12', 'rbp', 'rbx', 'r11', 'r10', 'r9', 'r8', 'rax', 'rcx', 'rdx', 'rsi', 'rdi',
         'orig_rax', 'rip', 'cs', 'eflags', 'rsp', 'ss', 'fs_base', 'gs_base', 'ds', 'es', 'fs', 'gs']
 
 
 def constants():
     out = {}
-    for path in (TYPES, CORE_READER):
+    for path in (TYPES, CORE_READER, MACHO_CORE_READER):
         for m in re.finditer(r'^pub const (\w+): int = (\d+)$', path.read_text(), re.M):
             out[m.group(1)] = int(m.group(2))
     return out
 
 
 def capture(args):
+    macos = args.platform == 'macos'
+    record = MACOS_RECORD if macos else RECORD
     with tempfile.TemporaryDirectory() as d:
         exe = Path(d) / 'abi-probe'
-        subprocess.run(['gcc', '-O0', str(ROOT / 'tools/abi-probe.c'), '-o', str(exe)], check=True)
+        if macos:
+            build = ['xcrun', 'clang', '-arch', 'arm64', '-O0', str(ROOT / 'tools/abi-probe-macos.c'), '-o', str(exe)]
+        else:
+            build = ['gcc', '-O0', str(ROOT / 'tools/abi-probe.c'), '-o', str(exe)]
+        subprocess.run(build, check=True)
         text = subprocess.run([str(exe)], check=True, capture_output=True, text=True).stdout
     if args.compare:
-        if text != RECORD.read_text():
-            print('FAIL abi-probe-drift: the probe output differs from ' + str(RECORD.relative_to(ROOT)))
+        if text != record.read_text():
+            print('FAIL abi-probe-drift: the probe output differs from ' + str(record.relative_to(ROOT)))
             return 1
-        print('PASS abi-probe-stable lines=%d' % len(text.splitlines()))
+        print('PASS abi-probe-stable platform=%s lines=%d' % (args.platform, len(text.splitlines())))
         return 0
-    RECORD.write_text(text)
-    print('CAPTURE abi.txt lines=%d' % len(text.splitlines()))
+    record.write_text(text)
+    print('CAPTURE %s lines=%d' % (record.relative_to(ROOT), len(text.splitlines())))
     return 0
 
 
@@ -109,6 +127,16 @@ def check(_args):
     for name in CORE:
         if 'core ' + name not in seen:
             bad.append('probe output lacks core ' + name)
+    machcore = {}
+    for ln in MACOS_RECORD.read_text().splitlines():
+        w = ln.split()
+        if len(w) == 3 and w[0] == 'machcore' and w[1] in MACHCORE:
+            machcore[w[1]] = int(w[2])
+            if consts.get('macho_core_' + w[1]) != int(w[2]):
+                bad.append('machcore %s is %s in the probe and %s in macho_core.lu' % (w[1], w[2], consts.get('macho_core_' + w[1])))
+    for name in MACHCORE:
+        if name not in machcore:
+            bad.append('macOS probe output lacks machcore ' + name)
     if consts.get('core_prstatus_reg_size') != 8 * consts.get('reg_count', 0):
         bad.append("core.lu's pr_reg is not reg_count eight-byte words")
     sizes = [ln for ln in lines if ln.startswith('regs size')]
@@ -128,7 +156,7 @@ def check(_args):
         for b in bad:
             print('FAIL abi-constants: ' + b)
         return 1
-    print('PASS abi-constants requests=%d regs=%d user=%d siginfo=%d core=%d waits=%d' % (len(REQUESTS), len(REGS), len(USER), len(SIGINFO), len(CORE), len(expect)))
+    print('PASS abi-constants requests=%d regs=%d user=%d siginfo=%d core=%d machcore=%d waits=%d' % (len(REQUESTS), len(REGS), len(USER), len(SIGINFO), len(CORE), len(MACHCORE), len(expect)))
     return 0
 
 
@@ -137,6 +165,7 @@ def main():
     sub = p.add_subparsers(dest='cmd', required=True)
     c = sub.add_parser('capture')
     c.add_argument('--compare', action='store_true')
+    c.add_argument('--platform', choices=['linux', 'macos'], default='linux')
     sub.add_parser('check')
     a = p.parse_args()
     return {'capture': capture, 'check': check}[a.cmd](a)
