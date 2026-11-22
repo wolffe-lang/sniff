@@ -17,6 +17,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 RECORD = ROOT / 'tests/evidence/linux-s2/abi.txt'
 TYPES = ROOT / 'src/platform/types.lu'
+CORE_READER = ROOT / 'src/readers/core.lu'
 
 REQUESTS = {
     'PTRACE_TRACEME': 'req_traceme', 'PTRACE_PEEKDATA': 'req_peekdata', 'PTRACE_POKEDATA': 'req_pokedata',
@@ -35,14 +36,19 @@ SIGINFO = {'size': 'siginfo_size', 'si_signo': 'siginfo_signo', 'si_code': 'sigi
            'si_addr': 'siginfo_addr'}
 # struct user fields the probe measures (S5's debug registers), byte offsets and sizes
 USER = {'u_debugreg': 'user_debugreg_offset', 'u_debugreg_size': 'user_debugreg_size'}
+# the core reader's descriptor layouts (S7): probe name -> core_NAME in src/readers/core.lu
+CORE = ['prstatus_size', 'prstatus_cursig', 'prstatus_pid', 'prstatus_reg', 'prstatus_reg_size', 'prpsinfo_size',
+        'prpsinfo_pid', 'prpsinfo_fname', 'prpsinfo_fname_size', 'prpsinfo_psargs', 'prpsinfo_psargs_size',
+        'fpregset_size']
 REGS = ['r15', 'r14', 'r13', 'r12', 'rbp', 'rbx', 'r11', 'r10', 'r9', 'r8', 'rax', 'rcx', 'rdx', 'rsi', 'rdi',
         'orig_rax', 'rip', 'cs', 'eflags', 'rsp', 'ss', 'fs_base', 'gs_base', 'ds', 'es', 'fs', 'gs']
 
 
 def constants():
     out = {}
-    for m in re.finditer(r'^pub const (\w+): int = (\d+)$', TYPES.read_text(), re.M):
-        out[m.group(1)] = int(m.group(2))
+    for path in (TYPES, CORE_READER):
+        for m in re.finditer(r'^pub const (\w+): int = (\d+)$', path.read_text(), re.M):
+            out[m.group(1)] = int(m.group(2))
     return out
 
 
@@ -83,6 +89,10 @@ def check(_args):
             seen['siginfo ' + w[1]] = int(w[2])
             if consts.get(SIGINFO[w[1]]) != int(w[2]):
                 bad.append('siginfo %s is %s in the probe and %s in types.lu' % (w[1], w[2], consts.get(SIGINFO[w[1]])))
+        elif w[0] == 'core' and w[1] in CORE:
+            seen['core ' + w[1]] = int(w[2])
+            if consts.get('core_' + w[1]) != int(w[2]):
+                bad.append('core %s is %s in the probe and %s in core.lu' % (w[1], w[2], consts.get('core_' + w[1])))
         elif w[0] == 'regs' and w[1] in REGS:
             want = 'reg_' + w[1]
             if consts.get(want) != int(w[2]):
@@ -96,6 +106,11 @@ def check(_args):
     for name in SIGINFO:
         if 'siginfo ' + name not in seen:
             bad.append('probe output lacks siginfo ' + name)
+    for name in CORE:
+        if 'core ' + name not in seen:
+            bad.append('probe output lacks core ' + name)
+    if consts.get('core_prstatus_reg_size') != 8 * consts.get('reg_count', 0):
+        bad.append("core.lu's pr_reg is not reg_count eight-byte words")
     sizes = [ln for ln in lines if ln.startswith('regs size')]
     if not sizes or int(sizes[0].split()[2]) != consts.get('reg_count'):
         bad.append('regs size differs from reg_count')
@@ -113,7 +128,7 @@ def check(_args):
         for b in bad:
             print('FAIL abi-constants: ' + b)
         return 1
-    print('PASS abi-constants requests=%d regs=%d user=%d siginfo=%d waits=%d' % (len(REQUESTS), len(REGS), len(USER), len(SIGINFO), len(expect)))
+    print('PASS abi-constants requests=%d regs=%d user=%d siginfo=%d core=%d waits=%d' % (len(REQUESTS), len(REGS), len(USER), len(SIGINFO), len(CORE), len(expect)))
     return 0
 
 

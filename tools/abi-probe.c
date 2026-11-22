@@ -12,6 +12,7 @@
 #include <sys/ptrace.h>
 #include <sys/syscall.h>
 #include <sys/personality.h>
+#include <sys/procfs.h>
 #include <sys/resource.h>
 #include <sys/user.h>
 #include <sys/wait.h>
@@ -58,6 +59,19 @@ int main(void) {
     /* S5: the debug registers, read and written with PEEKUSER and POKEUSER at these byte offsets */
     printf("user u_debugreg %d\n", (int)offsetof(struct user, u_debugreg));
     printf("user u_debugreg_size %d\n", (int)sizeof(((struct user *)0)->u_debugreg[0]));
+    /* S7: the descriptors of a core's NT_PRSTATUS, NT_PRPSINFO and NT_FPREGSET, at these byte offsets */
+    printf("core prstatus_size %d\n", (int)sizeof(struct elf_prstatus));
+    printf("core prstatus_cursig %d\n", (int)offsetof(struct elf_prstatus, pr_cursig));
+    printf("core prstatus_pid %d\n", (int)offsetof(struct elf_prstatus, pr_pid));
+    printf("core prstatus_reg %d\n", (int)offsetof(struct elf_prstatus, pr_reg));
+    printf("core prstatus_reg_size %d\n", (int)sizeof(((struct elf_prstatus *)0)->pr_reg));
+    printf("core prpsinfo_size %d\n", (int)sizeof(struct elf_prpsinfo));
+    printf("core prpsinfo_pid %d\n", (int)offsetof(struct elf_prpsinfo, pr_pid));
+    printf("core prpsinfo_fname %d\n", (int)offsetof(struct elf_prpsinfo, pr_fname));
+    printf("core prpsinfo_fname_size %d\n", (int)sizeof(((struct elf_prpsinfo *)0)->pr_fname));
+    printf("core prpsinfo_psargs %d\n", (int)offsetof(struct elf_prpsinfo, pr_psargs));
+    printf("core prpsinfo_psargs_size %d\n", (int)sizeof(((struct elf_prpsinfo *)0)->pr_psargs));
+    printf("core fpregset_size %d\n", (int)sizeof(elf_fpregset_t));
     status("exit0", 0, 0); status("exit3", 3, 0); status("exit255", 255, 0);
     status("sigsegv", 0, SIGSEGV); status("sigkill", 0, SIGKILL); status("sigabrt", 0, SIGABRT);
     /* the stop at exec: PTRACE_TRACEME, then exec; first stop status */

@@ -62,6 +62,18 @@ regs fs 25
 regs gs 26
 user u_debugreg 848
 user u_debugreg_size 8
+core prstatus_size 336
+core prstatus_cursig 12
+core prstatus_pid 32
+core prstatus_reg 112
+core prstatus_reg_size 216
+core prpsinfo_size 136
+core prpsinfo_pid 24
+core prpsinfo_fname 40
+core prpsinfo_fname_size 16
+core prpsinfo_psargs 56
+core prpsinfo_psargs_size 80
+core fpregset_size 512
 wait exit0 raw=0 exited=1 exitstatus=0 signaled=0 termsig=-1
 wait exit3 raw=768 exited=1 exitstatus=3 signaled=0 termsig=-1
 wait exit255 raw=65280 exited=1 exitstatus=255 signaled=0 termsig=-1
