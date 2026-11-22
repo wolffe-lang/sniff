@@ -4,10 +4,11 @@ A debugger written in [wolf](https://github.com/wolffe-lang/wolf-lang),
 for x86-64 Linux and PAX, and macOS arm64. The command language is GDB's;
 a Debug Adapter Protocol server is planned for editor integration.
 
-**Status: milestones S0 to S6 are met on Linux x86-64, macOS arm64 and PAX; core files (S7) are next.** `sniff -batch -x SCRIPT PROG` starts PROG
+**Status: milestones S0 to S6 are met on Linux x86-64, macOS arm64 and PAX; core files (S7) are under way: ELF cores of Linux programs first, then Mach-O cores.** `sniff -batch -x SCRIPT PROG` starts PROG
 (under `ptrace(2)` on Linux; as a suspended child with its task port and exception port on macOS) and debugs it with gdb's command language (breakpoints,
 stepping, frames, values, registers, watchpoints, threads (all-stop) and signals, `list` and `help`); `attach PID`, `detach` and
-`sniff -p PID PROG` take a running process instead. It is held to transcripts of the pinned gdb
+`sniff -p PID PROG` take a running process instead, and `sniff -batch -x SCRIPT PROG CORE` (or `-c CORE`, or `core-file CORE`) reads
+a Linux core file as a stopped program. It is held to transcripts of the pinned gdb
 and, on macOS, to Apple's lldb (facts) and to lupin's values; `sniff dump` still prints the S1 reader views.
 On PAX it is a static program of the dev image and debugs static programs with PAX's ptrace (see notes/sn04-sniff-on-pax.md). [MAP](docs/MAP.md) separates planned
 capabilities from measured ones.
@@ -49,9 +50,9 @@ target/sniff --version                         # sniff 0.1.0; src/wolf.pkg names
 
 Modes: `--debug-info`, `--debug-abbrev`, `--debug-line`, `--debug-addr`,
 `--debug-str-offsets`, `--debug-ranges`, `--debug-rnglists`, `--debug-loc`,
-`--debug-loclists`, `--eh-frame`, `--debug-frame` and `--symbols`. ELF output
-follows the Linux oracle (`llvm-dwarfdump-18`, and `readelf --symbols --wide`
-for symbols). Mach-O output follows the SDK `llvm-dwarfdump` and `llvm-nm`.
+`--debug-loclists`, `--eh-frame`, `--debug-frame`, `--symbols` and, for a core
+file, `--notes`. ELF output follows the Linux oracle (`llvm-dwarfdump-18`, and
+`readelf --symbols --wide` and `readelf --notes --wide`). Mach-O output follows the SDK `llvm-dwarfdump` and `llvm-nm`.
 The two oracles differ in a few spellings, and each container format keeps its
 platform's. Malformed or unsupported input is refused by name on standard
 error with status 1. Compact unwind, split DWARF and compressed sections are
