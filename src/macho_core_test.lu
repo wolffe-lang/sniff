@@ -1,0 +1,342 @@
+//! member: false
+
+use readers
+
+fn put(mut data: List[byte], at: int, value: u64, width: int) {
+    var i: int = 0
+    while i < width {
+        data[at + i] = (value >> (i * 8) as u64 & 255) as int as byte
+        i += 1
+    }
+}
+
+fn put_text(mut data: List[byte], at: int, t: str) {
+    let b = t.bytes()
+    var i: int = 0
+    while i < b.len { data[at + i] = b[i]; i += 1 }
+}
+
+// The layout mcore() writes, as lldb's cores lay it (tests/s7-macho-prediction.json): the header, n LC_THREADs of
+// 312 bytes, m LC_SEGMENT_64s, three LC_NOTEs, the notes' payloads, then the segments' bytes.
+fn th(i: int) -> int { 32 + 312 * i }
+fn sg(n: int, j: int) -> int { 32 + 312 * n + 72 * j }
+fn nt(n: int, m: int, k: int) -> int { 32 + 312 * n + 72 * m + 40 * k }
+fn pay(n: int, m: int) -> int { 32 + 312 * n + 72 * m + 120 }
+fn img(n: int, m: int) -> int { pay(n, m) + 48 }
+
+/// A core of n threads (thread `stop` at a breakpoint, the others in a system call) and m segments of 32 file bytes
+/// (64 of memory) at 0x100000000 + 0x4000 j; notes `addrable bits`, `process metadata` and `all image infos` (the
+/// program /p/prog with two segments, then /usr/lib/dyld with one).
+fn mcore(n: int, stop: int, m: int) -> List[byte] {
+    var data: List[byte] = []
+    let a = img(n, m)
+    let size = a + 240 + 32 * m
+    var i: int = 0
+    while i < size { (mut data).push(0 as byte); i += 1 }
+    put(mut data, 0, 4277009103, 4)
+    put(mut data, 4, 16777228, 4)
+    put(mut data, 12, 4, 4)
+    put(mut data, 16, (n + m + 3) as u64, 4)
+    put(mut data, 20, (312 * n + 72 * m + 120) as u64, 4)
+    i = 0
+    while i < n {
+        let t = th(i)
+        put(mut data, t, 4, 4)
+        put(mut data, t + 4, 312, 4)
+        put(mut data, t + 8, 6, 4)
+        put(mut data, t + 12, 68, 4)
+        put(mut data, t + 16, 5, 8)
+        put(mut data, t + 16 + 232, 6171915200, 8)
+        put(mut data, t + 16 + 240, 4294968328, 8)
+        put(mut data, t + 16 + 248, 6171915168, 8)
+        put(mut data, t + 16 + 256, (4294968200 + 4 * i) as u64, 8)
+        put(mut data, t + 16 + 264, 1610612736, 4)
+        put(mut data, t + 288, 7, 4)
+        put(mut data, t + 292, 4, 4)
+        let esr: u64 = if i == stop { 4060086272 } else { 1442840704 }
+        put(mut data, t + 304, esr, 4)
+        i += 1
+    }
+    i = 0
+    while i < m {
+        let s = sg(n, i)
+        put(mut data, s, 25, 4)
+        put(mut data, s + 4, 72, 4)
+        put(mut data, s + 24, (4294967296 + 16384 * i) as u64, 8)
+        put(mut data, s + 32, 64, 8)
+        put(mut data, s + 40, (a + 240 + 32 * i) as u64, 8)
+        put(mut data, s + 48, 32, 8)
+        put(mut data, s + 60, 3, 4)
+        put(mut data, a + 240 + 32 * i, (170 + i) as u64, 1)
+        i += 1
+    }
+    let p = pay(n, m)
+    let owners = ["addrable bits", "process metadata", "all image infos"]
+    let offsets = [p, p + 16, a]
+    let sizes = [16, 32, 240]
+    i = 0
+    while i < 3 {
+        let k = nt(n, m, i)
+        put(mut data, k, 49, 4)
+        put(mut data, k + 4, 40, 4)
+        put_text(mut data, k + 8, owners[i])
+        put(mut data, k + 24, offsets[i] as u64, 8)
+        put(mut data, k + 32, sizes[i] as u64, 8)
+        i += 1
+    }
+    put(mut data, p, 4, 4)
+    put(mut data, p + 4, 47, 4)
+    put(mut data, p + 8, 47, 4)
+    put_text(mut data, p + 16, "threads: 7")
+    // all image infos: the header, two entries, two paths, two segment lists
+    put(mut data, a, 1, 4)
+    put(mut data, a + 4, 2, 4)
+    put(mut data, a + 8, (a + 24) as u64, 8)
+    put(mut data, a + 16, 48, 4)
+    put_text(mut data, a + 120, "/p/prog")
+    put_text(mut data, a + 128, "/usr/lib/dyld")
+    put_text(mut data, a + 144, "__TEXT")
+    put(mut data, a + 160, 4294967296, 8)
+    put_text(mut data, a + 176, "__LINKEDIT")
+    put(mut data, a + 192, 4294983680, 8)
+    put_text(mut data, a + 208, "__TEXT")
+    put(mut data, a + 224, 6656540672, 8)
+    let paths = [a + 120, a + 128]
+    let loads: List[u64] = [4294967296, 6656540672]
+    let lists = [a + 144, a + 208]
+    let counts = [2, 1]
+    i = 0
+    while i < 2 {
+        let e = a + 24 + 48 * i
+        put(mut data, e, paths[i] as u64, 8)
+        var u: int = 0
+        while u < 16 { data[e + 8 + u] = (1 + u + 16 * i) as byte; u += 1 }
+        put(mut data, e + 24, loads[i], 8)
+        put(mut data, e + 32, lists[i] as u64, 8)
+        put(mut data, e + 40, counts[i] as u64, 4)
+        put(mut data, e + 44, 1, 4)
+        i += 1
+    }
+    data
+}
+
+fn base_core() -> List[byte] { mcore(1, 0, 2) }
+
+/// The name of what macho_core_read refuses data with under caps, or "ok".
+fn read_with(data: List[byte], caps: readers.MachCoreCaps) -> str {
+    let c = readers.macho_core_read(data, caps) else |failure| { return "{failure}" }
+    if c.threads.len < 0 { return "never" }
+    "ok"
+}
+
+fn read_error(data: List[byte]) -> str { read_with(data, readers.macho_core_caps()) }
+
+fn expect_bad(data: List[byte], expected: str) {
+    assert(read_error(data) == expected)
+}
+
+/// The default caps with one changed.
+fn cap(field: str, v: int) -> readers.MachCoreCaps {
+    var c = readers.macho_core_caps()
+    if field == "commands" { c.commands = v }
+    if field == "commands_bytes" { c.commands_bytes = v }
+    if field == "segments" { c.segments = v }
+    if field == "threads" { c.threads = v }
+    if field == "flavours" { c.flavours = v }
+    if field == "flavour_words" { c.flavour_words = v }
+    if field == "notes" { c.notes = v }
+    if field == "images" { c.images = v }
+    if field == "path_bytes" { c.path_bytes = v }
+    if field == "image_segments" { c.image_segments = v }
+    if field == "work" { c.work = v }
+    c
+}
+
+/// data read whole at the cap's value v, and refused by name one past it (the cap at v - 1).
+fn at_and_past(data: List[byte], field: str, v: int) {
+    assert(read_with(data, cap(field, v)) == "ok")
+    assert(read_with(data, cap(field, v - 1)) == "macho_core_resource_limit")
+}
+
+/// The registers and exception state read as written for thread i of mcore().
+fn thread_as_written(t: readers.MachCoreThread, i: int, esr: u64) -> bool {
+    t.regs.len == 34 && t.regs[0] == 5 && t.regs[29] == 6171915200 && t.regs[30] == 4294968328 &&
+        t.regs[31] == 6171915168 && t.regs[32] == (4294968200 + 4 * i) as u64 && t.regs[33] == 1610612736 &&
+        t.far == 0 && t.esr == esr
+}
+
+fn main() {
+    let data = base_core()
+    let c = readers.macho_core_read(data, readers.macho_core_caps()) else { assert(false); return }
+    assert(c.threads.len == 1 && c.segments.len == 2 && c.notes.len == 3)
+    assert(c.segments[1].vmaddr == 4294983680 && c.segments[1].vmsize == 64 && c.segments[1].filesize == 32)
+    assert(c.segments[0].fileoff == (img(1, 2) + 240) as u64 && c.segments[0].initprot == 3)
+    assert(readers.macho_core_name_is(data, c.notes[0].owner, "addrable bits"))
+    assert(readers.macho_core_name_is(data, c.notes[2].owner, "all image infos") && c.notes[2].size == 240)
+    assert(c.low_bits == 47 && c.high_bits == 47)
+    assert(readers.macho_core_segment_of(c, 4294983680, 32) == 1 && readers.macho_core_segment_of(c, 4294983680, 33) == -1)
+    assert(data[c.segments[1].fileoff as int] as int == 171)
+    print("PASS macho-core-layout")
+    let four = mcore(4, 3, 1)
+    let w = readers.macho_core_read(four, readers.macho_core_caps()) else { assert(false); return }
+    assert(w.threads.len == 4)
+    var i: int = 0
+    while i < 4 {
+        let esr: u64 = if i == 3 { 4060086272 } else { 1442840704 }
+        assert(thread_as_written(copy w.threads[i], i, esr))
+        i += 1
+    }
+    assert(readers.macho_core_stop_thread(w) == 3 && readers.macho_core_signal(copy w.threads[3]) == 5)
+    assert(readers.macho_core_signal(copy w.threads[0]) == 0)
+    // a data abort from the program is the stop, SIGSEGV; with no stop at all, the first thread
+    var fault = mcore(4, 3, 1)
+    put(mut fault, th(1) + 304, 2449473606, 4)
+    let f = readers.macho_core_read(fault, readers.macho_core_caps()) else { assert(false); return }
+    assert(readers.macho_core_stop_thread(f) == 1 && readers.macho_core_signal(copy f.threads[1]) == 11)
+    let quiet = mcore(2, 5, 1)
+    let z = readers.macho_core_read(quiet, readers.macho_core_caps()) else { assert(false); return }
+    assert(readers.macho_core_stop_thread(z) == 0)
+    print("PASS macho-core-threads")
+    // the flavours walked by their counts: the exception state first, then the registers; an unknown flavour skipped
+    var swapped = base_core()
+    let t = th(0)
+    var k: int = 0
+    while k < 24 { swapped[t + 8 + k] = data[t + 288 + k]; k += 1 }
+    k = 0
+    while k < 280 { swapped[t + 32 + k] = data[t + 8 + k]; k += 1 }
+    let s = readers.macho_core_read(swapped, readers.macho_core_caps()) else { assert(false); return }
+    assert(thread_as_written(copy s.threads[0], 0, 4060086272))
+    var unknown = base_core()
+    put(mut unknown, t + 288, 99, 4)
+    let u = readers.macho_core_read(unknown, readers.macho_core_caps()) else { assert(false); return }
+    assert(thread_as_written(copy u.threads[0], 0, 0) && readers.macho_core_stop_thread(u) == 0)
+    print("PASS macho-core-flavour-walk")
+    let a = img(1, 2)
+    assert(c.images.len == 2)
+    let prog = copy c.images[0]
+    assert(readers.macho_core_name_is(data, prog.path, "/p/prog") && prog.load == 4294967296 && prog.flag == 1)
+    assert(prog.uuid.start == a + 32 && prog.uuid.length == 16 && data[prog.uuid.start] as int == 1)
+    assert(prog.segments.len == 2 && readers.macho_core_name_is(data, prog.segments[1].name, "__LINKEDIT"))
+    assert(prog.segments[1].vmaddr == 4294983680)
+    let dyld = copy c.images[1]
+    assert(readers.macho_core_name_is(data, dyld.path, "/usr/lib/dyld") && dyld.load == 6656540672)
+    assert(dyld.segments.len == 1 && data[dyld.uuid.start + 15] as int == 32)
+    // a core without the notes: no images, no addressable bits
+    var bare = base_core()
+    put_text(mut bare, nt(1, 2, 2) + 8, "all image infoz")
+    put_text(mut bare, nt(1, 2, 0) + 8, "addrable bitz")
+    let b = readers.macho_core_read(bare, readers.macho_core_caps()) else { assert(false); return }
+    assert(b.images.len == 0 && b.low_bits == 0 && b.notes.len == 3)
+    print("PASS macho-core-image-list")
+    expect_bad(data[0..3], "macho_core_truncated")
+    expect_bad(data[0..31], "macho_core_truncated")
+    var bad = base_core()
+    put(mut bad, 0, 4277009102, 4)
+    expect_bad(bad, "macho_core_bad_magic")
+    bad = base_core()
+    put(mut bad, 4, 16777223, 4)
+    expect_bad(bad, "macho_core_unsupported_cpu")
+    bad = base_core()
+    put(mut bad, 8, 2, 4)
+    expect_bad(bad, "macho_core_unsupported_cpu")
+    bad = base_core()
+    put(mut bad, 12, 2, 4)
+    expect_bad(bad, "macho_core_not_core")
+    bad = base_core()
+    put(mut bad, 20, 100000, 4)
+    expect_bad(bad, "macho_core_truncated")
+    print("PASS macho-core-named-refusals")
+    // commands: too short, not a multiple of 4, past sizeofcmds, a segment or note command shorter than its struct
+    bad = base_core()
+    put(mut bad, th(0) + 4, 4, 4)
+    expect_bad(bad, "macho_core_invalid_command")
+    bad = base_core()
+    put(mut bad, sg(1, 0) + 4, 74, 4)
+    expect_bad(bad, "macho_core_invalid_command")
+    bad = base_core()
+    put(mut bad, nt(1, 2, 2) + 4, 48, 4)
+    expect_bad(bad, "macho_core_invalid_command")
+    bad = base_core()
+    put(mut bad, sg(1, 0) + 4, 64, 4)
+    expect_bad(bad, "macho_core_invalid_command")
+    // segments: bytes past the file, file size above memory size, memory past the address space
+    bad = base_core()
+    put(mut bad, sg(1, 1) + 40, 100000, 8)
+    expect_bad(bad, "macho_core_invalid_segment")
+    bad = base_core()
+    put(mut bad, sg(1, 1) + 48, 65, 8)
+    expect_bad(bad, "macho_core_invalid_segment")
+    bad = base_core()
+    put(mut bad, sg(1, 1) + 24, 18446744073709551600, 8)
+    expect_bad(bad, "macho_core_invalid_segment")
+    // threads: a flavour past its command, a register state of another count, no register state at all
+    bad = base_core()
+    put(mut bad, th(0) + 12, 75, 4)
+    expect_bad(bad, "macho_core_invalid_thread")
+    bad = base_core()
+    put(mut bad, th(0) + 12, 70, 4)
+    expect_bad(bad, "macho_core_invalid_thread")
+    bad = base_core()
+    put(mut bad, th(0) + 292, 3, 4)
+    expect_bad(bad, "macho_core_invalid_thread")
+    bad = base_core()
+    put(mut bad, th(0) + 8, 99, 4)
+    expect_bad(bad, "macho_core_invalid_thread")
+    // notes: a payload past the file; an image list of another version or entry size, entries, a path or a
+    // segment list past its payload, a path with no NUL inside it; addressable bits past 64 or too short
+    bad = base_core()
+    put(mut bad, nt(1, 2, 1) + 24, 100000, 8)
+    expect_bad(bad, "macho_core_invalid_note")
+    bad = base_core()
+    put(mut bad, a, 2, 4)
+    expect_bad(bad, "macho_core_invalid_note")
+    bad = base_core()
+    put(mut bad, a + 16, 40, 4)
+    expect_bad(bad, "macho_core_invalid_note")
+    bad = base_core()
+    put(mut bad, a + 8, (a + 200) as u64, 8)
+    expect_bad(bad, "macho_core_invalid_note")
+    bad = base_core()
+    put(mut bad, a + 24, 8, 8)
+    expect_bad(bad, "macho_core_invalid_note")
+    bad = base_core()
+    put(mut bad, a + 24 + 40, 4, 4)
+    expect_bad(bad, "macho_core_invalid_note")
+    bad = base_core()
+    put(mut bad, nt(1, 2, 2) + 32, 238, 8)
+    put_text(mut bad, a + 236, "xx")
+    put(mut bad, a + 72, (a + 236) as u64, 8)
+    expect_bad(bad, "macho_core_invalid_note")
+    bad = base_core()
+    put(mut bad, pay(1, 2) + 4, 65, 4)
+    expect_bad(bad, "macho_core_invalid_note")
+    bad = base_core()
+    put(mut bad, nt(1, 2, 0) + 32, 8, 8)
+    expect_bad(bad, "macho_core_invalid_note")
+    print("PASS macho-core-hostile-bounds")
+    at_and_past(data, "commands", 6)
+    at_and_past(data, "commands_bytes", 576)
+    at_and_past(data, "segments", 2)
+    at_and_past(mcore(2, 0, 2), "threads", 2)
+    at_and_past(data, "flavours", 2)
+    at_and_past(data, "flavour_words", 68)
+    at_and_past(data, "notes", 3)
+    at_and_past(data, "images", 2)
+    at_and_past(data, "path_bytes", 13)
+    at_and_past(data, "image_segments", 2)
+    // work: the least budget that reads the core, and one less
+    var low: int = 1
+    var high: int = 100000
+    assert(read_with(data, cap("work", high)) == "ok" && read_with(data, cap("work", low)) != "ok")
+    while high - low > 1 {
+        let mid = (low + high) / 2
+        if read_with(data, cap("work", mid)) == "ok" { high = mid } else { low = mid }
+    }
+    at_and_past(data, "work", high)
+    print("PASS macho-core-caps")
+    let d = readers.macho_core_caps()
+    assert(d.commands == 65536 && d.commands_bytes == 16777216 && d.segments == 65536 && d.threads == 4096)
+    assert(d.flavours == 16 && d.flavour_words == 1024 && d.notes == 64 && d.images == 4096)
+    assert(d.path_bytes == 1024 && d.image_segments == 256 && d.work == 50000000)
+    print("PASS macho-core-default-caps")
+}

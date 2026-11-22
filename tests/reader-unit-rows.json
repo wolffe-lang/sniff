@@ -114,5 +114,15 @@
     "core-hostile-bounds",
     "core-descriptor-refusals",
     "core-resource-limits"
+  ],
+  "macho_core_test.lu": [
+    "macho-core-layout",
+    "macho-core-threads",
+    "macho-core-flavour-walk",
+    "macho-core-image-list",
+    "macho-core-named-refusals",
+    "macho-core-hostile-bounds",
+    "macho-core-caps",
+    "macho-core-default-caps"
   ]
 }
