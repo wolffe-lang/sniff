@@ -4552,6 +4552,72 @@
     "of": "gcc-break",
     "file": "truncated"
    }
+  },
+  {
+   "name": "core-gcc-mappings",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "info proc mappings"
+   ],
+   "core": {
+    "of": "gcc-break"
+   }
+  },
+  {
+   "name": "core-gcc-mappings-no-prog",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "info proc mappings"
+   ],
+   "core": {
+    "of": "gcc-break",
+    "form": "dash-c-only"
+   }
+  },
+  {
+   "name": "core-gcc-watch",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "watch total",
+    "info watchpoints"
+   ],
+   "core": {
+    "of": "gcc-break"
+   }
+  },
+  {
+   "name": "core-gcc-break-command",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "break main",
+    "info breakpoints"
+   ],
+   "core": {
+    "of": "gcc-break"
+   }
+  },
+  {
+   "name": "core-gcc-run",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "run",
+    "info threads"
+   ],
+   "core": {
+    "of": "gcc-break"
+   }
+  },
+  {
+   "name": "core-gcc-threads-libc",
+   "prog": "c/workers/gcc-O0/prog",
+   "script": [
+    "thread 3",
+    "frame 2",
+    "x/4xb $pc"
+   ],
+   "core": {
+    "of": "gcc-threads"
+   }
   }
  ],
  "cores": {
