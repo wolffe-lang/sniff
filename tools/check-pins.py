@@ -52,6 +52,11 @@ def main():
         raise ValueError('certificate bootstrap check differs from pin')
     if 'ca-certificates=%s' % c['bootstrap_ca_version'] not in (ROOT / 'ci/packages.txt').read_text().splitlines():
         raise ValueError('certificate bootstrap differs from package lock')
+    # argument vectors are options only: no paths, no shell words
+    for key in ('arguments', 'notes_arguments'):
+        vector = oracle['readelf'][key]
+        if not isinstance(vector, list) or not vector or not all(isinstance(x, str) and x.startswith('--') for x in vector):
+            raise ValueError('readelf %s is not a list of options' % key)
     manifest = (ROOT / 'ci/oracle-binaries.lock').read_text()
     for name in ('gdb', 'llvm_dwarfdump', 'readelf', 'gcc', 'clang'):
         if oracle[name]['sha256'] not in manifest:

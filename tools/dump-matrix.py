@@ -8,6 +8,11 @@ and compare by SHA-256; a failing row names its first differing line.
 
 Linux: llvm-dwarfdump-18 and readelf, pinned by version and SHA-256.
 macOS: the SDK's llvm-dwarfdump (Apple LLVM 21.0.0) and llvm-nm, pinned.
+
+`notes` (Linux): `sniff dump --notes` against readelf with the [readelf] notes_arguments of sniff-oracle.toml,
+over every core in each --cores directory (the cores tools/session.py wrote in this take: NAME.core; the
+truncated copies hostile rows read are not dump rows). A core's NT_X86_XSTATE follows the processor that wrote
+it, so no dump golden is stored: both run on the same core in the same take.
 """
 import argparse
 import hashlib
@@ -23,6 +28,7 @@ DWARF_MODES = ['debug-info', 'debug-abbrev', 'debug-line', 'debug-addr', 'debug-
                'debug-ranges', 'debug-rnglists', 'debug-loc', 'debug-loclists']
 FRAME_MODES = ['eh-frame', 'debug-frame']
 ALL_MODES = DWARF_MODES + FRAME_MODES + ['symbols']
+CORE_MODES = ['notes']
 
 
 def sha256(path):
@@ -63,6 +69,8 @@ def oracle_command(mode, platform, tools):
     if mode == 'symbols':
         key = 'readelf' if platform == 'linux' else 'llvm_nm_macos'
         return tools['symbols'] + pins[key]['arguments']
+    if mode == 'notes':
+        return tools['symbols'] + pins['readelf']['notes_arguments']
     return tools['dwarfdump'] + ['--' + mode]
 
 
@@ -70,6 +78,16 @@ def artifact(fixture, mode, platform):
     if platform == 'macos' and mode in DWARF_MODES:
         return fixture / 'prog.dSYM/Contents/Resources/DWARF/prog'
     return fixture / 'prog'
+
+
+def core_rows(dirs):
+    """id -> core for every NAME.core in the directories: cores/SET/NAME, the set from the directory's name."""
+    out = {}
+    for d in dirs:
+        for core in sorted(d.glob('*.core')):
+            if core.name.count('.') == 1:
+                out['cores/%s/%s' % (d.name, core.stem)] = core.resolve()
+    return out
 
 
 def first_diff(a, b):
@@ -100,19 +118,29 @@ def main():
     parser.add_argument('--fixtures', required=True, type=Path)
     parser.add_argument('--modes', default=','.join(ALL_MODES))
     parser.add_argument('--out', type=Path, default=ROOT / 'target/dump-matrix')
+    parser.add_argument('--cores', type=Path, action='append', default=[],
+                        help='a directory of core files for the notes rows (Linux; repeatable)')
     args = parser.parse_args()
     modes = args.modes.split(',')
-    if any(mode not in ALL_MODES for mode in modes):
+    if any(mode not in ALL_MODES + CORE_MODES for mode in modes):
         raise ValueError('unknown-mode ' + args.modes)
+    if ('notes' in modes) != bool(args.cores) or (args.cores and args.platform != 'linux'):
+        raise ValueError('notes-needs-cores: the notes rows run on Linux over --cores, and only they take --cores')
     tools = {'dwarfdump': pinned('dwarfdump', args.platform),
              'symbols': pinned('symbols', args.platform)}
-    builds = json.loads((args.fixtures / 'builds.json').read_text())
-    ids = sorted(f['id'] for f in builds['fixtures'])
+    fixture_modes = [m for m in modes if m not in CORE_MODES]
+    ids = []
+    if fixture_modes:
+        builds = json.loads((args.fixtures / 'builds.json').read_text())
+        ids = sorted(f['id'] for f in builds['fixtures'])
+    cores = core_rows(args.cores)
+    if args.cores and not cores:
+        raise ValueError('no-cores in ' + ', '.join(map(str, args.cores)))
     rows = failed = 0
     for mode in modes:
-        for fid in ids:
+        for fid in (sorted(cores) if mode in CORE_MODES else ids):
             rows += 1
-            target = artifact(args.fixtures / fid, mode, args.platform).resolve()
+            target = cores[fid] if mode in CORE_MODES else artifact(args.fixtures / fid, mode, args.platform).resolve()
             work = args.out / fid
             work.mkdir(parents=True, exist_ok=True)
             want, got = work / (mode + '.oracle'), work / (mode + '.sniff')

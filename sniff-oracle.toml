@@ -25,6 +25,7 @@ version = "2.42 (Ubuntu binutils 2.42-4ubuntu2.10)"
 command = "readelf"
 version_line = "GNU readelf (GNU Binutils for Ubuntu) 2.42"
 arguments = ["--symbols", "--wide"]
+notes_arguments = ["--notes", "--wide"]
 sha256 = "64c58e15274bbbb5153f31078e455e9e77ee5f51489e709bba5bb788ce9df2b0"
 
 [llvm_nm_macos]
