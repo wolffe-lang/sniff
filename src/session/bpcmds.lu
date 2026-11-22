@@ -121,7 +121,8 @@ fn cmd_info_breakpoints(mut s: Session) -> str {
         emit_line(mut s, "No breakpoints, watchpoints, tracepoints, or catchpoints.")
         return ""
     }
-    emit_line(mut s, "Num     Type           Disp Enb {pad_right("Address", address_width(s) + 1)}What")
+    let width = address_width(s, true)
+    emit_line(mut s, "Num     Type           Disp Enb {pad_right("Address", width + 1)}What")
     var num = 1
     while num < s.bp_next {
         i = 0
@@ -131,7 +132,7 @@ fn cmd_info_breakpoints(mut s: Session) -> str {
         }
         i = 0
         while i < s.watches.len {
-            if s.watches[i].num == num { watch_row(mut s, copy s.watches[i]) }
+            if s.watches[i].num == num { watch_row(mut s, copy s.watches[i], width) }
             i += 1
         }
         num += 1

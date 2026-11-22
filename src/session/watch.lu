@@ -221,22 +221,26 @@ fn delete_watch(mut s: Session, num: int) -> bool {
 }
 
 /// The `info breakpoints` / `info watchpoints` row of watch w.
-fn watch_row(mut s: Session, w: Watch) {
+fn watch_row(mut s: Session, w: Watch, width: int) {
     let enb = if w.enabled { "y" } else { "n" }
-    emit_line(mut s, "{pad_right("{w.num}", 8)}{pad_right(watch_type_text(w.kind), 15)}{pad_right("keep", 5)}{pad_right(enb, 4)}{pad_right("", address_width(s) + 1)}{w.expr}")
+    emit_line(mut s, "{pad_right("{w.num}", 8)}{pad_right(watch_type_text(w.kind), 15)}{pad_right("keep", 5)}{pad_right(enb, 4)}{pad_right("", width + 1)}{w.expr}")
     if w.hits > 0 {
         let times = if w.hits == 1 { "time" } else { "times" }
         emit_line(mut s, "\tbreakpoint already hit {w.hits} {times}")
     }
 }
 
-/// The width gdb gives the table's Address column: an address's 18 characters once the session has a breakpoint
-/// of the user's (listed or not), else 10 (a table of watchpoints alone, as over a core).
-fn address_width(s: Session) -> int {
-    var i = 0
-    while i < s.bps.len {
-        if !s.bps[i].internal { return 18 }
-        i += 1
+/// The width gdb gives a breakpoint table's Address column: an address's 18 characters when a row the table lists
+/// has an address, else 10. Every breakpoint has one; a watchpoint has one only while a process is live, so over a
+/// core a table of watchpoints alone is narrow even when the session has a breakpoint it does not list.
+fn address_width(s: Session, lists_breakpoints: bool) -> int {
+    if s.alive && s.watches.len > 0 { return 18 }
+    if lists_breakpoints {
+        var i = 0
+        while i < s.bps.len {
+            if !s.bps[i].internal { return 18 }
+            i += 1
+        }
     }
     10
 }
@@ -247,9 +251,10 @@ fn cmd_info_watchpoints(mut s: Session) -> str {
         emit_line(mut s, "No watchpoints.")
         return ""
     }
-    emit_line(mut s, "Num     Type           Disp Enb {pad_right("Address", address_width(s) + 1)}What")
+    let width = address_width(s, false)
+    emit_line(mut s, "Num     Type           Disp Enb {pad_right("Address", width + 1)}What")
     var i = 0
-    while i < s.watches.len { watch_row(mut s, copy s.watches[i]); i += 1 }
+    while i < s.watches.len { watch_row(mut s, copy s.watches[i], width); i += 1 }
     ""
 }
 
