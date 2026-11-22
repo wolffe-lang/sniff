@@ -96,6 +96,9 @@ if [ "$mode" = linux ]; then
   find "$root/target/pax-fixtures" -type f -exec touch {} +
   step pax-probes python3 -I tools/session-pax.py probes --fixtures "$root/target/pax-fixtures"
   step pax-rows-linux python3 -I tools/session.py --set pax check --sniff "$root/target/sniff" --fixtures "$root/target/pax-fixtures" --work "$root"
+  # S7: every core the two row sets wrote in this take, listed by sniff and by the pinned readelf
+  step dump-notes python3 -I tools/dump-matrix.py --sniff "$root/target/sniff" --platform linux --fixtures "$root/target/fixtures" \
+    --modes notes --cores "$root/target/cores/s2" --cores "$root/target/cores/pax"
   step pax-sniff-static bash tools/build-static-sniff.sh "$wolf" "$root/target/sniff-static"
 else
   # S3: the macOS arm64 backend. The rows need a task port and, for the oracle rows, the pinned lldb.
