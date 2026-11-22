@@ -67,11 +67,12 @@ fn core_file_piece(s: Session, addr: u64, want: int) -> List[byte] {
             var k = (m.end - addr) as int
             if k > want { k = want }
             if s.core_files[fi].prog {
-                if at > s.prog.data.len as u64 { return out }
-                let left = s.prog.data.len - at as int
+                let image = prog_image(s.prog)
+                if at > image.len as u64 { return out }
+                let left = image.len - at as int
                 if k > left { k = left }
                 var j = 0
-                while j < k { (mut out).push(s.prog.data[at as int + j]); j += 1 }
+                while j < k { (mut out).push(image[at as int + j]); j += 1 }
                 return out
             }
             if at > s.core_files[fi].data.len as u64 { return out }
@@ -196,13 +197,36 @@ fn core_drop(mut s: Session) {
     s.libs = []
 }
 
-/// Read the core at path in place of any process or core, and print what gdb prints when it reads one: a
-/// `[New LWP N]` line for each thread, the program's arguments, its signal, then the stop as a frame line and
-/// its source line (and, with more than one thread, the thread it is). Returns "" or gdb's refusal.
+/// The program's own bytes: a Mach-O program's image (its DWARF is in the dSYM), an ELF program's file.
+fn prog_image(p: Prog) -> List[byte] {
+    if p.img.len > 0 { return copy p.img }
+    copy p.data
+}
+
+/// Whether data starts as a 64-bit little-endian Mach-O does (MH_MAGIC_64).
+fn is_macho(data: List[byte]) -> bool {
+    data.len >= 4 && data[0] as int == 207 && data[1] as int == 250 && data[2] as int == 237 && data[3] as int == 254
+}
+
+/// Read the core at path in place of any process or core: an ELF core (core_load_elf) or a Mach-O one
+/// (core_load_macho). Returns "" or gdb's refusal.
 fn core_load(mut s: Session, path: str) -> str {
     let size = fs_size(path) else |_| { return "{path}: No such file or directory." }
     if size > 1073741824 { return "\"{path}\" is not a core dump: file format not recognized" }
     let data = fs_read_bytes(path) else |_| { return "{path}: No such file or directory." }
+    if is_macho(data) { return core_load_macho(s, path, data) }
+    core_load_elf(mut s, path, data)
+}
+
+/// A Mach-O core: not read yet, so refused as any file that is not a core is.
+fn core_load_macho(s: Session, path: str, data: List[byte]) -> str {
+    "\"{path}\" is not a core dump: file format not recognized"
+}
+
+/// Read an ELF core in place of any process or core, and print what gdb prints when it reads one: a
+/// `[New LWP N]` line for each thread, the program's arguments, its signal, then the stop as a frame line and
+/// its source line (and, with more than one thread, the thread it is). Returns "" or gdb's refusal.
+fn core_load_elf(mut s: Session, path: str, data: List[byte]) -> str {
     let c = readers.core_read(data, 65536, 65536, 50000000) else |_| {
         return "\"{path}\" is not a core dump: file format not recognized"
     }
@@ -216,7 +240,7 @@ fn core_load(mut s: Session, path: str) -> str {
     s.core_on = true
     s.core_path = path
     s.core = c
-    s.core_data = data
+    s.core_data = copy data
     s.core_thr = copy threads
     s.core_maps = maps
     // the program's file: the one whose range holds the entry point
