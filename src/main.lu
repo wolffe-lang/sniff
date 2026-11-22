@@ -4,6 +4,10 @@
 use dump
 use session
 
+/// The version the program prints; `src/wolf.pkg` names the same number and
+/// `tools/check-version` fails when they differ.
+const VERSION: str = "0.1.0"
+
 fn usage() {
     eprint("usage: sniff dump MODE FILE")
     eprint("modes: --debug-info --debug-abbrev --debug-line --debug-addr --debug-str-offsets")
@@ -41,6 +45,10 @@ fn resolve(path: str) -> str ! {dsym_not_found, dsym_ambiguous} {
 
 fn main() {
     let args = env_args()
+    if args.len == 1 && args[0] == "--version" {
+        print("sniff {VERSION}")
+        return
+    }
     if args.len > 0 && args[0] != "dump" {
         os_exit(session.session_main(args))
         return
