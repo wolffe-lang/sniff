@@ -4271,6 +4271,344 @@
     "ticks": 100
    },
    "tty": true
+  },
+  {
+   "name": "core-gcc-segv",
+   "prog": "c/exits/gcc-O0/prog",
+   "script": [
+    "bt",
+    "info registers rip rsp rbp",
+    "x/4xg $sp",
+    "print argc",
+    "print argv[1]"
+   ],
+   "core": {
+    "of": "gcc-segv"
+   }
+  },
+  {
+   "name": "core-gcc-break",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "bt",
+    "up",
+    "info locals",
+    "down",
+    "info args",
+    "info locals"
+   ],
+   "core": {
+    "of": "gcc-break"
+   }
+  },
+  {
+   "name": "core-gcc-threads",
+   "prog": "c/workers/gcc-O0/prog",
+   "script": [
+    "info threads",
+    "thread 2",
+    "bt",
+    "thread 3",
+    "bt",
+    "thread 1",
+    "info locals"
+   ],
+   "core": {
+    "of": "gcc-threads"
+   }
+  },
+  {
+   "name": "core-clang-segv",
+   "prog": "c/exits/clang-O0/prog",
+   "script": [
+    "bt",
+    "info registers rip rsp rbp",
+    "x/4xg $sp",
+    "print argc",
+    "print argv[1]"
+   ],
+   "core": {
+    "of": "clang-segv"
+   }
+  },
+  {
+   "name": "core-clang-break",
+   "prog": "c/calls/clang-O0/prog",
+   "script": [
+    "bt",
+    "up",
+    "info locals",
+    "down",
+    "info args",
+    "info locals"
+   ],
+   "core": {
+    "of": "clang-break"
+   }
+  },
+  {
+   "name": "core-clang-threads",
+   "prog": "c/workers/clang-O0/prog",
+   "script": [
+    "info threads",
+    "thread 2",
+    "bt",
+    "thread 3",
+    "bt",
+    "thread 1",
+    "info locals"
+   ],
+   "core": {
+    "of": "clang-threads"
+   }
+  },
+  {
+   "name": "core-wolf-recursion",
+   "prog": "wolf/recursion/wolf-debug/prog",
+   "script": [
+    "bt",
+    "up",
+    "info locals",
+    "down",
+    "info args"
+   ],
+   "core": {
+    "of": "wolf-recursion"
+   }
+  },
+  {
+   "name": "core-gcc-registers",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "info registers rax rbx rcx rdx rsi rdi rbp rsp r8 r9 r10 r11 r12 r13 r14 r15 rip eflags cs ss ds es fs gs fs_base gs_base"
+   ],
+   "core": {
+    "of": "gcc-break"
+   }
+  },
+  {
+   "name": "core-gcc-dash-c",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "bt"
+   ],
+   "core": {
+    "of": "gcc-break",
+    "form": "dash-c"
+   }
+  },
+  {
+   "name": "core-gcc-no-prog",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "info registers rip rsp"
+   ],
+   "core": {
+    "of": "gcc-break",
+    "form": "dash-c-only"
+   }
+  },
+  {
+   "name": "core-gcc-mismatch",
+   "prog": "c/exits/gcc-O0/prog",
+   "script": [
+    "info registers rip rsp"
+   ],
+   "core": {
+    "of": "gcc-break",
+    "other_program": true
+   }
+  },
+  {
+   "name": "core-gcc-file-command",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "core-file {core}",
+    "bt"
+   ],
+   "core": {
+    "of": "gcc-break",
+    "form": "script"
+   }
+  },
+  {
+   "name": "core-gcc-file-drop",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "core-file",
+    "bt"
+   ],
+   "core": {
+    "of": "gcc-break"
+   }
+  },
+  {
+   "name": "core-gcc-detach",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "detach",
+    "bt"
+   ],
+   "core": {
+    "of": "gcc-break"
+   }
+  },
+  {
+   "name": "core-gcc-refuse-step",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "step"
+   ],
+   "core": {
+    "of": "gcc-break"
+   }
+  },
+  {
+   "name": "core-gcc-refuse-next",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "next"
+   ],
+   "core": {
+    "of": "gcc-break"
+   }
+  },
+  {
+   "name": "core-gcc-refuse-stepi",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "stepi"
+   ],
+   "core": {
+    "of": "gcc-break"
+   }
+  },
+  {
+   "name": "core-gcc-refuse-finish",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "finish"
+   ],
+   "core": {
+    "of": "gcc-break"
+   }
+  },
+  {
+   "name": "core-gcc-refuse-until",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "until"
+   ],
+   "core": {
+    "of": "gcc-break"
+   }
+  },
+  {
+   "name": "core-gcc-refuse-continue",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "continue"
+   ],
+   "core": {
+    "of": "gcc-break"
+   }
+  },
+  {
+   "name": "core-gcc-refuse-signal",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "signal SIGINT"
+   ],
+   "core": {
+    "of": "gcc-break"
+   }
+  },
+  {
+   "name": "core-gcc-refuse-kill",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "kill"
+   ],
+   "core": {
+    "of": "gcc-break"
+   }
+  },
+  {
+   "name": "core-gcc-missing",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "bt"
+   ],
+   "core": {
+    "of": "gcc-break",
+    "file": "missing"
+   }
+  },
+  {
+   "name": "core-gcc-truncated",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "bt"
+   ],
+   "core": {
+    "of": "gcc-break",
+    "file": "truncated"
+   }
   }
- ]
+ ],
+ "cores": {
+  "gcc-segv": {
+   "prog": "c/exits/gcc-O0/prog",
+   "args": [
+    "fault"
+   ],
+   "stop": [
+    "run"
+   ]
+  },
+  "gcc-break": {
+   "prog": "c/calls/gcc-O0/prog",
+   "stop": [
+    "break count",
+    "run"
+   ]
+  },
+  "gcc-threads": {
+   "prog": "c/workers/gcc-O0/prog",
+   "stop": [
+    "break work",
+    "run"
+   ]
+  },
+  "clang-segv": {
+   "prog": "c/exits/clang-O0/prog",
+   "args": [
+    "fault"
+   ],
+   "stop": [
+    "run"
+   ]
+  },
+  "clang-break": {
+   "prog": "c/calls/clang-O0/prog",
+   "stop": [
+    "break count",
+    "run"
+   ]
+  },
+  "clang-threads": {
+   "prog": "c/workers/clang-O0/prog",
+   "stop": [
+    "break work",
+    "run"
+   ]
+  },
+  "wolf-recursion": {
+   "prog": "wolf/recursion/wolf-debug/prog",
+   "stop": [
+    "break depth",
+    "run"
+   ]
+  }
+ }
 }

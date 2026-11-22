@@ -1985,6 +1985,10 @@
   "libframes-clang-up": "macOS's system libraries are in the dyld shared cache, with no file for a frame's `from LIB` and no .eh_frame to read; the lldb rows' frames through libsystem hold sniff's own unwinding there",
   "libframes-clang-entry": "macOS's system libraries are in the dyld shared cache, with no file for a frame's `from LIB` and no .eh_frame to read; the lldb rows' frames through libsystem hold sniff's own unwinding there",
   "attach-clang-detach": "the attach stop is in nap's arm64 system call (svc, line 28) and the frames are arm64's: the lldb-attach-* rows hold the frames, the breakpoint and how the sleeper ended",
-  "attach-clang-break": "the attach stop is in nap's arm64 system call (svc, line 28) and the frames are arm64's: the lldb-attach-* rows hold the frames, the breakpoint and how the sleeper ended"
+  "attach-clang-break": "the attach stop is in nap's arm64 system call (svc, line 28) and the frames are arm64's: the lldb-attach-* rows hold the frames, the breakpoint and how the sleeper ended",
+  "core-clang-segv": "an ELF core of a Linux program, read by the Linux session: macOS's own cores are Mach-O, lldb's, held by their own rows",
+  "core-clang-break": "an ELF core of a Linux program, read by the Linux session: macOS's own cores are Mach-O, lldb's, held by their own rows",
+  "core-clang-threads": "an ELF core of a Linux program, read by the Linux session: macOS's own cores are Mach-O, lldb's, held by their own rows",
+  "core-wolf-recursion": "an ELF core of a Linux program, read by the Linux session: macOS's own cores are Mach-O, lldb's, held by their own rows"
  }
 }
