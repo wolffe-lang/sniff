@@ -1,0 +1,112 @@
+{
+ "schema": 1,
+ "milestone": "S7a",
+ "part": "Mach-O cores on macOS arm64",
+ "written_before_code": "2026-11-22",
+ "scope": "sniff reads a Mach-O core lldb wrote of a macOS arm64 program as a stopped program. The core reader (src/readers/macho_core.lu) reads MH_CORE, LC_SEGMENT_64, LC_THREAD and the LC_NOTEs this prediction names. The session over such a core uses the same commands and start forms as over an ELF core on Linux: bt, frame, up, down, info locals, info args, info registers, x, print, info threads and thread N, answered from the core, and every command that needs a process refused in gdb's words. Facts are held to lldb over the same core; refusal text is held to gdb on Linux over the same program's ELF core. Hosted macOS skips these rows by name, because their cores are written per take by the pinned lldb on a Mac: the Mac's record is their only evidence.",
+ "measured_before_code": {
+  "lldb": "lldb-2100.0.16.4 (Apple Swift version 6.3, clang-2100.0.123.102), run only as a binary in batch mode (lldb -b -x), the same day",
+  "fixtures": "the macOS session fixtures as the gate builds them (Apple clang 21.0.0 at -O0, wolf 0.2.38 -g), signed with get-task-allow",
+  "how_cores_are_made": "lldb runs the fixture to the stop (`breakpoint set -n F`, `process launch -X false`) and runs `process save-core -s STYLE PATH`, then `process kill`. A fault's core is written by lldb's on-crash commands (`-k 'process save-core -s modified-memory PATH'`), which run once the program faults. The writer runs with RLIMIT_FSIZE at 64 MiB, SHELL=/bin/sh and a scratch HOME; every core is deleted at the end of its take.",
+  "styles": {
+   "modified-memory": "calls at count 950,272 bytes; workers at work 1,015,808; wolf recursion at depth 999,424; the fault 901,120. Every writable page, the stack, and any page lldb wrote to (the program's __TEXT page is present, with the original instructions restored: identical to the program file).",
+   "stack": "calls 36,864 bytes; workers 86,016; wolf 36,864. One LC_SEGMENT_64 per thread's stack, nothing else.",
+   "full": "about 5.9 GB a core (the shared cache): never written by a row."
+  },
+  "header": "magic 0xfeedfacf, cputype 0x100000c (CPU_TYPE_ARM64), cpusubtype 0, filetype 4 (MH_CORE), flags 0; ncmds 5 to 38, sizeofcmds 504 to 3,600 bytes",
+  "load_commands": "LC_THREAD first, one per thread (1 or 4), then LC_SEGMENT_64 (1 to 31, segname empty, nsects 0), then three LC_NOTEs (`addrable bits`, `process metadata`, `all image infos`), each a note_command (owner[16], offset, size) whose payload lies in the file",
+  "lc_thread": "two flavours each, as (flavour, count) pairs followed by count 32-bit words: 6 (ARM_THREAD_STATE64, count 68: x0-x28, fp, lr, sp, pc as 64-bit words, then cpsr and a pad word) and 7 (ARM_EXCEPTION_STATE64, count 4: far as a 64-bit word, then esr, then exception)",
+  "notes": {
+   "addrable bits": "16 bytes: four 32-bit words, read as version 4, 47 addressable bits for low memory, 47 for high memory, 0. Derived from the bytes; no SDK header declares it.",
+   "process metadata": "JSON text, {\"threads\":[{\"thread_id\":N},...]}, one entry per LC_THREAD in order; N is the tid lldb's `thread list` prints",
+   "all image infos": "derived from the bytes against lldb's `image list` over the same core and the program's own LC_UUID (no SDK header declares it): a 24-byte header (version u32 = 1, image count u32, file offset of the entries u64, entry size u32 = 48, reserved u32 = 0); each 48-byte entry: file offset of the image's NUL-terminated path u64, UUID (16 bytes), load address u64, file offset of its segment list u64, segment count u32, an executing flag u32; each segment-list entry 32 bytes (segname[16], vmaddr u64, a u64 that is 0). Offsets are from the start of the file. The first entry is the program (flag 1): its UUID is the program's LC_UUID and its load address is 0x100000000, the program's own __TEXT vmaddr (lldb starts programs with address randomisation off, so the slide is 0). A modified-memory core lists 46 or 47 images, a stack core 2 or 3."
+  },
+  "stop": "lldb names the stop by the exception state's class (esr >> 26): 0x3c is `ESR_EC_BRK_AARCH64 (fault address: 0x0)` at a breakpoint; 0x24 is `ESR_EC_DABORT_EL0 (fault address: 0x0)` at the fault; 0x15 (a thread in a system call, as the workers' spinning threads are) is no stop reason. The selected thread is the one whose class is a stop: thread 4 of 4 in workers, not thread 1.",
+  "facts": "over every core lldb prints the program's frames by function, file and line, `frame variable` from both styles, `register read` (x0-x28, fp, lr, sp, pc, cpsr) and `memory read` of the stack. Frames in the system libraries are named from the host's shared cache (dyld`start + 6992, libsystem_pthread.dylib`_pthread_start + 136).",
+  "lldb_answers": {
+   "step, next, stepi, finish": "`mach-o-core does not support resuming processes`",
+   "continue": "`error: Failed to resume process: mach-o-core does not support resuming processes.`",
+   "signal": "`error: Failed to send signal 2: error: mach-o-core does not support sending signals to processes`",
+   "kill": "nothing printed",
+   "launch": "starts the program, replacing the core",
+   "breakpoint set": "the breakpoint is set, with a warning that its site cannot be written",
+   "watchpoint set": "`error: watchpoints are not supported`",
+   "memory in no segment": "`error: core file does not contain 0x8`",
+   "no program": "the program is read from the path the image list names, with its dSYM",
+   "another program": "kept at the core's load address with no UUID check; frames are named `_mh_execute_header + N`, with warnings on standard error",
+   "missing core": "`error: file specified in --core (-c) option doesn't exist: 'PATH'`",
+   "truncated core": "lldb itself dies with SIGSEGV after a warning per load command past the end of the file"
+  }
+ },
+ "amended_by_measurement": [
+  "The contract predicted the program's text absent from a modified-memory core: the page holding a breakpoint is present, with the original instructions restored. The reader takes bytes from a segment first either way.",
+  "The crash case is measured: lldb's on-crash commands write a modified-memory core of the fault."
+ ],
+ "reader": {
+  "accepts": "MH_MAGIC_64 MH_CORE for CPU_TYPE_ARM64; every load command walked by its cmdsize; LC_SEGMENT_64, LC_THREAD and LC_NOTE kept, others skipped by size",
+  "errors": [
+   "macho_core_bad_magic",
+   "macho_core_not_core",
+   "macho_core_unsupported_cpu",
+   "macho_core_truncated",
+   "macho_core_invalid_command (a cmdsize under 8, not a multiple of 4, or past sizeofcmds)",
+   "macho_core_invalid_segment (a file range past the end of the file, or filesize above vmsize)",
+   "macho_core_invalid_thread (a flavour whose count runs past its command, a thread with no ARM_THREAD_STATE64 of count 68)",
+   "macho_core_invalid_note (a payload past the end of the file; an image list whose entries, paths or segment lists run past it; a path not NUL-terminated within the cap)",
+   "macho_core_resource_limit"
+  ],
+  "caps": {
+   "load_commands": 65536,
+   "sizeofcmds_bytes": 16777216,
+   "segments": 65536,
+   "threads": 4096,
+   "flavours_per_thread": 16,
+   "flavour_count_words": 1024,
+   "notes": 64,
+   "images": 4096,
+   "image_path_bytes": 1024,
+   "segments_per_image": 256
+  },
+  "caps_rule": "every cap is a parameter of the reader with these defaults, as core_read's are; each has a reader-unit row at the cap and one past it, and one row holds the defaults the session passes",
+  "falsifiers": "a core with cpusubtype other than 0 (arm64e programs), a third LC_THREAD flavour, a note owner other than the three, or an image list whose version is not 1: each is a new measurement before the reader accepts it"
+ },
+ "session": {
+  "program": "the image list's executing entry names the program: a program given on the command line is placed at its load address when its LC_UUID equals the entry's UUID; with no program, the file at the entry's path is read, with its dSYM paired by UUID as S3 pairs a live program's. A program whose UUID differs is not placed, as gdb drops a program whose build ID differs from the core's; its text then comes from the path the core names.",
+  "registers": "ARM_THREAD_STATE64 as `target_regs` returns it on macOS: x0-x28, fp, lr, sp, pc, cpsr",
+  "memory": "a segment's bytes; else the program's file at its own segments (slide = load address - __TEXT vmaddr); else the refusal sniff prints for unreadable memory. The system libraries' text is in neither: their frames have no name, live or over a core.",
+  "stop": "the selected thread is the first whose exception class is a stop (0x3c, 0x24; 0x20 and 0x22 predicted the same, unmeasured); its signal is SIGTRAP for 0x3c and SIGSEGV for 0x24, as the lldb extraction already maps EXC_BREAKPOINT and EXC_BAD_ACCESS; with none, thread 1",
+  "banner": "Core was generated by `PATH'. (the image list's program path), Program terminated with signal SIG, Description., the frame line and its source line, as over an ELF core; no [New LWP] lines (macOS threads are not LWPs); held by the lldb rows' frame and signal facts, not as text",
+  "refusals": "the gdb words sniff prints over an ELF core, held by the Linux row core-clang-refuse on both Linux sets and compared on the Mac after the named normalisations",
+  "threads": "one thread per LC_THREAD in order; `info threads` held by lldb's thread facts (number, function, file, line)"
+ },
+ "rows": {
+  "making_a_core": "the macOS rows' `cores` table names the lldb commands that reach the stop; in each take lldb writes the core under the take's work directory, capped at 64 MiB, and the take deletes every core at its end and prints the bytes left behind",
+  "lldb": [
+   "lldb-core-calls-bt (bt, frame variable, up, down)",
+   "lldb-core-calls-registers (register read; pc, sp, fp, lr)",
+   "lldb-core-calls-memory (x/4xg $sp against memory read)",
+   "lldb-core-workers-threads (info threads, thread 2, bt, thread 3, bt; the selected thread is 4)",
+   "lldb-core-wolf-recursion (bt, frame variable, up)",
+   "lldb-core-calls-stack-style (the stack-only core: frames and locals, a global refused)",
+   "lldb-core-fault (the fault's core: bt, frame variable, the signal)"
+  ],
+  "linux": [
+   "core-clang-refuse (step, next, stepi, finish, until, continue, signal and kill over clang-break), a new Linux row captured on both Linux sets"
+  ],
+  "expect": [
+   "macho-core-missing",
+   "macho-core-truncated",
+   "macho-core-other-program",
+   "macho-core-no-program"
+  ],
+  "units": "src/macho_core_test.lu: the layout, the flavour walk, the three notes, every named refusal, each cap at and past its value",
+  "red_first": "every row above is committed with its stored lldb output before any reader or session code; sniff ignores a Mach-O core, so each is red by name"
+ },
+ "plant": "P3, in src/readers/macho_core.lu: the flavour walk advances one word short. Red by name at the reader unit row for the flavour walk and at lldb-core-calls-registers.",
+ "honesty": [
+  "Every number above is from one take of each scenario on one Mac. The rows write every core afresh and hold only lldb's facts over it.",
+  "The layouts of `all image infos` and `addrable bits` are derived from bytes against lldb's output, not from a declaration; a core lldb writes differently is a new measurement.",
+  "Exception classes other than 0x3c, 0x24 and 0x15 are not measured.",
+  "The system libraries' frames are named by lldb from the host's shared cache and by sniff not at all: the rows compare the program's frames only, as the live macOS rows do."
+ ]
+}
