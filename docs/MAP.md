@@ -210,6 +210,15 @@ console, splits the console by marker, and compares each row with its golden. Th
 key by key at sniff's own prompt. The same rows also run on Linux (`pax-rows-linux`). Boundaries that remain:
 no `/proc/PID/maps`, `auxv` or `task/TID/stat` on PAX, and `personality` answers ENOSYS (`notes/sn04-sniff-on-pax.md`).
 
+PAX's ptrace answers the debug-register requests a watchpoint makes (POKEUSER of DR0-DR3 and DR7, PEEKUSER and
+POKEUSER of DR6) as Linux does, so the watch rows run at PAX's console as well. `tests/pax-probe/dr.c` makes exactly
+those calls; its Linux answer is a golden (`tests/evidence/pax-linux/probe-dr.out`), and the console run holds PAX's
+answer to it. A row of the PAX set that is skipped for a gap in PAX names the probe that witnesses the gap (`gap` in
+`tests/pax-rows.json`); while PAX answers that probe differently from Linux the row is SKIP with the first differing
+line, and once PAX answers alike the row is red by name (`skip-stale`) until its skip is removed. A skip for the
+harness's own limit says `harness`. `tools/session-pax.py --smp N` (and `PAX_SMP` for `tools/gate-pax`) gives the guest
+more than one processor.
+
 ### The session's list and help (sniff#11)
 
 `src/session/listing.lu` lists source lines through the reader `step` and `frame` use, in every form of the GDB
