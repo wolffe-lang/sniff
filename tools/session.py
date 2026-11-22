@@ -160,61 +160,72 @@ def core_path(row, fixtures):
     return str(cores_dir(fixtures) / (c['of'] + suffix))
 
 
-XSTATE_WARNING = re.compile(r"warning: Unexpected size of section `\.reg-xstate/[0-9]+' in core file\.")
+XSTATE_WARNING = re.compile(r"warning: (?:Unexpected size of section `\.reg-xstate/([0-9]+)' in core file\."
+                            r"|Section `\.reg-xstate/([0-9]+)' in core file too small\.)")
 
 
 def drop_xstate(err):
-    """gdb's standard error with its xstate-size warning taken out, and the counts: (text, warnings, lines).
+    """gdb's standard error with its xstate-size warnings taken out: (text, the LWP each warning named, lines).
 
-    gdb warns `Unexpected size of section `.reg-xstate/LWP' in core file.` when a core's XSAVE note is not the size
-    its own layouts give for the note's features. A host whose XSAVE area is larger than those layouts (a processor
-    with AMX tile state) gets the warning for every core gdb's gcore writes there, so the same core rows differ by it
-    from host to host. Only gdb's standard error passes through here. The exact sentence with a decimal LWP is
-    dropped, and the blank line gdb prints before it when that blank line directly precedes it; nothing else is."""
+    gdb reads a core's XSAVE note (`.reg-xstate/LWP`) against its own layouts for the note's features, and warns when
+    the host wrote it at another size: `Unexpected size of section `.reg-xstate/LWP' in core file.` when it is larger
+    (a runner whose XSAVE area carries AMX tile state) and `Section `.reg-xstate/LWP' in core file too small.` when it
+    is smaller (an AMD EPYC runner's 2432 bytes). gcore writes the note at the host's size, so the same core rows
+    differ by these warnings from host to host. Only gdb's standard error passes through here. The two exact
+    sentences with a decimal LWP are dropped, each with the blank line gdb prints before it when that blank line
+    directly precedes it; nothing else is."""
     out = []
-    warnings = lines = 0
+    lwps = []
+    lines = 0
     for line in err.splitlines(keepends=True):
-        if XSTATE_WARNING.fullmatch(line.rstrip('\n')):
-            warnings += 1
+        m = XSTATE_WARNING.fullmatch(line.rstrip('\n'))
+        if m:
+            lwps.append(int(m.group(1) or m.group(2)))
             lines += 1
             if out and out[-1] == '\n':
                 out.pop()
                 lines += 1
             continue
         out.append(line)
-    return ''.join(out), warnings, lines
+    return ''.join(out), lwps, lines
 
 
-def xstate_excess(warnings, threads):
-    """'' when gdb's xstate-size warnings are no more than the threads of the row's core (one XSAVE note each), else
-    the reason: a row with no core has none to warn about."""
-    if warnings <= threads:
-        return ''
-    return 'xstate-size dropped %d warnings, more than the %d threads of its core' % (warnings, threads)
+def xstate_excess(lwps, threads):
+    """'' when every xstate-size warning names a thread of the row's core (its NT_PRSTATUS pids), none more than
+    twice (gdb warns twice for the thread it selects, once for each other), else the reason. A row with no core has
+    no thread to warn about."""
+    for lwp in sorted(set(lwps)):
+        if lwp not in threads:
+            return 'xstate-size dropped a warning naming LWP %d, not a thread of its core %s' % (lwp, sorted(threads))
+        if lwps.count(lwp) > 2:
+            return 'xstate-size dropped %d warnings naming LWP %d, more than twice' % (lwps.count(lwp), lwp)
+    return ''
 
 
 def core_facts(path):
-    """From a core's own bytes: its NT_PRSTATUS notes (owner CORE) and the size of its first NT_X86_XSTATE (owner
-    LINUX), walked as src/readers/core.lu walks them (the ELF gABI's notes, laid at 8 when the PT_NOTE says 8 and
-    at 4 otherwise); (0, 0) for a file that is not a whole ELF64 core."""
+    """From a core's own bytes: its NT_PRSTATUS notes (owner CORE), the size of its first NT_X86_XSTATE (owner LINUX)
+    and the pr_pid of each NT_PRSTATUS (offset 32, tools/abi-probe.c), walked as src/readers/core.lu walks them (the
+    ELF gABI's notes, laid at 8 when the PT_NOTE says 8 and at 4 otherwise); (0, 0, []) for a file that is not a
+    whole ELF64 core."""
     try:
         data = Path(path).read_bytes()
     except OSError:
-        return 0, 0
+        return 0, 0, []
     up = lambda n, a: (n + a - 1) // a * a
     try:
         if data[:4] != b'\x7fELF' or data[4] != 2 or struct.unpack_from('<H', data, 16)[0] != 4:
-            return 0, 0
+            return 0, 0, []
         phoff = struct.unpack_from('<Q', data, 32)[0]
         phentsize, phnum = struct.unpack_from('<HH', data, 54)
-        threads = xstate = 0
+        xstate = 0
+        pids = []
         for i in range(phnum):
             at = phoff + i * phentsize
             if struct.unpack_from('<I', data, at)[0] != 4:
                 continue
             off, size, align = (struct.unpack_from('<Q', data, at + k)[0] for k in (8, 32, 48))
             if off + size > len(data):
-                return 0, 0
+                return 0, 0, []
             a = 8 if align == 8 else 4
             k = 0
             while k + 12 <= size:
@@ -222,21 +233,21 @@ def core_facts(path):
                 name = data[off + k + 12:off + k + 12 + namesz].rstrip(b'\0')
                 desc = up(k + 12 + namesz, a)
                 if name == b'CORE' and kind == 1:
-                    threads += 1
+                    pids.append(struct.unpack_from('<I', data, off + desc + 32)[0])
                 if name == b'LINUX' and kind == 0x202 and not xstate:
                     xstate = descsz
                 k = up(desc + descsz, a)
-        return threads, xstate
+        return len(pids), xstate, pids
     except struct.error:
-        return 0, 0
+        return 0, 0, []
 
 
 def row_threads(row, fixtures):
-    """The threads of the core a row reads (0 for a row with no core, or a core missing by design)."""
+    """The thread ids of the core a row reads ([] for a row with no core, or a core missing by design)."""
     c = row.get('core')
     if not c or c.get('file') == 'missing':
-        return 0
-    return core_facts(core_path(row, fixtures))[0]
+        return []
+    return core_facts(core_path(row, fixtures))[2]
 
 
 def host_facts():
@@ -324,7 +335,7 @@ def make_cores(rows, gdb, fixtures, work, timeout=120):
                 bad.add(name)
                 continue
             os.replace(part, path)
-            threads, xstate = core_facts(path)
+            threads, xstate, _ = core_facts(path)
             print('CORE %s bytes=%d secs=%.1f threads=%d xstate=%d' % (name, path.stat().st_size, time.time() - start,
                                                                      threads, xstate))
         if any(r.get('core', {}).get('of') == name and r['core'].get('file') == 'truncated' for r in rows):
@@ -721,8 +732,8 @@ def cmd_capture(a):
             else:
                 script = write_script(core_script(row, a.fixtures), work)
                 out, err, rc = run_tool(gdb_argv(a.gdb, row, script, prog_path(a.fixtures, row), a.fixtures), work, 120)
-            err, warnings, lines = drop_xstate(err)
-            excess = xstate_excess(warnings, row_threads(row, a.fixtures))
+            err, lwps, lines = drop_xstate(err)
+            excess = xstate_excess(lwps, row_threads(row, a.fixtures))
             if excess:
                 print('FAIL %s %s' % (row['name'], excess))
                 fails += 1
@@ -901,8 +912,8 @@ def cmd_oracle(a):
             else:
                 script = write_script(core_script(row, a.fixtures), work)
                 out, err, rc = run_tool(gdb_argv(a.gdb, row, script, prog_path(a.fixtures, row), a.fixtures), work, 120)
-            kept, warnings, lines = drop_xstate(err)
-            excess = xstate_excess(warnings, row_threads(row, a.fixtures))
+            kept, lwps, lines = drop_xstate(err)
+            excess = xstate_excess(lwps, row_threads(row, a.fixtures))
             if excess:
                 print('FAIL oracle-drift %s %s' % (row['name'], excess))
                 fails += 1
