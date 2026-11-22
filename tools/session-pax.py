@@ -24,6 +24,11 @@ The kernel probes ("probes" in tests/pax-rows.json) run first in the first image
 for a gap in PAX names its probe; while PAX answers that probe differently from Linux the row is SKIP with the first
 differing line as its witness, and once PAX answers alike the row is FAIL skip-stale: the skip is no longer true.
 A probe no skip names is a capability rows rely on, PASS or FAIL against Linux.
+
+A core row reads a core the pinned gdb wrote on Linux from the same static build (tools/session.py makes the PAX
+set's cores in target/cores/pax beside --fixtures, in the oracle image). The image carries each core at the path
+it has there, /work/target/cores/pax/NAME.core, and sniff is given it as the row's form says; a core that was not
+made is FAIL no-core by name.
 """
 import argparse
 import hashlib
@@ -38,6 +43,8 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 BEGIN, RC, OUT, ERR, END, WAIT = '@@BEGIN ', '@@RC ', '@@OUT', '@@ERR', '@@END', '@@WAIT '
 MAX_CHUNK_BYTES = 70_000_000
+# where the image puts the fixtures, as their line tables and the Linux goldens name them
+GUEST_FX = '/work/target/pax-fixtures'
 
 
 def load_session():
@@ -131,8 +138,10 @@ def probe_block(name, fx_guest):
             "printf '\\n%s\\n' '" + END + "'"]
 
 
-def guest_script(rows, scripts_dir, fx_guest, probes=()):
+def guest_script(rows, scripts_dir, fx_guest, probes=(), sess=None):
     """The text of /etc/rows.sh: the probes, then one block per row; markers on lines of their own."""
+    if sess is None and any(r.get('core') for r in rows):
+        sess = load_session()
     lines = []
     for name in probes:
         lines += probe_block(name, fx_guest)
@@ -144,6 +153,10 @@ def guest_script(rows, scripts_dir, fx_guest, probes=()):
         lines.append("printf '%s\\n' '" + BEGIN + row['name'] + "'")
         if row.get('attach'):
             lines += attach_block(row, scripts_dir, fx_guest, prog)
+        elif row.get('core'):
+            tail = ' '.join(sess.core_tail(row, prog, fx_guest))
+            lines.append('/bin/sniff -batch -x %s/%s.cmd %s > /tmp/o 2> /tmp/e' % (scripts_dir, row['name'], tail))
+            lines.append("printf '%s\\n' \"" + RC + "$?\"")
         else:
             lines.append('/bin/sniff -batch -x %s/%s.cmd %s%s > /tmp/o 2> /tmp/e' % (scripts_dir, row['name'], prog, args))
             lines.append("printf '%s\\n' \"" + RC + "$?\"")
@@ -183,20 +196,30 @@ def split_console(text):
     return got
 
 
+def row_files(row, fixtures, sess=None):
+    """The host files a row's image needs besides the shared ones: its program and the core it reads (none for a
+    row whose core is missing on purpose)."""
+    files = [Path(fixtures) / row['prog']]
+    if row.get('core') and row['core'].get('file') != 'missing':
+        files.append(Path((sess or load_session()).core_path(row, fixtures)))
+    return files
+
+
 def chunk_rows(rows, fixtures):
-    """Rows in groups whose distinct programs fit one image."""
-    chunks, cur, progs, size = [], [], set(), 0
+    """Rows in groups whose distinct programs and cores fit one image."""
+    sess = load_session() if any(r.get('core') for r in rows) else None
+    chunks, cur, have, size = [], [], set(), 0
     for row in rows:
-        p = row['prog']
-        extra = 0 if p in progs else (Path(fixtures) / p).stat().st_size
+        need = [f for f in row_files(row, fixtures, sess) if f not in have]
+        extra = sum(f.stat().st_size for f in need)
         if cur and size + extra > MAX_CHUNK_BYTES:
             chunks.append(cur)
-            cur, progs, size = [], set(), 0
-            extra = (Path(fixtures) / p).stat().st_size
+            cur, have, size = [], set(), 0
+            need = row_files(row, fixtures, sess)
+            extra = sum(f.stat().st_size for f in need)
         cur.append(row)
-        if p not in progs:
-            progs.add(p)
-            size += extra
+        have.update(need)
+        size += extra
     if cur:
         chunks.append(cur)
     return chunks
@@ -252,18 +275,23 @@ def build_image(pax, kernel, inputs, sniff, fixtures, rows, work, label, probes=
     scripts = work / 'cmds'
     scripts.mkdir(exist_ok=True)
     sess = load_session()
+    cores = {}
     for row in rows:
         f = scripts / (row['name'] + '.cmd')
-        f.write_text('\n'.join(row['script']) + '\n')
+        f.write_text('\n'.join(sess.core_script(row, GUEST_FX)['script']) + '\n')
         files.append(('/work/target/s2/%s.cmd' % row['name'], f, 644))
+        if row.get('core') and row['core'].get('file') != 'missing':
+            cores[sess.core_path(row, GUEST_FX)] = Path(sess.core_path(row, fixtures))
     for prog in image_progs(rows):
-        files.append(('/work/target/pax-fixtures/' + prog, Path(fixtures) / prog, 755))
+        files.append((GUEST_FX + '/' + prog, Path(fixtures) / prog, 755))
+    for dest, src in sorted(cores.items()):
+        files.append((dest, src, 644))
     for name in probes:
         files.append(('/work/target/pax-fixtures/probe/' + name, Path(fixtures) / 'probe' / name, 755))
     for dest, src in sources_for(rows).items():
         files.append((dest, src, 644))
     rows_sh = work / 'rows.sh'
-    rows_sh.write_text(guest_script(rows, '/work/target/s2', '/work/target/pax-fixtures', probes))
+    rows_sh.write_text(guest_script(rows, '/work/target/s2', GUEST_FX, probes, sess))
     files.append(('/etc/rows.sh', rows_sh, 644))
     run_line = work / 'pax-run'
     run_line.write_text('/bin/env HOME=/ /bin/sh -i\n')
@@ -369,6 +397,10 @@ def cmd_run(a):
     rows = [r for r in sess.load_rows(a.only) if not r.get('tty')]
     skipped = [r for r in rows if r.get('skip')]
     rows = [r for r in rows if not r.get('skip')]
+    no_core = [r for r in rows if not all(f.exists() for f in row_files(r, a.fixtures, sess))]
+    for r in no_core:
+        print('FAIL %s no-core %s' % (r['name'], r['core']['of']))
+    rows = [r for r in rows if r not in no_core]
     linux = linux_probe_goldens(sess)
     probes = sorted(linux)
     probe_got = {}
@@ -403,6 +435,7 @@ def cmd_run(a):
         print('%s %s%s' % (verdict, name, (' ' + why) if why else ''))
         total_fail += verdict == 'FAIL'
         nskip += verdict == 'SKIP'
+    total_fail += len(no_core)
     print('SUMMARY ran=%d failed=%d skipped=%d' % (total_ran, total_fail, nskip))
     return 1 if total_fail else 0
 
@@ -558,6 +591,18 @@ def cmd_selftest(a):
     assert probe_verdicts([], {'dr': ('0', 'a 1\nb 2\n', '')}, linux) == [('PASS', 'probe-dr', '')]
     assert probe_verdicts([], {'dr': ('0', 'a 1\n', '')}, linux)[0][:2] == ('FAIL', 'probe-dr')
     assert probe_verdicts([watch], {}, linux)[0][:2] == ('FAIL', 'probe-dr')
+    # a core row: sniff is given the core at the path the image carries it at, in the row's form
+    sess = load_session()
+    core = {'name': 'c1', 'prog': 'c/calls/gcc-O0/prog', 'script': ['bt'], 'core': {'of': 'gcc-break'}}
+    ct = guest_script([core, dict(core, name='c2', core={'of': 'gcc-break', 'form': 'dash-c'})], '/s', GUEST_FX, sess=sess)
+    g = GUEST_FX + '/c/calls/gcc-O0/prog'
+    assert '/bin/sniff -batch -x /s/c1.cmd %s /work/target/cores/pax/gcc-break.core > /tmp/o 2> /tmp/e' % g in ct, ct
+    assert '/bin/sniff -batch -x /s/c2.cmd -c /work/target/cores/pax/gcc-break.core %s >' % g in ct, ct
+    drop = dict(core, script=['core-file {core}', 'bt'], core={'of': 'gcc-break', 'form': 'script'})
+    assert sess.core_script(drop, GUEST_FX)['script'][0] == 'core-file /work/target/cores/pax/gcc-break.core'
+    assert row_files(dict(core, core={'of': 'gcc-break', 'file': 'missing'}), '/h/pax-fixtures', sess) == \
+        [Path('/h/pax-fixtures/c/calls/gcc-O0/prog')]
+    assert row_files(core, '/h/pax-fixtures', sess)[1] == Path('/h/cores/pax/gcc-break.core')
     # the processor count reaches QEMU through qemu-halt only when it is more than one
     assert smp_args(1) == [] and smp_args(4) == ['--qemu', '-smp', '--qemu', '4']
     print('PASS session-pax-selftest')
