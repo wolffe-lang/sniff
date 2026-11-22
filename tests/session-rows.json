@@ -1595,6 +1595,27 @@
    ]
   },
   {
+   "name": "watch-gcc-only-live",
+   "prog": "c/watch/gcc-O0/prog",
+   "script": [
+    "break main",
+    "run",
+    "delete 1",
+    "watch counter",
+    "info watchpoints",
+    "info breakpoints"
+   ]
+  },
+  {
+   "name": "watch-gcc-only-fault",
+   "prog": "c/exits/gcc-O0/prog",
+   "script": [
+    "run fault",
+    "watch nowhere",
+    "info watchpoints"
+   ]
+  },
+  {
    "name": "rwatch-gcc-global",
    "prog": "c/watch/gcc-O0/prog",
    "script": [
@@ -4580,6 +4601,19 @@
    "script": [
     "watch total",
     "info watchpoints"
+   ],
+   "core": {
+    "of": "gcc-break"
+   }
+  },
+  {
+   "name": "core-gcc-watch-unlisted-break",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "break main",
+    "watch total",
+    "info watchpoints",
+    "info breakpoints"
    ],
    "core": {
     "of": "gcc-break"
