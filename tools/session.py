@@ -47,6 +47,16 @@ write(), where sniff, quicker to start than gdb, stopped it on one CPU. "form" i
 (PROG PID); "held" first starts the holder fixture of the same build on the sleeper, so that another
 tracer has it.
 
+Core rows ("core": {"of": NAME, ...}) read a core file instead of starting the program. "cores" in
+tests/session-rows.json names each core: the program (under --fixtures), its arguments and the gdb commands that
+reach the stop; in each take the pinned gdb runs it there and writes the core with gcore, once, before the first
+row that reads it (`cores`, or capture, check and oracle for the cores their rows need). The cores of a set are
+in target/cores/s2 or target/cores/pax beside the set's fixtures (/work/target/cores/... in the oracle image and
+at PAX's console alike); a core is never committed. "form" is how the debugger is given it, the GDB manual's
+forms: "positional" (PROG CORE, the default), "dash-c" (-c CORE PROG), "dash-c-only" (-c CORE) or "script" (PROG
+only; the script names the core as {core}, for core-file). "file" is "truncated" (the core's first 4096 bytes) or
+"missing" (a path where no file is). A row whose program is not its core's says so with "other_program": true.
+
 A row compares standard output byte for byte unless its "compare" says otherwise
 (standard error and the exit status are always compared with the golden's):
   head    the first "head" lines are gdb's, byte for byte, and sniff prints more after
@@ -127,6 +137,115 @@ def load_probes():
     if not PAX_MODE:
         return {}
     return json.loads(PAX_ROWS.read_text()).get('probes', {})
+
+
+CORE_FORMS = ('positional', 'dash-c', 'dash-c-only', 'script')
+CORE_FILES = ('missing', 'truncated')
+
+
+def load_cores():
+    """The cores the rows read, tests/session-rows.json "cores": name -> {"prog", "args", "stop"}."""
+    return json.loads(ROWS.read_text()).get('cores', {})
+
+
+def cores_dir(fixtures):
+    """Where a set's cores are written: target/cores/SET beside the set's fixtures (target/session-fixtures or
+    target/pax-fixtures)."""
+    return Path(fixtures).parent / 'cores' / ('pax' if PAX_MODE else 's2')
+
+
+def core_path(row, fixtures):
+    c = row['core']
+    suffix = {'missing': '.missing.core', 'truncated': '.truncated.core'}.get(c.get('file'), '.core')
+    return str(cores_dir(fixtures) / (c['of'] + suffix))
+
+
+def core_tail(row, prog, fixtures):
+    """What follows the script on a core row's command line, in the row's form."""
+    core = core_path(row, fixtures)
+    return {'positional': [prog, core], 'dash-c': ['-c', core, prog], 'dash-c-only': ['-c', core],
+            'script': [prog]}[row['core'].get('form', 'positional')]
+
+
+def core_script(row, fixtures):
+    """The row with {core} in its script replaced by its core's path (a script-form row's core-file)."""
+    if not row.get('core'):
+        return row
+    return dict(row, script=[x.replace('{core}', core_path(row, fixtures)) for x in row['script']])
+
+
+def gcore_argv(gdb, core, prog, path):
+    argv = [gdb, '-nx', '-q', '-batch', '-iex', 'set confirm off', '-iex', 'set pagination off']
+    for c in core['stop']:
+        argv += ['-ex', c]
+    return argv + ['-ex', 'gcore ' + path, '--args', prog] + core.get('args', [])
+
+
+def make_cores(rows, gdb, fixtures, work, timeout=120):
+    """Write the cores the rows read that this take has not (or that are older than their program): gdb's gcore at
+    each core's stop, then the truncated copies the rows name. Returns the names of the cores that were not made."""
+    want = sorted({r['core']['of'] for r in rows if r.get('core')})
+    if not want:
+        return set()
+    table = load_cores()
+    d = cores_dir(fixtures)
+    d.mkdir(parents=True, exist_ok=True)
+    bad = set()
+    for name in want:
+        c = table[name]
+        prog = Path(fixtures) / c['prog']
+        path = d / (name + '.core')
+        if not path.exists() or not prog.exists() or path.stat().st_mtime < prog.stat().st_mtime:
+            part = d / (name + '.core.part')
+            if part.exists():
+                part.unlink()
+            start = time.time()
+            try:
+                _, err, rc = run_tool(gcore_argv(gdb, c, str(prog), str(part)), work, timeout)
+            except subprocess.TimeoutExpired:
+                err, rc = '', 'timeout'
+            if rc != 0 or not part.exists():
+                print('FAIL core-%s gcore exit=%s %s' % (name, rc, (err.strip().splitlines() or [''])[-1][:120]))
+                bad.add(name)
+                continue
+            os.replace(part, path)
+            print('CORE %s bytes=%d secs=%.1f' % (name, path.stat().st_size, time.time() - start))
+        if any(r.get('core', {}).get('of') == name and r['core'].get('file') == 'truncated' for r in rows):
+            (d / (name + '.truncated.core')).write_bytes(path.read_bytes()[:4096])
+        missing = d / (name + '.missing.core')
+        if missing.exists():
+            missing.unlink()
+    return bad
+
+
+def core_problems(rows, cores):
+    """What is wrong with the core rows and the cores table; [] when nothing is."""
+    bad = []
+    for name, c in sorted(cores.items()):
+        if not isinstance(c, dict) or not isinstance(c.get('prog'), str) or not isinstance(c.get('args', []), list) \
+                or not isinstance(c.get('stop'), list) or not c['stop'] or not all(isinstance(x, str) for x in c['stop']):
+            bad.append('core %s: needs a prog, an args list and the gdb commands of its stop' % name)
+    used = set()
+    for r in rows:
+        c = r.get('core')
+        if c is None:
+            continue
+        if not isinstance(c, dict) or c.get('of') not in cores:
+            bad.append('%s: core names no core of the table' % r['name'])
+            continue
+        used.add(c['of'])
+        if c.get('form', 'positional') not in CORE_FORMS:
+            bad.append('%s: core form %s is none of %s' % (r['name'], c.get('form'), ', '.join(CORE_FORMS)))
+        if c.get('file') is not None and c['file'] not in CORE_FILES:
+            bad.append('%s: core file %s is none of %s' % (r['name'], c['file'], ', '.join(CORE_FILES)))
+        if r.get('args') or r.get('attach') or r.get('tty'):
+            bad.append('%s: a core row is a batch row with no args or attach' % r['name'])
+        if (c.get('form') == 'script') != any('{core}' in x for x in r['script']):
+            bad.append('%s: a script-form core row names {core} in its script, and only it' % r['name'])
+        if (r['prog'] != cores[c['of']].get('prog')) != bool(c.get('other_program')):
+            bad.append('%s: its program differs from its core\'s exactly when it says other_program' % r['name'])
+    bad += ['core %s: no row reads it' % n for n in sorted(set(cores) - used)]
+    return bad
 
 
 def probe_golden_paths(name):
@@ -321,11 +440,16 @@ def run_tool(argv, work, timeout):
     return p.stdout, p.stderr, p.returncode
 
 
-def gdb_argv(gdb, row, script, prog):
-    return [gdb, '-nx', '-q', '-batch', '-iex', 'set confirm off', '-iex', 'set pagination off', '-x', script, '--args', prog] + row.get('args', [])
+def gdb_argv(gdb, row, script, prog, fixtures=None):
+    base = [gdb, '-nx', '-q', '-batch', '-iex', 'set confirm off', '-iex', 'set pagination off', '-x', script]
+    if row.get('core'):
+        return base + core_tail(row, prog, fixtures)
+    return base + ['--args', prog] + row.get('args', [])
 
 
-def sniff_argv(sniff, row, script, prog):
+def sniff_argv(sniff, row, script, prog, fixtures=None):
+    if row.get('core'):
+        return [sniff, '-batch', '-x', script] + core_tail(row, prog, fixtures)
     return [sniff, '-batch', '-x', script, prog] + (['--args'] + row['args'] if row.get('args') else [])
 
 
@@ -449,12 +573,20 @@ def golden_of_problems(rows):
 def cmd_capture(a):
     work = a.work
     GOLD.mkdir(parents=True, exist_ok=True)
-    for row in load_rows(a.only):
+    rows = load_rows(a.only)
+    no_core = make_cores([r for r in rows if not r.get('golden_of') and (a.include_skipped or not r.get('skip'))],
+                         a.gdb, a.fixtures, work)
+    fails = 0
+    for row in rows:
         if row.get('skip') and not a.include_skipped:
             print('SKIP ' + row['name'] + ' reason=' + row['skip'])
             continue
         if row.get('golden_of'):
             print('SHARED %s golden=%s' % (row['name'], row['golden_of']))
+            continue
+        if row.get('core', {}).get('of') in no_core:
+            print('FAIL %s no-core %s' % (row['name'], row['core']['of']))
+            fails += 1
             continue
         if row.get('tty'):
             if row.get('attach'):
@@ -469,15 +601,15 @@ def cmd_capture(a):
             if row.get('attach'):
                 out, err, rc = attach_run(a.gdb, row, prog_path(a.fixtures, row), work, True)
             else:
-                script = write_script(row, work)
-                out, err, rc = run_tool(gdb_argv(a.gdb, row, script, prog_path(a.fixtures, row)), work, 120)
+                script = write_script(core_script(row, a.fixtures), work)
+                out, err, rc = run_tool(gdb_argv(a.gdb, row, script, prog_path(a.fixtures, row), a.fixtures), work, 120)
             fired = set()
             o = normalize(out, fired, row)
             e = normalize(err, fired, row)
         for path, text in zip(golden_paths(row), (o, e, str(rc) + '\n')):
             path.write_text(text)
         print('CAPTURE ' + row['name'] + ' rc=' + str(rc))
-    return 0
+    return 1 if fails else 0
 
 
 def subset_lines(want, got, own):
@@ -560,13 +692,19 @@ def cmd_check(a):
     work = a.work
     fails = 0
     ran = 0
-    for row in load_rows(a.only):
+    rows = load_rows(a.only)
+    no_core = make_cores([r for r in rows if not r.get('skip')], getattr(a, 'gdb', 'gdb'), a.fixtures, work)
+    for row in rows:
         if row.get('skip'):
             print('SKIP ' + row['name'] + ' reason=' + row['skip'])
             continue
         gold = golden_paths(row)
         if not all(p.exists() for p in gold):
             print('FAIL %s no-golden' % row['name'])
+            fails += 1
+            continue
+        if row.get('core', {}).get('of') in no_core:
+            print('FAIL %s no-core %s' % (row['name'], row['core']['of']))
             fails += 1
             continue
         try:
@@ -581,8 +719,9 @@ def cmd_check(a):
             elif row.get('attach'):
                 out, err, rc = attach_run(a.sniff, row, prog_path(a.fixtures, row), work, False, row.get('timeout', 120))
             else:
-                script = write_script(row, work)
-                out, err, rc = run_tool(sniff_argv(a.sniff, row, script, prog_path(a.fixtures, row)), work, row.get('timeout', 120))
+                script = write_script(core_script(row, a.fixtures), work)
+                out, err, rc = run_tool(sniff_argv(a.sniff, row, script, prog_path(a.fixtures, row), a.fixtures), work,
+                                        row.get('timeout', 120))
         except subprocess.TimeoutExpired:
             print('FAIL %s timeout' % row['name'])
             fails += 1
@@ -606,13 +745,19 @@ def cmd_oracle(a):
     """Re-run gdb live and compare with the stored goldens (drift check)."""
     work = a.work
     fails = 0
-    for row in load_rows(a.only):
+    rows = load_rows(a.only)
+    no_core = make_cores([r for r in rows if not r.get('skip') and not r.get('golden_of')], a.gdb, a.fixtures, work)
+    for row in rows:
         if row.get('skip'):
             print('SKIP ' + row['name'] + ' reason=' + row['skip'])
             continue
         if row.get('golden_of'):
             # the golden is another row's, re-derived when that row runs here
             print('SHARED %s golden=%s' % (row['name'], row['golden_of']))
+            continue
+        if row.get('core', {}).get('of') in no_core:
+            print('FAIL oracle-drift %s no-core %s' % (row['name'], row['core']['of']))
+            fails += 1
             continue
         fired = set()
         if row.get('tty'):
@@ -625,8 +770,8 @@ def cmd_oracle(a):
             if row.get('attach'):
                 out, err, rc = attach_run(a.gdb, row, prog_path(a.fixtures, row), work, True)
             else:
-                script = write_script(row, work)
-                out, err, rc = run_tool(gdb_argv(a.gdb, row, script, prog_path(a.fixtures, row)), work, 120)
+                script = write_script(core_script(row, a.fixtures), work)
+                out, err, rc = run_tool(gdb_argv(a.gdb, row, script, prog_path(a.fixtures, row), a.fixtures), work, 120)
             got = (normalize(out, fired, row), normalize(err, fired, row), str(rc) + '\n')
         want = tuple(p.read_text() for p in golden_paths(row))
         if got != want:
@@ -637,6 +782,14 @@ def cmd_oracle(a):
         else:
             print('PASS oracle-stable ' + row['name'])
     return 1 if fails else 0
+
+
+def cmd_cores(a):
+    """Write every core the selected rows read (gcore at each core's stop), as capture, check and oracle do first."""
+    rows = [r for r in load_rows(a.only) if not r.get('skip')]
+    bad = make_cores(rows, a.gdb, a.fixtures, a.work)
+    print('SUMMARY cores=%d failed=%d' % (len({r['core']['of'] for r in rows if r.get('core')}), len(bad)))
+    return 1 if bad else 0
 
 
 def row_form(r):
@@ -667,6 +820,7 @@ def cmd_verify(a):
     rows = load_rows()
     probes = load_probes()
     bad = ['%s: %s' % (r['name'], row_form(r)) for r in rows if row_form(r)] + golden_of_problems(rows)
+    bad += core_problems(rows, load_cores())
     if PAX_MODE:
         bad += skip_problems(rows, probes)
         bad += ['probe %s: no source %s' % (n, src) for n, src in sorted(probes.items()) if not (ROOT / src).is_file()]
@@ -692,13 +846,13 @@ def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--set', choices=('s2', 'pax'), default='s2', help='pax: static builds and their goldens (S4)')
     sub = p.add_subparsers(dest='cmd', required=True)
-    for name in ('capture', 'check', 'oracle'):
+    for name in ('capture', 'check', 'oracle', 'cores'):
         s = sub.add_parser(name)
         s.add_argument('--work', default='/work')
         s.add_argument('--fixtures', default='/work/target/session-fixtures')
         s.add_argument('--only')
-        if name in ('capture', 'oracle'):
-            s.add_argument('--gdb', default='gdb')
+        # check makes the cores its rows read with gdb too (in the oracle image), when no step before it has
+        s.add_argument('--gdb', default='gdb')
         if name == 'capture':
             s.add_argument('--include-skipped', action='store_true',
                            help="capture skipped rows' goldens too (on Linux, before a PAX gap closes)")
@@ -710,7 +864,7 @@ def main():
         use_pax()
     global FIXTURES
     FIXTURES = getattr(a, 'fixtures', None)
-    return {'capture': cmd_capture, 'check': cmd_check, 'oracle': cmd_oracle, 'verify': cmd_verify}[a.cmd](a)
+    return {'capture': cmd_capture, 'check': cmd_check, 'oracle': cmd_oracle, 'cores': cmd_cores, 'verify': cmd_verify}[a.cmd](a)
 
 
 if __name__ == '__main__':

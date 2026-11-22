@@ -380,6 +380,169 @@ class PaxGaps(unittest.TestCase):
         self.assertTrue(all(p.parent == session.PAX_GOLD for p in session.probe_golden_paths('dr')))
 
 
+# a stand-in gdb for make_cores: it writes the file its `gcore PATH` names, or nothing when told to fail
+FAKE_GCORE = '''#!/usr/bin/env python3
+import sys
+from pathlib import Path
+args = sys.argv[1:]
+cmds = [args[i + 1] for i, x in enumerate(args) if x == '-ex']
+log = Path(sys.argv[0]).parent / 'calls'
+with open(log, 'a') as f:
+    f.write(' '.join(cmds) + '\\n')
+if 'fail' in cmds:
+    sys.stderr.write('The program is not being run.\\n')
+    sys.exit(1)
+path = [c for c in cmds if c.startswith('gcore ')][0][6:]
+Path(path).write_bytes(b'\\x7fELF' + bytes(8188))
+'''
+
+
+class CoreRows(unittest.TestCase):
+    """Rows over a core file: the cores table, the forms a debugger is given a core in, and the cores each take
+    writes with gdb's gcore before the rows that read them."""
+
+    TABLE = {'calls-break': {'prog': 'c/calls/gcc-O0/prog', 'stop': ['break count', 'run']},
+             'exits-segv': {'prog': 'c/exits/gcc-O0/prog', 'args': ['fault'], 'stop': ['run']}}
+
+    def row(self, **kw):
+        r = {'name': 'core-x', 'prog': 'c/calls/gcc-O0/prog', 'script': ['bt'], 'core': {'of': 'calls-break'}}
+        r.update(kw)
+        return r
+
+    def test_forms(self):
+        fx = '/work/target/session-fixtures'
+        core = '/work/target/cores/s2/calls-break.core'
+        prog = fx + '/c/calls/gcc-O0/prog'
+        self.assertEqual(session.core_tail(self.row(), prog, fx), [prog, core])
+        self.assertEqual(session.core_tail(self.row(core={'of': 'calls-break', 'form': 'dash-c'}), prog, fx),
+                         ['-c', core, prog])
+        self.assertEqual(session.core_tail(self.row(core={'of': 'calls-break', 'form': 'dash-c-only'}), prog, fx),
+                         ['-c', core])
+        self.assertEqual(session.core_tail(self.row(core={'of': 'calls-break', 'form': 'script'}), prog, fx), [prog])
+        r = self.row(core={'of': 'calls-break', 'file': 'truncated'})
+        self.assertEqual(session.core_path(r, fx), '/work/target/cores/s2/calls-break.truncated.core')
+        self.assertEqual(session.core_path(self.row(core={'of': 'calls-break', 'file': 'missing'}), fx),
+                         '/work/target/cores/s2/calls-break.missing.core')
+        g = session.gdb_argv('gdb', self.row(), 'S', prog, fx)
+        self.assertEqual(g[-3:], ['S', prog, core])
+        self.assertNotIn('--args', g)
+        self.assertEqual(session.sniff_argv('sniff', self.row(), 'S', prog, fx), ['sniff', '-batch', '-x', 'S', prog, core])
+        # a row without a core is as it was
+        self.assertEqual(session.sniff_argv('sniff', {'args': ['3']}, 'S', 'P'), ['sniff', '-batch', '-x', 'S', 'P', '--args', '3'])
+
+    def test_pax_cores_are_their_own(self):
+        old = (session.GOLD, session.PAX_MODE)
+        try:
+            session.use_pax()
+            self.assertEqual(session.cores_dir('/work/target/pax-fixtures'), Path('/work/target/cores/pax'))
+        finally:
+            session.GOLD, session.PAX_MODE = old
+
+    def test_script_form_names_the_core(self):
+        r = self.row(core={'of': 'calls-break', 'form': 'script'}, script=['core-file {core}', 'bt'])
+        s = session.core_script(r, '/f/session-fixtures')
+        self.assertEqual(s['script'], ['core-file /f/cores/s2/calls-break.core', 'bt'])
+        self.assertEqual(r['script'][0], 'core-file {core}')
+        plain = {'name': 'n', 'script': ['run']}
+        self.assertIs(session.core_script(plain, '/f'), plain)
+
+    def test_gcore_argv(self):
+        a = session.gcore_argv('gdb', self.TABLE['exits-segv'], 'P', '/c/x.core')
+        self.assertEqual(a[-7:], ['-ex', 'run', '-ex', 'gcore /c/x.core', '--args', 'P', 'fault'])
+        self.assertEqual(a[:2], ['gdb', '-nx'])
+
+    def test_core_problems(self):
+        ok = [self.row(), self.row(name='core-y', prog='c/exits/gcc-O0/prog', core={'of': 'exits-segv', 'form': 'dash-c'})]
+        self.assertEqual(session.core_problems(ok, self.TABLE), [])
+        bad = {
+            'no such core': self.row(core={'of': 'nowhere'}),
+            'form': self.row(core={'of': 'calls-break', 'form': 'sideways'}),
+            'file': self.row(core={'of': 'calls-break', 'file': 'gone'}),
+            'args': self.row(args=['3']),
+            'tty': self.row(tty=True),
+            'script form without {core}': self.row(core={'of': 'calls-break', 'form': 'script'}),
+            '{core} in another form': self.row(script=['core-file {core}']),
+            'another program unsaid': self.row(prog='c/exits/gcc-O0/prog'),
+            'other_program said of its own': self.row(core={'of': 'calls-break', 'other_program': True}),
+        }
+        for why, r in bad.items():
+            self.assertTrue(session.core_problems([r, ok[1]], self.TABLE), why)
+        said = self.row(prog='c/exits/gcc-O0/prog', core={'of': 'calls-break', 'other_program': True})
+        self.assertEqual(session.core_problems([said, ok[1]], self.TABLE), [])
+        # a core no row reads, and a table entry without its stop
+        self.assertTrue(session.core_problems([ok[0]], self.TABLE))
+        self.assertTrue(session.core_problems(ok, dict(self.TABLE, **{'calls-break': {'prog': 'c/calls/gcc-O0/prog', 'stop': []}})))
+
+    def test_make_cores(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            gdb = d / 'gdb'
+            gdb.write_text(FAKE_GCORE)
+            gdb.chmod(0o755)
+            fx = d / 'target/session-fixtures'
+            for c in self.TABLE.values():
+                (fx / c['prog']).parent.mkdir(parents=True, exist_ok=True)
+                (fx / c['prog']).write_text('prog')
+            rows_file = d / 'rows.json'
+            table = dict(self.TABLE, broken={'prog': 'c/calls/gcc-O0/prog', 'stop': ['fail']})
+            rows_file.write_text(json.dumps({'rows': [], 'cores': table}))
+            old = session.ROWS
+            session.ROWS = rows_file
+            rows = [self.row(), self.row(name='t', core={'of': 'calls-break', 'file': 'truncated'}),
+                    self.row(name='m', core={'of': 'calls-break', 'file': 'missing'}),
+                    self.row(name='b', core={'of': 'broken'})]
+            import io
+            from contextlib import redirect_stdout
+            try:
+                buf = io.StringIO()
+                with redirect_stdout(buf):
+                    bad = session.make_cores(rows, str(gdb), str(fx), str(d))
+                cores = d / 'target/cores/s2'
+                self.assertEqual(bad, {'broken'})
+                self.assertIn('CORE calls-break bytes=8192', buf.getvalue())
+                self.assertIn('FAIL core-broken gcore exit=1 The program is not being run.', buf.getvalue())
+                self.assertEqual((cores / 'calls-break.truncated.core').stat().st_size, 4096)
+                self.assertFalse((cores / 'calls-break.missing.core').exists())
+                self.assertFalse((cores / 'broken.core').exists())
+                self.assertFalse(any(p.suffix == '.part' for p in cores.iterdir()))
+                self.assertNotIn('exits-segv', buf.getvalue())  # no row reads it
+                # a core this take wrote is not written again; one older than its program is
+                calls = (d / 'calls').read_text().splitlines()
+                with redirect_stdout(io.StringIO()):
+                    session.make_cores(rows[:1], str(gdb), str(fx), str(d))
+                self.assertEqual(len((d / 'calls').read_text().splitlines()), len(calls))
+                os.utime(cores / 'calls-break.core', (1, 1))
+                with redirect_stdout(io.StringIO()):
+                    session.make_cores(rows[:1], str(gdb), str(fx), str(d))
+                self.assertEqual(len((d / 'calls').read_text().splitlines()), len(calls) + 1)
+            finally:
+                session.ROWS = old
+
+    def test_check_names_a_core_not_made(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            gdb = d / 'gdb'
+            gdb.write_text(FAKE_GCORE)
+            gdb.chmod(0o755)
+            rows_file = d / 'rows.json'
+            rows_file.write_text(json.dumps({'rows': [self.row(name='inferior-c-gcc-exit0', core={'of': 'broken'})],
+                                             'cores': {'broken': {'prog': 'c/calls/gcc-O0/prog', 'stop': ['fail']}}}))
+            old = (session.ROWS, session.GOLD)
+            session.ROWS, session.GOLD = rows_file, ROOT / 'tests/evidence/linux-s2'
+            import io
+            from contextlib import redirect_stdout
+            try:
+                args = type('A', (), {'work': str(d), 'fixtures': str(d / 'target/session-fixtures'), 'only': None,
+                                      'sniff': '/nonexistent', 'gdb': str(gdb)})()
+                buf = io.StringIO()
+                with redirect_stdout(buf):
+                    rc = session.cmd_check(args)
+                self.assertEqual(rc, 1)
+                self.assertIn('FAIL inferior-c-gcc-exit0 no-core broken', buf.getvalue())
+            finally:
+                session.ROWS, session.GOLD = old
+
+
 class Comparator(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
