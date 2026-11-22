@@ -268,14 +268,28 @@ def host_facts():
     return 'HOST kernel=%s cpu=%s flags=%s' % (os.uname().release, re.sub(r'\s+', '_', model) or '-', flags or '-')
 
 
-def keep_drift(name, out, err, where=None):
+def keep_drift(name, out, err, where=None, core=None):
     """gdb's whole output for a row that drifted, before any normalisation, kept where the gate's evidence is
-    (target/gate/oracle-drift/NAME.out and .err), so the next difference is read rather than inferred."""
+    (target/gate/oracle-drift/NAME.out and .err), so the next difference is read rather than inferred. For a core
+    row, core is its core_facts: NAME.core holds its thread ids and XSAVE note size as text, so the xstate-size
+    rule's membership check can be replayed without the core."""
     d = Path(where) if where else ROOT / 'target/gate/oracle-drift'
     d.mkdir(parents=True, exist_ok=True)
     (d / (name + '.out')).write_text(out)
     (d / (name + '.err')).write_text(err)
+    if core is not None:
+        threads, xstate, pids = core
+        (d / (name + '.core')).write_text('threads=%d xstate=%d pids=%s\n' % (threads, xstate, ','.join(map(str, pids)) or '-'))
     return d / (name + '.err')
+
+
+def row_core_facts(row, fixtures):
+    """core_facts of the core a row reads, or None for a row with no core."""
+    if not row.get('core'):
+        return None
+    if row['core'].get('file') == 'missing':
+        return 0, 0, []
+    return core_facts(core_path(row, fixtures))
 
 
 def xstate_note(dropped):
@@ -916,6 +930,7 @@ def cmd_oracle(a):
             excess = xstate_excess(lwps, row_threads(row, a.fixtures))
             if excess:
                 print('FAIL oracle-drift %s %s' % (row['name'], excess))
+                print('KEPT %s' % keep_drift(row['name'], out, err, core=row_core_facts(row, a.fixtures)).relative_to(ROOT))
                 fails += 1
                 continue
             if lines:
@@ -927,7 +942,7 @@ def cmd_oracle(a):
             why = '; '.join(n + ' ' + first_diff(w, g) for n, g, w in zip(names, got, want) if g != w)
             print('FAIL oracle-drift ' + row['name'] + ' ' + why)
             if not row.get('tty'):
-                print('KEPT %s' % keep_drift(row['name'], out, err).relative_to(ROOT))
+                print('KEPT %s' % keep_drift(row['name'], out, err, core=row_core_facts(row, a.fixtures)).relative_to(ROOT))
             fails += 1
         else:
             print('PASS oracle-stable ' + row['name'])

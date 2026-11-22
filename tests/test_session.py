@@ -133,9 +133,14 @@ class XstateSize(unittest.TestCase):
         facts = session.host_facts()
         self.assertRegex(facts, r'^HOST kernel=\S+ cpu=\S+ flags=\S+$')
         with tempfile.TemporaryDirectory() as d:
-            path = session.keep_drift('core-gcc-segv', 'out\n', '\n' + self.W, d)
+            path = session.keep_drift('core-gcc-segv', 'out\n', '\n' + self.W, d, (4, 2432, [4497, 4492, 4495, 4496]))
             self.assertEqual(path.read_text(), '\n' + self.W)
             self.assertEqual((Path(d) / 'core-gcc-segv.out').read_text(), 'out\n')
+            self.assertEqual((Path(d) / 'core-gcc-segv.core').read_text(), 'threads=4 xstate=2432 pids=4497,4492,4495,4496\n')
+            session.keep_drift('break-gcc-main', 'o\n', 'e\n', d)
+            self.assertFalse((Path(d) / 'break-gcc-main.core').exists())
+            self.assertIsNone(session.row_core_facts({'name': 'r'}, d))
+            self.assertEqual(session.row_core_facts({'name': 'r', 'core': {'of': 'x', 'file': 'missing'}}, d), (0, 0, []))
 
     def test_core_facts(self):
         with tempfile.TemporaryDirectory() as d:
