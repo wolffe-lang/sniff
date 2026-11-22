@@ -17,12 +17,14 @@ pub fn dump_mode_known(mode: str) -> bool {
         mode == "--debug-str-offsets" || mode == "--debug-ranges" || mode == "--debug-loc" ||
         mode == "--debug-rnglists" || mode == "--debug-loclists" || mode == "--eh-frame" ||
         mode == "--debug-frame" || mode == "--symbols" || mode == "--debug-info" ||
-        mode == "--unwind-info"
+        mode == "--unwind-info" || mode == "--notes"
 }
 
 /// Render one mode for the file at path. The caller owns flushing and status.
 pub fn dump_file(mut o: Out, path: str, data: List[byte], mode: str) -> () ! DumpError {
     if !dump_mode_known(mode) { return unsupported_dump_mode }
+    // a core is not a program: its notes are read by the core reader, never by object_sections
+    if mode == "--notes" { return dump_notes(mut o, data)? }
     let s = readers.object_sections(data)?
     if s.has_split_dwarf { return unsupported_split_dwarf }
     // Compact unwind is S3's (R-sn00-2): named, never decoded, and its

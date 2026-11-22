@@ -1,0 +1,65 @@
+// --notes over a core: the pinned `readelf --notes --wide` layout. For each PT_NOTE a blank line, `Displaying
+// notes found at file offset 0x%08x with length 0x%08x:` and the column header; for each note two spaces, its owner
+// padded to 20, a space, `0x%08x` of its descriptor's size, a tab, its type as readelf names it and a tab. readelf
+// decodes none of the descriptors Linux and gdb write into a core but two it prints in hex (NT_X86_XSTATE,
+// NT_GDB_TDESC: `   description data: ` and each byte followed by a space).
+
+use readers
+
+fn note_type_text(data: List[byte], n: readers.CoreNote) -> str {
+    let k = n.kind
+    if readers.core_owner_is(data, n, "CORE") {
+        if k == 1 { return "NT_PRSTATUS (prstatus structure)" }
+        if k == 2 { return "NT_FPREGSET (floating point registers)" }
+        if k == 3 { return "NT_PRPSINFO (prpsinfo structure)" }
+        if k == 6 { return "NT_AUXV (auxiliary vector)" }
+        if k == readers.nt_siginfo as u64 { return "NT_SIGINFO (siginfo_t data)" }
+        if k == readers.nt_file as u64 { return "NT_FILE (mapped files)" }
+    }
+    if readers.core_owner_is(data, n, "LINUX") && k == readers.nt_x86_xstate as u64 {
+        return "NT_X86_XSTATE (x86 XSAVE extended state)"
+    }
+    if readers.core_owner_is(data, n, "GDB") && k == readers.nt_gdb_tdesc as u64 {
+        return "NT_GDB_TDESC (GDB XML target description)"
+    }
+    "Unknown note type: (0x{k:08x})"
+}
+
+fn note_in_hex(data: List[byte], n: readers.CoreNote) -> bool {
+    (readers.core_owner_is(data, n, "LINUX") && n.kind == readers.nt_x86_xstate as u64) ||
+        (readers.core_owner_is(data, n, "GDB") && n.kind == readers.nt_gdb_tdesc as u64)
+}
+
+/// Render every note of a core, segment by segment.
+pub fn dump_notes(mut o: Out, data: List[byte]) -> () ! DumpError {
+    let core = readers.core_read(data, 65536, 65536, 10000000)?
+    var s: int = 0
+    while s < core.note_segments.len {
+        let seg = copy core.note_segments[s]
+        line(mut o, "")
+        line(mut o, "Displaying notes found at file offset 0x{seg.offset:08x} with length 0x{seg.size:08x}:")
+        line(mut o, "  Owner                Data size \tDescription")
+        var i: int = 0
+        while i < core.notes.len {
+            let n = copy core.notes[i]
+            if n.segment == s {
+                put(mut o, "  ")
+                put_raw(mut o, data, n.owner)
+                var pad = n.owner.length
+                while pad < 20 { put_byte(mut o, 32 as byte); pad += 1 }
+                put(mut o, " 0x{n.desc.length as u64:08x}\t{note_type_text(data, n)}\t")
+                if note_in_hex(data, n) {
+                    put(mut o, "   description data: ")
+                    var b: int = 0
+                    while b < n.desc.length {
+                        put(mut o, "{hex2(data[n.desc.start + b] as int as u64)} ")
+                        b += 1
+                    }
+                }
+                put_byte(mut o, 10 as byte)
+            }
+            i += 1
+        }
+        s += 1
+    }
+}
