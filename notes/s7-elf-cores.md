@@ -33,6 +33,19 @@ The prediction (`tests/s7-prediction.json`) was committed before any code, on tr
   session's table of watchpoints alone is wide, with or without an earlier breakpoint. Three rows hold this:
   `watch-gcc-only-live`, `watch-gcc-only-fault` and `core-gcc-watch-unlisted-break`. A watchpoint set before `run`,
   and one left after the process exits, are not measured.
+- gdb's text over a core depends on the host's processor. gcore writes each thread's XSAVE area at the size the
+  host gives it. On one hosted runner, gdb read its own cores back and warned on standard error:
+  `warning: Unexpected size of section `.reg-xstate/LWP' in core file.` The warning text was captured for one core
+  row. For the other 28 core rows only an empty first line was recorded, and the same warning after that blank line
+  is inferred from the captured one.
+  - Those cores were 10,176 bytes a thread larger than the same cores on a runner that gave no warning. That is
+    11,008 − 832, the XSAVE sizes with AMX tile state and with AVX only. The AMX reading is inferred from the sizes.
+  - stdout and the exit status were the same on both runners.
+  - The harness drops exactly that sentence, with the blank line directly before it, from gdb's standard error only
+    (`xstate-size`). It counts what it drops and prints the rows. A row that drops more warnings than its core has
+    threads is red.
+  - Each take prints the host's kernel and XSAVE flags and each core's threads and XSAVE size. A drifted row's
+    whole gdb output is kept in the evidence.
 - Two cores of the same stop differ in thread and process ids (normalised by `lwp` and `pid`), in thread pointers
   where hosts' stacks differ (`thread-addr`), and in the stack left from before the stop. A local that is not yet set
   at the stop is therefore never printed.
