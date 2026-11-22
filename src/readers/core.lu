@@ -1,0 +1,432 @@
+// ELF core files: the gABI's ELF64 header, program headers and note layout (chapter 5), as Linux x86-64 cores are
+// written (by gdb's gcore, and by the kernel in the same format). Like elf.lu this reads and never copies: segments
+// and notes are kept as offsets and spans into the caller's buffer, and every read is bounded and charged against the
+// caller's work. A note's descriptor is decoded only when asked (core_threads, core_psinfo, core_auxv, core_files), at
+// the offsets tools/abi-probe.c measures against the C library's sys/procfs.h (tools/check-abi.py holds the constants
+// below to that probe's record).
+
+/// Malformed core layouts and the profiles this reader refuses.
+pub error CoreError = {
+    core_bad_magic,
+    core_truncated,
+    core_offset_overflow,
+    core_unsupported_class,
+    core_unsupported_endian,
+    core_unsupported_machine,
+    core_not_core,
+    core_no_notes,
+    core_invalid_note,
+    core_invalid_segment,
+    core_invalid_prstatus,
+    core_invalid_file_note,
+    core_resource_limit,
+}
+
+// struct elf_prstatus, struct elf_prpsinfo and elf_fpregset_t, by offsetof (tools/abi-probe.c)
+/// sizeof(struct elf_prstatus): an NT_PRSTATUS descriptor at least this long (tools/abi-probe.c).
+pub const core_prstatus_size: int = 336
+/// offsetof(struct elf_prstatus, pr_cursig): the signal the thread stopped with (2 bytes).
+pub const core_prstatus_cursig: int = 12
+/// offsetof(struct elf_prstatus, pr_pid): the thread's id (4 bytes).
+pub const core_prstatus_pid: int = 32
+/// offsetof(struct elf_prstatus, pr_reg): the registers, in user_regs_struct's order.
+pub const core_prstatus_reg: int = 112
+/// sizeof pr_reg: 27 eight-byte words.
+pub const core_prstatus_reg_size: int = 216
+/// sizeof(struct elf_prpsinfo): an NT_PRPSINFO descriptor at least this long.
+pub const core_prpsinfo_size: int = 136
+/// offsetof(struct elf_prpsinfo, pr_pid) (4 bytes).
+pub const core_prpsinfo_pid: int = 24
+/// offsetof(struct elf_prpsinfo, pr_fname): the program's name.
+pub const core_prpsinfo_fname: int = 40
+/// sizeof pr_fname.
+pub const core_prpsinfo_fname_size: int = 16
+/// offsetof(struct elf_prpsinfo, pr_psargs): the program and its arguments.
+pub const core_prpsinfo_psargs: int = 56
+/// sizeof pr_psargs.
+pub const core_prpsinfo_psargs_size: int = 80
+/// sizeof(elf_fpregset_t): the NT_FPREGSET descriptor.
+pub const core_fpregset_size: int = 512
+
+// note types (owner CORE unless named)
+/// NT_PRSTATUS: one thread's status and registers.
+pub const nt_prstatus: int = 1
+/// NT_FPREGSET: one thread's floating-point registers.
+pub const nt_fpregset: int = 2
+/// NT_PRPSINFO: the process.
+pub const nt_prpsinfo: int = 3
+/// NT_AUXV: the auxiliary vector.
+pub const nt_auxv: int = 6
+/// NT_SIGINFO: one thread's siginfo_t.
+pub const nt_siginfo: int = 1397311305
+/// NT_FILE: the mapped files.
+pub const nt_file: int = 1179208773
+/// NT_X86_XSTATE (owner LINUX): one thread's XSAVE area.
+pub const nt_x86_xstate: int = 514
+/// NT_GDB_TDESC (owner GDB): gdb's target description.
+pub const nt_gdb_tdesc: int = 4278190080
+
+/// One PT_LOAD: the memory at [vaddr, vaddr + memsz), of which the first filesz bytes are in the file at offset.
+pub struct CoreSegment {
+    pub vaddr: u64,
+    pub memsz: u64,
+    pub offset: u64,
+    pub filesz: u64,
+    pub flags: u64,
+}
+
+/// One PT_NOTE: where its notes are in the file, and the alignment they were laid at.
+pub struct CoreNoteSegment {
+    pub offset: u64,
+    pub size: u64,
+    pub align: int,
+}
+
+/// One note: its owner's name (without the NUL), its type and its descriptor, spans into the input; segment is
+/// the index of the PT_NOTE it is in.
+pub struct CoreNote {
+    pub owner: ByteSpan,
+    pub kind: u64,
+    pub desc: ByteSpan,
+    pub segment: int,
+}
+
+/// A core's layout. Descriptors stay undecoded until a core_* function reads them.
+pub struct CoreFile {
+    pub segments: List[CoreSegment],
+    pub note_segments: List[CoreNoteSegment],
+    pub notes: List[CoreNote],
+}
+
+/// One thread: an NT_PRSTATUS and the NT_FPREGSET after it (fpregs.length 0 when there is none).
+pub struct CoreThread {
+    pub pid: int,
+    pub cursig: int,
+    pub regs: List[u64],
+    pub fpregs: ByteSpan,
+}
+
+/// NT_PRPSINFO: the process id, the program's name and its arguments as the kernel kept them (NUL-free spans).
+pub struct CorePsinfo {
+    pub pid: int,
+    pub fname: ByteSpan,
+    pub psargs: ByteSpan,
+}
+
+/// One NT_FILE entry: [start, end) maps name at the byte offset offset.
+pub struct CoreMapped {
+    pub start: u64,
+    pub end: u64,
+    pub offset: u64,
+    pub name: ByteSpan,
+}
+
+fn core_uint(data: List[byte], mut c: Cursor, at: int, width: int) -> u64 ! CoreError {
+    c.pos = at
+    let result = uint_le(data, mut c, width) else |failure| {
+        if "{failure}" == "resource_limit" { return core_resource_limit }
+        return core_truncated
+    }
+    result
+}
+
+fn core_range(data: List[byte], offset: u64, size: u64) -> int ! CoreError {
+    let bound = data.len as u64
+    if offset > bound || size > bound - offset { return core_offset_overflow }
+    offset as int
+}
+
+fn core_charge(mut c: Cursor) -> () ! CoreError {
+    if c.fuel < 1 { return core_resource_limit }
+    c.fuel -= 1
+}
+
+/// The notes' alignment for a PT_NOTE's p_align: 8 when it says 8, 4 when it says 0, 1, 2 or 4 (gcore writes 1 and
+/// pads at 4), anything else refused.
+pub fn core_note_align(p_align: u64) -> int ! CoreError {
+    if p_align == 8 { return 8 }
+    if p_align <= 2 || p_align == 4 { return 4 }
+    core_invalid_note
+}
+
+fn round_up(n: u64, align: int) -> u64 {
+    let a = align as u64
+    let r = n % a
+    if r == 0 { return n }
+    n + (a - r)
+}
+
+/// The notes of one PT_NOTE at [start, start + size), laid at align.
+fn core_walk_notes(
+    data: List[byte],
+    mut c: Cursor,
+    start: int,
+    size: u64,
+    align: int,
+    segment: int,
+    max_notes: int,
+    mut notes: List[CoreNote],
+) -> () ! CoreError {
+    var at: u64 = 0
+    while at < size {
+        core_charge(mut c)?
+        if size - at < 12 { return core_invalid_note }
+        let namesz = core_uint(data, mut c, start + at as int, 4)?
+        let descsz = core_uint(data, mut c, start + at as int + 4, 4)?
+        let kind = core_uint(data, mut c, start + at as int + 8, 4)?
+        let name_at = at + 12
+        if namesz > size - name_at { return core_invalid_note }
+        let desc_at = round_up(name_at + namesz, align)
+        if desc_at > size || descsz > size - desc_at { return core_invalid_note }
+        var owner = ByteSpan { start: start + name_at as int, length: 0 }
+        if namesz > 0 {
+            // the name's size counts its NUL, and the NUL ends it
+            let last = core_uint(data, mut c, start + (name_at + namesz) as int - 1, 1)?
+            if last != 0 { return core_invalid_note }
+            owner.length = namesz as int - 1
+        }
+        if notes.len >= max_notes || notes.len >= 65536 { return core_resource_limit }
+        (mut notes).push(CoreNote {
+            owner: owner,
+            kind: kind,
+            desc: ByteSpan { start: start + desc_at as int, length: descsz as int },
+            segment: segment,
+        })
+        let next = round_up(desc_at + descsz, align)
+        at = if next > size { size } else { next }
+    }
+}
+
+/// Read an ELF64 little-endian x86-64 ET_CORE: its PT_LOAD segments and the notes of its PT_NOTEs. Caps are the
+/// caller's, also bounded by 65536 segments and 65536 notes; work counts each program header and each note.
+pub fn core_read(data: List[byte], max_segments: int, max_notes: int, work: int) -> CoreFile ! CoreError {
+    if max_segments < 0 || max_notes < 0 || work < 0 || work > 100000000 { return core_resource_limit }
+    if data.len < 16 { return core_truncated }
+    var c = cursor(0, data.len, work)
+    let magic = core_uint(data, mut c, 0, 4)?
+    if magic != 1179403647 { return core_bad_magic }
+    let class = core_uint(data, mut c, 4, 1)?
+    if class != 2 { return core_unsupported_class }
+    let endian = core_uint(data, mut c, 5, 1)?
+    if endian != 1 { return core_unsupported_endian }
+    if data.len < 64 { return core_truncated }
+    let file_type = core_uint(data, mut c, 16, 2)?
+    if file_type != 4 { return core_not_core }
+    let machine = core_uint(data, mut c, 18, 2)?
+    if machine != 62 { return core_unsupported_machine }
+    let phoff = core_uint(data, mut c, 32, 8)?
+    let shoff = core_uint(data, mut c, 40, 8)?
+    let phentsize = core_uint(data, mut c, 54, 2)?
+    var phnum = core_uint(data, mut c, 56, 2)?
+    if phnum == 65535 {
+        // PN_XNUM: the count is section zero's sh_info
+        if shoff == 0 { return core_invalid_segment }
+        let zero = core_range(data, shoff, 64)?
+        phnum = core_uint(data, mut c, zero + 44, 4)?
+    }
+    if phnum == 0 { return core_no_notes }
+    if phentsize != 56 { return core_invalid_segment }
+    if phnum > 131072 { return core_resource_limit }
+    let base = core_range(data, phoff, phnum * 56)?
+    var segments: List[CoreSegment] = []
+    var note_segments: List[CoreNoteSegment] = []
+    var notes: List[CoreNote] = []
+    var i: int = 0
+    while i < phnum as int {
+        core_charge(mut c)?
+        let at = base + i * 56
+        let kind = core_uint(data, mut c, at, 4)?
+        if kind == 1 || kind == 4 {
+            let flags = core_uint(data, mut c, at + 4, 4)?
+            let offset = core_uint(data, mut c, at + 8, 8)?
+            let vaddr = core_uint(data, mut c, at + 16, 8)?
+            let filesz = core_uint(data, mut c, at + 32, 8)?
+            let memsz = core_uint(data, mut c, at + 40, 8)?
+            let p_align = core_uint(data, mut c, at + 48, 8)?
+            let bound = data.len as u64
+            if offset > bound || filesz > bound - offset { return core_invalid_segment }
+            if kind == 1 {
+                if filesz > memsz || memsz > 18446744073709551615 - vaddr { return core_invalid_segment }
+                if segments.len >= max_segments || segments.len >= 65536 { return core_resource_limit }
+                (mut segments).push(CoreSegment { vaddr: vaddr, memsz: memsz, offset: offset, filesz: filesz, flags: flags })
+            } else {
+                let align = core_note_align(p_align)?
+                (mut note_segments).push(CoreNoteSegment { offset: offset, size: filesz, align: align })
+                core_walk_notes(data, mut c, offset as int, filesz, align, note_segments.len - 1, max_notes, mut notes)?
+            }
+        }
+        i += 1
+    }
+    if note_segments.len == 0 { return core_no_notes }
+    CoreFile { segments: segments, note_segments: note_segments, notes: notes }
+}
+
+/// Whether a note's owner is name.
+pub fn core_owner_is(data: List[byte], n: CoreNote, name: str) -> bool {
+    let want = name.bytes()
+    if want.len != n.owner.length { return false }
+    var i: int = 0
+    while i < want.len {
+        if data[n.owner.start + i] != want[i] { return false }
+        i += 1
+    }
+    true
+}
+
+fn desc_uint(data: List[byte], n: CoreNote, at: int, width: int) -> u64 {
+    var v: u64 = 0
+    var i: int = 0
+    while i < width {
+        v = v | ((data[n.desc.start + at + i] as int as u64) << (8 * i) as u64)
+        i += 1
+    }
+    v
+}
+
+/// The bytes of a fixed-size text field of a descriptor, up to its first NUL.
+fn desc_text(data: List[byte], n: CoreNote, at: int, size: int) -> ByteSpan {
+    var len: int = 0
+    while len < size && data[n.desc.start + at + len] as int != 0 { len += 1 }
+    ByteSpan { start: n.desc.start + at, length: len }
+}
+
+fn signed32(v: u64) -> int {
+    if v >= 2147483648 { return v as int - 4294967296 }
+    v as int
+}
+
+/// The threads, one per NT_PRSTATUS in note order (the first is the thread that stopped): its pid, its signal and
+/// its 27 registers in user_regs_struct's order, with the NT_FPREGSET that follows it before the next thread's.
+pub fn core_threads(data: List[byte], core: CoreFile) -> List[CoreThread] ! CoreError {
+    var out: List[CoreThread] = []
+    var i: int = 0
+    while i < core.notes.len {
+        let n = copy core.notes[i]
+        if n.kind == nt_prstatus as u64 && core_owner_is(data, n, "CORE") {
+            if n.desc.length < core_prstatus_size { return core_invalid_prstatus }
+            var regs: List[u64] = []
+            var r: int = 0
+            while r < core_prstatus_reg_size / 8 {
+                (mut regs).push(desc_uint(data, n, core_prstatus_reg + 8 * r, 8))
+                r += 1
+            }
+            (mut out).push(CoreThread {
+                pid: signed32(desc_uint(data, n, core_prstatus_pid, 4)),
+                cursig: desc_uint(data, n, core_prstatus_cursig, 2) as int,
+                regs: regs,
+                fpregs: ByteSpan { start: 0, length: 0 },
+            })
+        } else if n.kind == nt_fpregset as u64 && core_owner_is(data, n, "CORE") && out.len > 0 {
+            if n.desc.length >= core_fpregset_size && out[out.len - 1].fpregs.length == 0 {
+                out[out.len - 1].fpregs = ByteSpan { start: n.desc.start, length: core_fpregset_size }
+            }
+        }
+        i += 1
+    }
+    out
+}
+
+/// The NT_PRPSINFO, or core_invalid_note when there is none or it is shorter than its layout.
+pub fn core_psinfo(data: List[byte], core: CoreFile) -> CorePsinfo ! CoreError {
+    var i: int = 0
+    while i < core.notes.len {
+        let n = copy core.notes[i]
+        if n.kind == nt_prpsinfo as u64 && core_owner_is(data, n, "CORE") {
+            if n.desc.length < core_prpsinfo_size { return core_invalid_note }
+            return CorePsinfo {
+                pid: signed32(desc_uint(data, n, core_prpsinfo_pid, 4)),
+                fname: desc_text(data, n, core_prpsinfo_fname, core_prpsinfo_fname_size),
+                psargs: desc_text(data, n, core_prpsinfo_psargs, core_prpsinfo_psargs_size),
+            }
+        }
+        i += 1
+    }
+    core_invalid_note
+}
+
+/// The value of the auxiliary vector's entry key (NT_AUXV's pairs), or 0 when it has none.
+pub fn core_auxv(data: List[byte], core: CoreFile, key: u64) -> u64 {
+    var i: int = 0
+    while i < core.notes.len {
+        let n = copy core.notes[i]
+        if n.kind == nt_auxv as u64 && core_owner_is(data, n, "CORE") {
+            var at: int = 0
+            while at + 16 <= n.desc.length {
+                let k = desc_uint(data, n, at, 8)
+                if k == 0 { return 0 }
+                if k == key { return desc_uint(data, n, at + 8, 8) }
+                at += 16
+            }
+            return 0
+        }
+        i += 1
+    }
+    0
+}
+
+/// NT_FILE's mapped files: count, page size, count (start, end, offset in pages) triples, then count names. The
+/// offsets are returned in bytes. None when the core has no NT_FILE.
+pub fn core_files(data: List[byte], core: CoreFile, max_entries: int, work: int) -> List[CoreMapped] ! CoreError {
+    var out: List[CoreMapped] = []
+    var c = cursor(0, data.len, work)
+    var i: int = 0
+    while i < core.notes.len {
+        let n = copy core.notes[i]
+        if n.kind == nt_file as u64 && core_owner_is(data, n, "CORE") {
+            if n.desc.length < 16 { return core_invalid_file_note }
+            let count = desc_uint(data, n, 0, 8)
+            let page = desc_uint(data, n, 8, 8)
+            if count > ((n.desc.length - 16) / 24) as u64 { return core_invalid_file_note }
+            if count > max_entries as u64 || count > 65536 { return core_resource_limit }
+            var name_at: int = 16 + 24 * count as int
+            var k: int = 0
+            while k < count as int {
+                core_charge(mut c)?
+                let start = desc_uint(data, n, 16 + 24 * k, 8)
+                let end = desc_uint(data, n, 24 + 24 * k, 8)
+                let pages = desc_uint(data, n, 32 + 24 * k, 8)
+                if end < start { return core_invalid_file_note }
+                if page != 0 && pages > 18446744073709551615 / page { return core_invalid_file_note }
+                var len: int = 0
+                while name_at + len < n.desc.length && data[n.desc.start + name_at + len] as int != 0 {
+                    core_charge(mut c)?
+                    len += 1
+                }
+                if name_at + len >= n.desc.length { return core_invalid_file_note }
+                (mut out).push(CoreMapped {
+                    start: start,
+                    end: end,
+                    offset: pages * page,
+                    name: ByteSpan { start: n.desc.start + name_at, length: len },
+                })
+                name_at += len + 1
+                k += 1
+            }
+            return out
+        }
+        i += 1
+    }
+    out
+}
+
+/// The index of the PT_LOAD whose file bytes hold [addr, addr + n), or -1.
+pub fn core_segment_of(core: CoreFile, addr: u64, n: u64) -> int {
+    var i: int = 0
+    while i < core.segments.len {
+        let s = copy core.segments[i]
+        if addr >= s.vaddr && addr - s.vaddr < s.filesz && n <= s.filesz - (addr - s.vaddr) { return i }
+        i += 1
+    }
+    -1
+}
+
+/// The index of the PT_LOAD whose memory holds addr, or -1.
+pub fn core_segment_at(core: CoreFile, addr: u64) -> int {
+    var i: int = 0
+    while i < core.segments.len {
+        let s = copy core.segments[i]
+        if addr >= s.vaddr && addr - s.vaddr < s.memsz { return i }
+        i += 1
+    }
+    -1
+}

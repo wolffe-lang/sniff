@@ -104,5 +104,15 @@
   "sort_test.lu": [
     "line-sort-runs",
     "line-sort-overlap"
+  ],
+  "core_test.lu": [
+    "core-gcore-layout",
+    "core-descriptors",
+    "core-segments",
+    "core-note-alignment",
+    "core-named-refusals",
+    "core-hostile-bounds",
+    "core-descriptor-refusals",
+    "core-resource-limits"
   ]
 }

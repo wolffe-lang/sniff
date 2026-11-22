@@ -1,0 +1,213 @@
+//! member: false
+
+use readers
+
+fn put(mut data: List[byte], at: int, value: u64, width: int) {
+    var i: int = 0
+    while i < width {
+        data[at + i] = (value >> (i * 8) as u64 & 255) as int as byte
+        i += 1
+    }
+}
+
+fn up(n: int, align: int) -> int { (n + align - 1) / align * align }
+
+/// A note at `at`: its header and owner name; returns where its descriptor starts.
+fn note(mut data: List[byte], at: int, name: str, kind: u64, descsz: int, align: int) -> int {
+    let b = name.bytes()
+    put(mut data, at, (b.len + 1) as u64, 4)
+    put(mut data, at + 4, descsz as u64, 4)
+    put(mut data, at + 8, kind, 4)
+    var i: int = 0
+    while i < b.len { data[at + 12 + i] = b[i]; i += 1 }
+    data[at + 12 + b.len] = 0 as byte
+    at + up(12 + b.len + 1, align)
+}
+
+/// A core of one thread: PT_NOTE (PRPSINFO, PRSTATUS, FPREGSET, AUXV, FILE) laid at `align` with p_align `p_align`,
+/// then one PT_LOAD of 16 file bytes (memory 32) at 0x1000.
+fn core(align: int, p_align: u64) -> List[byte] { core_sized(align, p_align, 336) }
+
+/// core() with an NT_PRSTATUS descriptor of prstatus bytes.
+fn core_sized(align: int, p_align: u64, prstatus: int) -> List[byte] {
+    var data: List[byte] = []
+    var i: int = 0
+    while i < 4096 { (mut data).push(0 as byte); i += 1 }
+    put(mut data, 0, 1179403647, 4)
+    put(mut data, 4, 2, 1)
+    put(mut data, 5, 1, 1)
+    put(mut data, 6, 1, 1)
+    put(mut data, 16, 4, 2)
+    put(mut data, 18, 62, 2)
+    put(mut data, 20, 1, 4)
+    put(mut data, 32, 64, 8)
+    put(mut data, 52, 64, 2)
+    put(mut data, 54, 56, 2)
+    put(mut data, 56, 2, 2)
+    let notes = 176
+    var at = notes
+    var d = note(mut data, at, "CORE", 3, 136, align)
+    put(mut data, d + 24, 4242, 4)
+    let args = "prog fault".bytes()
+    i = 0
+    while i < args.len { data[d + 56 + i] = args[i]; i += 1 }
+    at = d + up(136, align)
+    d = note(mut data, at, "CORE", 1, prstatus, align)
+    put(mut data, d + 12, 11, 2)
+    put(mut data, d + 32, 4243, 4)
+    put(mut data, d + 112 + 16 * 8, 4198400, 8)
+    put(mut data, d + 112 + 21 * 8, 77, 8)
+    at = d + up(prstatus, align)
+    d = note(mut data, at, "CORE", 2, 512, align)
+    put(mut data, d, 895, 2)
+    at = d + up(512, align)
+    d = note(mut data, at, "CORE", 6, 32, align)
+    put(mut data, d, 9, 8)
+    put(mut data, d + 8, 4198432, 8)
+    at = d + up(32, align)
+    d = note(mut data, at, "CORE", 1179208773, 43, align)
+    put(mut data, d, 1, 8)
+    put(mut data, d + 8, 4096, 8)
+    put(mut data, d + 16, 4096, 8)
+    put(mut data, d + 24, 8192, 8)
+    put(mut data, d + 32, 3, 8)
+    data[d + 40] = 47 as byte
+    data[d + 41] = 112 as byte
+    at = d + up(43, align)
+    // the program headers: PT_NOTE, then PT_LOAD
+    put(mut data, 64, 4, 4)
+    put(mut data, 64 + 8, notes as u64, 8)
+    put(mut data, 64 + 32, (at - notes) as u64, 8)
+    put(mut data, 64 + 48, p_align, 8)
+    put(mut data, 120, 1, 4)
+    put(mut data, 120 + 4, 6, 4)
+    put(mut data, 120 + 8, at as u64, 8)
+    put(mut data, 120 + 16, 4096, 8)
+    put(mut data, 120 + 32, 16, 8)
+    put(mut data, 120 + 40, 32, 8)
+    put(mut data, at, 1311768467463790320, 8)
+    data[0..at + 16]
+}
+
+/// The name of what core_read refuses data with, or "ok".
+fn read_error(data: List[byte], segments: int, notes: int, work: int) -> str {
+    let c = readers.core_read(data, segments, notes, work) else |failure| { return "{failure}" }
+    if c.notes.len < 0 { return "never" }
+    "ok"
+}
+
+fn expect_bad(data: List[byte], expected: str) {
+    assert(read_error(data, 100, 100, 100000) == expected)
+}
+
+/// Whether the notes were read as written: five of them, the second an NT_PRSTATUS of pid 4243.
+fn reads_as_written(data: List[byte]) -> bool {
+    let c = readers.core_read(data, 100, 100, 100000) else { return false }
+    if c.notes.len != 5 || c.notes[1].kind != 1 { return false }
+    let t = readers.core_threads(data, c) else { return false }
+    t.len == 1 && t[0].pid == 4243
+}
+
+fn threads_error(data: List[byte]) -> str {
+    let c = readers.core_read(data, 100, 100, 100000) else |failure| { return "read {failure}" }
+    let t = readers.core_threads(data, c) else |failure| { return "{failure}" }
+    if t.len < 0 { return "never" }
+    "ok"
+}
+
+fn files_error(data: List[byte]) -> str {
+    let c = readers.core_read(data, 100, 100, 100000) else |failure| { return "read {failure}" }
+    let f = readers.core_files(data, c, 100, 100000) else |failure| { return "{failure}" }
+    if f.len < 0 { return "never" }
+    "ok"
+}
+
+fn main() {
+    let data = core(4, 1)
+    let c = readers.core_read(data, 100, 100, 100000) else { assert(false); return }
+    assert(c.segments.len == 1 && c.note_segments.len == 1 && c.notes.len == 5)
+    assert(c.note_segments[0].offset == 176 && c.note_segments[0].align == 4)
+    assert(c.segments[0].vaddr == 4096 && c.segments[0].filesz == 16 && c.segments[0].memsz == 32)
+    assert(c.notes[0].kind == 3 && c.notes[0].owner.length == 4 && c.notes[0].desc.length == 136)
+    assert(readers.core_owner_is(data, c.notes[1], "CORE") && !readers.core_owner_is(data, c.notes[1], "LINUX"))
+    print("PASS core-gcore-layout")
+    let threads = readers.core_threads(data, c) else { assert(false); return }
+    assert(threads.len == 1 && threads[0].pid == 4243 && threads[0].cursig == 11)
+    assert(threads[0].regs.len == 27 && threads[0].regs[16] == 4198400 && threads[0].regs[21] == 77)
+    assert(threads[0].fpregs.length == 512)
+    let ps = readers.core_psinfo(data, c) else { assert(false); return }
+    assert(ps.pid == 4242 && ps.psargs.length == 10 && ps.fname.length == 0)
+    assert(readers.core_auxv(data, c, 9) == 4198432 && readers.core_auxv(data, c, 3) == 0)
+    let files = readers.core_files(data, c, 100, 100000) else { assert(false); return }
+    // the offset is in pages of the note's page size: 3 pages of 4096 bytes
+    assert(files.len == 1 && files[0].start == 4096 && files[0].end == 8192 && files[0].offset == 12288)
+    assert(files[0].name.length == 2 && data[files[0].name.start] as int == 47)
+    print("PASS core-descriptors")
+    assert(readers.core_segment_of(c, 4096, 16) == 0 && readers.core_segment_of(c, 4100, 16) == -1)
+    assert(readers.core_segment_at(c, 4100 + 16) == 0 && readers.core_segment_at(c, 4096 + 32) == -1)
+    print("PASS core-segments")
+    // p_align 8 lays the notes at 8; 0, 1, 2 and 4 at 4; another is refused; notes laid at 4 are not read at 8
+    let eight = core(8, 8)
+    assert(reads_as_written(eight) && reads_as_written(core(4, 4)) && reads_as_written(core(4, 0)))
+    assert(!reads_as_written(core(4, 8)))
+    expect_bad(core(4, 16), "core_invalid_note")
+    expect_bad(core(4, 3), "core_invalid_note")
+    print("PASS core-note-alignment")
+    var bad = core(4, 1)
+    expect_bad(bad[0..63], "core_truncated")
+    put(mut bad, 0, 1179403648, 4)
+    expect_bad(bad, "core_bad_magic")
+    bad = core(4, 1)
+    put(mut bad, 4, 1, 1)
+    expect_bad(bad, "core_unsupported_class")
+    bad = core(4, 1)
+    put(mut bad, 5, 2, 1)
+    expect_bad(bad, "core_unsupported_endian")
+    bad = core(4, 1)
+    put(mut bad, 18, 183, 2)
+    expect_bad(bad, "core_unsupported_machine")
+    bad = core(4, 1)
+    put(mut bad, 16, 2, 2)
+    expect_bad(bad, "core_not_core")
+    bad = core(4, 1)
+    put(mut bad, 64, 6, 4)
+    expect_bad(bad, "core_no_notes")
+    print("PASS core-named-refusals")
+    // a note's name or descriptor past its segment, a name without its NUL
+    bad = core(4, 1)
+    put(mut bad, 176, 2000, 4)
+    expect_bad(bad, "core_invalid_note")
+    bad = core(4, 1)
+    put(mut bad, 176 + 4, 4000, 4)
+    expect_bad(bad, "core_invalid_note")
+    bad = core(4, 1)
+    bad[176 + 16] = 65 as byte
+    expect_bad(bad, "core_invalid_note")
+    // a segment past the file, filesz above memsz, memory past the address space, a PT_NOTE past the file
+    bad = core(4, 1)
+    put(mut bad, 120 + 32, 100000, 8)
+    expect_bad(bad, "core_invalid_segment")
+    bad = core(4, 1)
+    put(mut bad, 120 + 40, 8, 8)
+    expect_bad(bad, "core_invalid_segment")
+    bad = core(4, 1)
+    put(mut bad, 120 + 16, 18446744073709551600, 8)
+    expect_bad(bad, "core_invalid_segment")
+    bad = core(4, 1)
+    put(mut bad, 64 + 8, 1099511627776, 8)
+    expect_bad(bad, "core_invalid_segment")
+    print("PASS core-hostile-bounds")
+    // descriptors shorter than their layouts, an NT_FILE table that does not fit, a name past the descriptor
+    assert(threads_error(core_sized(4, 1, 335)) == "core_invalid_prstatus")
+    bad = core(4, 1)
+    put(mut bad, c.notes[4].desc.start, 2, 8)
+    assert(files_error(bad) == "core_invalid_file_note")
+    bad = core(4, 1)
+    bad[c.notes[4].desc.start + 42] = 65 as byte
+    assert(files_error(bad) == "core_invalid_file_note")
+    print("PASS core-descriptor-refusals")
+    assert(read_error(data, 100, 2, 100000) == "core_resource_limit")
+    assert(read_error(data, 0, 100, 100000) == "core_resource_limit")
+    assert(read_error(data, 100, 100, 3) == "core_resource_limit")
+    print("PASS core-resource-limits")
+}
