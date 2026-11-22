@@ -1,0 +1,131 @@
+{
+ "schema": 1,
+ "milestone": "S7a",
+ "written_before_code": "2026-11-22",
+ "scope": "S7a, Linux half: ELF core files of Linux x86-64 programs. The core reader (src/readers/core.lu), `sniff dump --notes`, and the session over a core: its start forms, its banner, bt, frame, up, down, info locals, info args, info registers, x, print, list, info threads and thread N answered from the core, and every command that needs a process refused as gdb words it. Rows on the Linux set and at PAX's console (cores written on Linux, read by the static sniff at the console). Mach-O cores (macOS arm64) are the milestone's next part; cores written by PAX wait for its multiprocessor work. Red first against trunk 60411374, where sniff ignores a second argument.",
+ "measured_before_code": {
+  "oracles": {
+   "gdb": "GNU gdb (Ubuntu 15.1-1ubuntu1~24.04.1) 15.1, the pinned binary in the oracle image, run only as a binary: batch scripts (-nx -q -batch -iex 'set confirm off' -iex 'set pagination off'), one take each",
+   "readelf": "GNU readelf (GNU Binutils for Ubuntu) 2.42, the pinned binary: --notes --wide, --program-headers --wide, --file-header --wide",
+   "linux_host": "the oracle image under rootless podman, Linux 7.2.4, CAP_SYS_PTRACE in the container's user namespace; the session fixtures and their static builds as the gate builds them at 726388678da7",
+   "lldb": "lldb-2100.0.16.4 on macOS arm64, the same day, for the Mach-O part (below)"
+  },
+  "how_cores_are_made": "with gdb's gcore at a chosen stop. The host's core pattern pipes kernel-written cores to a crash handler outside the container, so no row can take a kernel-written core; every S7a core is gcore's. Kernel-written cores are a later source with their own falsifiers (below).",
+  "corpus": {
+   "segv-gcc, segv-clang": "c/exits with `fault`, at its SIGSEGV: 638,416 and 638,424 bytes, 17 PT_LOAD",
+   "break-gcc, break-clang": "c/calls at `break count`: 638,416 and 638,424 bytes, 17 PT_LOAD",
+   "threads-gcc, threads-clang": "c/workers at `break work`, four threads: 25,963,800 and 25,963,816 bytes, 24 PT_LOAD",
+   "wolf-recursion": "wolf/recursion at `break depth`: 983,216 bytes, 20 PT_LOAD",
+   "static-segv-gcc": "the static c/exits with `fault`: 874,352 bytes, 9 PT_LOAD",
+   "static-threads-gcc": "the static c/workers at `break work`: 26,170,944 bytes, 15 PT_LOAD"
+  },
+  "elf": [
+   "e_type ET_CORE (4), e_machine EM_X86_64 (62), ELFCLASS64, little-endian. gcore also writes section headers (e_shnum is e_phnum + 2).",
+   "One PT_NOTE, first among the program headers, with p_align 1. Every PT_LOAD has p_align 1 and p_filesz equal to p_memsz: no segment has a tail left out.",
+   "Notes are padded to 4 bytes (name and descriptor alike), not 8: on every core, walking the PT_NOTE at 4 ends exactly at its end.",
+   "gcore leaves whole file-backed mappings out of the core rather than shortening segments: of a dynamic C program's 15 NT_FILE ranges, 4 lie in no PT_LOAD (the program's read-only data, the C library's text and read-only data, the dynamic loader's read-only data); of a static program's 5, 1 (its read-only data, .rodata and .eh_frame); of the wolf program's 20, 6 (its read-only data, the C library's and libgcc_s's text and read-only data, the loader's read-only data). The first range of each file and everything writable is in the core."
+  ],
+  "notes_in_order": "NT_PRPSINFO (136 bytes); then for each thread NT_PRSTATUS (336), NT_FPREGSET (512), NT_X86_XSTATE (owner LINUX, 2696 bytes on this processor) and NT_SIGINFO (128); then NT_AUXV (368), NT_FILE, and last NT_GDB_TDESC (owner GDB, type 0xff000000, gdb's XML target description, 8069 bytes). The thread that stopped or faulted is the first NT_PRSTATUS; the others follow in the order the threads were made.",
+  "layouts": "offsetof against the container's C library (sys/procfs.h), never header text: struct elf_prstatus is 336 bytes with pr_info at 0, pr_cursig 12, pr_sigpend 16, pr_pid 32, pr_ppid 36, pr_utime 48, pr_reg 112 (216 bytes: 27 eight-byte words in user_regs_struct's order) and pr_fpvalid 328; struct elf_prpsinfo is 136 bytes with pr_state at 0, pr_flag 8, pr_uid 16, pr_pid 24, pr_ppid 28, pr_fname 40 (16 bytes) and pr_psargs 56 (80 bytes); elf_fpregset_t is 512 bytes.",
+  "nt_file": "count (8 bytes), page size (8), then count triples of start, end and file offset in pages (8 bytes each), then count NUL-terminated names. gcore writes a page size of 1, so its offsets are byte offsets (0, 4096, 8192, ...); two ranges may share an offset.",
+  "readelf_notes": [
+   "per PT_NOTE: a blank line, `Displaying notes found at file offset 0x%08x with length 0x%08x:`, then `  Owner                Data size \\tDescription`",
+   "one line per note: two spaces, the owner padded to 20, `0x%08x` of the descriptor size, a tab, the type's name and its description in parentheses, a tab",
+   "NT_X86_XSTATE and NT_GDB_TDESC: `   description data: ` and every descriptor byte in hex on the same line",
+   "NT_FILE: the pinned build prints `    Cannot decode 64-bit note in 32-bit build` after the type and decodes nothing",
+   "NT_PRPSINFO, NT_PRSTATUS, NT_FPREGSET, NT_SIGINFO and NT_AUXV: the type line only",
+   "exit status 0 on every core"
+  ],
+  "gdb_over_a_core": {
+   "banner": "on stdout, in order: `[New LWP N]` for each NT_PRSTATUS in note order; for a program with the C library's thread records (every dynamic one, and the static C programs) `[Thread debugging using libthread_db enabled]` and `Using host libthread_db library \"...\".`, which the harness drops as it does live; `Core was generated by `PSARGS'.` (pr_psargs: the program and its arguments); `Program terminated with signal SIGSEGV, Segmentation fault.` (the first thread's signal: a core taken at a breakpoint says `SIGTRAP, Trace/breakpoint trap.`); the frame line and its source line as at a stop; then, when there is more than one thread, `[Current thread is 1 (Thread 0x... (LWP N))]`. Nothing on stderr.",
+   "start_forms": "`gdb PROG CORE` and `gdb -c CORE PROG` print the same.",
+   "a_stop_from_a_core": "bt, frame N, up, down, info locals, info args, info registers, x/4xg $sp, info threads, list and info signals answer as at a live stop in the same place. `frame 1` past main says `No frame at level 1.`; `up` from main says `Initial frame selected; you cannot go up.`",
+   "registers": "at the same stop (c/calls at `break count`), the 26 registers of value-gcc-registers print the same lines live and from the core (fs_base and gs_base included)",
+   "threads": "info threads lists the threads in note order with `*` on thread 1, the first note; the threads' frames in the C library, whose text is not in the core, are named from the library file: `#2  0x... in ?? () from /lib/x86_64-linux-gnu/libc.so.6`",
+   "refusals": {
+    "step, next, stepi, finish, until, continue, signal SIGINT": "`The program is not being run.` on stderr; the script goes on (exit 0)",
+    "kill": "`You can't do that without a process to debug.` (exit 0)",
+    "detach": "drops the core and prints nothing; the next `bt` says `No stack.` (exit 1)",
+    "core-file (no argument)": "drops the core and prints nothing in batch; the next `bt` says `No stack.` (exit 1)"
+   },
+   "files": {
+    "missing": "`PATH: No such file or directory.` then `No stack.` (exit 1)",
+    "truncated": "a core cut to its first 4096 bytes: `\"PATH\" is not a core dump: file format not recognized` then `No stack.` (exit 1)",
+    "another program's core": "c/exits given the core of c/calls: no warning on either stream, and none of the program's symbols is used (every frame `?? ()`, the libraries unnamed): the same text as with no program at all (`gdb -c CORE`)"
+   },
+   "not_yet_measured": "`run` with a core loaded; `watch` of a global the program has; `attach` with a core loaded; `info proc mappings` over a core; `core-file` at a terminal; what makes gdb drop another program (below); the wolf trap's core (below)"
+  },
+  "wolf_trap": "an index past a list's end two calls deep prints `wolf-trap: bounds` and `  at FILE:LINE:COL` on stderr and ends with exit status 134 and no signal, under gdb too (`exited with code 0206`): there is no fault stop. The runtime's entry points are `__wolf_rt_trap` and `__wolf_rt_trap_at` (the runtime archive's symbols).",
+  "macos": {
+   "styles": "lldb `process save-core` on the C calls, C workers and wolf recursion fixtures at a breakpoint: `stack` 36,864 to 86,016 bytes, `modified-memory` 950,272 to 999,424 bytes, `full` stopped at a 4 GiB file limit (about 5.9 GB each, the shared cache): the rows use `modified-memory`, and `stack` as a small case",
+   "shape": "MH_CORE (filetype 4), arm64; one LC_THREAD per thread with flavours 6 (ARM_THREAD_STATE64, 68 words) and 7 (ARM_EXCEPTION_STATE64, 4 words); LC_SEGMENT_64 for memory; three LC_NOTEs: `addrable bits` (16 bytes), `process metadata` (36 bytes, 105 with four threads), `all image infos`",
+   "crash": "under -b, lldb stops running -o commands when the program crashes, so the SIGSEGV scenario wrote no core: crash cores need lldb's on-crash commands (-k), not yet measured"
+  }
+ },
+ "amended_by_measurement": [
+  "Note alignment: the draft took 4 or 8 from p_align and refused anything else. gcore writes p_align 1 with notes at 4. The reader pads at 8 when p_align is 8 and at 4 when it is 0, 1, 2 or 4, and refuses any other p_align as core_invalid_note.",
+  "Memory past a segment: the draft read a file-backed tail past p_filesz from NT_FILE. gcore leaves out whole mappings instead, so the file is read for any address in no PT_LOAD that an NT_FILE range covers; a tail past p_filesz (which kernel cores may have) reads the same way, and zero when no file is mapped there.",
+  "NT_FILE in the dump: the pinned readelf does not decode it (above), so readelf cannot hold its table.",
+  "core-file with no argument prints nothing in batch (the draft predicted `No core file now.`).",
+  "The wolf trap ends in exit status 134 with no signal (the draft predicted SIGABRT): the wolf core is taken at a breakpoint on the runtime's trap entry."
+ ],
+ "reader": {
+  "entry": "core_read(data, caps, work) -> CoreFile ! CoreError, beside elf_read, which keeps refusing ET_CORE so nothing that reads a program can take a core for one",
+  "keeps": "every PT_LOAD (vaddr, memsz, offset, filesz, flags) in file order and every note (owner, type, descriptor) as spans into the input; NT_PRSTATUS, NT_PRPSINFO, NT_SIGINFO, NT_AUXV, NT_FILE and NT_FPREGSET decoded on demand",
+  "layout_constants": "the offsets above, from tools/abi-probe.c's output in the oracle image and checked by tools/check-abi.py, as the ptrace constants are",
+  "errors": [
+   "core_bad_magic",
+   "core_truncated",
+   "core_offset_overflow",
+   "core_unsupported_class",
+   "core_unsupported_endian",
+   "core_unsupported_machine",
+   "core_not_core",
+   "core_no_notes",
+   "core_invalid_note",
+   "core_invalid_segment",
+   "core_invalid_prstatus",
+   "core_invalid_file_note",
+   "core_resource_limit"
+  ],
+  "caps": "PT_LOAD 65536, notes 65536, NT_FILE entries 65536 (measured maxima 24, 20 and 20); the input cap stays 64 MiB (largest measured core 26,170,944 bytes)",
+  "falsifiers": [
+   "a gcore'd or kernel-written core whose notes walk only at an alignment the rule does not give",
+   "any abi-probe line that differs from the layouts above (the reader takes the probe's numbers)",
+   "a row's core over 64 MiB"
+  ]
+ },
+ "dump_notes": {
+  "what": "`sniff dump --notes CORE`, byte for byte and exit status the pinned `readelf --notes --wide` on every core of the corpus, in a notes mode of tools/dump-matrix.py that takes both in the same take (NT_X86_XSTATE's size follows the processor, so no dump golden is stored); the argument vector is pinned in sniff-oracle.toml under [readelf]",
+  "nt_file": "open before the dump rows: how NT_FILE's line is held when the pinned readelf declines to decode it. Proposed: sniff prints the type line as readelf does without readelf's refusal text, the matrix strips that one named phrase from readelf's line, and NT_FILE's table is held instead by `info proc mappings` over the core against gdb (predicted to read NT_FILE; falsifier: gdb refuses it on a core)",
+  "programs": "S7a's --notes reads cores; given a program it refuses by name (`not a core file`), and the program notes readelf decodes (build ID, ABI tag, GNU properties) are not in S7a"
+ },
+ "session": {
+  "source": "src/session/source.lu: every memory, register and thread-pointer read of the session goes through src_read, src_regs, src_thread_pointer_of, src_xmm0 and src_fp_status (one mechanical commit moves the 37 call sites, held by the existing gate with no row moving); with a core loaded they answer from it",
+  "memory_order": "a PT_LOAD's bytes; else, for an address an NT_FILE range covers, that file at page size x offset + (address - start), where the ranges of the program (the file whose range holds NT_AUXV's AT_ENTRY) read from the program the session was given, whatever its path, and the others from the path the note names; else `Cannot access memory at address 0x...`",
+  "load_base": "AT_ENTRY minus the program's e_entry",
+  "registers": "pr_reg as target_regs returns it on Linux: info registers, frames and the DWARF machine unchanged; the thread pointer is pr_reg's fs_base",
+  "start_forms": "`sniff -batch -x SCRIPT PROG CORE`, `sniff -c CORE PROG`, `sniff -c CORE`, `core-file CORE` and `core-file` in a script; a second argument made only of digits is a process id (attach), as in gdb",
+  "banner": "as gdb's above, from the notes: `[New LWP N]` from pr_pid in note order, `Core was generated by` from pr_psargs, `Program terminated with signal` from the first thread's pr_cursig and sniff's signal table, `[Current thread is 1 (...)]` when there is more than one thread",
+  "refusals": "the measured texts above, by command; `run` and `attach` with a core loaded as gdb is measured to answer",
+  "another_program": "predicted mechanism: gdb compares the program's build ID with the build ID in the core's copy of the program's first page and drops the program when they differ. Falsifier: a copy of the right program under another path is dropped too, or a different program under the core's path is kept; the rule then follows what is measured",
+  "falsifiers": [
+   "a row's frames or values that differ from gdb over the same core",
+   "a register line that differs between the live stop and the core in gdb (then the cross-check row is wrong, not sniff)"
+  ]
+ },
+ "pax": "the static builds' cores, taken on Linux with gcore, are copied into the console image beside their programs; the static sniff at the console reads them, held to the Linux goldens of the same core. Core reading asks the kernel only for files, so no new gap probe is predicted; falsifier: a core row that passes on Linux and fails at the console.",
+ "rows": {
+  "making_a_core": "a session row with `core` names the gdb commands that reach the stop; in each take the pinned gdb runs the fixture there and writes target/cores/ROW.core with gcore before the row runs (gcore's own `Saved corefile` line is in no golden); a core is never committed",
+  "session": "core-{gcc,clang}-segv, core-{gcc,clang}-break, core-{gcc,clang}-threads, core-wolf-recursion, core-wolf-trap (at `break __wolf_rt_trap_at`), core-gcc-registers-match (golden_of value-gcc-registers' register lines), core-gcc-dash-c, core-gcc-no-prog, core-gcc-file-command, core-gcc-file-drop, core-gcc-detach, core-gcc-refuse-{step,next,stepi,finish,until,continue,kill,signal}, core-gcc-missing, core-gcc-truncated, core-gcc-mismatch, core-static-{segv,threads} on the PAX set",
+  "dump": "dump-notes over every core the session rows make",
+  "reader_units": "hostile cores built in the reader's unit tests: each CoreError by name, a note past its segment, a name without its NUL, a PT_NOTE with p_align 16, an NT_FILE count whose table does not fit, a PT_LOAD past the file, p_filesz above p_memsz",
+  "red_first": "at trunk 60411374 sniff ignores a second argument and has no dump --notes, so every session and dump row is red until the reader and the session land",
+  "plant": "the note padding rounded to 8 where p_align is not 8: every gcore'd core's notes misread, the dump and session rows red"
+ },
+ "honesty": [
+  "Every number above is from one take of each scenario; the rows take every core afresh and hold only gdb's text over it.",
+  "Kernel-written cores are not measured: their PT_NOTE alignment, segment tails and note order are predictions with the falsifiers above, to be taken where a core pattern allows.",
+  "lldb's Mach-O cores are measured only at breakpoint stops; the crash case is not."
+ ]
+}
