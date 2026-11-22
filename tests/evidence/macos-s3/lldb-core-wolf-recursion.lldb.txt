@@ -1,0 +1,33 @@
+(lldb) target create "/Users/mfwolffe/lanes/sn08/build-c4b3f882c16f98ea3365fa380536676c840a503b/target/session-fixtures/wolf/recursion/wolf-debug/prog" --core "/Users/mfwolffe/lanes/sn08/build-c4b3f882c16f98ea3365fa380536676c840a503b/target/s3c/cores/wolf-depth.core"
+Core file '/Users/mfwolffe/lanes/sn08/build-c4b3f882c16f98ea3365fa380536676c840a503b/target/s3c/cores/wolf-depth.core' (arm64) was loaded.
+(lldb) command source -s 0 '/Users/mfwolffe/lanes/sn08/build-c4b3f882c16f98ea3365fa380536676c840a503b/target/s3c/lldb-core-wolf-recursion.lldb'
+Executing commands in '/Users/mfwolffe/lanes/sn08/build-c4b3f882c16f98ea3365fa380536676c840a503b/target/s3c/lldb-core-wolf-recursion.lldb'.
+(lldb) process status
+Process 0 stopped
+* thread #1, stop reason = ESR_EC_BRK_AARCH64 (fault address: 0x0)
+    frame #0: 0x00000001000007e0 prog`depth(n=3) at main.lu:2:5
+   1   	fn depth(n: int) -> int {
+-> 2   	    if n == 0 { return 0 }
+    	    ^
+   3   	    let below = depth(n - 1)
+   4   	    n + below
+   5   	}
+   6   	
+   7   	fn main() -> int {
+(lldb) bt
+* thread #1, stop reason = ESR_EC_BRK_AARCH64 (fault address: 0x0)
+  * frame #0: 0x00000001000007e0 prog`depth(n=3) at main.lu:2:5
+    frame #1: 0x00000001000008a8 prog`main at main.lu:8:5
+    frame #2: 0x000000010000090c prog`main + 24
+    frame #3: 0x000000018ce4bda4 dyld`start + 6992
+(lldb) frame variable n
+(long) n = 3
+(lldb) up
+frame #1: 0x00000001000008a8 prog`main at main.lu:8:5
+   5   	}
+   6   	
+   7   	fn main() -> int {
+-> 8   	    let total = depth(3)
+    	    ^
+   9   	    total - 6
+   10  	}

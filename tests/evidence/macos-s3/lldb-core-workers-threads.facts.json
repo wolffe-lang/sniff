@@ -1,0 +1,1 @@
+[["died", "SIGTRAP"], ["thread", 1, "spin", "main.c", 46], ["thread", 2, "spin", "main.c", 46], ["thread", 3, "spin", "main.c", 46], ["thread", 4, "work", "main.c", 62], ["frame", 0, "work", "main.c", 62], ["frame", 1, "worker", "main.c", 73], ["frame", 0, "spin", "main.c", 46], ["frame", 1, "spinner", "main.c", 57]]
