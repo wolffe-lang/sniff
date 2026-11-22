@@ -160,6 +160,92 @@ def core_path(row, fixtures):
     return str(cores_dir(fixtures) / (c['of'] + suffix))
 
 
+XSTATE_WARNING = re.compile(r"warning: Unexpected size of section `\.reg-xstate/[0-9]+' in core file\.")
+
+
+def drop_xstate(err):
+    """gdb's standard error with its xstate-size warning taken out, and the counts: (text, warnings, lines).
+
+    gdb warns `Unexpected size of section `.reg-xstate/LWP' in core file.` when a core's XSAVE note is not the size
+    its own layouts give for the note's features. A host whose XSAVE area is larger than those layouts (a processor
+    with AMX tile state) gets the warning for every core gdb's gcore writes there, so the same core rows differ by it
+    from host to host. Only gdb's standard error passes through here. The exact sentence with a decimal LWP is
+    dropped, and the blank line gdb prints before it when that blank line directly precedes it; nothing else is."""
+    out = []
+    warnings = lines = 0
+    for line in err.splitlines(keepends=True):
+        if XSTATE_WARNING.fullmatch(line.rstrip('\n')):
+            warnings += 1
+            lines += 1
+            if out and out[-1] == '\n':
+                out.pop()
+                lines += 1
+            continue
+        out.append(line)
+    return ''.join(out), warnings, lines
+
+
+def xstate_excess(warnings, threads):
+    """'' when gdb's xstate-size warnings are no more than the threads of the row's core (one XSAVE note each), else
+    the reason: a row with no core has none to warn about."""
+    if warnings <= threads:
+        return ''
+    return 'xstate-size dropped %d warnings, more than the %d threads of its core' % (warnings, threads)
+
+
+def core_facts(path):
+    """From a core's own bytes: its NT_PRSTATUS notes (owner CORE) and the size of its first NT_X86_XSTATE (owner
+    LINUX), walked as src/readers/core.lu walks them (the ELF gABI's notes, laid at 8 when the PT_NOTE says 8 and
+    at 4 otherwise); (0, 0) for a file that is not a whole ELF64 core."""
+    try:
+        data = Path(path).read_bytes()
+    except OSError:
+        return 0, 0
+    up = lambda n, a: (n + a - 1) // a * a
+    try:
+        if data[:4] != b'\x7fELF' or data[4] != 2 or struct.unpack_from('<H', data, 16)[0] != 4:
+            return 0, 0
+        phoff = struct.unpack_from('<Q', data, 32)[0]
+        phentsize, phnum = struct.unpack_from('<HH', data, 54)
+        threads = xstate = 0
+        for i in range(phnum):
+            at = phoff + i * phentsize
+            if struct.unpack_from('<I', data, at)[0] != 4:
+                continue
+            off, size, align = (struct.unpack_from('<Q', data, at + k)[0] for k in (8, 32, 48))
+            if off + size > len(data):
+                return 0, 0
+            a = 8 if align == 8 else 4
+            k = 0
+            while k + 12 <= size:
+                namesz, descsz, kind = struct.unpack_from('<III', data, off + k)
+                name = data[off + k + 12:off + k + 12 + namesz].rstrip(b'\0')
+                desc = up(k + 12 + namesz, a)
+                if name == b'CORE' and kind == 1:
+                    threads += 1
+                if name == b'LINUX' and kind == 0x202 and not xstate:
+                    xstate = descsz
+                k = up(desc + descsz, a)
+        return threads, xstate
+    except struct.error:
+        return 0, 0
+
+
+def row_threads(row, fixtures):
+    """The threads of the core a row reads (0 for a row with no core, or a core missing by design)."""
+    c = row.get('core')
+    if not c or c.get('file') == 'missing':
+        return 0
+    return core_facts(core_path(row, fixtures))[0]
+
+
+def xstate_note(dropped):
+    """The evidence line for the rows whose gdb text needed the xstate-size rule, or ''."""
+    if not dropped:
+        return ''
+    return 'xstate-size dropped %d lines on rows %s' % (sum(dropped.values()), ','.join(sorted(dropped)))
+
+
 def core_tail(row, prog, fixtures):
     """What follows the script on a core row's command line, in the row's form."""
     core = core_path(row, fixtures)
@@ -577,6 +663,7 @@ def cmd_capture(a):
     no_core = make_cores([r for r in rows if not r.get('golden_of') and (a.include_skipped or not r.get('skip'))],
                          a.gdb, a.fixtures, work)
     fails = 0
+    dropped = {}
     for row in rows:
         if row.get('skip') and not a.include_skipped:
             print('SKIP ' + row['name'] + ' reason=' + row['skip'])
@@ -603,12 +690,22 @@ def cmd_capture(a):
             else:
                 script = write_script(core_script(row, a.fixtures), work)
                 out, err, rc = run_tool(gdb_argv(a.gdb, row, script, prog_path(a.fixtures, row), a.fixtures), work, 120)
+            err, warnings, lines = drop_xstate(err)
+            excess = xstate_excess(warnings, row_threads(row, a.fixtures))
+            if excess:
+                print('FAIL %s %s' % (row['name'], excess))
+                fails += 1
+                continue
+            if lines:
+                dropped[row['name']] = lines
             fired = set()
             o = normalize(out, fired, row)
             e = normalize(err, fired, row)
         for path, text in zip(golden_paths(row), (o, e, str(rc) + '\n')):
             path.write_text(text)
         print('CAPTURE ' + row['name'] + ' rc=' + str(rc))
+    if dropped:
+        print(xstate_note(dropped))
     return 1 if fails else 0
 
 
@@ -747,6 +844,7 @@ def cmd_oracle(a):
     fails = 0
     rows = load_rows(a.only)
     no_core = make_cores([r for r in rows if not r.get('skip') and not r.get('golden_of')], a.gdb, a.fixtures, work)
+    dropped = {}
     for row in rows:
         if row.get('skip'):
             print('SKIP ' + row['name'] + ' reason=' + row['skip'])
@@ -772,7 +870,15 @@ def cmd_oracle(a):
             else:
                 script = write_script(core_script(row, a.fixtures), work)
                 out, err, rc = run_tool(gdb_argv(a.gdb, row, script, prog_path(a.fixtures, row), a.fixtures), work, 120)
-            got = (normalize(out, fired, row), normalize(err, fired, row), str(rc) + '\n')
+            kept, warnings, lines = drop_xstate(err)
+            excess = xstate_excess(warnings, row_threads(row, a.fixtures))
+            if excess:
+                print('FAIL oracle-drift %s %s' % (row['name'], excess))
+                fails += 1
+                continue
+            if lines:
+                dropped[row['name']] = lines
+            got = (normalize(out, fired, row), normalize(kept, fired, row), str(rc) + '\n')
         want = tuple(p.read_text() for p in golden_paths(row))
         if got != want:
             names = ('stdout', 'stderr', 'exit')
@@ -781,6 +887,8 @@ def cmd_oracle(a):
             fails += 1
         else:
             print('PASS oracle-stable ' + row['name'])
+    if dropped:
+        print(xstate_note(dropped))
     return 1 if fails else 0
 
 
