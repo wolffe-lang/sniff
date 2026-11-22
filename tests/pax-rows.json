@@ -34,6 +34,13 @@
   "tty-gcc-attach": {
    "skip": "the console's terminal rows run sniff as init, with no shell to start the sleeper it attaches to; the batch attach rows hold attach and detach at PAX's console",
    "gap": "harness"
+  },
+  "core-gcc-mismatch": {
+   "drop": [
+    "^$",
+    "^warning: Error reading shared library list entry at 0x"
+   ],
+   "why": "a static program over another program's core: gdb keeps the program's symbols and reads the C library's list of loaded objects at the program's _r_debug in that core's memory, where the other program keeps something else; sniff reads no such list for a static program, so gdb's warning about the list and the blank line before it are dropped"
   }
  },
  "probes": {
