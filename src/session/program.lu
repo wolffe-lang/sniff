@@ -90,6 +90,9 @@ struct Prog {
     pub interp: bool,
     /// The interpreter's path as the file names it (`/lib64/ld-linux-x86-64.so.2`), or "".
     pub interp_path: str,
+    /// The build ID (the descriptor of .note.gnu.build-id) in data, length 0 for none, and its file address.
+    pub build_id: readers.ByteSpan,
+    pub build_id_addr: u64,
 }
 
 /// Bytes of a span as text; invalid UTF-8 yields the empty string.
@@ -122,7 +125,7 @@ fn prog_failed(why: str) -> Prog {
             line_str: copy sec, str_offsets: copy sec, addr: copy sec, ranges: copy sec, rnglists: copy sec,
             loc: copy sec, loclists: copy sec, frame: copy sec, eh_frame: copy sec, types: copy sec,
             has_split_dwarf: false, has_compact_unwind: false },
-        text_addr: 0, ui_off: 0, ui_size: 0, dsym: "", interp: false, interp_path: "",
+        text_addr: 0, ui_off: 0, ui_size: 0, dsym: "", interp: false, interp_path: "", build_id: copy none, build_id_addr: 0,
     }
 }
 
@@ -357,6 +360,17 @@ fn prog_load(path: str) -> Prog {
         let sec = copy elf.sections[m]
         if (sec.flags & 2) != 0 && sec.kind != 8 && sec.size > 0 {
             (mut p.maps).push(SecMap { addr: sec.address, off: sec.offset, size: sec.size })
+        }
+        if span_text(data, sec.name) == ".note.gnu.build-id" && sec.size >= 16 && sec.offset + sec.size <= data.len as u64 {
+            // namesz, descsz, type, the name padded to 4, then the descriptor
+            let at = sec.offset as int
+            let namesz = (data[at] as int) | (data[at + 1] as int << 8)
+            let descsz = (data[at + 4] as int) | (data[at + 5] as int << 8)
+            let rel = 12 + (namesz + 3) / 4 * 4
+            if rel + descsz <= sec.size as int {
+                p.build_id = readers.ByteSpan { start: at + rel, length: descsz }
+                p.build_id_addr = sec.address + rel as u64
+            }
         }
         if span_text(data, sec.name) == ".interp" {
             p.interp = true

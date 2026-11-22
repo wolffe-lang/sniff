@@ -72,7 +72,7 @@ fn reg_slot(name: str) -> int {
 /// The value of register `name` in the selected frame (frame 0 reads the live registers).
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 fn reg_value(s: Session, name: str) -> Val {
-    if !s.alive { return val_fail("No registers.") }
+    if !has_stack(s) { return val_fail("No registers.") }
     let slot = reg_slot(name)
     if slot < 0 { return val_fail("Invalid register `{name}'") }
     let raw = src_regs(s)
@@ -117,7 +117,7 @@ fn reg_slot(name: str) -> int {
 /// The value of register `name` in the selected frame (frame 0 reads the live registers).
 #[cfg(target = "aarch64-apple-darwin")]
 fn reg_value(s: Session, name: str) -> Val {
-    if !s.alive { return val_fail("No registers.") }
+    if !has_stack(s) { return val_fail("No registers.") }
     let slot = reg_slot(name)
     if slot < 0 { return val_fail("Invalid register `{name}'") }
     let raw = src_regs(s)
@@ -135,7 +135,7 @@ fn reg_value(s: Session, name: str) -> Val {
 }
 
 fn find_var(s: Session, name: str) -> Val {
-    if !s.alive || s.sel >= s.frames.len { return val_fail("") }
+    if !has_stack(s) || s.sel >= s.frames.len { return val_fail("") }
     let fr = copy s.frames[s.sel]
     var tags: List[u64] = [tag_variable, tag_formal]
     var t = 0
@@ -433,7 +433,7 @@ fn flags_text(v: u64) -> str {
 /// info registers [names]
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 fn cmd_info_registers(mut s: Session, rest: str) -> str {
-    if !s.alive { return "The program has no registers now." }
+    if !has_stack(s) { return "The program has no registers now." }
     var names: List[str] = ["rax", "rbx", "rcx", "rdx", "rsi", "rdi", "rbp", "rsp", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15", "rip", "eflags", "cs", "ss", "ds", "es", "fs", "gs", "fs_base", "gs_base"]
     let want = rest.trim()
     if want.len() > 0 {
@@ -477,7 +477,7 @@ fn cpsr_text(v: u64) -> str {
 /// info registers [names]: x0-x30, sp, pc, cpsr, fpsr and fpcr, in gdb's aarch64 layout.
 #[cfg(target = "aarch64-apple-darwin")]
 fn cmd_info_registers(mut s: Session, rest: str) -> str {
-    if !s.alive { return "The program has no registers now." }
+    if !has_stack(s) { return "The program has no registers now." }
     var names: List[str] = []
     var k = 0
     while k <= 30 { (mut names).push("x{k}"); k += 1 }

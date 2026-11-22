@@ -184,7 +184,7 @@ fn list_before(mut s: Session) -> str {
 
 /// `list .`: around the selected frame's line, or around main with no process.
 fn list_here(mut s: Session) -> str {
-    if s.alive {
+    if has_stack(s) {
         if !s.frames_ok { compute_frames(mut s) }
         if s.frames.len > s.sel {
             let sal = find_sal(s.prog, frame_lookup_pc(s, s.sel) - s.base)
@@ -202,7 +202,7 @@ fn list_address(mut s: Session, spec: str) -> str {
     var file_addr = r.addrs[0]
     var shown = r.addrs[0]
     if r.abs { file_addr = to_file_address(s, shown) }
-    else if s.alive { shown = file_addr + s.base }
+    else if has_stack(s) { shown = file_addr + s.base }
     let sal = find_sal(s.prog, file_addr)
     if !sal.ok { return "" }
     let f = func_at(s.prog, file_addr)

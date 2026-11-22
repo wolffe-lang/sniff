@@ -49,13 +49,13 @@ fn print_stop_frame(mut s: Session, header: bool, prefix: str) {
 }
 
 fn need_stack(s: Session) -> str {
-    if !s.alive { return "No stack." }
+    if !has_stack(s) { return "No stack." }
     ""
 }
 
 /// The error for a frame command with no process.
 fn no_frame(s: Session) -> str {
-    if !s.alive { return "No frame selected." }
+    if !has_stack(s) { return "No frame selected." }
     ""
 }
 
@@ -87,7 +87,7 @@ fn print_selected(mut s: Session) {
 /// frame [N]
 fn cmd_frame(mut s: Session, rest: str) -> str {
     let t = rest.trim()
-    if !s.alive {
+    if !has_stack(s) {
         if t.len() == 0 { return "No stack." }
         return "No registers."
     }
@@ -174,7 +174,7 @@ fn block_contains(s: Session, b: int, pc: u64) -> bool {
 
 /// info locals
 fn cmd_info_locals(mut s: Session) -> str {
-    if !s.alive { return "No frame selected." }
+    if !has_stack(s) { return "No frame selected." }
     let fr = copy s.frames[s.sel]
     if fr.func < 0 { emit_line(mut s, "No symbol table info available."); return "" }
     let vars = visible_vars(s, fr, s.sel, tag_variable)
@@ -190,7 +190,7 @@ fn cmd_info_locals(mut s: Session) -> str {
 
 /// info args
 fn cmd_info_args(mut s: Session) -> str {
-    if !s.alive { return "No frame selected." }
+    if !has_stack(s) { return "No frame selected." }
     let fr = copy s.frames[s.sel]
     if fr.func < 0 { emit_line(mut s, "No symbol table info available."); return "" }
     let vars = visible_vars(s, fr, s.sel, tag_formal)

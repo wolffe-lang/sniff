@@ -145,7 +145,7 @@ fn unit_is_wolf(p: Prog, ui: int) -> bool {
 
 /// The expression mode of the selected frame: wolf when its function's unit is wolf's.
 fn frame_is_wolf(s: Session) -> bool {
-    if !s.alive || s.sel >= s.frames.len { return false }
+    if !has_stack(s) || s.sel >= s.frames.len { return false }
     let f = s.frames[s.sel].func
     if f < 0 { return false }
     unit_is_wolf(s.prog, s.prog.funcs[f].unit)
@@ -962,7 +962,7 @@ fn find_global(s: Session, name: str) -> Val {
                         let at = a + s.base
                         let ty = attr_ref(s.prog, e, 73)
                         let size = ty_size(s.prog, ty)
-                        if !s.alive {
+                        if !has_stack(s) {
                             let b = file_bytes_at(s.prog, a, size)
                             if b.len == size { return Val { ok: true, why: "", ty: ty, bytes: b, addr: a, has_addr: true, reg: -1 } }
                             return val_fail("Cannot access memory at address 0x{a:x}")

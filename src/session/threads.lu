@@ -61,7 +61,8 @@ fn thr_target_id(mut s: Session, i: int) -> str {
         let tls = thr_tls(mut s, i)
         return "Thread 0x{tls:x} (LWP {s.thr[i].tid})"
     }
-    if s.thr_multi { return "LWP {s.thr[i].tid}" }
+    // a core's threads are its notes' LWPs, one or many
+    if s.thr_multi || s.core_on { return "LWP {s.thr[i].tid}" }
     "process {s.inferior.pid}"
 }
 
@@ -352,7 +353,7 @@ fn pad_to(t: str, w: int) -> str {
 
 /// info threads [ID...]
 fn cmd_info_threads(mut s: Session, rest: str) -> str {
-    if !s.alive || s.thr.len == 0 {
+    if !has_stack(s) || s.thr.len == 0 {
         emit_line(mut s, "No threads.")
         return ""
     }
@@ -373,7 +374,7 @@ fn cmd_info_threads(mut s: Session, rest: str) -> str {
     var width = 9
     for k in rows {
         let id = thr_target_id(mut s, k)
-        let t = "{id} \"{thr_name(s, k)}\""
+        let t = if s.core_on { id } else { "{id} \"{thr_name(s, k)}\"" }
         if t.len() > width { width = t.len() }
         (mut ids).push(t)
     }
@@ -396,7 +397,7 @@ fn cmd_thread(mut s: Session, rest: str) -> str {
         return not_implemented("thread {t.words()[0]}")
     }
     if t.len() == 0 {
-        if !s.alive || s.thr.len == 0 { return "No thread selected" }
+        if !has_stack(s) || s.thr.len == 0 { return "No thread selected" }
         let id = thr_target_id(mut s, s.thr_cur)
         emit_line(mut s, "[Current thread is {s.thr[s.thr_cur].num} ({id})]")
         return ""
@@ -406,7 +407,7 @@ fn cmd_thread(mut s: Session, rest: str) -> str {
     var k = 0 - 1
     var i = 0
     while i < s.thr.len {
-        if s.alive && s.thr[i].num == n.addr as int { k = i }
+        if has_stack(s) && s.thr[i].num == n.addr as int { k = i }
         i += 1
     }
     if k < 0 { return "Unknown thread {t}." }

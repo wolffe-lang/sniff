@@ -230,7 +230,7 @@ fn compute_frames(mut s: Session) {
     s.frames = []
     s.frames_ok = true
     s.sel = 0
-    if !s.alive { return }
+    if !has_stack(s) { return }
     let raw = src_regs(s)
     let regs = dwarf_regs(raw)
     if regs.len != platform.arch_ncols() { return }

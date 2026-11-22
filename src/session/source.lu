@@ -1,20 +1,56 @@
 // What a stopped program answers: its memory, the selected thread's registers and a thread's thread
-// pointer. Every read the session makes of the program goes through these, so that something other than a
-// live process (a core file) can answer them; today each asks the platform.
+// pointer. Every read the session makes of the program goes through these: a core file answers them when the
+// session has one (core.lu), the platform's process otherwise.
 
 use platform
 
 /// n bytes of the program's memory at addr.
-fn src_read(s: Session, addr: u64, n: int) -> platform.Bytes { platform.target_read(s.target, addr, n) }
+fn src_read(s: Session, addr: u64, n: int) -> platform.Bytes {
+    if s.core_on { return core_mem(s, addr, n) }
+    platform.target_read(s.target, addr, n)
+}
 
 /// The selected thread's registers, in the platform's order.
-fn src_regs(s: Session) -> List[u64] { platform.target_regs(s.target) }
+fn src_regs(s: Session) -> List[u64] {
+    if s.core_on {
+        if s.thr_cur < s.core_thr.len { return copy s.core_thr[s.thr_cur].regs }
+        return []
+    }
+    platform.target_regs(s.target)
+}
 
 /// The thread pointer of thread tid.
-fn src_thread_pointer_of(s: Session, tid: int) -> u64 { platform.target_thread_pointer_of(s.inferior, tid) }
+fn src_thread_pointer_of(s: Session, tid: int) -> u64 {
+    if s.core_on {
+        var i = 0
+        while i < s.core_thr.len {
+            if s.core_thr[i].pid == tid && s.core_thr[i].regs.len > platform.reg_fs_base {
+                return s.core_thr[i].regs[platform.reg_fs_base]
+            }
+            i += 1
+        }
+        return 0
+    }
+    platform.target_thread_pointer_of(s.inferior, tid)
+}
 
 /// The selected thread's xmm0 (a returned float or double).
-fn src_xmm0(s: Session) -> List[byte] { platform.target_xmm0(s.target) }
+fn src_xmm0(s: Session) -> List[byte] {
+    if s.core_on {
+        // fxsave's layout: xmm0 is the 16 bytes at 160 of NT_FPREGSET
+        var out: List[byte] = []
+        if s.thr_cur < s.core_thr.len && s.core_thr[s.thr_cur].fpregs.length >= 176 {
+            let at = s.core_thr[s.thr_cur].fpregs.start + 160
+            var i = 0
+            while i < 16 { (mut out).push(s.core_data[at + i]); i += 1 }
+        }
+        return out
+    }
+    platform.target_xmm0(s.target)
+}
 
 /// The selected thread's floating-point status registers (empty where the platform has none to show).
-fn src_fp_status(s: Session) -> List[u64] { platform.target_fp_status(s.target) }
+fn src_fp_status(s: Session) -> List[u64] {
+    if s.core_on { return [] }
+    platform.target_fp_status(s.target)
+}

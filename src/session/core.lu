@@ -1,0 +1,278 @@
+// A core file in place of a process (S7): the GDB manual's "Commands to Specify Files". The core is a stopped
+// program's threads, registers and memory, read by readers.core_read; every command that inspects a stop answers
+// from it through source.lu, and every command that needs a process is refused as gdb words it. Memory is a
+// PT_LOAD's bytes; else, for an address an NT_FILE range covers, that file's bytes (gcore leaves a library's
+// unmodified text and read-only data out of the core), the program's from the program the session was given and
+// the others' from the paths the note names; else nothing ("Cannot access memory at address 0x...").
+
+use platform
+use readers
+
+/// The file an NT_FILE entry maps: its path, whether it is the program's (the file whose range holds the
+/// auxiliary vector's AT_ENTRY), and its bytes when it is not (empty when it could not be read).
+struct CoreMapFile {
+    pub name: str,
+    pub prog: bool,
+    pub data: List[byte],
+}
+
+/// AT_ENTRY: the program's entry point as the kernel started it.
+const at_entry: int = 9
+
+/// Whether there is a stack to inspect: a stopped process, or a core.
+fn has_stack(s: Session) -> bool { s.alive || s.core_on }
+
+fn core_none() -> readers.CoreFile { readers.CoreFile { segments: [], note_segments: [], notes: [] } }
+
+/// The bytes at addr, at most want of them, from the one place that holds addr; empty when none does.
+fn core_piece(s: Session, addr: u64, want: int) -> List[byte] {
+    var out: List[byte] = []
+    var i = 0
+    while i < s.core.segments.len {
+        let g = copy s.core.segments[i]
+        if addr >= g.vaddr && addr - g.vaddr < g.memsz {
+            let into = addr - g.vaddr
+            if into < g.filesz {
+                var k = (g.filesz - into) as int
+                if k > want { k = want }
+                let at = (g.offset + into) as int
+                var j = 0
+                while j < k { (mut out).push(s.core_data[at + j]); j += 1 }
+                return out
+            }
+            // past the segment's file bytes: the file mapped there, else zeros (anonymous memory)
+            let f = core_file_piece(s, addr, want)
+            if f.len > 0 { return f }
+            var k = (g.memsz - into) as int
+            if k > want { k = want }
+            var j = 0
+            while j < k { (mut out).push(0 as byte); j += 1 }
+            return out
+        }
+        i += 1
+    }
+    core_file_piece(s, addr, want)
+}
+
+/// The bytes at addr from the file an NT_FILE range maps there; empty when no range does or the file is not read.
+fn core_file_piece(s: Session, addr: u64, want: int) -> List[byte] {
+    var out: List[byte] = []
+    var i = 0
+    while i < s.core_maps.len {
+        let m = copy s.core_maps[i]
+        if addr >= m.start && addr < m.end {
+            let fi = s.core_map_file[i]
+            if fi < 0 { return out }
+            let at = m.offset + (addr - m.start)
+            var k = (m.end - addr) as int
+            if k > want { k = want }
+            if s.core_files[fi].prog {
+                if at > s.prog.data.len as u64 { return out }
+                let left = s.prog.data.len - at as int
+                if k > left { k = left }
+                var j = 0
+                while j < k { (mut out).push(s.prog.data[at as int + j]); j += 1 }
+                return out
+            }
+            if at > s.core_files[fi].data.len as u64 { return out }
+            let left = s.core_files[fi].data.len - at as int
+            if k > left { k = left }
+            var j = 0
+            while j < k { (mut out).push(s.core_files[fi].data[at as int + j]); j += 1 }
+            return out
+        }
+        i += 1
+    }
+    out
+}
+
+/// n bytes of the core's memory at addr, gathered across the places that hold them.
+fn core_mem(s: Session, addr: u64, n: int) -> platform.Bytes {
+    var out: List[byte] = []
+    var a = addr
+    var left = n
+    while left > 0 {
+        let got = core_piece(s, a, left)
+        if got.len == 0 { return platform.Bytes { ok: false, data: out } }
+        for b in got { (mut out).push(b) }
+        left -= got.len
+        if left > 0 {
+            if a > 18446744073709551615 - got.len as u64 { return platform.Bytes { ok: false, data: out } }
+            a += got.len as u64
+        }
+    }
+    platform.Bytes { ok: true, data: out }
+}
+
+/// The file NT_FILE maps at addr and the lowest start of that file's ranges, as /proc/PID/maps gives them for a
+/// process; none for the program's own file, or when the session has no program (gdb finds no library then).
+fn core_mapped_at(s: Session, addr: u64) -> Mapped {
+    let none = Mapped { path: "", base: 0 }
+    if s.prog.data.len == 0 { return none }
+    var i = 0
+    var name = ""
+    while i < s.core_maps.len {
+        let m = copy s.core_maps[i]
+        if addr >= m.start && addr < m.end {
+            let fi = s.core_map_file[i]
+            if fi < 0 || s.core_files[fi].prog { return none }
+            name = s.core_files[fi].name
+        }
+        i += 1
+    }
+    if name.len() == 0 { return none }
+    var base: u64 = 0
+    var found = false
+    i = 0
+    while i < s.core_maps.len {
+        let fi = s.core_map_file[i]
+        if fi >= 0 && s.core_files[fi].name == name && (!found || s.core_maps[i].start < base) {
+            base = s.core_maps[i].start
+            found = true
+        }
+        i += 1
+    }
+    Mapped { path: name, base: base }
+}
+
+/// The name gdb gives the library a frame's pc is in, from the core's mapped files ("" for none).
+fn core_solib_of(s: Session, pc: u64) -> str {
+    let m = core_mapped_at(s, pc)
+    if m.path.len() == 0 { return "" }
+    solib_name(s, m.path)
+}
+
+/// The bytes of a span of the core as text, up to its end (invalid UTF-8 gives "").
+fn core_text(s: Session, span: readers.ByteSpan) -> str {
+    var b: List[byte] = []
+    var i = 0
+    while i < span.length { (mut b).push(s.core_data[span.start + i]); i += 1 }
+    var n = b.len
+    while n > 0 && b[n - 1] as int == 32 { n -= 1 }
+    str_from_utf8(b[0..n]) else { "" }
+}
+
+/// Whether the core holds the build ID the program carries, at the program's load address: gdb drops a
+/// program whose build ID is not the core's. A program with no build ID is kept.
+fn core_build_id_matches(s: Session) -> bool {
+    if s.prog.build_id.length == 0 { return true }
+    let r = core_mem(s, s.prog.build_id_addr + s.base, s.prog.build_id.length)
+    if !r.ok { return false }
+    var i = 0
+    while i < r.data.len {
+        if r.data[i] != s.prog.data[s.prog.build_id.start + i] { return false }
+        i += 1
+    }
+    true
+}
+
+/// Leave the core: the session has no stack until a program runs or another core is read.
+fn core_drop(mut s: Session) {
+    s.core_on = false
+    s.core_path = ""
+    s.core_data = []
+    s.core = core_none()
+    s.core_thr = []
+    s.core_maps = []
+    s.core_map_file = []
+    s.core_files = []
+    s.thr = []
+    s.thr_cur = 0
+    s.frames = []
+    s.frames_ok = false
+    s.sel = 0
+    s.libs = []
+}
+
+/// Read the core at path in place of any process or core, and print what gdb prints when it reads one: a
+/// `[New LWP N]` line for each thread, the program's arguments, its signal, then the stop as a frame line and
+/// its source line (and, with more than one thread, the thread it is). Returns "" or gdb's refusal.
+fn core_load(mut s: Session, path: str) -> str {
+    let size = fs_size(path) else |_| { return "{path}: No such file or directory." }
+    if size > 1073741824 { return "\"{path}\" is not a core dump: file format not recognized" }
+    let data = fs_read_bytes(path) else |_| { return "{path}: No such file or directory." }
+    let c = readers.core_read(data, 65536, 65536, 50000000) else |_| {
+        return "\"{path}\" is not a core dump: file format not recognized"
+    }
+    let threads = readers.core_threads(data, c) else |_| { return "\"{path}\" is not a core dump: file format not recognized" }
+    if threads.len == 0 { return "\"{path}\" is not a core dump: file format not recognized" }
+    let ps = readers.core_psinfo(data, c) else |_| { readers.CorePsinfo { pid: 0, fname: readers.ByteSpan { start: 0, length: 0 }, psargs: readers.ByteSpan { start: 0, length: 0 } } }
+    let maps = readers.core_files(data, c, 65536, 50000000) else |_| { [] }
+    let entry = readers.core_auxv(data, c, at_entry as u64)
+    if s.alive { kill_process(mut s) }
+    core_drop(mut s)
+    s.core_on = true
+    s.core_path = path
+    s.core = c
+    s.core_data = data
+    s.core_thr = copy threads
+    s.core_maps = maps
+    // the program's file: the one whose range holds the entry point
+    var prog_name = ""
+    var i = 0
+    while i < s.core_maps.len {
+        if entry >= s.core_maps[i].start && entry < s.core_maps[i].end { prog_name = core_text(s, s.core_maps[i].name) }
+        i += 1
+    }
+    i = 0
+    while i < s.core_maps.len {
+        let name = core_text(s, s.core_maps[i].name)
+        var fi = 0 - 1
+        var k = 0
+        while k < s.core_files.len {
+            if s.core_files[k].name == name { fi = k }
+            k += 1
+        }
+        if fi < 0 && name.len() > 0 {
+            let is_prog = name == prog_name
+            if is_prog {
+                (mut s.core_files).push(CoreMapFile { name: name, prog: true, data: [] })
+            } else {
+                let bytes = fs_read_bytes(name) else { [] }
+                (mut s.core_files).push(CoreMapFile { name: name, prog: false, data: bytes })
+            }
+            fi = s.core_files.len - 1
+        }
+        (mut s.core_map_file).push(fi)
+        i += 1
+    }
+    s.base = 0
+    if s.prog.pie && entry >= s.prog.entry { s.base = entry - s.prog.entry }
+    if s.prog.data.len > 0 && !core_build_id_matches(s) {
+        s.prog = prog_failed("")
+        s.cfi = []
+        s.base = 0
+    }
+    // the threads, numbered in note order: the first is the one that stopped
+    i = 0
+    while i < threads.len {
+        var tls: u64 = 0
+        if threads[i].regs.len > platform.reg_fs_base { tls = threads[i].regs[platform.reg_fs_base] }
+        (mut s.thr).push(Thr { num: i + 1, tid: threads[i].pid, tls: tls, running: false, pending: 0 - 1, expect_stop: false })
+        i += 1
+    }
+    s.thr_cur = 0
+    s.thr_next = threads.len + 1
+    s.thr_multi = threads.len > 1
+    s.thr_prev = threads[0].pid
+    for t in threads { emit_line(mut s, "[New LWP {t.pid}]") }
+    emit_line(mut s, "Core was generated by `{core_text(s, ps.psargs)}'.")
+    let sig = threads[0].cursig
+    emit_line(mut s, "Program terminated with signal {signal_name(sig)}, {signal_description(sig)}.")
+    print_stop_frame(mut s, true, "#0  ")
+    if threads.len > 1 {
+        let id = thr_target_id(mut s, 0)
+        emit_line(mut s, "[Current thread is 1 ({id})]")
+    }
+    ""
+}
+
+/// core-file [FILE]: read FILE as the core, or with no FILE drop the core (gdb prints nothing in batch).
+fn cmd_core_file(mut s: Session, rest: str) -> str {
+    let path = rest.trim()
+    if path.len() == 0 {
+        if s.core_on { core_drop(mut s) }
+        return ""
+    }
+    core_load(mut s, path)
+}
