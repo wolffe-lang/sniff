@@ -115,6 +115,14 @@ class XstateSize(unittest.TestCase):
         self.assertIn('xstate-size', session.xstate_excess(2, 1))
         self.assertIn('xstate-size', session.xstate_excess(1, 0))
 
+    def test_host_facts_and_kept_drift(self):
+        facts = session.host_facts()
+        self.assertRegex(facts, r'^HOST kernel=\S+ cpu=\S+ flags=\S+$')
+        with tempfile.TemporaryDirectory() as d:
+            path = session.keep_drift('core-gcc-segv', 'out\n', '\n' + self.W, d)
+            self.assertEqual(path.read_text(), '\n' + self.W)
+            self.assertEqual((Path(d) / 'core-gcc-segv.out').read_text(), 'out\n')
+
     def test_core_facts(self):
         with tempfile.TemporaryDirectory() as d:
             path = Path(d) / 'c.core'

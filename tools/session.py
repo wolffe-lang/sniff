@@ -239,6 +239,34 @@ def row_threads(row, fixtures):
     return core_facts(core_path(row, fixtures))[0]
 
 
+def host_facts():
+    """The kernel and the processor a take's cores were written on: gcore writes each thread's XSAVE area at the
+    size the host gives it, so the facts behind any xstate-size line. Linux's /proc/cpuinfo; '-' where it is not."""
+    model = flags = ''
+    try:
+        for line in Path('/proc/cpuinfo').read_text().splitlines():
+            key, _, value = line.partition(':')
+            key = key.strip()
+            if key == 'model name' and not model:
+                model = value.strip()
+            if key == 'flags' and not flags:
+                have = set(value.split())
+                flags = ','.join(f for f in ('xsave', 'avx2', 'avx512f', 'amx_tile', 'amx_bf16', 'amx_int8') if f in have)
+    except OSError:
+        pass
+    return 'HOST kernel=%s cpu=%s flags=%s' % (os.uname().release, re.sub(r'\s+', '_', model) or '-', flags or '-')
+
+
+def keep_drift(name, out, err, where=None):
+    """gdb's whole output for a row that drifted, before any normalisation, kept where the gate's evidence is
+    (target/gate/oracle-drift/NAME.out and .err), so the next difference is read rather than inferred."""
+    d = Path(where) if where else ROOT / 'target/gate/oracle-drift'
+    d.mkdir(parents=True, exist_ok=True)
+    (d / (name + '.out')).write_text(out)
+    (d / (name + '.err')).write_text(err)
+    return d / (name + '.err')
+
+
 def xstate_note(dropped):
     """The evidence line for the rows whose gdb text needed the xstate-size rule, or ''."""
     if not dropped:
@@ -277,6 +305,7 @@ def make_cores(rows, gdb, fixtures, work, timeout=120):
     d = cores_dir(fixtures)
     d.mkdir(parents=True, exist_ok=True)
     bad = set()
+    print(host_facts())
     for name in want:
         c = table[name]
         prog = Path(fixtures) / c['prog']
@@ -295,7 +324,9 @@ def make_cores(rows, gdb, fixtures, work, timeout=120):
                 bad.add(name)
                 continue
             os.replace(part, path)
-            print('CORE %s bytes=%d secs=%.1f' % (name, path.stat().st_size, time.time() - start))
+            threads, xstate = core_facts(path)
+            print('CORE %s bytes=%d secs=%.1f threads=%d xstate=%d' % (name, path.stat().st_size, time.time() - start,
+                                                                     threads, xstate))
         if any(r.get('core', {}).get('of') == name and r['core'].get('file') == 'truncated' for r in rows):
             (d / (name + '.truncated.core')).write_bytes(path.read_bytes()[:4096])
         missing = d / (name + '.missing.core')
@@ -884,6 +915,8 @@ def cmd_oracle(a):
             names = ('stdout', 'stderr', 'exit')
             why = '; '.join(n + ' ' + first_diff(w, g) for n, g, w in zip(names, got, want) if g != w)
             print('FAIL oracle-drift ' + row['name'] + ' ' + why)
+            if not row.get('tty'):
+                print('KEPT %s' % keep_drift(row['name'], out, err).relative_to(ROOT))
             fails += 1
         else:
             print('PASS oracle-stable ' + row['name'])
