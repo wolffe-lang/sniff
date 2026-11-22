@@ -21,6 +21,8 @@ step symbol-oracle-unit python3 -I tests/test_symbol_oracle.py
 step gate-switch-unit python3 -I tests/test_gate_switch.py
 step reader-runner-unit python3 -I tests/test_reader_runner.py
 step tier-planner python3 -I ci/tiers-test.py
+step version-rows python3 -I tools/check-version --self-test
+step version python3 -I tools/check-version
 step session-harness-unit python3 -I tests/test_session.py
 step session-rows-inventory python3 -I tools/session.py verify
 step pax-rows-inventory python3 -I tools/session.py --set pax verify
@@ -44,6 +46,7 @@ wolf=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["tools
 lupin=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["tools"]["lupin"]["root"]+"/lupin")' "$stage/manifest.json")
 step reader-unit python3 -I tools/test-readers.py --wolf "$wolf"
 step sniff-build "$wolf" build src/main.lu --no-cache -o "$root/target/sniff"
+step version-printed python3 -I tools/check-version --bin "$root/target/sniff"
 compilers=(clang)
 [ "$mode" != linux ] || compilers+=(gcc)
 step fixture-builds python3 -I tools/build-fixtures.py --wolf "$wolf" --out "$root/target/fixtures" --compilers "${compilers[@]}"
