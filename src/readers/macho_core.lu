@@ -267,7 +267,7 @@ fn mc_thread(
             t.exception = mc_uint(data, mut c, words + macho_core_exception_exception, 4)?
         }
         flavours += 1
-        k = words + count as int * 4
+        k = words + count as int * 4 - 4
     }
     if t.regs.len == 0 { return macho_core_invalid_thread }
     t
