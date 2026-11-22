@@ -268,3 +268,23 @@ where a program loaded at its own addresses keeps its symbols, as gdb does. `inf
 over a core, which the pinned readelf declines to decode. The rows take every core afresh with the
 pinned gdb's `gcore` and hold sniff to gdb's session over the same core, on the Linux set and, for the static
 builds' cores, at PAX's console.
+
+### Core files (S7, macOS)
+
+`src/readers/macho_core.lu` reads an arm64 MH_CORE as lldb's `process save-core` writes it: its LC_SEGMENT_64
+segments, one LC_THREAD a thread with its flavours walked by their counts (ARM_THREAD_STATE64, ARM_EXCEPTION_STATE64),
+and its LC_NOTEs. The layouts are the SDK's declarations, held by `tools/abi-probe-macos.c`. Two notes have no
+declaration and were derived from lldb's own cores against lldb's `image list` (tests/s7-macho-prediction.json):
+`all image infos`, the images with their paths, UUIDs, load addresses and segments, the program first; and
+`addrable bits`. Every cap (load commands, segments, threads, flavours, a flavour's words, notes, images, a path's
+bytes, an image's segments, the work) is the caller's, and a reader unit row holds each at its value and one past it.
+`src/session/core.lu` reads such a core as a stopped program with the forms an ELF core has. Its segments are its
+memory, and the program's own sections the memory it leaves out. The program is the image list's first image: one
+given whose UUID differs is not placed, and with none placed the file the core names is read. The thread that
+stopped is the one whose exception class is a stop (a breakpoint is SIGTRAP, a data abort SIGSEGV). The system
+libraries' text is in the dyld shared cache, neither in the core nor in a file, so their frames have no name, as live.
+The rows take every core afresh with the pinned lldb, under the take's own directory, capped at 64 MiB and deleted at
+the end of the take; they hold sniff to lldb's facts over the same core. The refusals of run control are held by
+the Linux set's `core-gcc-refuse-*` rows, run over a Mach-O core of the clang build of the same program; anything
+macOS-specific in how a refusal is reached is held by the macOS `expect` rows. Hosted macOS skips these rows by name
+(they need the pinned lldb to write their cores): the Mac's record is their only evidence.

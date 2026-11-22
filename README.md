@@ -4,11 +4,11 @@ A debugger written in [wolf](https://github.com/wolffe-lang/wolf-lang),
 for x86-64 Linux and PAX, and macOS arm64. The command language is GDB's;
 a Debug Adapter Protocol server is planned for editor integration.
 
-**Status: milestones S0 to S6 are met on Linux x86-64, macOS arm64 and PAX; core files (S7) are under way: ELF cores of Linux programs first, then Mach-O cores.** `sniff -batch -x SCRIPT PROG` starts PROG
+**Status: milestones S0 to S6 are met on Linux x86-64, macOS arm64 and PAX; core files (S7) are read on Linux, at PAX's console and on macOS; cores PAX writes itself come next.** `sniff -batch -x SCRIPT PROG` starts PROG
 (under `ptrace(2)` on Linux; as a suspended child with its task port and exception port on macOS) and debugs it with gdb's command language (breakpoints,
 stepping, frames, values, registers, watchpoints, threads (all-stop) and signals, `list` and `help`); `attach PID`, `detach` and
 `sniff -p PID PROG` take a running process instead, and `sniff -batch -x SCRIPT PROG CORE` (or `-c CORE`, or `core-file CORE`) reads
-a Linux core file as a stopped program. It is held to transcripts of the pinned gdb
+a core file as a stopped program: an ELF core of a Linux program, or on macOS a Mach-O core lldb wrote. It is held to transcripts of the pinned gdb
 and, on macOS, to Apple's lldb (facts) and to lupin's values; `sniff dump` still prints the S1 reader views.
 On PAX it is a static program of the dev image and debugs static programs with PAX's ptrace (see notes/sn04-sniff-on-pax.md). [MAP](docs/MAP.md) separates planned
 capabilities from measured ones.
