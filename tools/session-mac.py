@@ -35,6 +35,18 @@ program, the sleeper, as this harness's own child, read its 'ready PID' line, wa
 "hardened" runs a copy signed with the hardened runtime and no get-task-allow: macOS refuses its task port
 to every debugger.
 
+Core rows (a row's "core": NAME, from the "cores" table of tests/macos-rows.json) read a Mach-O core instead of
+starting the program. Each take writes its cores afresh: lldb runs the fixture to the core's stop (or, for a
+"crash" core, runs it until it faults) and saves it with `process save-core` in the core's style, under the take's
+work directory, with RLIMIT_FSIZE at 64 MiB, SHELL=/bin/sh and the work directory's own HOME and TMPDIR. The take
+deletes every core at its end and prints the bytes it left behind. A core row's "form" gives sniff the core as
+`-c CORE PROG` (dash-c, the default), `PROG CORE` (positional) or `-c CORE` alone (dash-c-only); a "file" of missing
+or truncated gives it no file, or the core's first 4096 bytes. lldb is given `-c CORE PROG` (`-c CORE` for
+dash-c-only). Over a core, sniff prints gdb's banner and lldb its `process status`: the stop each prints is a status
+block, no frame fact, and the signal that ended the program is a `died` fact on both sides (lldb names it by the
+exception class: ESR_EC_BRK_AARCH64 is SIGTRAP, ESR_EC_DABORT_EL0 SIGSEGV). `x` and `memory read` give `mem` facts:
+an address and the words read there.
+
 `capture` runs lldb on the lldb rows and stores its raw output in
 tests/evidence/macos-s3, so extraction can be replayed without lldb. `check` runs sniff
 on every row. `replay` re-extracts facts from the stored lldb output and checks them
@@ -57,6 +69,10 @@ LINUX_GOLD = ROOT / 'tests/evidence/linux-s2'
 EVID = ROOT / 'tests/evidence/macos-s3'
 SIGNAL_OF_EXC = {'EXC_BAD_ACCESS': 'SIGSEGV', 'EXC_BAD_INSTRUCTION': 'SIGILL', 'EXC_ARITHMETIC': 'SIGFPE',
                  'EXC_BREAKPOINT': 'SIGTRAP'}
+# lldb's stop reason over a Mach-O core is the thread's exception class (tests/s7-macho-prediction.json)
+SIGNAL_OF_ESR = {'ESR_EC_BRK_AARCH64': 'SIGTRAP', 'ESR_EC_DABORT_EL0': 'SIGSEGV'}
+CORE_CAP = 64 << 20
+MEM = re.compile(r'^(0x[0-9a-f]+)(?: <[^>]*>)?:\s+((?:0x[0-9a-f]+\s*)+)$')
 
 
 def load():
@@ -114,8 +130,15 @@ def facts_sniff(text):
     lines = text.splitlines()
     status = {i + 1 for i, ln in enumerate(lines[:-1])
               if re.match(r'^\[Switching to thread \d+ \(', ln) and re.match(r'^#\d+\s', lines[i + 1])}
+    # over a core, the stop gdb's banner prints after the signal is the same kind of status
+    status |= {i + 1 for i, ln in enumerate(lines[:-1])
+               if re.match(r'^Program terminated with signal SIG\w+,', ln) and re.match(r'^#\d+\s', lines[i + 1])}
     for i, line in enumerate(lines):
         if i in status:
+            continue
+        m = MEM.match(line)
+        if m:
+            facts.append(('mem', hexint(m[1]), [hexint(w) for w in m[2].split()]))
             continue
         m = SLEEPER.match(line)
         if m:
@@ -200,6 +223,14 @@ def facts_lldb(text):
             cur = line[7:]
             expect_print = cur.startswith('print ') or cur.startswith('p ')
             continue
+        m = MEM.match(line)
+        if m and cur.startswith('memory read'):
+            facts.append(('mem', hexint(m[1]), [hexint(w) for w in m[2].split()]))
+            continue
+        m = re.search(r'stop reason = (ESR_EC_\w+)', line)
+        if m and cur.startswith('process status') and m[1] in SIGNAL_OF_ESR and not any(f[0] == 'died' for f in facts):
+            facts.append(('died', SIGNAL_OF_ESR[m[1]]))
+            continue
         in_frame_cmd = cur.startswith(FRAME_CMDS)
         in_stop_cmd = cur.startswith(STOP_CMDS)
         m = re.match(r'^Breakpoint (\d+): where = .*? at (\S+?):(\d+)(?::\d+)?, address = (0x[0-9a-f]+)$', line)
@@ -273,13 +304,96 @@ def run(argv, cwd, timeout, env=None):
     return p.stdout, p.stderr, p.returncode
 
 
-def sniff_run(sniff, prog, script, args, work, name, timeout=120, pre=()):
+def sniff_run(sniff, prog, script, args, work, name, timeout=120, pre=(), post=(), with_prog=True):
     d = Path(work)
     d.mkdir(parents=True, exist_ok=True)
     path = d / (name + '.cmd')
     path.write_text('\n'.join(script) + '\n')
-    argv = [sniff, '-batch', '-x', str(path)] + list(pre) + [prog] + (['--args'] + args if args else [])
+    argv = [sniff, '-batch', '-x', str(path)] + list(pre) + ([prog] if with_prog else []) + list(post) + \
+        (['--args'] + args if args else [])
     return run(argv, work, timeout)
+
+
+def core_argv(row, core):
+    """sniff's (pre, post, with_prog) for a core row's form, and lldb's (pre, with_prog)."""
+    form = row.get('form', 'dash-c')
+    if form == 'positional':
+        return ((), (core,), True), (('-c', core), True)
+    if form == 'dash-c-only':
+        return (('-c', core), (), False), (('-c', core), False)
+    return (('-c', core), (), True), (('-c', core), True)
+
+
+def core_env(work):
+    """The environment a core's writer runs in: no shell of the user's, the take's own HOME and TMPDIR."""
+    d = Path(work)
+    for sub in ('home', 'tmp'):
+        (d / sub).mkdir(parents=True, exist_ok=True)
+    env = dict(ENV_BASE)
+    env.update(SHELL='/bin/sh', HOME=str(d / 'home'), TMPDIR=str(d / 'tmp'))
+    return env
+
+
+def cap_file_size():
+    import resource
+    resource.setrlimit(resource.RLIMIT_FSIZE, (CORE_CAP, CORE_CAP))
+
+
+def make_cores(rows, lldb, fixtures, work):
+    """Write the cores the rows read, afresh: lldb runs the fixture to the core's stop (or until it faults) and saves
+    it under WORK/cores. Returns {name: path} for the cores written; a core not written is FAIL by name."""
+    table = load().get('cores', {})
+    want = sorted({r['core'] for r in rows if r.get('core')})
+    d = Path(work) / 'cores'
+    d.mkdir(parents=True, exist_ok=True)
+    made = {}
+    for name in want:
+        c = table[name]
+        prog = str(Path(fixtures) / c['prog'])
+        path = d / (name + '.core')
+        if path.exists():
+            path.unlink()
+        save = 'process save-core -s %s %s' % (c.get('style', 'modified-memory'), path)
+        argv = [lldb, '-b', '-x']
+        if c.get('crash'):
+            argv += sum([['-o', x] for x in c['crash']], []) + ['-k', save, '-k', 'process kill']
+        else:
+            argv += sum([['-o', x] for x in c['stop']], []) + ['-o', save, '-o', 'process kill']
+        start = time.time()
+        try:
+            rc = subprocess.run(argv + [prog], cwd=work, env=core_env(work), capture_output=True, text=True, errors='replace',
+                                timeout=300, preexec_fn=cap_file_size).returncode
+        except subprocess.TimeoutExpired:
+            rc = 'timeout'
+        size = path.stat().st_size if path.exists() else 0
+        if size == 0 or size >= CORE_CAP:
+            print('FAIL core-%s save-core exit=%s bytes=%d (a core is under %d)' % (name, rc, size, CORE_CAP))
+            if path.exists():
+                path.unlink()
+            continue
+        print('CORE %s bytes=%d secs=%.1f style=%s' % (name, size, time.time() - start, c.get('style', 'modified-memory')))
+        made[name] = path
+    for r in rows:
+        if r.get('core') in made and r.get('file') == 'truncated':
+            (d / (r['core'] + '.truncated.core')).write_bytes(made[r['core']].read_bytes()[:4096])
+    return made
+
+
+def core_file(row, made, work):
+    """The path a core row gives sniff and lldb."""
+    d = Path(work) / 'cores'
+    return str({'missing': d / (row['core'] + '.missing.core'),
+                'truncated': d / (row['core'] + '.truncated.core')}.get(row.get('file'), made.get(row['core'], d / 'none')))
+
+
+def delete_cores(work):
+    """Every core of the take deleted; prints the bytes left behind (0, or the take is red)."""
+    d = Path(work) / 'cores'
+    for c in d.glob('*.core') if d.exists() else []:
+        c.unlink()
+    left = sum(c.stat().st_size for c in d.glob('*.core')) if d.exists() else 0
+    print('cores left behind: %d bytes' % left)
+    return left
 
 
 S2 = []
@@ -306,12 +420,12 @@ def tty_run(sniff, prog, script, args, work):
     return s2.normalize_tty(out, set()), err, rc
 
 
-def lldb_run(lldb, prog, script, work, name, timeout=120, pre=()):
+def lldb_run(lldb, prog, script, work, name, timeout=120, pre=(), with_prog=True):
     d = Path(work)
     d.mkdir(parents=True, exist_ok=True)
     path = d / (name + '.lldb')
     path.write_text('\n'.join(script) + '\n')
-    return run([lldb, '-b', '-s', str(path)] + list(pre) + [prog], work, timeout)
+    return run([lldb, '-b', '-s', str(path)] + list(pre) + ([prog] if with_prog else []), work, timeout)
 
 
 def ps_letter(text):
@@ -394,14 +508,23 @@ def select(rows, only):
 def cmd_capture(a):
     spec = load()
     EVID.mkdir(parents=True, exist_ok=True)
-    for r in select(lldb_script_rows(spec['rows']), a.only):
+    rows = select(lldb_script_rows(spec['rows']), a.only)
+    made = make_cores(rows, a.lldb, a.fixtures, a.work)
+    for r in rows:
         prog = str(Path(a.fixtures) / r['prog'])
-        out, err, rc = with_sleeper(r, prog, lambda sub, pre: lldb_run(a.lldb, prog, sub(r['lldb']), a.work, r['name'], pre=pre))
+        if r.get('core'):
+            if r['core'] not in made:
+                print('FAIL %s no-core %s' % (r['name'], r['core']))
+                continue
+            (lpre, lprog) = core_argv(r, core_file(r, made, a.work))[1]
+            out, err, rc = lldb_run(a.lldb, prog, r['lldb'], a.work, r['name'], pre=lpre, with_prog=lprog)
+        else:
+            out, err, rc = with_sleeper(r, prog, lambda sub, pre: lldb_run(a.lldb, prog, sub(r['lldb']), a.work, r['name'], pre=pre))
         (EVID / (r['name'] + '.lldb.txt')).write_text(out)
         facts = facts_lldb(out)
         (EVID / (r['name'] + '.facts.json')).write_text(json.dumps(facts) + '\n')
         print('CAPTURE %s facts=%d' % (r['name'], len(facts)))
-    return 0
+    return 1 if delete_cores(a.work) else 0
 
 
 SCRIPT = re.compile(r'(?m)^\S*/([\w.-]+)\.cmd:(\d+): Error in sourced command file:$')
@@ -442,12 +565,24 @@ def prepare_target(kind, src, dst):
         subprocess.run(['codesign', '--remove-signature', dst], check=True, capture_output=True)
 
 
+def sniff_core_run(a, r, prog, script, args, made, timeout):
+    """sniff over a core row's core, in the row's form."""
+    pre, post, with_prog = core_argv(r, core_file(r, made, a.work))[0]
+    return sniff_run(a.sniff, prog, script, args, a.work, r['name'], timeout, pre, post, with_prog)
+
+
 def cmd_check(a):
     spec = load()
     lin = linux_rows()
     roots = [str(ROOT), '/work', str(Path(a.fixtures).parent)]
     fails = ran = 0
-    for r in select(spec['rows'], a.only):
+    rows = select(spec['rows'], a.only)
+    made = make_cores([r for r in rows if r.get('core')], a.lldb, a.fixtures, a.work)
+    for r in rows:
+        if r.get('core') and r['core'] not in made:
+            print('FAIL %s no-core %s' % (r['name'], r['core']))
+            fails += 1
+            continue
         if r['kind'] == 'expect':
             prog = str(Path(a.work) / 'hostile' / r['name'])
             if 'sign' in r:
@@ -455,8 +590,11 @@ def cmd_check(a):
             else:
                 prog = str(Path(a.fixtures) / r['prog'])
             try:
-                out, err, rc = with_sleeper(r, prog, lambda sub, pre: sniff_run(a.sniff, prog, sub(r['script']), r.get('args', []), a.work,
-                                                                                r['name'], r.get('timeout', 60), pre))
+                if r.get('core'):
+                    out, err, rc = sniff_core_run(a, r, prog, r['script'], r.get('args', []), made, r.get('timeout', 60))
+                else:
+                    out, err, rc = with_sleeper(r, prog, lambda sub, pre: sniff_run(a.sniff, prog, sub(r['script']), r.get('args', []), a.work,
+                                                                                    r['name'], r.get('timeout', 60), pre))
             except subprocess.TimeoutExpired:
                 print('FAIL %s timeout (sniff hung)' % r['name'])
                 fails += 1
@@ -477,6 +615,8 @@ def cmd_check(a):
         try:
             if r['kind'] == 'linux' and lin[r['name']].get('tty'):
                 out, err, rc = tty_run(a.sniff, prog, script, args, a.work)
+            elif r.get('core'):
+                out, err, rc = sniff_core_run(a, r, prog, script, args, made, r.get('timeout', 120))
             else:
                 out, err, rc = with_sleeper(r, prog, lambda sub, pre: sniff_run(a.sniff, prog, sub(script), args, a.work, r['name'],
                                                                                 r.get('timeout', 120), pre))
@@ -535,6 +675,8 @@ def cmd_check(a):
                 i = next((i for i in range(max(len(got), len(want))) if (got[i] if i < len(got) else None) != (want[i] if i < len(want) else None)), 0)
                 print('FAIL %s fact %d: lldb %r sniff %r' % (r['name'], i + 1, want[i] if i < len(want) else None, got[i] if i < len(got) else None))
                 fails += 1
+    if made and delete_cores(a.work):
+        fails += 1
     print('SUMMARY ran=%d failed=%d' % (ran, fails))
     return 1 if fails else 0
 
@@ -584,6 +726,17 @@ def cmd_verify(a):
             bad.append('no linux golden for ' + r['name'])
         if r['kind'] == 'lldb' and not all((EVID / (r['name'] + e)).exists() for e in ('.lldb.txt', '.facts.json')):
             bad.append('no lldb evidence for ' + r['name'])
+    cores = spec.get('cores', {})
+    for name, c in sorted(cores.items()):
+        if not c.get('prog') or not (c.get('stop') or c.get('crash')) or c.get('style', 'modified-memory') not in ('modified-memory', 'stack'):
+            bad.append('core %s needs a prog, its stop or crash commands and a style of modified-memory or stack' % name)
+    used = {r['core'] for r in spec['rows'] if r.get('core')}
+    for r in spec['rows']:
+        if r.get('core') and r['core'] not in cores:
+            bad.append('%s reads core %s, not in the cores table' % (r['name'], r['core']))
+        if r.get('form', 'dash-c') not in ('dash-c', 'positional', 'dash-c-only') or r.get('file', 'core') not in ('core', 'missing', 'truncated'):
+            bad.append('%s: a core row\'s form is dash-c, positional or dash-c-only and its file core, missing or truncated' % r['name'])
+    bad += ['core %s: no row reads it' % n for n in sorted(set(cores) - used)]
     covered = set(names) | set(spec['excluded'])
     for name in lin:
         mac_relevant = '-gcc-' not in name and not name.startswith('tty-gcc')
@@ -607,9 +760,8 @@ def main():
         s.add_argument('--work', default=str(ROOT / 'target/s3'))
         s.add_argument('--fixtures', default=str(ROOT / 'target/session-fixtures'))
         s.add_argument('--only')
-        if name == 'capture':
-            s.add_argument('--lldb', default='lldb')
-        else:
+        s.add_argument('--lldb', default='lldb')
+        if name == 'check':
             s.add_argument('--sniff', default=str(ROOT / 'target/sniff'))
     sub.add_parser('replay')
     sub.add_parser('reextract')
