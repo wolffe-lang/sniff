@@ -269,10 +269,12 @@ fn format_bytes(p: Prog, s: Session, t: int, b: List[byte], top: bool) -> str {
     if t == ty_voidp || t == ty_codep || t <= 0 - 1000 {
         let v = le_u64(b, 8)
         var text = hex_text(v)
-        if t <= 0 - 1000 && is_char_type(p, 0 - 1000 - t) && v != 0 {
+        let to_char = t <= 0 - 1000 && is_char_type(p, 0 - 1000 - t)
+        if to_char && v != 0 {
             text = "{text} {read_cstring(s, v)}"
         }
-        if top { return "({ty_name(p, t)}) {text}" }
+        // gdb's print names a pointer's type first, but not a pointer to text: its string says what it is
+        if top && !to_char { return "({ty_name(p, t)}) {text}" }
         return text
     }
     let st = ty_strip(p, t)
@@ -307,10 +309,11 @@ fn format_bytes(p: Prog, s: Session, t: int, b: List[byte], top: bool) -> str {
         let v = le_u64(b, 8)
         let inner = attr_ref(p, st, 73)
         var text = hex_text(v)
-        if is_char_type(p, inner) && v != 0 {
+        let to_char = is_char_type(p, inner)
+        if to_char && v != 0 {
             text = "{text} {read_cstring(s, v)}"
         }
-        if top {
+        if top && !to_char {
             return "({ty_name(p, t)}) {text}"
         }
         return text
