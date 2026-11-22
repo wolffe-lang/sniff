@@ -694,4 +694,8 @@ class CompareModes(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main()
+    # unittest's own report, then one `FAIL NAME` line at column 0 per failing test, so a gate or record names it
+    result = unittest.main(exit=False).result
+    for case, _ in result.failures + result.errors:
+        print('FAIL ' + case.id().split('.')[-1], flush=True)
+    sys.exit(0 if result.wasSuccessful() else 1)
