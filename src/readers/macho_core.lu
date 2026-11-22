@@ -1,0 +1,242 @@
+// Mach-O core files: MH_CORE as lldb's `process save-core` writes them for macOS arm64 programs. The layouts are the
+// SDK's declarations: mach-o/loader.h (mach_header_64, segment_command_64, thread_command, note_command) and
+// mach/arm/thread_status.h (the ARM_THREAD_STATE64 and ARM_EXCEPTION_STATE64 flavours). tools/abi-probe-macos.c
+// compiles against them and tools/check-abi.py holds the constants below to its record. Like core.lu this reads and
+// never copies: segments, notes and image paths are offsets and spans into the caller's buffer, and every read is
+// bounded and charged against the caller's work.
+//
+// Two LC_NOTE payloads have no SDK declaration. Their layouts were derived from lldb's own cores against lldb's
+// `image list` over the same core and against the program's LC_UUID (tests/s7-macho-prediction.json):
+//   `all image infos`: a 24-byte header (version 1, image count, the file offset of the entries, entry size 48, 0),
+//     then per image its path's file offset, its UUID, its load address, its segment list's file offset, the segment
+//     count and a flag; each segment-list entry is a 16-byte name, the segment's address and a word that is 0. The
+//     first image is the program.
+//   `addrable bits`: four 32-bit words, read as a version, the addressable bits of low memory and of high memory, 0.
+
+/// Malformed Mach-O core layouts and the profiles this reader refuses.
+pub error MachCoreError = {
+    macho_core_bad_magic,
+    macho_core_truncated,
+    macho_core_not_core,
+    macho_core_unsupported_cpu,
+    macho_core_invalid_command,
+    macho_core_invalid_segment,
+    macho_core_invalid_thread,
+    macho_core_invalid_note,
+    macho_core_resource_limit,
+}
+
+// mach-o/loader.h, by tools/abi-probe-macos.c
+/// MH_MAGIC_64: a 64-bit Mach-O in the host's byte order.
+pub const macho_core_mh_magic_64: int = 4277009103
+/// MH_CORE: the file type of a core.
+pub const macho_core_mh_core: int = 4
+/// CPU_TYPE_ARM64.
+pub const macho_core_cpu_type_arm64: int = 16777228
+/// sizeof(struct mach_header_64): the load commands start here.
+pub const macho_core_header_size: int = 32
+/// offsetof(struct mach_header_64, cputype).
+pub const macho_core_header_cputype: int = 4
+/// offsetof(struct mach_header_64, cpusubtype).
+pub const macho_core_header_cpusubtype: int = 8
+/// offsetof(struct mach_header_64, filetype).
+pub const macho_core_header_filetype: int = 12
+/// offsetof(struct mach_header_64, ncmds).
+pub const macho_core_header_ncmds: int = 16
+/// offsetof(struct mach_header_64, sizeofcmds).
+pub const macho_core_header_sizeofcmds: int = 20
+/// LC_SEGMENT_64.
+pub const macho_core_lc_segment_64: int = 25
+/// LC_THREAD.
+pub const macho_core_lc_thread: int = 4
+/// LC_NOTE.
+pub const macho_core_lc_note: int = 49
+/// sizeof(struct segment_command_64).
+pub const macho_core_segment_size: int = 72
+/// offsetof(struct segment_command_64, vmaddr).
+pub const macho_core_segment_vmaddr: int = 24
+/// offsetof(struct segment_command_64, vmsize).
+pub const macho_core_segment_vmsize: int = 32
+/// offsetof(struct segment_command_64, fileoff).
+pub const macho_core_segment_fileoff: int = 40
+/// offsetof(struct segment_command_64, filesize).
+pub const macho_core_segment_filesize: int = 48
+/// offsetof(struct segment_command_64, initprot).
+pub const macho_core_segment_initprot: int = 60
+/// sizeof(struct note_command).
+pub const macho_core_note_size: int = 40
+/// offsetof(struct note_command, data_owner).
+pub const macho_core_note_owner: int = 8
+/// sizeof data_owner.
+pub const macho_core_note_owner_size: int = 16
+/// offsetof(struct note_command, offset): the payload's file offset.
+pub const macho_core_note_offset: int = 24
+/// offsetof(struct note_command, size): the payload's size.
+pub const macho_core_note_payload_size: int = 32
+
+// mach/arm/thread_status.h, by tools/abi-probe-macos.c
+/// ARM_THREAD_STATE64: the general registers.
+pub const macho_core_thread_state64: int = 6
+/// ARM_THREAD_STATE64_COUNT, in 32-bit words.
+pub const macho_core_thread_state64_count: int = 68
+/// ARM_EXCEPTION_STATE64: the fault address, the exception syndrome and the exception.
+pub const macho_core_exception_state64: int = 7
+/// ARM_EXCEPTION_STATE64_COUNT, in 32-bit words.
+pub const macho_core_exception_state64_count: int = 4
+/// offsetof(arm_thread_state64_t, __fp): x29, after x0-x28.
+pub const macho_core_state_fp: int = 232
+/// offsetof(arm_thread_state64_t, __lr).
+pub const macho_core_state_lr: int = 240
+/// offsetof(arm_thread_state64_t, __sp).
+pub const macho_core_state_sp: int = 248
+/// offsetof(arm_thread_state64_t, __pc).
+pub const macho_core_state_pc: int = 256
+/// offsetof(arm_thread_state64_t, __cpsr) (4 bytes).
+pub const macho_core_state_cpsr: int = 264
+/// offsetof(arm_exception_state64_t, __far).
+pub const macho_core_exception_far: int = 0
+/// offsetof(arm_exception_state64_t, __esr) (4 bytes).
+pub const macho_core_exception_esr: int = 8
+/// offsetof(arm_exception_state64_t, __exception) (4 bytes).
+pub const macho_core_exception_exception: int = 12
+
+// the derived layouts (above), not in any SDK header
+/// The `all image infos` header: version, count, entries' offset, entry size, reserved.
+pub const macho_core_images_header: int = 24
+/// One `all image infos` entry.
+pub const macho_core_image_entry: int = 48
+/// One entry of an image's segment list.
+pub const macho_core_image_segment_entry: int = 32
+
+/// The caps a read stays inside; macho_core_caps() gives the defaults the session uses.
+pub struct MachCoreCaps {
+    pub commands: int,
+    pub commands_bytes: int,
+    pub segments: int,
+    pub threads: int,
+    pub flavours: int,
+    pub flavour_words: int,
+    pub notes: int,
+    pub images: int,
+    pub path_bytes: int,
+    pub image_segments: int,
+    pub work: int,
+}
+
+/// The default caps: 65536 load commands in at most 16 MiB, 65536 segments, 4096 threads of at most 16 flavours of
+/// at most 1024 words, 64 notes, 4096 images with paths of at most 1024 bytes (MAXPATHLEN) and 256 segments each.
+pub fn macho_core_caps() -> MachCoreCaps {
+    MachCoreCaps {
+        commands: 65536,
+        commands_bytes: 16777216,
+        segments: 65536,
+        threads: 4096,
+        flavours: 16,
+        flavour_words: 1024,
+        notes: 64,
+        images: 4096,
+        path_bytes: 1024,
+        image_segments: 256,
+        work: 50000000,
+    }
+}
+
+/// One LC_SEGMENT_64: the memory at [vmaddr, vmaddr + vmsize), whose first filesize bytes are at fileoff.
+pub struct MachCoreSegment {
+    pub vmaddr: u64,
+    pub vmsize: u64,
+    pub fileoff: u64,
+    pub filesize: u64,
+    pub initprot: int,
+}
+
+/// One LC_THREAD: its 34 register slots as the macOS platform's target_regs returns them (x0-x28, fp, lr, sp, pc,
+/// cpsr), and its exception state (all 0 when the thread has none).
+pub struct MachCoreThread {
+    pub regs: List[u64],
+    pub far: u64,
+    pub esr: u64,
+    pub exception: u64,
+}
+
+/// One LC_NOTE: its owner's name (up to its NUL, at most 16 bytes) and its payload in the file.
+pub struct MachCoreNote {
+    pub owner: ByteSpan,
+    pub offset: u64,
+    pub size: u64,
+}
+
+/// One segment of an image in the image list: its name and address.
+pub struct MachCoreImageSegment {
+    pub name: ByteSpan,
+    pub vmaddr: u64,
+}
+
+/// One image of `all image infos`: its path, its UUID (16 bytes), its load address and its segments.
+pub struct MachCoreImage {
+    pub path: ByteSpan,
+    pub uuid: ByteSpan,
+    pub load: u64,
+    pub flag: u64,
+    pub segments: List[MachCoreImageSegment],
+}
+
+/// A Mach-O core's layout. The first image is the program; addressable bits are 0 when the core does not say.
+pub struct MachCoreFile {
+    pub segments: List[MachCoreSegment],
+    pub threads: List[MachCoreThread],
+    pub notes: List[MachCoreNote],
+    pub images: List[MachCoreImage],
+    pub low_bits: int,
+    pub high_bits: int,
+}
+
+/// Whether span's bytes are text.
+pub fn macho_core_name_is(data: List[byte], span: ByteSpan, text: str) -> bool {
+    let want = text.bytes()
+    if want.len != span.length { return false }
+    var i: int = 0
+    while i < want.len {
+        if data[span.start + i] != want[i] { return false }
+        i += 1
+    }
+    true
+}
+
+/// Read a little-endian arm64 MH_CORE within caps. Not yet: every core is refused as not a core until the reader
+/// that walks its load commands lands.
+pub fn macho_core_read(data: List[byte], caps: MachCoreCaps) -> MachCoreFile ! MachCoreError {
+    if caps.work < 0 || data.len < 0 { return macho_core_resource_limit }
+    macho_core_not_core
+}
+
+/// The index of the segment whose file bytes hold [addr, addr + n), or -1.
+pub fn macho_core_segment_of(core: MachCoreFile, addr: u64, n: u64) -> int {
+    var i: int = 0
+    while i < core.segments.len {
+        let s = copy core.segments[i]
+        if addr >= s.vmaddr && addr - s.vmaddr < s.filesize && n <= s.filesize - (addr - s.vmaddr) { return i }
+        i += 1
+    }
+    -1
+}
+
+/// The signal a thread's exception class means, as lldb names the stop: SIGTRAP (5) for a breakpoint (class 0x3c),
+/// SIGSEGV (11) for a data or instruction abort from the program (0x24, 0x20); 0 for none (a thread in a system
+/// call is class 0x15).
+pub fn macho_core_signal(t: MachCoreThread) -> int {
+    let class = t.esr >> 26
+    if class == 60 { return 5 }
+    if class == 36 || class == 32 { return 11 }
+    0
+}
+
+/// The thread the core stopped in: the first whose exception class is a stop, else the first.
+pub fn macho_core_stop_thread(core: MachCoreFile) -> int {
+    var i: int = 0
+    while i < core.threads.len {
+        if macho_core_signal(copy core.threads[i]) != 0 { return i }
+        i += 1
+    }
+    0
+}
