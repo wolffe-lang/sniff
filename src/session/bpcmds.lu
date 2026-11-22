@@ -121,7 +121,7 @@ fn cmd_info_breakpoints(mut s: Session) -> str {
         emit_line(mut s, "No breakpoints, watchpoints, tracepoints, or catchpoints.")
         return ""
     }
-    emit_line(mut s, "Num     Type           Disp Enb Address            What")
+    emit_line(mut s, "Num     Type           Disp Enb {pad_right("Address", address_width(s) + 1)}What")
     var num = 1
     while num < s.bp_next {
         i = 0

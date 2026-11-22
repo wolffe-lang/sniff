@@ -223,11 +223,22 @@ fn delete_watch(mut s: Session, num: int) -> bool {
 /// The `info breakpoints` / `info watchpoints` row of watch w.
 fn watch_row(mut s: Session, w: Watch) {
     let enb = if w.enabled { "y" } else { "n" }
-    emit_line(mut s, "{pad_right("{w.num}", 8)}{pad_right(watch_type_text(w.kind), 15)}{pad_right("keep", 5)}{pad_right(enb, 4)}{pad_right("", 19)}{w.expr}")
+    emit_line(mut s, "{pad_right("{w.num}", 8)}{pad_right(watch_type_text(w.kind), 15)}{pad_right("keep", 5)}{pad_right(enb, 4)}{pad_right("", address_width(s) + 1)}{w.expr}")
     if w.hits > 0 {
         let times = if w.hits == 1 { "time" } else { "times" }
         emit_line(mut s, "\tbreakpoint already hit {w.hits} {times}")
     }
+}
+
+/// The width gdb gives the table's Address column: an address's 18 characters once the session has a breakpoint
+/// of the user's (listed or not), else 10 (a table of watchpoints alone, as over a core).
+fn address_width(s: Session) -> int {
+    var i = 0
+    while i < s.bps.len {
+        if !s.bps[i].internal { return 18 }
+        i += 1
+    }
+    10
 }
 
 /// info watchpoints
@@ -236,7 +247,7 @@ fn cmd_info_watchpoints(mut s: Session) -> str {
         emit_line(mut s, "No watchpoints.")
         return ""
     }
-    emit_line(mut s, "Num     Type           Disp Enb Address            What")
+    emit_line(mut s, "Num     Type           Disp Enb {pad_right("Address", address_width(s) + 1)}What")
     var i = 0
     while i < s.watches.len { watch_row(mut s, copy s.watches[i]); i += 1 }
     ""
