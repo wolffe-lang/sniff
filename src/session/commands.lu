@@ -75,6 +75,7 @@ fn cmd_continue(mut s: Session, rest: str) -> str {
 }
 
 fn cmd_kill(mut s: Session, rest: str) -> str {
+    if !s.alive && s.core_on { return "You can't do that without a process to debug." }
     if !s.alive { return "The program is not being run." }
     let pid = s.inferior.pid
     kill_process(mut s)
@@ -136,7 +137,7 @@ fn repeat_cmd(mut s: Session, rest: str, kind: int) -> str {
 /// whether it was unwound through CFI or through the frame-pointer fallback.
 fn cmd_maint(mut s: Session, rest: str) -> str {
     if rest.trim() != "frames" { return "Undefined maintenance command: \"{rest.trim()}\".  Try \"help maintenance\"." }
-    if !s.alive { return "No stack." }
+    if !has_stack(s) { return "No stack." }
     var i = 0
     while i < s.frames.len {
         var how = s.frames[i].basis
@@ -203,6 +204,7 @@ fn dispatch(mut s: Session, word: str, rest: str, text: str) -> str {
     if word == "handle" { return cmd_handle(mut s, rest) }
     if word == "attach" { return cmd_attach(mut s, rest) }
     if word == "detach" { return cmd_detach(mut s, rest) }
+    if word == "core-file" { return cmd_core_file(mut s, rest) }
     if word == "signal" { return cmd_signal(mut s, rest) }
     if word == "up" { return cmd_up(mut s, rest) }
     if word == "down" || word == "dow" || word == "do" { return cmd_down(mut s, rest) }
@@ -292,11 +294,13 @@ fn run_interactive(mut s: Session) -> int {
     0
 }
 
-/// The debugger entry: sniff -batch -x SCRIPT PROG [--args A...].
+/// The debugger entry: sniff -batch -x SCRIPT PROG [--args A...], with a core as gdb takes one (the GDB manual's
+/// "Choosing Files"): -c CORE, or a second argument that is not a process id.
 pub fn session_main(args: List[str]) -> int {
     var script = ""
     var attach_pid = ""
     var prog = ""
+    var core = ""
     var run_args: List[str] = []
     var i: int = 0
     while i < args.len {
@@ -308,6 +312,9 @@ pub fn session_main(args: List[str]) -> int {
         } else if a == "-p" && i + 1 < args.len {
             i += 1
             attach_pid = args[i]
+        } else if (a == "-c" || a == "-core" || a == "--core") && i + 1 < args.len {
+            i += 1
+            core = args[i]
         } else if a == "--args" {
             i += 1
             if i < args.len { prog = args[i] }
@@ -316,21 +323,34 @@ pub fn session_main(args: List[str]) -> int {
             break
         } else if prog.len() == 0 {
             prog = a
+        } else if all_digits(a) && attach_pid.len() == 0 && core.len() == 0 {
+            attach_pid = a
+        } else if core.len() == 0 {
+            core = a
         }
         i += 1
     }
-    if prog.len() == 0 {
-        eprint("usage: sniff -batch -x SCRIPT [-p PID] PROG [--args ARGS...]")
+    if prog.len() == 0 && core.len() == 0 {
+        eprint("usage: sniff -batch -x SCRIPT [-p PID] PROG [CORE] [--args ARGS...]")
         return 2
     }
-    let p = prog_load(prog)
-    if p.err.len() > 0 && p.data.len == 0 {
-        eprint(p.err)
-        return 1
+    var p = prog_failed("")
+    if prog.len() > 0 {
+        p = prog_load(prog)
+        if p.err.len() > 0 && p.data.len == 0 {
+            eprint(p.err)
+            return 1
+        }
     }
     var s = session_new(take p)
     s.args = run_args
     var rc = 0
+    if core.len() > 0 {
+        // gdb reads the core before the command file; a core it cannot read is an error, and the script runs on
+        let why = core_load(mut s, core)
+        flush_out(mut s)
+        if why.len() > 0 { eprint(why) }
+    }
     if attach_pid.len() > 0 {
         // -p PID: gdb attaches before it reads the command file
         let why = cmd_attach(mut s, attach_pid)

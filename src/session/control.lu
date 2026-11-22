@@ -82,6 +82,8 @@ fn bp_rt(s: Session, i: int) -> u64 {
 /// Start the program stopped at its exec. Returns "" or a reason.
 fn start_process(mut s: Session) -> str {
     if s.alive { kill_process(mut s) }
+    // a program that runs replaces the core the session read
+    if s.core_on { core_drop(mut s) }
     let t = platform.target_spawn(s.prog.path, s.args, "24", "80")
     if t.pid == 0 {
         let why = platform.target_refusal(t)

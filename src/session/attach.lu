@@ -12,6 +12,7 @@ fn cmd_attach(mut s: Session, rest: str) -> str {
     if !all_digits(t) { return "Illegal process-id: {t}." }
     // sniff's own: gdb asks whether to kill the program it has, which a command file cannot answer
     if s.alive { return "A program is being debugged already." }
+    if s.core_on { core_drop(mut s) }
     attach_to(mut s, parse_number(t))
 }
 
@@ -70,6 +71,11 @@ fn reading_libraries(mut s: Session) {
 
 /// detach.
 fn cmd_detach(mut s: Session, rest: str) -> str {
+    // a core is let go as a process is, quietly
+    if !s.alive && s.core_on {
+        core_drop(mut s)
+        return ""
+    }
     if !s.alive { return "The program is not being run." }
     detach_process(mut s)
     ""
