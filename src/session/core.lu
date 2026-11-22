@@ -182,6 +182,7 @@ fn has_data_symbol(p: Prog, name: str) -> bool {
 /// Leave the core: the session has no stack until a program runs or another core is read.
 fn core_drop(mut s: Session) {
     s.core_on = false
+    s.core_macho = false
     s.core_path = ""
     s.core_data = []
     s.core = core_none()
@@ -214,13 +215,133 @@ fn core_load(mut s: Session, path: str) -> str {
     let size = fs_size(path) else |_| { return "{path}: No such file or directory." }
     if size > 1073741824 { return "\"{path}\" is not a core dump: file format not recognized" }
     let data = fs_read_bytes(path) else |_| { return "{path}: No such file or directory." }
-    if is_macho(data) { return core_load_macho(s, path, data) }
+    if is_macho(data) { return core_load_macho(mut s, path, data) }
     core_load_elf(mut s, path, data)
 }
 
-/// A Mach-O core: not read yet, so refused as any file that is not a core is.
-fn core_load_macho(s: Session, path: str, data: List[byte]) -> str {
-    "\"{path}\" is not a core dump: file format not recognized"
+/// Whether two byte lists are the same bytes.
+fn bytes_equal(a: List[byte], b: List[byte]) -> bool {
+    if a.len != b.len { return false }
+    var i = 0
+    while i < a.len {
+        if a[i] != b[i] { return false }
+        i += 1
+    }
+    true
+}
+
+/// The thread ids a Mach-O core's `process metadata` note lists, in its threads' order (its JSON's `"thread_id":`
+/// values); empty when the core has no such note.
+fn macho_thread_ids(data: List[byte], c: readers.MachCoreFile) -> List[int] {
+    var out: List[int] = []
+    let key = "\"thread_id\":".bytes()
+    for n in c.notes {
+        if !readers.macho_core_name_is(data, n.owner, "process metadata") { continue }
+        var i = n.offset as int
+        let end = (n.offset + n.size) as int
+        while i + key.len <= end {
+            var hit = true
+            var k = 0
+            while k < key.len {
+                if data[i + k] != key[k] { hit = false; break }
+                k += 1
+            }
+            if !hit { i += 1; continue }
+            i += key.len
+            var v = 0
+            while i < end && data[i] as int >= 48 && data[i] as int <= 57 {
+                v = v * 10 + (data[i] as int - 48)
+                i += 1
+            }
+            (mut out).push(v)
+        }
+    }
+    out
+}
+
+/// Read a Mach-O core (lldb's `process save-core` of a macOS arm64 program) in place of any process or core, and
+/// print gdb's banner for it: the program the core names, the signal its stop means, then the stop as a frame line
+/// and its source line (and, with more than one thread, the thread it is). The core's segments are its memory and
+/// the program's own sections the memory it does not hold. The program is the first image of the core's image
+/// list: one given whose UUID differs is not placed, and with none placed the file at the image's path is read.
+/// Returns "" or gdb's refusal.
+fn core_load_macho(mut s: Session, path: str, data: List[byte]) -> str {
+    let refused = "\"{path}\" is not a core dump: file format not recognized"
+    let c = readers.macho_core_read(data, readers.macho_core_caps()) else |_| { return refused }
+    if c.threads.len == 0 || c.images.len == 0 { return refused }
+    if s.alive { kill_process(mut s) }
+    core_drop(mut s)
+    s.core_on = true
+    s.core_macho = true
+    s.core_path = path
+    s.core_data = copy data
+    var segs: List[readers.CoreSegment] = []
+    for g in c.segments {
+        (mut segs).push(readers.CoreSegment { vaddr: g.vmaddr, memsz: g.vmsize, offset: g.fileoff, filesz: g.filesize, flags: g.initprot as u64 })
+    }
+    s.core = readers.CoreFile { segments: segs, note_segments: [], notes: [] }
+    let image = copy c.images[0]
+    let image_path = core_text(s, image.path)
+    var uuid: List[byte] = []
+    var k = 0
+    while k < image.uuid.length { (mut uuid).push(s.core_data[image.uuid.start + k]); k += 1 }
+    if s.prog.img.len > 0 && !bytes_equal(s.prog.uuid, uuid) {
+        s.prog = prog_failed("")
+        s.cfi = []
+    }
+    if s.prog.img.len == 0 && image_path.len() > 0 {
+        let p = prog_load(image_path)
+        if p.err.len() == 0 && bytes_equal(p.uuid, uuid) {
+            s.prog = p
+            s.cfi = []
+        }
+    }
+    s.base = 0
+    if s.prog.img.len > 0 {
+        s.base = image.load - s.prog.text_addr
+        (mut s.core_files).push(CoreMapFile { name: copy image_path, prog: true, data: [] })
+        var i = 0
+        while i < s.prog.maps.len {
+            let m = copy s.prog.maps[i]
+            (mut s.core_maps).push(readers.CoreMapped { start: m.addr + s.base, end: m.addr + s.base + m.size, offset: m.off, name: copy image.path })
+            (mut s.core_map_file).push(0)
+            i += 1
+        }
+    }
+    let ids = macho_thread_ids(s.core_data, c)
+    var threads: List[readers.CoreThread] = []
+    var i = 0
+    while i < c.threads.len {
+        let t = copy c.threads[i]
+        let tid = if i < ids.len { ids[i] } else { i + 1 }
+        (mut threads).push(readers.CoreThread {
+            pid: tid,
+            cursig: readers.macho_core_signal(copy t),
+            regs: copy t.regs,
+            fpregs: readers.ByteSpan { start: 0, length: 0 },
+        })
+        i += 1
+    }
+    s.core_thr = copy threads
+    let stop = readers.macho_core_stop_thread(c)
+    i = 0
+    while i < threads.len {
+        (mut s.thr).push(Thr { num: i + 1, tid: threads[i].pid, tls: 0, running: false, pending: 0 - 1, expect_stop: false })
+        i += 1
+    }
+    s.thr_cur = stop
+    s.thr_next = threads.len + 1
+    s.thr_multi = threads.len > 1
+    s.thr_prev = threads[stop].pid
+    emit_line(mut s, "Core was generated by `{image_path}'.")
+    let sig = threads[stop].cursig
+    if sig > 0 { emit_line(mut s, "Program terminated with signal {signal_name(sig)}, {signal_description(sig)}.") }
+    print_stop_frame(mut s, true, "#0  ")
+    if threads.len > 1 {
+        let id = thr_target_id(mut s, stop)
+        emit_line(mut s, "[Current thread is {stop + 1} ({id})]")
+    }
+    ""
 }
 
 /// Read an ELF core in place of any process or core, and print what gdb prints when it reads one: a

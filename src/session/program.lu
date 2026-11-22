@@ -93,6 +93,8 @@ struct Prog {
     /// The build ID (the descriptor of .note.gnu.build-id) in data, length 0 for none, and its file address.
     pub build_id: readers.ByteSpan,
     pub build_id_addr: u64,
+    /// A Mach-O image's LC_UUID (16 bytes); empty for ELF or an image without one.
+    pub uuid: List[byte],
 }
 
 /// Bytes of a span as text; invalid UTF-8 yields the empty string.
@@ -126,6 +128,7 @@ fn prog_failed(why: str) -> Prog {
             loc: copy sec, loclists: copy sec, frame: copy sec, eh_frame: copy sec, types: copy sec,
             has_split_dwarf: false, has_compact_unwind: false },
         text_addr: 0, ui_off: 0, ui_size: 0, dsym: "", interp: false, interp_path: "", build_id: copy none, build_id_addr: 0,
+        uuid: [],
     }
 }
 
@@ -544,6 +547,10 @@ fn prog_load_macho(path: str, data: List[byte]) -> Prog {
     p.path = path
     p.pie = true
     p.img = copy data
+    if mach.has_uuid {
+        var u = 0
+        while u < mach.uuid.length { (mut p.uuid).push(data[mach.uuid.start + u]); u += 1 }
+    }
     var text_index: int = 0 - 1
     var m: int = 0
     while m < mach.sections.len {

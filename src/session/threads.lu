@@ -70,6 +70,8 @@ fn thr_target_id(mut s: Session, i: int) -> str {
 /// thread's handle and its system-wide id as the kernel reports them (THREAD_IDENTIFIER_INFO).
 #[cfg(target = "aarch64-apple-darwin")]
 fn thr_target_id(mut s: Session, i: int) -> str {
+    // over a core: the thread's system-wide id as the core's process metadata keeps it
+    if s.core_on { return "Thread (tid {s.thr[i].tid})" }
     let h = thr_tls(mut s, i)
     let id = platform.target_thread_tid(s.inferior, s.thr[i].tid)
     "Thread 0x{h:x} (tid {id})"

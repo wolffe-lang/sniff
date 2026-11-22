@@ -135,6 +135,8 @@ struct Session {
     /// files it maps, and for each mapping the index of its file in core_files (-1 for none). core_on is false
     /// when there is none.
     pub core_on: bool,
+    /// Whether the core is a Mach-O core (macOS), whose threads, memory and program come from its load commands.
+    pub core_macho: bool,
     pub core_path: str,
     pub core_data: List[byte],
     pub core: readers.CoreFile,
@@ -174,7 +176,7 @@ fn session_new(take p: Prog) -> Session {
         watches: [], watch_armed: false, disps: [], disp_next: 1,
         lst_file: -1, lst_first: 0, lst_last: 0, lst_at_end: false, lst_solitary: 0, src_warned: [],
         repeat: "", x_ok: false, x_next: 0, x_count: 1, x_fmt: "x", x_size: 4,
-        core_on: false, core_path: "", core_data: [], core: core_none(), core_thr: [], core_maps: [], core_map_file: [],
+        core_on: false, core_macho: false, core_path: "", core_data: [], core: core_none(), core_thr: [], core_maps: [], core_map_file: [],
         core_files: [],
     }
 }

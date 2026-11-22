@@ -21,6 +21,8 @@ fn src_regs(s: Session) -> List[u64] {
 
 /// The thread pointer of thread tid.
 fn src_thread_pointer_of(s: Session, tid: int) -> u64 {
+    // a Mach-O core's thread state holds no thread pointer
+    if s.core_macho { return 0 }
     if s.core_on {
         var i = 0
         while i < s.core_thr.len {
