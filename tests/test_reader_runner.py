@@ -25,6 +25,11 @@ class ReaderRunner(unittest.TestCase):
     def test_checked_success_matches_native(self):
         self.runner.check_checked({'verdict': 'exit(0)', 'stdout_inline': 'PASS row\n'}, 'PASS row\n')
 
+    def test_a_stopped_unit_names_its_row(self):
+        self.assertEqual(self.runner.stopped_at('PASS a\nPASS b\n', ['a', 'b', 'c']), 'c')
+        self.assertEqual(self.runner.stopped_at('', ['a', 'b']), 'a')
+        self.assertEqual(self.runner.stopped_at('PASS a\n', ['a']), '')
+
     def test_missing_named_row_is_not_success(self):
         with self.assertRaisesRegex(ValueError, 'reader-row-missing'):
             self.runner.check_rows('', ['bytes-fixed-widths'])

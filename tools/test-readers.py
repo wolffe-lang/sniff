@@ -29,6 +29,15 @@ def check_rows(stdout, expected):
         raise ValueError('reader-row-failure: failure or skip in output')
 
 
+def stopped_at(stdout, expected):
+    """The first named row a unit program printed no PASS line for: where it stopped."""
+    lines = stdout.splitlines()
+    for row in expected:
+        if 'PASS ' + row not in lines:
+            return row
+    return ''
+
+
 def command(args):
     result = subprocess.run(list(map(str, args)), cwd=ROOT, capture_output=True,
                             text=True, timeout=180)
@@ -54,7 +63,16 @@ def main():
         name = source.stem
         binary = target / name
         command([wolf, 'build', source, '--no-cache', '-o', binary])
-        native = command([binary])
+        ran = subprocess.run([str(binary)], cwd=ROOT, capture_output=True, text=True, timeout=180)
+        if ran.returncode:
+            print(ran.stdout, end='')
+            print(ran.stderr, end='', file=sys.stderr)
+            # a unit program stops at its first failing assertion: the row it stopped in is named
+            row = stopped_at(ran.stdout, expected[source.name])
+            if row:
+                print('FAIL %s (the unit stopped in this row: exit %d)' % (row, ran.returncode))
+            raise ValueError('reader-command-exit: ' + str(ran.returncode))
+        native = ran
         check_rows(native.stdout, expected[source.name])
         checked = command([wolf, 'conform-run', source, '--json', '--checked', '--deny-warnings'])
         (target / (name + '-native.txt')).write_text(native.stdout)
