@@ -40,8 +40,8 @@ fn add_i(a: u64, d: i64) -> u64 {
 fn refused(why: str) -> Loc { Loc { kind: loc_refused, value: 0, why: why } }
 
 /// Read an 8-byte word of the child, or fail.
-fn read_u64(t: platform.Target, addr: u64) -> u64 ! {unreadable} {
-    let r = platform.target_read(t, addr, 8)
+fn read_u64(s: Session, addr: u64) -> u64 ! {unreadable} {
+    let r = src_read(s, addr, 8)
     if !r.ok { return unreadable }
     var v: u64 = 0
     var i = 0
@@ -53,7 +53,7 @@ fn read_u64(t: platform.Target, addr: u64) -> u64 ! {unreadable} {
 }
 
 /// Evaluate span of data against a stopped child.
-fn expr_eval(data: List[byte], span: readers.ByteSpan, ctx: EvalCtx, t: platform.Target) -> Loc {
+fn expr_eval(data: List[byte], span: readers.ByteSpan, ctx: EvalCtx, s: Session) -> Loc {
     var stack: List[u64] = []
     var c = readers.cursor(span.start, span.start + span.length, 100000)
     var is_reg = false
@@ -77,7 +77,7 @@ fn expr_eval(data: List[byte], span: readers.ByteSpan, ctx: EvalCtx, t: platform
         } else if op == 6 {
             if stack.len < 1 { return refused("stack underflow") }
             let a = stack[stack.len - 1]
-            let v = read_u64(t, a) else { return refused("cannot read memory") }
+            let v = read_u64(s, a) else { return refused("cannot read memory") }
             stack[stack.len - 1] = v
         } else if op == 8 {
             let v = readers.uint_le(data, mut c, 1) else { return refused("bad const") }
@@ -149,7 +149,7 @@ fn expr_eval(data: List[byte], span: readers.ByteSpan, ctx: EvalCtx, t: platform
         } else if op == 148 {
             let n = readers.uint_le(data, mut c, 1) else { return refused("bad deref_size") }
             if stack.len < 1 { return refused("stack underflow") }
-            let r = platform.target_read(t, stack[stack.len - 1], n as int)
+            let r = src_read(s, stack[stack.len - 1], n as int)
             if !r.ok { return refused("cannot read memory") }
             var v: u64 = 0
             var i = 0

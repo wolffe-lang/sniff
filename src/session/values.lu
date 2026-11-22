@@ -218,12 +218,12 @@ fn quote_text(q: int) -> str {
 }
 
 /// A NUL-terminated string at addr, quoted, with gdb's 200 element limit.
-fn read_cstring(t: platform.Target, addr: u64) -> str {
+fn read_cstring(s: Session, addr: u64) -> str {
     var out = "\""
     var n = 0
     var done = false
     while n < 200 && !done {
-        let r = platform.target_read(t, addr + n as u64, 1)
+        let r = src_read(s, addr + n as u64, 1)
         if !r.ok { return "<error: Cannot access memory at address 0x{addr + n as u64:x}>" }
         let c = r.data[0] as int
         if c == 0 { done = true } else {
@@ -245,7 +245,7 @@ fn is_char_type(p: Prog, t: int) -> bool {
 
 /// Format bytes of type t. top is true for the `print` command (pointers
 /// then carry a type prefix); frame is false for argument lists.
-fn format_bytes(p: Prog, tgt: platform.Target, t: int, b: List[byte], top: bool) -> str {
+fn format_bytes(p: Prog, s: Session, t: int, b: List[byte], top: bool) -> str {
     if t == ty_int { return "{sign_extend(le_u64(b, 4), 4)}" }
     if t == ty_long { return "{sign_extend(le_u64(b, 8), 8)}" }
     if t == ty_ulong { return "{le_u64(b, 8)}" }
@@ -270,7 +270,7 @@ fn format_bytes(p: Prog, tgt: platform.Target, t: int, b: List[byte], top: bool)
         let v = le_u64(b, 8)
         var text = hex_text(v)
         if t <= 0 - 1000 && is_char_type(p, 0 - 1000 - t) && v != 0 {
-            text = "{text} {read_cstring(tgt, v)}"
+            text = "{text} {read_cstring(s, v)}"
         }
         if top { return "({ty_name(p, t)}) {text}" }
         return text
@@ -308,7 +308,7 @@ fn format_bytes(p: Prog, tgt: platform.Target, t: int, b: List[byte], top: bool)
         let inner = attr_ref(p, st, 73)
         var text = hex_text(v)
         if is_char_type(p, inner) && v != 0 {
-            text = "{text} {read_cstring(tgt, v)}"
+            text = "{text} {read_cstring(s, v)}"
         }
         if top {
             return "({ty_name(p, t)}) {text}"
@@ -342,7 +342,7 @@ fn format_bytes(p: Prog, tgt: platform.Target, t: int, b: List[byte], top: bool)
             // collapse runs of identical elements
             var run = 1
             while i + run < n && same_bytes(b, i * es, (i + run) * es, es) { run += 1 }
-            let item = format_bytes(p, tgt, elem, chunk, false)
+            let item = format_bytes(p, s, elem, chunk, false)
             if !first { out = "{out}, " }
             first = false
             if run >= 10 {
@@ -359,8 +359,8 @@ fn format_bytes(p: Prog, tgt: platform.Target, t: int, b: List[byte], top: bool)
         // a reference prints where it refers, then the value there
         let at = le_u64(b, 8)
         let inner = attr_ref(p, st, 73)
-        let r = platform.target_read(tgt, at, ty_size(p, inner))
-        let body = if r.ok { format_bytes(p, tgt, inner, r.data, false) } else { "<error: Cannot access memory at address {hex_text(at)}>" }
+        let r = src_read(s, at, ty_size(p, inner))
+        let body = if r.ok { format_bytes(p, s, inner, r.data, false) } else { "<error: Cannot access memory at address {hex_text(at)}>" }
         if top { return "({ty_name(p, t)}) @{hex_text(at)}: {body}" }
         return "@{hex_text(at)}: {body}"
     }
@@ -376,7 +376,7 @@ fn format_bytes(p: Prog, tgt: platform.Target, t: int, b: List[byte], top: bool)
                 let ms = ty_size(p, mt)
                 if !first { out = "{out}, " }
                 first = false
-                out = "{out}{attr_text(p, ui, e, 3)} = {format_bytes(p, tgt, mt, slice_bytes(b, off, ms), false)}"
+                out = "{out}{attr_text(p, ui, e, 3)} = {format_bytes(p, s, mt, slice_bytes(b, off, ms), false)}"
             }
             e += 1
         }

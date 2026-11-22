@@ -51,7 +51,7 @@ fn attach_to(mut s: Session, pid: int) -> str {
 /// A thread the process had when sniff attached: numbered, no `[New ...]` line.
 fn thr_attached(mut s: Session, tid: int) {
     var th = Thr { num: s.thr_next, tid: tid, tls: 0, running: false, pending: 0 - 1, expect_stop: false }
-    th.tls = platform.target_thread_pointer_of(s.inferior, tid)
+    th.tls = src_thread_pointer_of(s, tid)
     s.thr_next += 1
     (mut s.thr).push(th)
     s.thr_multi = true

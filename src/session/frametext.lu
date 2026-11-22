@@ -73,17 +73,17 @@ fn var_val(s: Session, fr: Frame, die: int) -> Val {
         let fa = attr_at(s.prog, fd, 64)
         if fa >= 0 {
             let fctx = EvalCtx { regs: copy fr.regs, frame_base: 0, has_frame_base: false, cfa: fr.cfa, has_cfa: fr.cfa_ok, base: s.base }
-            let fl = expr_eval(s.prog.data, s.prog.info.attributes[fa].value.bytes, fctx, s.target)
+            let fl = expr_eval(s.prog.data, s.prog.info.attributes[fa].value.bytes, fctx, s)
             if fl.kind == loc_register && fl.value < platform.arch_ncols() as u64 { fb = fr.regs[fl.value as int]; has_fb = true }
             else if fl.kind == loc_memory || fl.kind == loc_value { fb = fl.value; has_fb = true }
         }
     }
     let ctx = EvalCtx { regs: copy fr.regs, frame_base: fb, has_frame_base: has_fb, cfa: fr.cfa, has_cfa: fr.cfa_ok, base: s.base }
-    let l = expr_eval(s.prog.data, lv.bytes, ctx, s.target)
+    let l = expr_eval(s.prog.data, lv.bytes, ctx, s)
     let size = ty_size(s.prog, ty)
     if l.kind == loc_refused { return val_fail("<{l.why}>") }
     if l.kind == loc_memory {
-        let r = platform.target_read(s.target, l.value, size)
+        let r = src_read(s, l.value, size)
         if !r.ok { return val_fail("<error: Cannot access memory at address 0x{l.value:x}>") }
         return Val { ok: true, why: "", ty: ty, bytes: r.data, addr: l.value, has_addr: true, reg: -1 }
     }
@@ -111,7 +111,7 @@ fn var_val(s: Session, fr: Frame, die: int) -> Val {
 fn var_text(s: Session, fr: Frame, die: int, top: bool) -> str {
     let v = var_val(s, fr, die)
     if !v.ok { return v.why }
-    format_bytes(s.prog, s.target, v.ty, v.bytes, top)
+    format_bytes(s.prog, s, v.ty, v.bytes, top)
 }
 
 /// Direct child DIEs of `die` with the given tag.

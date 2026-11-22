@@ -809,7 +809,7 @@ fn deref(s: Session, v_in: Val) -> Val {
     if target == ty_none || target < 0 { return val_fail("Attempt to take contents of a non-pointer value.") }
     let at = as_u64(v.bytes)
     let size = ty_size(s.prog, target)
-    let r = platform.target_read(s.target, at, size)
+    let r = src_read(s, at, size)
     if !r.ok { return val_fail("Cannot access memory at address 0x{at:x}") }
     Val { ok: true, why: "", ty: target, bytes: r.data, addr: at, has_addr: true, reg: -1 }
 }
@@ -865,7 +865,7 @@ fn index(s: Session, x: Ex, v_in: Val, i_in: Val) -> Val {
         // gdb reads past an array's bound in C: the element is wherever it would be
         if !v.has_addr { return val_fail("no such vector element") }
         let at = platform.bits_u64(platform.bits_i64(v.addr) + off)
-        let r = platform.target_read(s.target, at, es)
+        let r = src_read(s, at, es)
         if !r.ok { return val_fail("Cannot access memory at address 0x{at:x}") }
         return Val { ok: true, why: "", ty: elem, bytes: r.data, addr: at, has_addr: true, reg: -1 }
     }
@@ -886,7 +886,7 @@ fn coerce_ref(s: Session, v: Val) -> Val {
     if st < 0 || !is_reference_tag(s.prog.info.entries[st].tag) { return copy v }
     let target = attr_ref(s.prog, st, 73)
     let at = as_u64(v.bytes)
-    let r = platform.target_read(s.target, at, ty_size(s.prog, target))
+    let r = src_read(s, at, ty_size(s.prog, target))
     if !r.ok { return val_fail("Cannot access memory at address 0x{at:x}") }
     Val { ok: true, why: "", ty: target, bytes: r.data, addr: at, has_addr: true, reg: -1 }
 }
@@ -921,7 +921,7 @@ fn list_element(s: Session, v: Val, n: i64) -> Val {
     if elem == ty_none || elem < 0 { return val_fail("the List header {tname} has no element type") }
     let es = ty_size(s.prog, elem)
     let at = as_u64(p.bytes) + (n * es as i64) as u64
-    let r = platform.target_read(s.target, at, es)
+    let r = src_read(s, at, es)
     if !r.ok { return val_fail("Cannot access memory at address 0x{at:x}") }
     Val { ok: true, why: "", ty: elem, bytes: r.data, addr: at, has_addr: true, reg: -1 }
 }
@@ -967,7 +967,7 @@ fn find_global(s: Session, name: str) -> Val {
                             if b.len == size { return Val { ok: true, why: "", ty: ty, bytes: b, addr: a, has_addr: true, reg: -1 } }
                             return val_fail("Cannot access memory at address 0x{a:x}")
                         }
-                        let r = platform.target_read(s.target, at, size)
+                        let r = src_read(s, at, size)
                         if !r.ok { return val_fail("Cannot access memory at address 0x{at:x}") }
                         return Val { ok: true, why: "", ty: ty, bytes: r.data, addr: at, has_addr: true, reg: -1 }
                     }

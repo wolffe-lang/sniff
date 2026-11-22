@@ -1,0 +1,20 @@
+// What a stopped program answers: its memory, the selected thread's registers and a thread's thread
+// pointer. Every read the session makes of the program goes through these, so that something other than a
+// live process (a core file) can answer them; today each asks the platform.
+
+use platform
+
+/// n bytes of the program's memory at addr.
+fn src_read(s: Session, addr: u64, n: int) -> platform.Bytes { platform.target_read(s.target, addr, n) }
+
+/// The selected thread's registers, in the platform's order.
+fn src_regs(s: Session) -> List[u64] { platform.target_regs(s.target) }
+
+/// The thread pointer of thread tid.
+fn src_thread_pointer_of(s: Session, tid: int) -> u64 { platform.target_thread_pointer_of(s.inferior, tid) }
+
+/// The selected thread's xmm0 (a returned float or double).
+fn src_xmm0(s: Session) -> List[byte] { platform.target_xmm0(s.target) }
+
+/// The selected thread's floating-point status registers (empty where the platform has none to show).
+fn src_fp_status(s: Session) -> List[u64] { platform.target_fp_status(s.target) }

@@ -50,7 +50,7 @@ fn thread_db_form(s: Session) -> bool {
 
 /// A thread's thread pointer: the one read at its first stop, else its registers' now.
 fn thr_tls(mut s: Session, i: int) -> u64 {
-    if s.thr[i].tls == 0 { s.thr[i].tls = platform.target_thread_pointer_of(s.inferior, s.thr[i].tid) }
+    if s.thr[i].tls == 0 { s.thr[i].tls = src_thread_pointer_of(s, s.thr[i].tid) }
     s.thr[i].tls
 }
 
@@ -87,7 +87,7 @@ fn thr_name(s: Session, i: int) -> str {
 /// A new thread, stopped at its first stop: numbered, its thread pointer read, `[New ...]` printed.
 fn thr_add(mut s: Session, tid: int) -> int {
     var t = Thr { num: s.thr_next, tid: tid, tls: 0, running: false, pending: 0 - 1, expect_stop: false }
-    t.tls = platform.target_thread_pointer_of(s.inferior, tid)
+    t.tls = src_thread_pointer_of(s, tid)
     s.thr_next += 1
     (mut s.thr).push(t)
     s.thr_multi = true

@@ -129,7 +129,7 @@ fn watch_hit(mut s: Session) -> int {
     while i < s.watches.len {
         if s.watches[i].enabled {
             if k == slot {
-                let r = platform.target_read(s.target, s.watches[i].addr, s.watches[i].len)
+                let r = src_read(s, s.watches[i].addr, s.watches[i].len)
                 if !r.ok { return i }
                 let changed = !same_list(r.data, s.watches[i].old)
                 if s.watches[i].kind == wk_write && !changed { return 0 - 2 }
@@ -156,17 +156,17 @@ fn same_list(a: List[byte], b: List[byte]) -> bool {
 /// Report watch i's trigger, as gdb prints it, and remember the new value.
 fn report_watch(mut s: Session, i: int) {
     let w = copy s.watches[i]
-    let r = platform.target_read(s.target, w.addr, w.len)
+    let r = src_read(s, w.addr, w.len)
     let now = if r.ok { copy r.data } else { copy w.old }
     s.watches[i].hits += 1
     emit_line(mut s, "")
     emit_line(mut s, "{watch_label(w.kind)} {w.num}: {w.expr}")
     emit_line(mut s, "")
     if w.kind != wk_read && !same_list(now, w.old) {
-        emit_line(mut s, "Old value = {format_bytes(s.prog, s.target, w.ty, w.old, true)}")
-        emit_line(mut s, "New value = {format_bytes(s.prog, s.target, w.ty, now, true)}")
+        emit_line(mut s, "Old value = {format_bytes(s.prog, s, w.ty, w.old, true)}")
+        emit_line(mut s, "New value = {format_bytes(s.prog, s, w.ty, now, true)}")
     } else {
-        emit_line(mut s, "Value = {format_bytes(s.prog, s.target, w.ty, now, true)}")
+        emit_line(mut s, "Value = {format_bytes(s.prog, s, w.ty, now, true)}")
     }
     s.watches[i].old = now
     s.frames = []
@@ -181,7 +181,7 @@ fn scope_ended(mut s: Session, bp: int) -> bool {
     var i = 0
     while i < s.watches.len {
         if s.watches[i].num == num {
-            let regs = platform.target_regs(s.target)
+            let regs = src_regs(s)
             if regs.len != platform.arch_nregs() { return false }
             let sp = regs[platform.arch_sp_slot()]
             if sp < s.watches[i].scope_cfa { return false }

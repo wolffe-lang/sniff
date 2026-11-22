@@ -75,7 +75,7 @@ fn reg_value(s: Session, name: str) -> Val {
     if !s.alive { return val_fail("No registers.") }
     let slot = reg_slot(name)
     if slot < 0 { return val_fail("Invalid register `{name}'") }
-    let raw = platform.target_regs(s.target)
+    let raw = src_regs(s)
     if raw.len != platform.arch_nregs() { return val_fail("The program has no registers now.") }
     var v = raw[slot]
     if s.sel > 0 && s.sel < s.frames.len {
@@ -120,7 +120,7 @@ fn reg_value(s: Session, name: str) -> Val {
     if !s.alive { return val_fail("No registers.") }
     let slot = reg_slot(name)
     if slot < 0 { return val_fail("Invalid register `{name}'") }
-    let raw = platform.target_regs(s.target)
+    let raw = src_regs(s)
     if raw.len != platform.arch_nregs() { return val_fail("The program has no registers now.") }
     var v = raw[slot]
     if s.sel > 0 && s.sel < s.frames.len {
@@ -172,7 +172,7 @@ fn symbolize(s: Session, addr: u64) -> str {
 }
 
 fn text_with_format(s: Session, v: Val, fmt: str, top: bool) -> str {
-    if fmt.len() == 0 { return format_bytes(s.prog, s.target, v.ty, v.bytes, top) }
+    if fmt.len() == 0 { return format_bytes(s.prog, s, v.ty, v.bytes, top) }
     let raw = as_u64(v.bytes)
     let size = ty_size(s.prog, v.ty)
     var u = raw
@@ -360,7 +360,7 @@ fn cmd_x(mut s: Session, rest: str) -> str {
         var line = "0x{addr:x}{label(s, addr)}:"
         var k = 0
         while k < per_line && i < count {
-            let r = platform.target_read(s.target, addr, size)
+            let r = src_read(s, addr, size)
             if !r.ok {
                 if k > 0 { emit_line(mut s, line) }
                 return "Cannot access memory at address 0x{addr:x}"
@@ -408,7 +408,7 @@ fn read_string_at(s: Session, addr: u64) -> (str, int) {
     var out = "\""
     var n = 0
     while n < 200 {
-        let r = platform.target_read(s.target, addr + n as u64, 1)
+        let r = src_read(s, addr + n as u64, 1)
         if !r.ok { break }
         let c = r.data[0] as int
         n += 1
@@ -495,7 +495,7 @@ fn cmd_info_registers(mut s: Session, rest: str) -> str {
         var raw: u64 = 0
         var natural = ""
         if name == "fpsr" || name == "fpcr" {
-            let fp = platform.target_fp_status(s.target)
+            let fp = src_fp_status(s)
             if fp.len != 2 { return "The program has no registers now." }
             raw = if name == "fpsr" { fp[0] } else { fp[1] }
             natural = "{raw}"

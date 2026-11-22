@@ -130,7 +130,7 @@ fn insert_all(mut s: Session) -> int {
                 placed = true
             } else {
                 let insn = platform.arch_bp_insn()
-                let r = platform.target_read(s.target, a, insn.len)
+                let r = src_read(s, a, insn.len)
                 if r.ok {
                     s.bps[i].orig = pack_bytes(r.data)
                     placed = platform.target_write(s.target, a, insn)
@@ -162,13 +162,13 @@ fn remove_all(mut s: Session) {
 
 /// The current pc, or 0 when no registers can be read.
 fn current_pc(s: Session) -> u64 {
-    let regs = platform.target_regs(s.target)
+    let regs = src_regs(s)
     if regs.len != platform.arch_nregs() { return 0 }
     regs[platform.arch_pc_slot()]
 }
 
 fn set_pc(s: Session, pc: u64) {
-    var regs = platform.target_regs(s.target)
+    var regs = src_regs(s)
     if regs.len != platform.arch_nregs() { return }
     regs[platform.arch_pc_slot()] = pc
     let _ = platform.target_set_regs(s.target, regs)
