@@ -4310,8 +4310,7 @@
     "bt",
     "thread 3",
     "bt",
-    "thread 1",
-    "info locals"
+    "thread 1"
    ],
    "core": {
     "of": "gcc-threads"
@@ -4355,8 +4354,7 @@
     "bt",
     "thread 3",
     "bt",
-    "thread 1",
-    "info locals"
+    "thread 1"
    ],
    "core": {
     "of": "clang-threads"

@@ -27,4 +27,3 @@ Program terminated with signal SIGTRAP, Trace/breakpoint trap.
 [Switching to thread 1 (Thread <T1> (LWP <L1>))]
 #0  work (n=4) at /work/fixtures/session/c/workers/main.c:62
 62	    int total = 0;
-total = 943
