@@ -1,0 +1,3 @@
+/work/target/cores/s2/gcc-break.missing.core: No such file or directory.
+/work/target/s2/core-gcc-missing.cmd:1: Error in sourced command file:
+No stack.

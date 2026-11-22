@@ -518,6 +518,39 @@ class CoreRows(unittest.TestCase):
             finally:
                 session.ROWS = old
 
+    def test_registers_from_a_core_are_the_live_ones(self):
+        # gdb prints the same 26 register lines at a live stop and from the core gcore wrote there
+        reg = __import__('re').compile(r'^(r[a-z0-9]+|eflags|[cdefgs]s|fs_base|gs_base)\s')
+        for gold in (session.GOLD, session.PAX_GOLD):
+            live = [x for x in (gold / 'value-gcc-registers.out').read_text().splitlines() if reg.match(x)]
+            core = [x for x in (gold / 'core-gcc-registers.out').read_text().splitlines() if reg.match(x)]
+            self.assertEqual(len(core), 26, gold)
+            if gold == session.GOLD:
+                self.assertEqual(core, live)
+
+    def test_the_core_rows_cover_each_form_and_file(self):
+        rows = [r for r in session.load_rows() if r.get('core')]
+        forms = {r['core'].get('form', 'positional') for r in rows}
+        self.assertEqual(forms, set(session.CORE_FORMS))
+        self.assertEqual({r['core'].get('file') for r in rows} - {None}, set(session.CORE_FILES))
+        self.assertTrue(any(r['core'].get('other_program') for r in rows))
+        self.assertEqual(session.core_problems(session.load_rows(), session.load_cores()), [])
+
+    def test_readelf_nt_file_rule(self):
+        # the notes rows take readelf's declined NT_FILE phrase off and say so; a decoded NT_FILE stays as it is
+        spec = importlib.util.spec_from_file_location('dump_matrix', ROOT / 'tools/dump-matrix.py')
+        dm = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(dm)
+        line = b'  CORE                 0x00000411\tNT_FILE (mapped files)\t'
+        text = b'\nDisplaying notes\n' + line + dm.NT_DECLINED + b'\n  CORE  0x1\tNT_AUXV (auxiliary vector)\t\n'
+        got, state = dm.nt_file_rule(text)
+        self.assertEqual(state, 'declined')
+        self.assertEqual(got, b'\nDisplaying notes\n' + line + b'\n  CORE  0x1\tNT_AUXV (auxiliary vector)\t\n')
+        decoded = line + b'    Page size: 4096\n'
+        self.assertEqual(dm.nt_file_rule(decoded), (decoded, 'decoded'))
+        self.assertEqual(dm.nt_file_rule(text + decoded)[1], 'decoded')
+        self.assertEqual(dm.nt_file_rule(b'no notes\n'), (b'no notes\n', 'none'))
+
     def test_check_names_a_core_not_made(self):
         with tempfile.TemporaryDirectory() as d:
             d = Path(d)

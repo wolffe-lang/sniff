@@ -1,0 +1,3 @@
+"/work/target/cores/s2/gcc-break.truncated.core" is not a core dump: file format not recognized
+/work/target/s2/core-gcc-truncated.cmd:1: Error in sourced command file:
+No stack.
