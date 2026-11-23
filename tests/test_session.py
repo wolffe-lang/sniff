@@ -158,6 +158,14 @@ class GateRemoteQemuLine(unittest.TestCase):
         self.assertIn('FAIL remote-qemu-line accel=tcg', said)
         self.assertIn('rc=1', said.splitlines())
 
+    def test_a_step_passes_the_oracles_and_image_lines_on(self):
+        # the record names gdbserver and gdb by version and digest, and the server rows' image, from these two lines
+        oracles = "ORACLES gdbserver 'GNU gdbserver 15.1' sha256 %s; gdb 'GNU gdb 15.1' sha256 %s" % ('1' * 64, '2' * 64)
+        image = 'IMAGE server.iso sha256 %s, sniff-server sha256 %s, kernel sha256 %s' % ('3' * 64, '4' * 64, '5' * 64)
+        said = self.gate("step remote-server-pax printf '%%s\\n%%s\\nPASS remote r\\n' \"%s\" \"%s\"" % (oracles, image))
+        self.assertIn('  ' + oracles, said.splitlines())
+        self.assertIn('  ' + image, said.splitlines())
+
 
 class ServerSignalTable(unittest.TestCase):
     """sniff-server's signal numbers are the measured table's (tests/server-signals.tsv), never written from memory:
