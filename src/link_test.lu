@@ -2,9 +2,10 @@
 // The transport and its stand-in stub (sniff's own code over loopback sockets, scripted replies written before the
 // client speaks). First row: std.net itself, a loopback round trip, which needs the package's `net` capability.
 
+use remote
 use std.net
 
-fn main() {
+fn loopback_row() {
     var srv = net.listen(net.loopback(0)) else { print("FAIL listen"); return }
     let port = net.port(srv) else { print("FAIL port"); return }
     var cli = net.connect(net.loopback(port)) else { print("FAIL connect"); return }
@@ -17,4 +18,180 @@ fn main() {
     net.close(take cli) else { return }
     net.close(take conn) else { return }
     net.close_listener(take srv) else { return }
+}
+
+struct Pair {
+    link: remote.Link,
+    stub: net.Socket,
+    srv: net.Listener,
+}
+
+fn pair(ms: int) -> Pair ! {refused, timeout, closed, io, invalid, packet_too_long, reply_too_long, unescaped_byte, bad_hex, bad_escape, bad_run_length, notification_refused, resend_limit, reply_timeout} {
+    var srv = net.listen(net.loopback(0))?
+    let port = net.port(srv)?
+    var link = remote.open(net.loopback(port))?
+    link.wait_ms = ms
+    let stub = net.accept(mut srv)?
+    Pair { link: link, stub: stub, srv: srv }
+}
+
+fn done(take p: Pair) {
+    remote.shut(take p.link) else { return }
+    net.close(take p.stub) else { return }
+    net.close_listener(take p.srv) else { return }
+}
+
+// What the client wrote, as text, read until the socket has been quiet for 100 ms.
+fn heard(mut s: net.Socket) -> str {
+    net.set_deadline(mut s, 100) else { return "deadline-refused" }
+    var out: List[byte] = []
+    var more = true
+    while more {
+        let got = net.read_bytes(mut s, 65536) else |e| match e {
+            timeout => {
+                more = false
+                []
+            },
+            closed => {
+                more = false
+                []
+            },
+            io => {
+                return "io"
+            },
+        }
+        for x in got { (mut out).push(x) }
+    }
+    str_from_utf8(out) else { "<binary>" }
+}
+
+fn says(mut s: net.Socket, text: str) {
+    net.write_bytes(mut s, text.bytes()) else { return }
+}
+
+fn text(d: List[byte]) -> str {
+    str_from_utf8(d) else { "<binary>" }
+}
+
+fn request_row() {
+    var p = pair(remote.reply_ms) else { print("FAIL remote-link-request setup"); return }
+    says(mut p.stub, "+$OK#9a")
+    let r = remote.request(mut p.link, "g") else |e| { print("FAIL remote-link-request {e}"); return }
+    assert(text(r) == "OK")
+    assert(heard(mut p.stub) == "$g#67+")
+    done(take p)
+    print("PASS remote-link-request")
+}
+
+fn nack_row() {
+    var p = pair(remote.reply_ms) else { return }
+    says(mut p.stub, "-+$OK#9a")
+    let r = remote.request(mut p.link, "g") else |e| { print("FAIL remote-link-nack-resend {e}"); return }
+    assert(text(r) == "OK")
+    assert(heard(mut p.stub) == "$g#67$g#67+")
+    done(take p)
+    print("PASS remote-link-nack-resend")
+}
+
+fn resend_limit_row() {
+    var p = pair(50) else { return }
+    says(mut p.stub, "----")
+    let r = remote.request(mut p.link, "g")
+    assert("{r}" == "resend_limit")
+    assert(heard(mut p.stub) == "$g#67$g#67$g#67$g#67")
+    done(take p)
+    print("PASS remote-link-resend-limit")
+}
+
+fn ack_timeout_row() {
+    var p = pair(50) else { return }
+    let r = remote.send(mut p.link, "g")
+    assert("{r}" == "resend_limit")
+    assert(heard(mut p.stub) == "$g#67$g#67$g#67$g#67")
+    done(take p)
+    print("PASS remote-link-ack-timeout")
+}
+
+fn bad_sum_row() {
+    var p = pair(remote.reply_ms) else { return }
+    says(mut p.stub, "+$OK#00$OK#9a")
+    let r = remote.request(mut p.link, "g") else |e| { print("FAIL remote-link-bad-sum {e}"); return }
+    assert(text(r) == "OK")
+    assert(heard(mut p.stub) == "$g#67-+")
+    done(take p)
+    print("PASS remote-link-bad-sum")
+}
+
+fn reply_timeout_row() {
+    var p = pair(50) else { return }
+    says(mut p.stub, "+")
+    let r = remote.request(mut p.link, "g")
+    assert("{r}" == "reply_timeout")
+    done(take p)
+    print("PASS remote-link-reply-timeout")
+}
+
+fn no_ack_row() {
+    var p = pair(remote.reply_ms) else { return }
+    remote.start_no_ack(mut p.link.ack)
+    says(mut p.stub, "$OK#9a")
+    let r = remote.request(mut p.link, "g") else |e| { print("FAIL remote-link-noack {e}"); return }
+    assert(text(r) == "OK")
+    assert(heard(mut p.stub) == "$g#67")
+    done(take p)
+    print("PASS remote-link-noack")
+}
+
+fn binary_row() {
+    var p = pair(remote.reply_ms) else { return }
+    let data: List[byte] = [108 as byte, 125 as byte, 93 as byte, 120 as byte]
+    let sum: List[byte] = [remote.checksum(data) as byte]
+    says(mut p.stub, "+$l}}]x#" + remote.hex_encode(sum))
+    let r = remote.request_binary(mut p.link, "qXfer:features:read:target.xml:0,1000") else |e| { print("FAIL remote-link-binary {e}"); return }
+    assert(r.len == 3 && r[0] as int == 108 && r[1] as int == 125 && r[2] as int == 120)
+    done(take p)
+    print("PASS remote-link-binary")
+}
+
+fn interrupt_row() {
+    var p = pair(remote.reply_ms) else { return }
+    remote.interrupt(mut p.link) else { return }
+    let h = heard(mut p.stub).bytes()
+    assert(h.len == 1 && h[0] as int == 3)
+    done(take p)
+    print("PASS remote-link-interrupt")
+}
+
+fn closed_row() {
+    var p = pair(remote.reply_ms) else { return }
+    net.close(take p.stub) else { return }
+    let r = remote.request(mut p.link, "g")
+    assert("{r}" == "closed")
+    remote.shut(take p.link) else { return }
+    net.close_listener(take p.srv) else { return }
+    print("PASS remote-link-closed")
+}
+
+fn refused_row() {
+    var srv = net.listen(net.loopback(0)) else { return }
+    let port = net.port(srv) else { return }
+    net.close_listener(take srv) else { return }
+    let r = remote.open(net.loopback(port))
+    assert("{r}" == "refused")
+    print("PASS remote-link-refused")
+}
+
+fn main() {
+    loopback_row()
+    request_row()
+    nack_row()
+    resend_limit_row()
+    ack_timeout_row()
+    bad_sum_row()
+    reply_timeout_row()
+    no_ack_row()
+    binary_row()
+    interrupt_row()
+    closed_row()
+    refused_row()
 }

@@ -159,6 +159,17 @@
     "remote-tdesc-caps-past"
   ],
   "link_test.lu": [
-    "remote-net-loopback"
+    "remote-net-loopback",
+    "remote-link-request",
+    "remote-link-nack-resend",
+    "remote-link-resend-limit",
+    "remote-link-ack-timeout",
+    "remote-link-bad-sum",
+    "remote-link-reply-timeout",
+    "remote-link-noack",
+    "remote-link-binary",
+    "remote-link-interrupt",
+    "remote-link-closed",
+    "remote-link-refused"
   ]
 }
