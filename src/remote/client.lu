@@ -333,7 +333,16 @@ pub fn read_mem(t: Target, addr: u64, len: int) -> List[byte] ! ClientError {
         let r = ask(t.link, "m{hex_u64(a)},{hex_u64(n as u64)}", false)?
         if r.len == 0 { return stub_error }
         if reply_kind(r) == reply_error || reply_kind(r) == reply_error_text { return stub_error }
-        let got = hex_decode(r)?
+        let raw = hex_decode(r)?
+        var got: List[byte] = []
+        var w: int = 0
+        while w < raw.len {
+            var e = w + 8
+            if e > raw.len { e = raw.len }
+            var j = e - 1
+            while j >= w { (mut got).push(raw[j]); j -= 1 }
+            w = e
+        }
         for b in got { (mut out).push(b) }
         done += got.len
         if got.len < n { more = false }
