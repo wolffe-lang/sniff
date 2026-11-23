@@ -4,7 +4,7 @@ A debugger written in [wolf](https://github.com/wolffe-lang/wolf-lang),
 for x86-64 Linux and PAX, and macOS arm64. The command language is GDB's;
 a Debug Adapter Protocol server is planned for editor integration.
 
-**Status: milestones S0 to S6 are met on Linux x86-64, macOS arm64 and PAX; core files (S7) are read on Linux, at PAX's console and on macOS; cores PAX writes itself come next. S8's remote client is in; its remote process stub comes next.** `sniff -batch -x SCRIPT PROG` starts PROG
+**Status: milestones S0 to S6 are met on Linux x86-64, macOS arm64 and PAX; core files (S7) are read on Linux, at PAX's console and on macOS; cores PAX writes itself come next. S8's remote client is in, and so is its stub, `sniff-server`, on Linux and PAX.** `sniff -batch -x SCRIPT PROG` starts PROG
 (under `ptrace(2)` on Linux; as a suspended child with its task port and exception port on macOS) and debugs it with gdb's command language (breakpoints,
 stepping, frames, values, registers, watchpoints, threads (all-stop) and signals, `list` and `help`); `attach PID`, `detach` and
 `sniff -p PID PROG` take a running process instead, and `sniff -batch -x SCRIPT PROG CORE` (or `-c CORE`, or `core-file CORE`) reads
@@ -51,6 +51,24 @@ wolf build src/main.lu -o target/sniff
 target/sniff dump --debug-info prog            # or prog.dSYM on macOS
 target/sniff --version                         # sniff 0.1.0; src/wolf.pkg names the number
 ```
+
+The stub serves one program to one client over the GDB remote protocol (S8):
+
+```sh
+wolf build src/sniff_server.lu -o target/sniff-server
+target/sniff-server :1234 prog [args...]           # listens on 127.0.0.1:1234; then `target remote :1234` in gdb or sniff
+target/sniff-server --non-loopback 0.0.0.0:1234 prog
+```
+
+**The protocol has no authentication: whoever connects to the port controls the program, and can read and write its
+memory and registers.** So the stub listens on the loopback address unless the address is given and is not a loopback
+one, and then only with `--non-loopback`, asked for by name; without it such an address is refused with that warning.
+It serves one client at a time: a second client gets an error reply naming that and is closed. It starts the program
+stopped at its first instruction and ends when its client does: `kill`, or the client going away, kills the program;
+`detach` takes out every breakpoint and watchpoint and lets the program run on. It offers its own target description, software and hardware breakpoints, watchpoints, the
+registers (the x87 and SSE ones written back on Linux; PAX refuses those writes, and the stub says so with an error
+reply), threads in all-stop with their names, and the interrupt; not multiprocess, Host I/O or non-stop. Its rows hold
+it to the pinned gdbserver run beside it on Linux, and on PAX's console under KVM (see docs/MAP.md).
 
 Modes: `--debug-info`, `--debug-abbrev`, `--debug-line`, `--debug-addr`,
 `--debug-str-offsets`, `--debug-ranges`, `--debug-rnglists`, `--debug-loc`,
