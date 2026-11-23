@@ -201,7 +201,24 @@
    "linux_tcg": "the image under TCG on the record host, as its own step of the record's manifest"
   },
   "goldens": "tests/evidence/remote/ from gdb's side of the rows under KVM, with a unit row holding the qSupported reply and the description equal across KVM, TCG and the Mac (the measurement found them equal under KVM and TCG). QEMU's description reaches the repository by its sha256 only, never as text (client.description_text)",
-  "unit_scored": "as built: the 22 packet rows in src/remote_test.lu and 7 description rows in src/tdesc_test.lu (caps and caps-past added: 1024 registers, inclusions four deep, 1 MiB of text), every one natively and on the checked machine. The stand-in stub over a socket is not in U1: U1 is pure, and the socket rows belong to the transport with U2"
+  "unit_scored": "as built: the 22 packet rows in src/remote_test.lu and 7 description rows in src/tdesc_test.lu (caps and caps-past added: 1024 registers, inclusions four deep, 1 MiB of text), every one natively and on the checked machine. The stand-in stub over a socket is not in U1: U1 is pure, and the socket rows belong to the transport with U2",
+  "moved_scored": [
+   {
+    "rows": "remote-kernel-write-mem, remote-kernel-write-reg",
+    "predicted": "in PR 1",
+    "score": "missed: sniff has no set command, so the session can write neither memory nor registers. Assignment is new debugger surface for a process, a core (where it must refuse) and a remote target, and gets its own contract before code. The rows stay in the row file as named skips; gdb's goldens stay in the lane's evidence"
+   },
+   {
+    "rows": "remote-kernel-regs",
+    "predicted": "in PR 1",
+    "score": "missed: gdb prints QEMU's control and flag registers (cr0, cr3, cr4, efer, mxcsr) from the description's flags types, which sniff's description reader skips. Reading flags types is a later change; the row stays as a named skip. info registers rip stays in PR 1"
+   },
+   {
+    "rows": "remote-refuse-hbreak-no-target",
+    "predicted": "not predicted",
+    "score": "added: hbreak is new user-visible surface. It is a remote target's Z1; on a process, a core, or with nothing to debug, sniff refuses it by name, where gdb would set a hardware breakpoint. The row holds sniff's own words"
+   }
+  ]
  },
  "plants": {
   "P1": {
