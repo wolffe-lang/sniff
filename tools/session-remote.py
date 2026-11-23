@@ -1514,6 +1514,11 @@ def cmd_selftest(_a):
     assert running and rc is None, (rc, running)
     rc, err, running = refusal_run([sys.executable, '-c', 'import sys; sys.stderr.write("no"); sys.exit(2)'], 5.0)
     assert not running and rc == 2 and err == 'no', (rc, err, running)
+    # on PAX too a driver exception is a fault by name, and never a retry
+    def lost():
+        raise ConnectionResetError(104, 'Connection reset by peer')
+    got, failed = pax_safely(lost)
+    assert got[0] == 'FAULT' and 'ConnectionResetError' in got[1] and not failed, (got, failed)
     # a red is the row's own comparison: a driver exception, a stub that never listened, and either side's silence
     # are faults by name, never a comparison's FAIL
     def broken(_a, _row, _out):
