@@ -412,6 +412,26 @@
    "check": "loopback-default",
    "prog": "c/calls/gcc-O0/prog",
    "why": "`:PORT` listens on 127.0.0.1 alone, as the kernel's socket table shows, and says so"
+  },
+  {
+   "name": "server-idle-cost",
+   "kind": "server",
+   "check": "idle-cost",
+   "prog": "c/sleeper/gcc-O0/prog",
+   "args": [
+    "1000"
+   ],
+   "why": "the loop polls only while the program runs: stopped with a silent client sniff-server uses no CPU tick and at most 2 wakeups in 5 s; running it wakes about ten times a second (its 100 ms wait), never past fifteen; the row states each number"
+  },
+  {
+   "name": "server-interrupt-latency",
+   "kind": "server",
+   "check": "interrupt-latency",
+   "prog": "c/sleeper/gcc-O0/prog",
+   "args": [
+    "1000"
+   ],
+   "why": "the interrupt byte stops a running program with SIGINT's T02 within 500 ms, five times the loop's 100 ms wait; the row states the time measured"
   }
  ]
 }

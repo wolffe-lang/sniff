@@ -389,7 +389,8 @@ def cmd_skip(a):
 
 # sniff-server's rows (kind server): the stub on loopback in this host, its client this harness or the pinned gdb. Each
 # row's check names what it holds; the stub is started by its recorded pid and ended by it.
-SERVER_CHECKS = ('refuse-second', 'refuse-non-loopback', 'loopback-default')
+SERVER_CHECKS = ('refuse-second', 'refuse-non-loopback', 'loopback-default', 'idle-cost', 'interrupt-latency')
+RUN_POLL_MS = 100  # sniff-server's run_poll_ms: the longest wait on the sockets while the program runs
 LISTENING = re.compile(r'^Listening on (\S+):(\d+)$', re.M)
 
 
@@ -544,12 +545,112 @@ def check_loopback_default(a, row, out):
     return '; '.join(problems), 'listening on 127.0.0.1:PORT alone'
 
 
+def proc_cost(pid):
+    """(CPU ticks, context switches) a process has used: utime and stime from /proc/PID/stat, and its voluntary and
+    involuntary switches from /proc/PID/status (each wakeup from a wait is one)."""
+    stat = Path('/proc/%d/stat' % pid).read_text()
+    f = stat[stat.rindex(')') + 2:].split()
+    sw = 0
+    for line in Path('/proc/%d/status' % pid).read_text().splitlines():
+        if line.startswith(('voluntary_ctxt_switches:', 'nonvoluntary_ctxt_switches:')):
+            sw += int(line.split(':')[1])
+    return int(f[11]) + int(f[12]), sw
+
+
+def cost_problems(idle_ticks, idle_wakes, run_rate):
+    """A stopped program with a silent client costs nothing measurable (no CPU tick and at most 2 wakeups in 5 s);
+    a running one wakes about 1000/RUN_POLL_MS times a second, and never more than half again that."""
+    problems = []
+    if idle_ticks != 0:
+        problems.append('stopped with a silent client it used %d CPU ticks in 5 s' % idle_ticks)
+    if idle_wakes > 2:
+        problems.append('stopped with a silent client it woke %d times in 5 s' % idle_wakes)
+    if run_rate > 1.5 * 1000 / RUN_POLL_MS:
+        problems.append('running it woke %.1f times a second, past %.0f' % (run_rate, 1.5 * 1000 / RUN_POLL_MS))
+    return problems
+
+
+def latency_problems(reply, seconds):
+    """The interrupt byte stops a running program with SIGINT's stop reply (T02, measured: protocol 2) within five
+    times RUN_POLL_MS."""
+    problems = []
+    if not reply or not reply.startswith('T02'):
+        problems.append('the interrupt got %r, not a T02 stop reply' % reply)
+    if seconds > 5 * RUN_POLL_MS / 1000:
+        problems.append('the stop came %.0f ms after the interrupt, past %d ms' % (seconds * 1000, 5 * RUN_POLL_MS))
+    return problems
+
+
+def started(a, row, out):
+    port = free_port()
+    p, up = start_server(a, ['127.0.0.1:%d' % port, str(Path(a.fixtures) / row['prog'])] + row.get('args', []), out, row['name'])
+    if not up:
+        end_server(p, row['name'])
+        return None, None, None
+    c = socket.create_connection(('127.0.0.1', port), timeout=5)
+    ask(c, 'qSupported:swbreak+;vContSupported+')
+    ask(c, '?')
+    return p, c, port
+
+
+def check_idle_cost(a, row, out):
+    """What the polling loop costs: 5 s stopped with a silent client, then 5 s running (sniff-server's own ticks and
+    wakeups); each number stated."""
+    p, c, _port = started(a, row, out)
+    if p is None:
+        return 'sniff-server never said it was listening', ''
+    try:
+        time.sleep(0.5)
+        t0, s0 = proc_cost(p.pid)
+        time.sleep(5)
+        t1, s1 = proc_cost(p.pid)
+        c.sendall(frame('vCont;c'))
+        time.sleep(0.5)
+        t2, s2 = proc_cost(p.pid)
+        time.sleep(5)
+        t3, s3 = proc_cost(p.pid)
+        rate = (s3 - s2) / 5.0
+        c.sendall(b'\x03')
+        read_packet(c, 5)
+        c.sendall(b'+')
+        c.sendall(frame('k'))
+        c.close()
+    finally:
+        end_server(p, row['name'])
+    held = ('stopped, silent client: %d CPU ticks and %d wakeups in 5 s; running: %d CPU ticks in 5 s and %.1f wakeups a '
+            'second (the %d ms wait: %d)' % (t1 - t0, s1 - s0, t3 - t2, rate, RUN_POLL_MS, 1000 // RUN_POLL_MS))
+    return '; '.join(cost_problems(t1 - t0, s1 - s0, rate)), held
+
+
+def check_interrupt_latency(a, row, out):
+    """The interrupt byte to the stop reply, while the program runs: the time measured and its bound stated."""
+    p, c, _port = started(a, row, out)
+    if p is None:
+        return 'sniff-server never said it was listening', ''
+    try:
+        c.sendall(frame('vCont;c'))
+        time.sleep(1)
+        t = time.monotonic()
+        c.sendall(b'\x03')
+        reply = read_packet(c, 5)
+        took = time.monotonic() - t
+        c.sendall(b'+')
+        c.sendall(frame('k'))
+        c.close()
+    finally:
+        end_server(p, row['name'])
+    held = 'the stop reply %r came %.0f ms after the interrupt (bound %d ms, five times the %d ms wait)' % (
+        (reply or '')[:3], took * 1000, 5 * RUN_POLL_MS, RUN_POLL_MS)
+    return '; '.join(latency_problems(reply, took)), held
+
+
 def cmd_server(a):
     out = Path(a.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
     counts = {'pass': 0, 'fail': 0, 'skip': 0}
     checks = {'refuse-second': check_refuse_second, 'refuse-non-loopback': check_refuse_non_loopback,
-              'loopback-default': check_loopback_default}
+              'loopback-default': check_loopback_default, 'idle-cost': check_idle_cost,
+              'interrupt-latency': check_interrupt_latency}
     for row in load_rows(a.only, 'server'):
         if row.get('skip'):
             print('SKIP remote %s reason=%s' % (row['name'], row['skip']))
@@ -630,6 +731,11 @@ def cmd_selftest(_a):
     names = [r['name'] for r in rows]
     assert len(names) == len(set(names)), 'duplicate row names'
     assert frame('qC') == b'$qC#b4' and frame('') == b'$#00'
+    # the cost and latency rows' verdicts, held red on planted numbers
+    assert cost_problems(0, 0, 10.0) == [] and cost_problems(0, 2, 14.9) == []
+    assert cost_problems(1, 0, 10.0) and cost_problems(0, 3, 10.0) and cost_problems(0, 0, 15.1)
+    assert latency_problems('T02thread:4d2;', 0.12) == []
+    assert latency_problems('T02thread:4d2;', 0.51) and latency_problems('T05thread:4d2;', 0.1) and latency_problems(None, 0.1)
     for r in [r for r in rows if r.get('kind') == 'server']:
         assert r['name'].startswith('server-') and r.get('check') in SERVER_CHECKS, r['name']
         assert r.get('prog', '').startswith('c/') and r.get('why'), 'a server row names its fixture and says what it holds: ' + r['name']
