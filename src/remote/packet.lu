@@ -1,0 +1,167 @@
+// The GDB manual's Remote Serial Protocol: Overview (framing, the checksum, the `}` escape, run-length
+// encoding, hex numbers), Standard Replies, Packet Acknowledgment, and Interrupts (the byte 0x03).
+// Pure: no I/O. The transport feeds the bytes it reads to `scan` and writes what `frame` builds.
+// Every cap below has a unit row at its value and one past it (src/remote_test.lu).
+// Until the layer is built, every packet is refused and every helper answers nothing.
+
+/// Refusals of the packet layer, each by name.
+pub error PacketError = {
+    packet_too_long,
+    reply_too_long,
+    unescaped_byte,
+    bad_hex,
+    bad_escape,
+    bad_run_length,
+    notification_refused,
+    resend_limit,
+    reply_timeout,
+}
+
+/// The most data sniff sends in one packet, whatever the stub's PacketSize says.
+pub const send_cap_max: int = 16384
+/// The send cap before the stub has given a PacketSize or a `g` reply: a connect's packets are short.
+pub const send_cap_floor: int = 256
+/// The most data a reply may hold, as framed and after its runs are expanded.
+pub const reply_cap: int = 65536
+/// A packet goes again at most this many times, after a `-` or after reply_ms passes unanswered.
+pub const resend_cap: int = 3
+/// Milliseconds for an acknowledgment, or for the reply to a packet that does not resume the target:
+/// the default the manual gives for `set remotetimeout` (Remote Configuration).
+pub const reply_ms: int = 2000
+
+/// `scan` found less than a whole frame: read more and scan again from the same place.
+pub const scan_need: int = 0
+/// `scan` found `+`, the acknowledgment (Overview).
+pub const scan_ack: int = 1
+/// `scan` found `-`, the request to send again (Overview).
+pub const scan_nack: int = 2
+/// `scan` found a whole packet.
+pub const scan_packet: int = 3
+/// `scan` found a byte outside any packet, which is skipped.
+pub const scan_junk: int = 4
+/// `scan` found the interrupt byte 0x03 outside a packet (Interrupts).
+pub const scan_interrupt: int = 5
+
+/// One step of the receiver: its kind, the bytes it consumed, and for a packet its data as framed
+/// (escapes and runs not yet undone) and whether the checksum holds.
+pub struct Scan {
+    pub kind: int,
+    pub used: int,
+    pub data: List[byte],
+    pub sum_ok: bool,
+}
+
+/// An empty reply: the packet is not supported (Standard Replies).
+pub const reply_empty: int = 0
+/// The reply `OK`.
+pub const reply_ok: int = 1
+/// `E` and two hex digits: an error whose number the protocol does not define (Standard Replies).
+pub const reply_error: int = 2
+/// `E.` and text: an error in words (Standard Replies).
+pub const reply_error_text: int = 3
+/// Any other reply: the packet's own data.
+pub const reply_data: int = 4
+
+/// The sum of the data's bytes modulo 256 (Overview).
+pub fn checksum(data: List[byte]) -> int {
+    0
+}
+
+/// `$` DATA `#` and the checksum's two lower-case hex digits (Overview). sniff's packets are text it
+/// builds from names and hex, so a `$`, `#`, `}` or `*` in DATA is refused by name, never escaped.
+pub fn frame(data: str, cap: int) -> List[byte] ! PacketError {
+    packet_too_long
+}
+
+/// The interrupt: the single byte 0x03, sent outside any packet (Interrupts).
+pub fn interrupt_byte() -> List[byte] {
+    []
+}
+
+/// What starts at buf[start]. A packet's data is everything to its `#`; its checksum is the next two
+/// hex digits, either case. A frame whose data passes reply_cap is refused, and so is a notification
+/// (`%`): notifications belong to non-stop mode, outside what sniff speaks.
+pub fn scan(buf: List[byte], start: int) -> Scan ! PacketError {
+    reply_too_long
+}
+
+/// A reply's data with its runs expanded (Overview: `C*N` is C and N-29 more of it, N printable and
+/// never `#` or `$`) and, for binary data, its escapes undone (`}` then the byte XOR 0x20). A run
+/// repeats the byte before it as decoded. The result is held to reply_cap.
+pub fn decode(raw: List[byte], binary: bool) -> List[byte] ! PacketError {
+    bad_run_length
+}
+
+/// Two lower-case hex digits a byte, in order (Overview: binary data in most packets).
+pub fn hex_encode(b: List[byte]) -> str {
+    ""
+}
+
+/// Bytes from pairs of hex digits, either case; an odd count or any other byte is bad_hex.
+pub fn hex_decode(s: List[byte]) -> List[byte] ! PacketError {
+    bad_hex
+}
+
+/// A number in hex with leading zeros suppressed (Overview); zero is `0`.
+pub fn hex_u64(v: u64) -> str {
+    ""
+}
+
+/// A hex number, either case, leading zeros allowed; at most 16 digits after them. An empty field,
+/// any other byte, or a value past 64 bits is bad_hex.
+pub fn parse_hex(s: List[byte]) -> u64 ! PacketError {
+    bad_hex
+}
+
+/// The kind of a reply's data (Standard Replies).
+pub fn reply_kind(d: List[byte]) -> int {
+    reply_data
+}
+
+/// The number of an `E NN` reply; -1 for any other reply.
+pub fn error_number(d: List[byte]) -> int {
+    -1
+}
+
+/// The data cap for what sniff sends: the stub's PacketSize (General Query Packets, qSupported) when it
+/// gave one, else the length of its `g` reply's data as the manual says gdb guesses it, else the
+/// floor; never past send_cap_max.
+pub fn send_cap(packet_size: int, g_len: int) -> int {
+    0
+}
+
+/// The acknowledgment state of one connection (Packet Acknowledgment): whether `+` and `-` are still
+/// spoken, and how many times the packet in flight has gone again.
+pub struct Ack {
+    pub no_ack: bool,
+    pub resends: int,
+}
+
+/// A new connection's state: acknowledgments on, no resends spent (Packet Acknowledgment).
+pub fn ack_state() -> Ack {
+    Ack { no_ack: false, resends: 0 }
+}
+
+/// The packet in flight must go again (a `-`, or reply_ms passing): refused once resend_cap is spent.
+/// Returns how many resends are now spent.
+pub fn resend(mut a: Ack) -> int ! PacketError {
+    resend_limit
+}
+
+/// The packet in flight was acknowledged: the next one starts with no resends spent.
+pub fn acked(mut a: Ack) {
+}
+
+/// After the stub's `OK` to QStartNoAckMode and sniff's `+` for it, neither side acknowledges again.
+pub fn start_no_ack(mut a: Ack) {
+}
+
+/// Whether a packet sent or received on this connection is acknowledged.
+pub fn wants_ack(a: Ack) -> bool {
+    false
+}
+
+/// A wait of ms milliseconds for an acknowledgment or a reply: past reply_ms it is reply_timeout.
+pub fn waited(ms: int) -> int ! PacketError {
+    reply_timeout
+}
