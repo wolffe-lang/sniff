@@ -564,6 +564,14 @@ def frame_relative(fact, frame):
     return ['mem', at, ['%s%+d' % (at, w - addr) if i in frame['offsets'] else w for i, w in enumerate(fact[2])]]
 
 
+def frame_note(row, stored, read):
+    """A frame row's PASS line says where each side read, so a take shows how far its stack moved."""
+    at = [[f[1] for f in facts if f[0] == 'mem'] for facts in (stored, read)]
+    if not row.get('frame') or len(at[0]) != 1 or len(at[1]) != 1:
+        return ''
+    return ' [%s read at: lldb 0x%x, sniff 0x%x, sniff-lldb %+d]' % (row['frame']['at'], at[0][0], at[1][0], at[1][0] - at[0][0])
+
+
 XG = re.compile(r'^x/(\d+)xg (\$\w+)$')
 LLDB_READ = re.compile(r'^memory read -s8 -fx -c(\d+) (\$\w+)$')
 
@@ -811,10 +819,10 @@ def check_rows(a, rows, made, lin, roots):
                 print('FAIL %s %s' % (r['name'], why))
                 fails += 1
         else:
-            want = comparable(r, json.loads((EVID / (r['name'] + '.facts.json')).read_text()))
-            got = comparable(r, facts_sniff(out))
+            stored, read = json.loads((EVID / (r['name'] + '.facts.json')).read_text()), facts_sniff(out)
+            want, got = comparable(r, stored), comparable(r, read)
             if got == want:
-                print('PASS %s facts=%d' % (r['name'], len(got)))
+                print('PASS %s facts=%d%s' % (r['name'], len(got), frame_note(r, stored, read)))
             else:
                 i = next((i for i in range(max(len(got), len(want))) if (got[i] if i < len(got) else None) != (want[i] if i < len(want) else None)), 0)
                 print('FAIL %s fact %d: lldb %r sniff %r' % (r['name'], i + 1, want[i] if i < len(want) else None, got[i] if i < len(got) else None))
