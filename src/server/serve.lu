@@ -56,6 +56,9 @@ struct Stub {
     w_lens: List[int],
     w_kinds: List[int],
     w_types: List[int],
+    fresh: List[int],
+    owed: List[int],
+    moving: List[int],
 }
 
 fn no_bytes() -> List[byte] { let n: List[byte] = []; n }
@@ -303,24 +306,86 @@ fn resume(mut st: Stub, r: Request) -> str {
         sig = h
     }
     let who = if r.num > 0 { r.num } else { st.sel }
+    var moving: List[int] = []
     if r.step {
         if platform.target_step(platform.target_thread(st.t, who), sig) < 0 { return "E01" }
         st.stepped = who
+        (mut moving).push(who)
     } else {
         for tid in platform.target_task_ids(st.t) {
             let s = if tid == who { sig } else { 0 }
-            let _ = platform.target_cont(platform.target_thread(st.t, tid), s)
+            if platform.target_cont(platform.target_thread(st.t, tid), s) >= 0 { (mut moving).push(tid) }
         }
         st.stepped = 0
     }
+    st.moving = moving
     st.running = true
     ""
+}
+
+fn index_in(l: List[int], x: int) -> int {
+    var i: int = 0
+    while i < l.len { if l[i] == x { return i }; i += 1 }
+    -1
+}
+
+fn without(l: List[int], x: int) -> List[int] {
+    var out: List[int] = []
+    for y in l { if y != x { (mut out).push(y) } }
+    out
+}
+
+// All-stop: every other thread the loop set running is stopped before the client hears of a stop (SIGSTOP by tgkill,
+// then its stop awaited; a thread already stopped is never sent one, so no wait can block).
+// A thread that stopped for something else first keeps that for later: a breakpoint it hit has its pc moved back so
+// it hits again, and the SIGSTOP it still owes is swallowed when it comes.
+fn halt_others(mut st: Stub, except: int) {
+    var moving: List[int] = []
+    for tid in st.moving { (mut moving).push(tid) }
+    st.moving = no_ints()
+    for tid in moving {
+        if tid != except {
+            let _ = platform.target_tgkill(st.t, st.t.pid, tid, 19)
+            let s = platform.target_wait_pid(st.t, tid)
+            if s >= 0 && (s & 255) == 127 && ((s >> 8) & 255) != 19 {
+                (mut st.owed).push(tid)
+                if ((s >> 8) & 255) == 5 {
+                    let tt = platform.target_thread(st.t, tid)
+                    var r = platform.target_regs(tt)
+                    if r.len >= 27 && r[16] > 0 && point_index(st, r[16] - 1) >= 0 {
+                        r[16] = r[16] - 1
+                        let _ = platform.target_set_regs(tt, r)
+                    }
+                }
+            }
+        }
+    }
 }
 
 // The reply for the stop the program just made, and the stub's own bookkeeping: a breakpoint's pc moved back to the
 // breakpoint (the stub's duty on x86 with swbreak), a watch's slot named, an exit or a kill ending the program.
 fn stopped(mut st: Stub, w: platform.Waited) -> str {
     let status = w.status
+    let leader = w.tid == st.t.pid
+    if !leader && ((status & 255) != 127) {
+        // a thread other than the program's first ended: the program goes on
+        st.moving = without(st.moving, w.tid)
+        return ""
+    }
+    if (status & 255) == 127 && (status >> 16) == platform.event_clone {
+        // a new thread: traced from its start (TRACECLONE); its first stop is swallowed below
+        let nt = platform.target_event_pid(platform.target_thread(st.t, w.tid))
+        if nt > 0 { (mut st.fresh).push(nt) }
+        let _ = platform.target_cont(platform.target_thread(st.t, w.tid), 0)
+        return ""
+    }
+    if (status & 255) == 127 && ((status >> 8) & 255) == 19 && (index_in(st.fresh, w.tid) >= 0 || index_in(st.owed, w.tid) >= 0) {
+        // a new thread's first stop, or the stop sniff-server sent to halt a thread: neither is the client's
+        st.fresh = without(st.fresh, w.tid)
+        st.owed = without(st.owed, w.tid)
+        if st.running && platform.target_cont(platform.target_thread(st.t, w.tid), 0) >= 0 { (mut st.moving).push(w.tid) }
+        return ""
+    }
     st.sel = w.tid
     if (status & 127) == 0 {
         st.alive = false
@@ -362,6 +427,7 @@ fn stopped(mut st: Stub, w: platform.Waited) -> str {
         }
     }
     st.stepped = 0
+    halt_others(mut st, w.tid)
     let rep = stop_reply(sig, w.tid, reason, addr) else |e| {
         say("signal {sig} has no measured protocol number ({e}): the stop is refused")
         return "E.sniff-server has no measured protocol number for host signal {sig}"
@@ -536,7 +602,8 @@ pub fn serve(at: Listen, prog: str, args: List[str]) -> int {
     let first = stop_reply(5, pid, "", 0) else { "T05" }
     var st = Stub { lfd: lfd, cfd: cfd, t: t, pending: no_bytes(), no_ack: false, running: false, alive: true,
                     done: false, sel: pid, stepped: 0, last: first, cursor: 0, bp_addrs: no_u64s(), bp_bytes: no_bytes(),
-                    w_addrs: no_u64s(), w_lens: no_ints(), w_kinds: no_ints(), w_types: no_ints() }
+                    w_addrs: no_u64s(), w_lens: no_ints(), w_kinds: no_ints(), w_types: no_ints(), fresh: no_ints(),
+                    owed: no_ints(), moving: no_ints() }
     while !st.done {
         let wait_ms = if st.running { run_poll_ms } else { 0 - 1 }
         let nothing: List[int] = []
