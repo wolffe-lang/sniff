@@ -508,7 +508,7 @@ def check_refuse_second(a, row, out):
     problems = []
     try:
         if not up:
-            return 'sniff-server never said it was listening', ''
+            return FAULT + 'sniff-server never said it was listening', ''
         first = socket.create_connection(('127.0.0.1', port), timeout=5)
         r1 = ask(first, 'qSupported:swbreak+;vContSupported+')
         if not r1 or 'PacketSize=' not in r1:
@@ -567,7 +567,7 @@ def check_loopback_default(a, row, out):
     problems = []
     try:
         if not up:
-            return 'sniff-server never said it was listening', ''
+            return FAULT + 'sniff-server never said it was listening', ''
         if up.group(1) != '127.0.0.1' or int(up.group(2)) != port:
             problems.append('it said Listening on %s:%s' % (up.group(1), up.group(2)))
         if tcp_sockets(port) != [('0100007F', '0A')]:
@@ -633,7 +633,7 @@ def check_idle_cost(a, row, out):
     wakeups); each number stated."""
     p, c, _port = started(a, row, out)
     if p is None:
-        return 'sniff-server never said it was listening', ''
+        return FAULT + 'sniff-server never said it was listening', ''
     try:
         time.sleep(0.5)
         t0, s0 = proc_cost(p.pid)
@@ -661,7 +661,7 @@ def check_interrupt_latency(a, row, out):
     """The interrupt byte to the stop reply, while the program runs: the time measured and its bound stated."""
     p, c, _port = started(a, row, out)
     if p is None:
-        return 'sniff-server never said it was listening', ''
+        return FAULT + 'sniff-server never said it was listening', ''
     try:
         c.sendall(frame('vCont;c'))
         time.sleep(1)
@@ -690,10 +690,12 @@ def symbol(prog, name):
 
 def thread_ids(ask_fn):
     """Every thread id by qfThreadInfo and then qsThreadInfo until `l` (General Query Packets: a reply may hold one id
-    or several), or None when the first reply is no list."""
+    or several): [] when the first reply is no list, None when there is no reply."""
     first = ask_fn('qfThreadInfo')
-    if not first or not first.startswith('m'):
+    if first is None:
         return None
+    if not first.startswith('m'):
+        return []
     ids, got = [], first
     for _ in range(4096):
         if not got or not got.startswith('m'):
@@ -731,6 +733,32 @@ def oracle_silent(answers):
     return any(v is None or (isinstance(v, (list, dict)) and oracle_silent(v)) for v in vals)
 
 
+# A row's FAIL is its own comparison, or a fault by this prefix: the driver lost its connection or its process, a stub
+# never listened, or a side gave no reply where one was asked for. A red is never a fault (the rig's red steps
+# refuse a fault line by this prefix).
+FAULT = 'fault: '
+
+
+def run_check(fn, a, row, out):
+    """A row's check, a driver exception made a fault by name."""
+    try:
+        return fn(a, row, out)
+    except (OSError, subprocess.SubprocessError) as e:
+        return FAULT + '%s: %s (the driver lost its connection or its process; nothing compared)' % (type(e).__name__, e), ''
+
+
+def compare(mine, theirs, what):
+    """sniff-server's answers against gdbserver's: a fault when either side gave no reply ('-' is a request not made,
+    because an earlier answer ruled it out), else the comparison."""
+    if oracle_silent(mine):
+        return FAULT + 'the stub gave no reply (sniff-server %r): nothing compared' % (mine,), ''
+    if oracle_silent(theirs):
+        return FAULT + 'the oracle gave no reply (gdbserver %r): nothing compared' % (theirs,), ''
+    if mine != theirs:
+        return '%s: sniff-server %r, gdbserver %r' % (what, mine, theirs), ''
+    return '', '%s equal to gdbserver\'s: %r' % (what, mine)
+
+
 def both_stubs(a, row, out, steps):
     """steps(socket, prog) run against sniff-server and then against the pinned gdbserver, each on its own free port
     with the row's fixture and arguments: (sniff-server's answers, gdbserver's), or a reason one never listened."""
@@ -746,7 +774,7 @@ def both_stubs(a, row, out, steps):
             time.sleep(0.05)
         if not ANY_LISTENING.search(log.read_text(errors='replace')):
             end_server(p, row['name'])
-            return None, None, '%s never said it was listening' % who
+            return None, None, FAULT + '%s never said it was listening' % who
         c = socket.create_connection(('127.0.0.1', port), timeout=5)
         # the pinned gdb's own opening, in its order (its remote log): qSupported, `?`, then Hg for the thread named
         ask(c, 'qSupported:swbreak+;vContSupported+')
@@ -775,11 +803,7 @@ def check_same(a, row, out, steps, what):
     mine, theirs, why = both_stubs(a, row, out, steps)
     if why:
         return why, ''
-    if oracle_silent(theirs):
-        return 'the oracle gave no reply (gdbserver %r): nothing compared' % (theirs,), ''
-    if mine != theirs:
-        return '%s: sniff-server %r, gdbserver %r' % (what, mine, theirs), ''
-    return '', '%s equal to gdbserver\'s: %r' % (what, mine)
+    return compare(mine, theirs, what)
 
 
 def check_z1_hbreak(a, row, out):
@@ -787,10 +811,10 @@ def check_z1_hbreak(a, row, out):
     def steps(c, prog):
         addr = symbol(prog, row['symbol'])
         z = ask(c, 'Z1,%x,1' % addr)
-        stop = resumed(c) if z == 'OK' else None
-        g = ask(c, 'g') if stop else None
-        at = (g_field(g, G_RIP, 8) == addr) if g and len(g) >= 2 * (G_RIP + 8) else None
-        return {'Z1': z, 'stop': stop[:3] if stop else None, 'rip at the breakpoint': at}
+        stop = resumed(c) if z == 'OK' else '-'
+        g = ask(c, 'g') if stop not in (None, '-') else '-'
+        at = g if g in (None, '-') else (len(g) >= 2 * (G_RIP + 8) and g_field(g, G_RIP, 8) == addr)
+        return {'Z1': z, 'stop': stop if stop in (None, '-') else stop[:3], 'rip at the breakpoint': at}
     return check_same(a, row, out, steps, 'Z1, the stop and the pc')
 
 
@@ -799,9 +823,10 @@ def check_fp_write(a, row, out):
     value = '0102030405060708090a0b0c0d0e0f10'
     def steps(c, prog):
         g = ask(c, 'g')
-        w = ask(c, 'G' + g_with(g, G_XMM0, value)) if g else None
-        r = ask(c, 'g') if w is not None else None
-        return {'G with xmm0': w, 'xmm0 read back is the value': (r[2 * G_XMM0:2 * G_XMM0 + 32] == value) if r else None}
+        w = ask(c, 'G' + g_with(g, G_XMM0, value)) if g else ('-' if g == '' else None)
+        r = ask(c, 'g') if w not in (None, '-') else w
+        return {'g': None if g is None else 'read', 'G with xmm0': w,
+                'xmm0 read back is the value': r if r in (None, '-') else r[2 * G_XMM0:2 * G_XMM0 + 32] == value}
     return check_same(a, row, out, steps, 'the write and the read back')
 
 
@@ -811,10 +836,10 @@ def check_fp_tag(a, row, out):
     read, ftag written as 0x3fff (R7 in use, the rest empty), and read back."""
     def steps(c, prog):
         g = ask(c, 'g')
-        before = [g[2 * (G_FCTRL + 4 * i):2 * (G_FCTRL + 4 * i) + 8] for i in range(8)] if g else None
-        w = ask(c, 'G' + g_with(g, G_FTAG, 'ff3f0000')) if g else None
-        r = ask(c, 'g') if w is not None else None
-        return {'fctrl to fop': before, 'G with ftag': w, 'ftag read back': r[2 * G_FTAG:2 * G_FTAG + 8] if r else None}
+        before = [g[2 * (G_FCTRL + 4 * i):2 * (G_FCTRL + 4 * i) + 8] for i in range(8)] if g else g
+        w = ask(c, 'G' + g_with(g, G_FTAG, 'ff3f0000')) if g else ('-' if g == '' else None)
+        r = ask(c, 'g') if w not in (None, '-') else w
+        return {'fctrl to fop': before, 'G with ftag': w, 'ftag read back': r if r in (None, '-') else r[2 * G_FTAG:2 * G_FTAG + 8]}
     return check_same(a, row, out, steps, 'the x87 control registers, and the tag word written and read back')
 
 
@@ -828,8 +853,8 @@ def check_detach(a, row, out):
     mine, theirs, why = both_stubs(a, row, out, steps)
     if why:
         return why, ''
-    if oracle_silent(theirs):
-        return 'the oracle gave no reply (gdbserver %r): nothing compared' % (theirs,), ''
+    if oracle_silent(mine) or oracle_silent(theirs):
+        return compare(mine, theirs, 'the detach')
     want = 'done %s' % row['args'][0]
     for who, got in (('sniff-server', mine), ('gdbserver', theirs)):
         log = out / ('%s.%s' % (row['name'], who))
@@ -837,9 +862,7 @@ def check_detach(a, row, out):
         while time.time() < end and want not in log.read_text(errors='replace'):
             time.sleep(0.1)
         got['ran to its end'] = want in log.read_text(errors='replace')
-    if mine != theirs:
-        return 'the detach: sniff-server %r, gdbserver %r' % (mine, theirs), ''
-    return '', 'the detach equal to gdbserver\'s: %r' % mine
+    return compare(mine, theirs, 'the detach')
 
 
 def check_threads(a, row, out):
@@ -848,9 +871,10 @@ def check_threads(a, row, out):
     def steps(c, prog):
         addr = symbol(prog, row['symbol'])
         z = ask(c, 'Z0,%x,1' % addr)
-        stop = resumed(c) if z == 'OK' else None
-        ids = thread_ids(lambda q: ask(c, q)) if stop else None
-        return {'Z0': z, 'stop': stop[:3] if stop else None, 'threads listed': (len(ids) >= 2) if ids is not None else None}
+        stop = resumed(c) if z == 'OK' else '-'
+        ids = thread_ids(lambda q: ask(c, q)) if stop not in (None, '-') else '-'
+        return {'Z0': z, 'stop': stop if stop in (None, '-') else stop[:3],
+                'threads listed': ids if ids in (None, '-') else len(ids) >= 2}
     return check_same(a, row, out, steps, 'the stop and the thread list')
 
 
@@ -929,13 +953,13 @@ def check_gdb_session(a, row, out):
     fixture, both transcripts with the named normalisations, held equal."""
     got = session_script(row['row'])
     if got is None:
-        return 'session row %s is not one plain run' % row['row'], ''
+        return FAULT + 'session row %s is not one plain run' % row['row'], ''
     prog, args, cmds = got
     prog = Path(a.fixtures) / prog
     mine = gdb_through(a, 'sniff-server', prog, args, cmds, out, row['name'] + '.sniff-server')
     theirs = gdb_through(a, 'gdbserver', prog, args, cmds, out, row['name'] + '.gdbserver')
     if mine is None or theirs is None:
-        return 'a stub never listened, or gdb did not end in 120 s', ''
+        return FAULT + 'a stub never listened, or gdb did not end in 120 s', ''
     d = first_diff(session_normalise(theirs), session_normalise(mine))
     if d:
         return d, ''
@@ -966,12 +990,12 @@ def check_native_golden(a, row, out):
     (its standard output, then its standard error), with NATIVE_NORMALISE's two named drops."""
     got = session_script(row['row'])
     if got is None:
-        return 'session row %s is not one plain run' % row['row'], ''
+        return FAULT + 'session row %s is not one plain run' % row['row'], ''
     prog, args, cmds = got
     want = (NATIVE_GOLD / (row['row'] + '.out')).read_text() + (NATIVE_GOLD / (row['row'] + '.err')).read_text()
     mine = gdb_through(a, 'sniff-server', Path(a.fixtures) / prog, args, cmds, out, row['name'] + '.sniff-server')
     if mine is None:
-        return 'the stub never listened, or gdb did not end in 120 s', ''
+        return FAULT + 'the stub never listened, or gdb did not end in 120 s', ''
     d = first_diff(want, native_normalise(mine))
     if d:
         return d, ''
@@ -984,13 +1008,13 @@ def check_oracle_stable(a, row, out):
     byte-equal once each run's port is named."""
     got = session_script(row['row'])
     if got is None:
-        return 'session row %s is not one plain run' % row['row'], ''
+        return FAULT + 'session row %s is not one plain run' % row['row'], ''
     prog, args, cmds = got
     prog = Path(a.fixtures) / prog
     one = gdb_through(a, 'gdbserver', prog, args, cmds, out, row['name'] + '.first')
     two = gdb_through(a, 'gdbserver', prog, args, cmds, out, row['name'] + '.second')
     if one is None or two is None:
-        return 'gdbserver never listened, or gdb did not end in 120 s', ''
+        return FAULT + 'gdbserver never listened, or gdb did not end in 120 s', ''
     d = first_diff(stable_normalise(one), stable_normalise(two))
     if d:
         return 'gdbserver\'s transcript changed between two runs: ' + d, ''
@@ -1225,16 +1249,16 @@ def cmd_server_pax(a):
         name = r['name']
         why = ''
         if name not in reached:
-            why = 'never reached: its stub never said it was listening on the console'
+            why = FAULT + 'never reached: its stub never said it was listening on the console'
         elif mine[name] is None:
-            why = 'no answer: %d attempts in %.1f s (%s)' % (reached[name][0], reached[name][1], bound)
+            why = FAULT + 'no answer: %d attempts in %.1f s (%s)' % (reached[name][0], reached[name][1], bound)
         elif name not in served:
-            why = 'its stub did not end on the console'
+            why = FAULT + 'its stub did not end on the console'
         elif served[name][1] != '0':
-            why = 'sniff-server on PAX exited %s: %s' % (served[name][1], ' | '.join(served[name][0][-3:]))
+            why = FAULT + 'sniff-server on PAX exited %s: %s' % (served[name][1], ' | '.join(served[name][0][-3:]))
         elif r['check'] == 'pax-session':
             if theirs.get(name) is None:
-                why = 'no oracle: gdbserver never listened, or gdb did not end'
+                why = FAULT + 'no oracle: gdbserver never listened, or gdb did not end'
             else:
                 why = first_diff(pax_normalise(theirs[name]), pax_normalise(mine[name]))
         elif mine[name] != PAX_FP_WANT:
@@ -1294,10 +1318,7 @@ def cmd_server(a):
             print('FAIL remote %s no sniff-server at %s' % (row['name'], a.server))
             counts['fail'] += 1
             continue
-        try:
-            why, held = checks[row['check']](a, row, out)
-        except (OSError, subprocess.SubprocessError) as e:
-            why, held = '%s: %s' % (type(e).__name__, e), ''
+        why, held = run_check(checks[row['check']], a, row, out)
         if why:
             print('FAIL remote %s %s' % (row['name'], why))
             counts['fail'] += 1
@@ -1401,7 +1422,7 @@ def cmd_selftest(_a):
     assert thread_ids(lambda q: next(replies)) == ['5f3', '5f4', '5f5']
     replies = iter(['m4d2,4d3', 'l'])
     assert thread_ids(lambda q: next(replies)) == ['4d2', '4d3']
-    assert thread_ids(lambda q: None) is None and thread_ids(lambda q: '') is None
+    assert thread_ids(lambda q: None) is None and thread_ids(lambda q: '') == []
     # registers by g and G (gdbserver answers p and P with the empty reply): fields at the description's byte offsets
     g = '00' * G_RIP + '7740400000000000' + '00' * 400
     assert g_field(g, G_RIP, 8) == 0x404077 and g_with(g, G_RIP, '01').startswith('00' * G_RIP + '01404000')
