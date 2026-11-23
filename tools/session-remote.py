@@ -311,14 +311,37 @@ def cmd_selftest(_a):
     assert first_diff('a\nb\n', 'a\nc\n') == "line 2: want 'b' got 'c'"
     w = normalise('Old value = 0\r\nNew value = 10468460\r\n', 0, Path('/k'), sess, ['watch-values'])
     assert w == 'Old value = <VALUE>\nNew value = <VALUE>\n', repr(w)
-    s = normalise('\r\nProgram received signal SIGTRAP, Trace/breakpoint trap.\r\n0xffffffff800001e3 in pax_inb ()\r\n', 0, Path('/k'), sess, ['stop-location'])
-    assert s == '\nProgram received signal SIGTRAP, Trace/breakpoint trap.\n<LOCATION>\n', repr(s)
-    # a normalisation cannot hide a missing line: each transcript lacking one still differs from the golden
-    gold_s = s
-    no_frame = normalise('\r\nProgram received signal SIGTRAP, Trace/breakpoint trap.\r\n[Inferior 1 (process 1) killed]\r\n', 0, Path('/k'), sess, ['stop-location'])
-    assert first_diff(gold_s, no_frame), 'a missing frame line was hidden'
-    no_signal = normalise('\r\n0xffffffff800001e3 in pax_inb ()\r\n', 0, Path('/k'), sess, ['stop-location'])
-    assert first_diff(gold_s, no_signal), 'a missing signal line was hidden'
+    # stop-location: the frame a connect after a detach prints, in either of gdb's two frame forms
+    let_go = '[Inferior 1 (process 1) detached]\r\nRemote debugging using 127.0.0.1:41001\r\n'
+    end = '[Inferior 1 (process 1) killed]\r\n'
+    def loc(text):
+        return normalise(text, 41001, Path('/k'), sess, ['stop-location'])
+    gold_s = loc(let_go + '0xffffffff800001e3 in pax_inb ()\r\n' + end)
+    want_s = '[Inferior 1 (process 1) detached]\nRemote debugging using 127.0.0.1:PORT\n<LOCATION>\n[Inferior 1 (process 1) killed]\n'
+    assert gold_s == want_s, 'stop-location, the form 0x... in NAME (ARGS): ' + repr(gold_s)
+    with_line = loc(let_go + '0xffffffff80142b2d in smp.hold () at ./smp/smp.lu:273\r\n273\t        x = 1\r\n' + end)
+    assert with_line == want_s, 'stop-location, the form 0x... in NAME (ARGS) at FILE:LINE and its source line: ' + repr(with_line)
+    at_line = loc(let_go + 'boot_info.cmdline_has () at ./boot_info/boot_info.lu:184\r\n184\t                if x {\r\n' + end)
+    assert at_line == want_s, 'stop-location, the form NAME (ARGS) at FILE:LINE and its source line: ' + repr(at_line)
+    signalled = loc(let_go + '\r\nProgram received signal SIGTRAP, Trace/breakpoint trap.\r\n0xffffffff80000786 in pax_idle ()\r\n' + end)
+    assert signalled == want_s.replace('<LOCATION>', '\nProgram received signal SIGTRAP, Trace/breakpoint trap.\n<LOCATION>'), \
+        'stop-location keeps the signal line it follows: ' + repr(signalled)
+    # a line in neither form stays as it came, and so differs from the golden; so does a missing line
+    for name, text in (
+            ('a line in neither form', let_go + 'Cannot access memory at address 0xffffffff800001e3\r\n' + end),
+            ('a frame from a library', let_go + '0xffffffff800001e3 in pax_inb () from /lib/x.so\r\n' + end),
+            ('a bare name', let_go + 'pax_inb\r\n' + end),
+            ('a frame at a line without its source line', let_go + 'boot_info.cmdline_has () at ./boot_info/boot_info.lu:184\r\n' + end),
+            ('a source line of another line', let_go + 'boot_info.cmdline_has () at ./boot_info/boot_info.lu:184\r\n185\t    y\r\n' + end),
+            ('a missing frame line', let_go + end),
+            ('a missing signal line', let_go + '0xffffffff80000786 in pax_idle ()\r\n' + end),
+            ('a missing connect line', '[Inferior 1 (process 1) detached]\r\n0xffffffff800001e3 in pax_inb ()\r\n' + end)):
+        got = loc(text)
+        gold = signalled if name == 'a missing signal line' else gold_s
+        assert first_diff(gold, got), 'stop-location hid %s: %r' % (name, got)
+    # a connect that no detach came before keeps its frame: the machine was at reset, frozen
+    first = loc('Remote debugging using 127.0.0.1:41001\r\n0x000000000000fff0 in ?? ()\r\n')
+    assert first == 'Remote debugging using 127.0.0.1:PORT\n0x000000000000fff0 in ?? ()\n', 'stop-location took a first connect: ' + repr(first)
     gold_w = normalise('Hardware watchpoint 2: *(unsigned long *) 0xffffffff80652068\r\n\r\nOld value = 0\r\nNew value = 1\r\n', 0, Path('/k'), sess, ['watch-values'])
     no_hit = normalise('Old value = 0\r\nNew value = 1\r\n', 0, Path('/k'), sess, ['watch-values'])
     assert first_diff(gold_w, no_hit), 'a missing watchpoint line was hidden'
