@@ -2,7 +2,6 @@
 // packet layer's frames with its acknowledgments, resends and reply time (Overview, Packet
 // Acknowledgment), and the interrupt byte (Interrupts). Bytes read but not yet scanned stay in the
 // link between calls, so a reply that arrives with its acknowledgment is never lost.
-// Until the transport is built, every connection is refused.
 
 use std.net
 
@@ -37,7 +36,9 @@ pub struct Link {
 
 /// Connect to ADDR (`HOST:PORT`): a connection nobody answers is `refused`.
 pub fn open(addr: str) -> Link ! LinkError {
-    refused
+    let s = net.connect(addr)?
+    let none: List[byte] = []
+    Link { sock: s, ack: ack_state(), pending: none, wait_ms: reply_ms, cap: send_cap_floor }
 }
 
 /// Close the connection, sending nothing (Connecting: `disconnect`).
@@ -45,31 +46,120 @@ pub fn shut(take l: Link) -> () ! LinkError {
     net.close(take l.sock)?
 }
 
+fn drop_front(mut l: Link, n: int) {
+    var rest: List[byte] = []
+    var i = n
+    while i < l.pending.len { (mut rest).push(l.pending[i]); i += 1 }
+    l.pending = rest
+}
+
+/// Read what the socket has within ms (no limit when ms <= 0) onto the pending bytes. Returns false
+/// when the time passed with nothing read.
+fn fill(mut l: Link, ms: int) -> bool ! LinkError {
+    net.set_deadline(mut l.sock, ms)?
+    let got = net.read_bytes(mut l.sock, 65536) else |e| match e {
+        timeout => {
+            return false
+        },
+        closed => {
+            return closed
+        },
+        io => {
+            return io
+        },
+    }
+    for x in got { (mut l.pending).push(x) }
+    true
+}
+
+/// The next acknowledgment: 1 for `+`, 2 for `-`, 0 when wait_ms passed without one. A packet that
+/// comes first is left pending and counts as `+`. Bytes outside any packet are skipped.
+fn next_ack(mut l: Link) -> int ! LinkError {
+    var more = true
+    while more {
+        var looking = true
+        while looking && l.pending.len > 0 {
+            let sc = scan(l.pending, 0)?
+            if sc.kind == scan_need {
+                looking = false
+            } else if sc.kind == scan_packet {
+                return 1
+            } else {
+                drop_front(mut l, sc.used)
+                if sc.kind == scan_ack { return 1 }
+                if sc.kind == scan_nack { return 2 }
+            }
+        }
+        more = fill(mut l, l.wait_ms)?
+    }
+    0
+}
+
 /// Send one packet. With acknowledgments on, wait for `+`; after a `-`, or wait_ms with nothing, send
 /// it again, at most resend_cap times; then the command fails with resend_limit.
 pub fn send(mut l: Link, data: str) -> () ! LinkError {
-    io
+    let f = frame(data, l.cap)?
+    net.write_bytes(mut l.sock, f)?
+    if !wants_ack(l.ack) { return }
+    var waiting = true
+    while waiting {
+        let got = next_ack(mut l)?
+        if got == 1 {
+            acked(mut l.ack)
+            waiting = false
+        } else {
+            resend(mut l.ack)?
+            net.write_bytes(mut l.sock, f)?
+        }
+    }
 }
 
 /// The next packet's data as framed (escapes and runs not yet undone), acknowledged with `+`; one with
 /// a wrong checksum is answered `-` and waited for again, at most resend_cap times. ms <= 0 waits with
 /// no limit (a stop reply after a resumption); otherwise ms passing is reply_timeout.
 pub fn receive(mut l: Link, ms: int) -> List[byte] ! LinkError {
-    io
+    var bad: int = 0
+    var more = true
+    while more {
+        var looking = true
+        while looking && l.pending.len > 0 {
+            let sc = scan(l.pending, 0)?
+            if sc.kind == scan_need {
+                looking = false
+            } else {
+                drop_front(mut l, sc.used)
+                if sc.kind == scan_packet {
+                    if sc.sum_ok || !wants_ack(l.ack) {
+                        if wants_ack(l.ack) { net.write_bytes(mut l.sock, [43 as byte])? }
+                        return sc.data
+                    }
+                    if bad >= resend_cap { return resend_limit }
+                    bad += 1
+                    net.write_bytes(mut l.sock, [45 as byte])?
+                }
+            }
+        }
+        more = fill(mut l, ms)?
+    }
+    reply_timeout
 }
 
 /// Send a packet and return its reply's data with runs expanded (a text or hex reply).
 pub fn request(mut l: Link, data: str) -> List[byte] ! LinkError {
-    io
+    send(mut l, data)?
+    let raw = receive(mut l, l.wait_ms)?
+    decode(raw, false)?
 }
 
 /// Send a packet and return its reply's data with runs expanded and escapes undone (binary data, as in
 /// qXfer's replies).
 pub fn request_binary(mut l: Link, data: str) -> List[byte] ! LinkError {
-    io
+    send(mut l, data)?
+    let raw = receive(mut l, l.wait_ms)?
+    decode(raw, true)?
 }
 
 /// Write the interrupt byte 0x03, outside any packet (Interrupts).
 pub fn interrupt(mut l: Link) -> () ! LinkError {
-    io
+    net.write_bytes(mut l.sock, interrupt_byte())?
 }
