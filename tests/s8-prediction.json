@@ -216,7 +216,7 @@
    {
     "rows": "remote-kernel-write-mem, remote-kernel-write-reg",
     "predicted": "in PR 1",
-    "score": "missed: sniff has no set command, so the session can write neither memory nor registers. Assignment is new debugger surface for a process, a core (where it must refuse) and a remote target, and gets its own contract before code. The rows stay in the row file as named skips; gdb's goldens stay in the lane's evidence"
+    "score": "missed: sniff has no set command, so the session can write neither memory nor registers. Assignment is new debugger surface for a process, a core (where it must refuse) and a remote target, and gets its own contract before code. The rows stay in the row file as named skips; gdb's goldens for them are kept outside the repository until then"
    },
    {
     "rows": "remote-kernel-regs",
