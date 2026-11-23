@@ -1,18 +1,18 @@
-(lldb) target create "/Users/mfwolffe/lanes/sn08/build-c4b3f882c16f98ea3365fa380536676c840a503b/target/session-fixtures/c/calls/clang-O0/prog" --core "/Users/mfwolffe/lanes/sn08/build-c4b3f882c16f98ea3365fa380536676c840a503b/target/s3c/cores/calls-break.core"
-Core file '/Users/mfwolffe/lanes/sn08/build-c4b3f882c16f98ea3365fa380536676c840a503b/target/s3c/cores/calls-break.core' (arm64) was loaded.
-(lldb) command source -s 0 '/Users/mfwolffe/lanes/sn08/build-c4b3f882c16f98ea3365fa380536676c840a503b/target/s3c/lldb-core-calls-memory.lldb'
-Executing commands in '/Users/mfwolffe/lanes/sn08/build-c4b3f882c16f98ea3365fa380536676c840a503b/target/s3c/lldb-core-calls-memory.lldb'.
+(lldb) target create "/Users/mfwolffe/lanes/sn08/build-38dc233871a5a328c040874c2fac70292bab7f65/target/session-fixtures/c/calls/clang-O0/prog" --core "/Users/mfwolffe/lanes/sn08/build-38dc233871a5a328c040874c2fac70292bab7f65/target/s3c/cores/calls-depth.core"
+Core file '/Users/mfwolffe/lanes/sn08/build-38dc233871a5a328c040874c2fac70292bab7f65/target/s3c/cores/calls-depth.core' (arm64) was loaded.
+(lldb) command source -s 0 '/Users/mfwolffe/lanes/sn08/build-38dc233871a5a328c040874c2fac70292bab7f65/target/s3c/lldb-core-calls-memory.lldb'
+Executing commands in '/Users/mfwolffe/lanes/sn08/build-38dc233871a5a328c040874c2fac70292bab7f65/target/s3c/lldb-core-calls-memory.lldb'.
 (lldb) process status
 Process 0 stopped
 * thread #1, stop reason = ESR_EC_BRK_AARCH64 (fault address: 0x0)
-    frame #0: 0x0000000100000388 prog`count(limit=5) at main.c:12:9
-   9   	}
-   10  	
-   11  	int count(int limit) {
--> 12  	    int total = 0;
+    frame #0: 0x0000000100000338 prog`depth_sum(n=3) at main.c:6:9
+   3   	int plain_twice(int v);
+   4   	
+   5   	int depth_sum(int n) {
+-> 6   	    if (n == 0) return 0;
     	        ^
-   13  	    for (int i = 0; i < limit; i++) {
-   14  	        total += i;
-   15  	    }
-(lldb) memory read -s8 -fx -c1 $sp
-0x16fdff490: 0x000000016fdff4b0
+   7   	    int below = depth_sum(n - 1);
+   8   	    return n + below;
+   9   	}
+(lldb) memory read -s8 -fx -c2 $fp
+0x16fdff490: 0x000000016fdff4b0 0x00000001000003fc
