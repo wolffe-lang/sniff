@@ -58,6 +58,10 @@ struct Stub {
     w_types: List[int],
 }
 
+fn no_bytes() -> List[byte] { let n: List[byte] = []; n }
+fn no_u64s() -> List[u64] { let n: List[u64] = []; n }
+fn no_ints() -> List[int] { let n: List[int] = []; n }
+
 fn say(text: str) {
     eprint("sniff-server: {text}")
 }
@@ -147,7 +151,7 @@ fn write_register(st: Stub, n: int, b: List[byte]) -> bool {
     platform.target_set_regs(tt, r) >= 0
 }
 
-fn send(mut st: Stub, data: str) -> () ! ServerError {
+fn send(st: Stub, data: str) -> () ! ServerError {
     let f = remote.frame(data, 1048576) else { return invalid }
     net_write_bytes(st.cfd, f)?
     if st.no_ack { return }
@@ -478,7 +482,7 @@ fn client_bytes(mut st: Stub) -> bool {
                 if sc.sum_ok {
                     let text = str_from_utf8(sc.data) else { "" }
                     let rep = answer(mut st, sc.data)
-                    if !(st.running && rep == "") { send(mut st, rep) else { return false } }
+                    if !(st.running && rep == "") { send(st, rep) else { return false } }
                     // no-ack mode starts after the OK that agrees to it is acknowledged (Packet Acknowledgment)
                     if text == "QStartNoAckMode" { st.no_ack = true }
                 }
@@ -505,13 +509,11 @@ pub fn serve(at: Listen, prog: str, args: List[str]) -> int {
     let port = net_port(lfd) else { at.port }
     eprint("Listening on {at.host}:{port}")
     let cfd = net_accept(lfd) else |e| { say("no client: {e}"); let _ = platform.target_kill(t); return 1 }
-    let none: List[byte] = []
-    let no_addrs: List[u64] = []
-    let no_ints: List[int] = []
-    let first = stop_reply(5, t.pid, "", 0) else { "T05" }
-    var st = Stub { lfd: lfd, cfd: cfd, t: t, pending: none, no_ack: false, running: false, alive: true, done: false,
-                    sel: t.pid, stepped: 0, last: first, cursor: 0, bp_addrs: no_addrs, bp_bytes: none,
-                    w_addrs: no_addrs, w_lens: no_ints, w_kinds: no_ints, w_types: no_ints }
+    let pid = t.pid
+    let first = stop_reply(5, pid, "", 0) else { "T05" }
+    var st = Stub { lfd: lfd, cfd: cfd, t: t, pending: no_bytes(), no_ack: false, running: false, alive: true,
+                    done: false, sel: pid, stepped: 0, last: first, cursor: 0, bp_addrs: no_u64s(), bp_bytes: no_bytes(),
+                    w_addrs: no_u64s(), w_lens: no_ints(), w_kinds: no_ints(), w_types: no_ints() }
     while !st.done {
         let wait_ms = if st.running { run_poll_ms } else { 0 - 1 }
         let nothing: List[int] = []
@@ -529,7 +531,7 @@ pub fn serve(at: Listen, prog: str, args: List[str]) -> int {
             let w = platform.target_wait_any_now(st.t)
             if w.tid > 0 {
                 let rep = stopped(mut st, w)
-                if rep != "" { send(mut st, rep) else { st.done = true } }
+                if rep != "" { send(st, rep) else { st.done = true } }
             }
         }
     }
