@@ -346,7 +346,10 @@ stub equal to its transcript through gdbserver after four named normalisations: 
 which offers Host I/O, does gdb read a separate debug file over the connection and warn that file transfers can be
 slow), `inferior-name` (gdbserver's multiprocess names the inferior by its pid), `port` and `thread-id` (each run's
 own). gdbserver's transcript taken twice is held equal too, and every run names gdbserver and gdb by version and
-SHA-256. The kind `server-pax` rows run the stub, built static, in PAX's console image under KVM, reached through a
+SHA-256. One fixture, `step-gcc-calls`, is also held through the stub to the pinned gdb's native golden for the same
+static build, with two lines dropped by name from the stub's side alone, both gdb's own on a remote target:
+`connect-stop` (the stop at the first instruction a remote target reports on connecting) and `remote-kill` (gdb's
+line on leaving a remote target at the end of batch mode). The kind `server-pax` rows run the stub, built static, in PAX's console image under KVM, reached through a
 port QEMU forwards from the host's loopback (retried every 0.5 s for up to 60 s, twenty times the first round trip
 measured there), and hold seven session rows to gdbserver on Linux with the PAX set's `stack` rule as well, plus the
 SSE write's refusal. Hosted Linux runs the server rows (`tools/gate`); the record host runs the PAX ones
