@@ -593,6 +593,13 @@
    "why": "the session row's commands on its static fixture: gdb through sniff-server equals gdb through the pinned gdbserver, with the named normalisations"
   },
   {
+   "name": "server-native-step-gcc-calls",
+   "kind": "server",
+   "check": "native-golden",
+   "row": "step-gcc-calls",
+   "why": "one fixture held to the pinned gdb's native golden through the stub (tests/evidence/pax-linux/step-gcc-calls), with two lines dropped by name from the stub's side alone: the stop a remote target reports on connecting, and gdb's line on leaving a remote target"
+  },
+  {
    "name": "server-oracle-stable-step-gcc-calls",
    "kind": "server",
    "check": "oracle-stable",
