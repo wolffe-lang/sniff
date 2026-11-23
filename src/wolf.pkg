@@ -2,5 +2,5 @@ pkg {
     name: "sniff",
     version: "0.1.0",
     edition: "1",
-    capabilities: [env, fs, exec, ffi],
+    capabilities: [env, fs, exec, ffi, net],
 }
