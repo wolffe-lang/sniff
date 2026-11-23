@@ -127,32 +127,47 @@ fn byte_at(s: Session, addr: u64) -> int {
     r.data[0] as int
 }
 
+/// The frame-pointer fallback's rule (x86-64) for a frame whose return address is at the stack pointer: a
+/// function's first instruction, or its ret. cfa = rsp + 8, and rbp is still the caller's.
+pub const unwind_at_entry: int = 1
+/// The fallback's rule just past a function's `push %rbp`: cfa = rsp + 16, the caller's rbp at rsp.
+pub const unwind_after_push: int = 2
+/// The fallback's rule anywhere else in a function: the frame pointer's chain, cfa = rbp + 16.
+pub const unwind_frame_pointer: int = 3
+
+/// Which rule a frame takes: whether its pc is in code the session knows (the program's image or a library's),
+/// is a ret, is at or before its function's `push %rbp`, or just past it.
+pub fn fallback_rule(in_code: bool, at_ret: bool, before_push: bool, after_push: bool) -> int {
+    if at_ret || before_push { return unwind_at_entry }
+    if after_push { return unwind_after_push }
+    unwind_frame_pointer
+}
+
 /// A frame whose CFA and caller registers come from the frame pointer, with
 /// gdb's prologue/epilogue cases for a function with no CFI (x86-64).
-fn unwind_fp_x86(s: Session, f: Frame) -> Frame ! {no_caller} {
+fn unwind_fp_x86(s: Session, f: Frame, in_code: bool) -> Frame ! {no_caller} {
     let rsp = f.regs[7]
     let rbp = f.regs[6]
     let pc = f.pc
     let start = func_start(s.prog, file_or_zero(pc, s.base))
+    // the address of the function's `push %rbp` (past an endbr64), 0 when its start is unknown or has none
+    var push_at: u64 = 0
+    if start != 0 {
+        var a = start + s.base
+        if byte_at(s, a) == 243 && byte_at(s, a + 1) == 15 && byte_at(s, a + 2) == 30 && byte_at(s, a + 3) == 250 { a += 4 }
+        if byte_at(s, a) == 85 { push_at = a }
+    }
+    let at_ret = byte_at(s, pc) == 195
+    let rule = fallback_rule(in_code, at_ret, push_at != 0 && pc <= push_at, push_at != 0 && pc == push_at + 1)
     var cfa: u64 = rbp + 16
     var saved_rbp_at: u64 = rbp
     var rbp_saved = true
-    if byte_at(s, pc) == 195 {
-        // at ret: the frame is already torn down
+    if rule == unwind_at_entry {
         cfa = rsp + 8
         rbp_saved = false
-    } else if start != 0 {
-        var a = start + s.base
-        if byte_at(s, a) == 243 && byte_at(s, a + 1) == 15 && byte_at(s, a + 2) == 30 && byte_at(s, a + 3) == 250 { a += 4 }
-        if byte_at(s, a) == 85 {
-            if pc <= a {
-                cfa = rsp + 8
-                rbp_saved = false
-            } else if pc == a + 1 {
-                cfa = rsp + 16
-                saved_rbp_at = rsp
-            }
-        }
+    } else if rule == unwind_after_push {
+        cfa = rsp + 16
+        saved_rbp_at = rsp
     }
     let ra = rd64(s, cfa - 8) else { return no_caller }
     var regs = copy f.regs
@@ -167,10 +182,10 @@ fn unwind_fp_x86(s: Session, f: Frame) -> Frame ! {no_caller} {
 
 /// The frame-pointer unwind for this machine; arm64 also uses compact unwind and its prologue analysis.
 #[cfg(target = "x86_64-unknown-linux-gnu")]
-fn unwind_fp(s: Session, f: Frame, level: int) -> Frame ! {no_caller} { unwind_fp_x86(s, f) }
+fn unwind_fp(s: Session, f: Frame, level: int, in_code: bool) -> Frame ! {no_caller} { unwind_fp_x86(s, f, in_code) }
 
 #[cfg(target = "aarch64-apple-darwin")]
-fn unwind_fp(s: Session, f: Frame, level: int) -> Frame ! {no_caller} { unwind_arm64(s, f, level) }
+fn unwind_fp(s: Session, f: Frame, level: int, in_code: bool) -> Frame ! {no_caller} { unwind_arm64(s, f, level) }
 
 /// Unwind through the CFI rules of fde. The CFA of frame f is filled in.
 fn unwind_cfi(s: Session, f: Frame, fi: int, lookup: u64) -> Frame ! {no_caller} {
@@ -259,7 +274,9 @@ fn compute_frames(mut s: Session) {
                 f.basis = "cfi"
                 caller = unwind_lib(s, f, li, lfi, lookup) else { next_ok = false; copy f }
             } else {
-                caller = unwind_fp(s, f, level) else { next_ok = false; copy f }
+                // whether the pc is in code the session knows: the program's image or a library's
+                let in_code = in_image(s.prog, file_pc) || li >= 0
+                caller = unwind_fp(s, f, level, in_code) else { next_ok = false; copy f }
                 f.fallback = caller.fallback
                 f.basis = caller.basis
             }
