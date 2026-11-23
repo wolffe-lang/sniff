@@ -182,6 +182,16 @@
    "`detach`: `Detaching from program: KERNEL, process 1`, `Ending remote debugging.`, `[Inferior 1 (process 1) detached]`; a reconnect prints `Program received signal SIGTRAP, Trace/breakpoint trap.` and the location; `disconnect`: `Ending remote debugging.`; `kill`: `[Inferior 1 (process 1) killed]`",
    "session B under KVM: `x/2xg` of the kernel at reset prints the address line and `Cannot access memory at address 0xffffffff80000000`; `continue` with `break kmain` prints `Warning:`, `Cannot insert breakpoint 1.`, `Cannot access memory at address 0xffffffff80117633`, a blank line and `Command aborted.`; under TCG the same `continue` stops at kmain",
    "session C: `detach` and `kill` with no target: `The program is not being run.`; `disconnect`: ``You can't do that when your target is `exec'``; `target remote 127.0.0.1:1` and `:70000`: `could not connect: Connection refused.`; an unresolvable name: `NAME:PORT: cannot resolve name: Temporary failure in name resolution`; `127.0.0.1:`: `Missing port on hostname '127.0.0.1:'`; no address: the three-line `To open a remote debug connection, you need to specify what` paragraph; `info threads`: `No threads.`"
+  ],
+  "scored": [
+   {
+    "predicted": "no normalisation beyond the port and the kernel's path at the fixed breakpoints",
+    "score": "wrong for two rows: a watchpoint's old and new values follow the time (watch-values), and the frame a connect prints after a detach is wherever the machine ran to (stop-location). The first stop-location rule waited for a `Program received signal` line, which gdb does not print in that row, so it never fired; a hold under TCG found the frame in gdb's other form (`NAME (ARGS) at FILE:LINE` and its source line). The rule now takes a frame in either form, `0x... in NAME (ARGS)` with or without ` at FILE:LINE`, or `NAME (ARGS) at FILE:LINE`, with the source line a frame naming a line is followed by, and nothing else"
+   },
+   {
+    "predicted": "a connect after a detach prints `Program received signal SIGTRAP, Trace/breakpoint trap.` before the frame (session A: after a stop by SIGINT, both a detach and a disconnect were followed by it)",
+    "score": "wrong as stated: after a breakpoint's stop the rows show the frame alone. Predicted now, before its rows are captured: a connect prints the SIGTRAP line when the last stop reported since the target was last resumed was reported as a signal. PENDING: remote-kernel-detach-signalled and remote-kernel-disconnect-signalled"
+   }
   ]
  },
  "kernel_symbols": {
