@@ -321,6 +321,39 @@ Mac, whose build has no x86-64 register, CFI or call tables for the kernel. Boun
 (`set var`) to memory or registers, no `<flags>` types in `info registers` (three rows wait for these as named
 skips), and no Mac build for the kernel rows.
 
+### The remote stub (S8, sniff-server)
+
+`src/sniff_server.lu` and `src/server/` are the stub side of the same protocol, from the same manual nodes:
+`sniff-server [--non-loopback] [HOST]:PORT PROG [ARGS...]` starts PROG stopped at its first instruction under
+`ptrace(2)` and serves it to one client. The protocol has no authentication, so the address is loopback unless the
+caller names another and asks for it with `--non-loopback`; a second client while one is attached gets an error reply
+naming that and is closed. `requests.lu` parses the requests and the listen address, `replies.lu` writes the stop
+replies (signal numbers from `tests/server-signals.tsv`, each measured under the pinned gdbserver; an unmeasured one
+is refused by name), qSupported's reply, the thread list with names and the stub's own target description (core, SSE
+and segment features, EFLAGS's flags from the processor manual), `x87.lu` turns FXSAVE's abridged tag byte into gdb's
+full tag word and back, and `serve.lu` is the loop: one wait on the client and the listening socket (none at all while
+the program is stopped, a 100 ms one while it runs, so an interrupt is answered within that), breakpoints by `int3`
+with `swbreak`, hardware breakpoints and watchpoints in the debug registers, the registers read by `g` and `p` and written by
+`P` (the x87 and SSE ones through the FXSAVE area) and by `G` (the general ones), threads in all-stop (each new one traced from its clone, every other
+running thread halted before a stop is reported), `D` (every breakpoint and watchpoint out, every thread let go) and
+`k`. PAX answers PTRACE_SETFPREGS with EIO, so there the stub answers an x87 or SSE write with an error reply.
+
+The server rows (`tests/remote-rows.json`, kind `server`) hold the stub to the pinned gdbserver run beside it in the
+same container, on the same static fixture: packet by packet for the address rules, the one-client rule, the idle
+cost and the interrupt's latency (each row states its number), the debug-register breakpoint, the SSE write, the tag
+word, the threads and the detach, and through the pinned gdb for seventeen session rows, gdb's transcript through the
+stub equal to its transcript through gdbserver after four named normalisations: `host-io` (only through gdbserver,
+which offers Host I/O, does gdb read a separate debug file over the connection and warn that file transfers can be
+slow), `inferior-name` (gdbserver's multiprocess names the inferior by its pid), `port` and `thread-id` (each run's
+own). gdbserver's transcript taken twice is held equal too, and every run names gdbserver and gdb by version and
+SHA-256. The kind `server-pax` rows run the stub, built static, in PAX's console image under KVM, reached through a
+port QEMU forwards from the host's loopback (retried every 0.5 s for up to 60 s, twenty times the first round trip
+measured there), and hold seven session rows to gdbserver on Linux with the PAX set's `stack` rule as well, plus the
+SSE write's refusal. Hosted Linux runs the server rows (`tools/gate`); the record host runs the PAX ones
+(`tools/gate-pax` builds the image, `tools/gate-remote` boots it); every other host skips them by name with the
+counts held. Boundaries that remain: no multiprocess, Host I/O, non-stop or `vCont;t`, no Mac build of the stub, and
+on PAX no x87 or SSE register writes.
+
 Every load base comes off an address through `file_address` (a census in `tests/test_session.py` holds that no other
 code subtracts one): an address or pc below a moved program (`x/2xg 0`, a call through a null function pointer) finds
 nothing instead of trapping. A frame at a pc in no known code takes its caller from the top of the stack on x86-64,
