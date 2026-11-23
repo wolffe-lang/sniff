@@ -203,6 +203,8 @@
     "server-stop-reply",
     "server-end-replies",
     "server-supported",
-    "server-description"
+    "server-description",
+    "server-listen-address",
+    "server-requests"
   ]
 }

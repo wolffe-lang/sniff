@@ -105,10 +105,83 @@ fn description_row() {
     print("PASS server-description")
 }
 
+fn listen_row() {
+    // the default is loopback: `:PORT` and `localhost:PORT` listen on 127.0.0.1, and 127.x.y.z is loopback; any other
+    // HOST must be asked for by name (--non-loopback), because whoever connects controls the program
+    let any = server.listen_address(":1234", false) else |e| { print("FAIL server-listen-address {e}"); return }
+    assert(any.host == "127.0.0.1" && any.port == 1234)
+    let named = server.listen_address("localhost:1234", false) else { return }
+    assert(named.host == "127.0.0.1")
+    let lo = server.listen_address("127.1.2.3:9", false) else { return }
+    assert(lo.host == "127.1.2.3" && lo.port == 9)
+    let open = server.listen_address("0.0.0.0:1234", false)
+    assert("{open}" == "non_loopback_refused")
+    let guest = server.listen_address("10.0.2.15:1234", false)
+    assert("{guest}" == "non_loopback_refused")
+    let asked = server.listen_address("0.0.0.0:1234", true) else { return }
+    assert(asked.host == "0.0.0.0" && asked.port == 1234)
+    let no_port = server.listen_address("1234", false)
+    assert("{no_port}" == "bad_address")
+    let zero = server.listen_address(":0", false)
+    assert("{zero}" == "bad_address")
+    let past = server.listen_address(":65536", false)
+    assert("{past}" == "bad_address")
+    let six = server.listen_address("[::1]:1234", true)
+    assert("{six}" == "bad_address")
+    print("PASS server-listen-address")
+}
+
+fn requests_row() {
+    // each request's kind and fields (Packets, General Query Packets); anything else is the empty reply's
+    let m = server.request("m401000,4".bytes()) else |e| { print("FAIL server-requests {e}"); return }
+    assert(m.kind == server.req_read && m.addr == 4198400 && m.len == 4)
+    let w = server.request("M401000,2:cc90".bytes()) else { return }
+    assert(w.kind == server.req_write && w.len == 2 && w.data[0] as int == 204 && w.data[1] as int == 144)
+    let z = server.request("Z0,401136,1".bytes()) else { return }
+    assert(z.kind == server.req_insert && z.num == 0 && z.addr == 4198710 && z.len == 1)
+    let wz = server.request("z2,404028,4".bytes()) else { return }
+    assert(wz.kind == server.req_remove && wz.num == 2 && wz.len == 4)
+    let c = server.request("vCont;c".bytes()) else { return }
+    assert(c.kind == server.req_resume && !c.step && c.sig == 0)
+    let s = server.request("vCont;s:4d2;c".bytes()) else { return }
+    assert(s.kind == server.req_resume && s.step && s.num == 1234)
+    let sig = server.request("vCont;C1e:4d2;c".bytes()) else { return }
+    assert(sig.kind == server.req_resume && !sig.step && sig.sig == 30 && sig.num == 1234)
+    let plain = server.request("C0b".bytes()) else { return }
+    assert(plain.kind == server.req_resume && plain.sig == 11)
+    let q = server.request("vCont?".bytes()) else { return }
+    assert(q.kind == server.req_vcont_query)
+    let h = server.request("Hg4d2".bytes()) else { return }
+    assert(h.kind == server.req_thread && h.annex == "g" && h.num == 1234)
+    let all = server.request("Hc-1".bytes()) else { return }
+    assert(all.kind == server.req_thread && all.annex == "c" && all.num == -1)
+    let p = server.request("p10".bytes()) else { return }
+    assert(p.kind == server.req_reg && p.num == 16)
+    let x = server.request("qXfer:features:read:target.xml:0,fff".bytes()) else { return }
+    assert(x.kind == server.req_features && x.annex == "target.xml" && x.offset == 0 && x.len == 4095)
+    let sup = server.request("qSupported:multiprocess+;swbreak+;vContSupported+".bytes()) else { return }
+    assert(sup.kind == server.req_supported)
+    let no_ack = server.request("QStartNoAckMode".bytes()) else { return }
+    assert(no_ack.kind == server.req_no_ack)
+    let kill = server.request("vKill;4d2".bytes()) else { return }
+    assert(kill.kind == server.req_kill)
+    let empty = server.request("vMustReplyEmpty".bytes()) else { return }
+    assert(empty.kind == server.req_unsupported)
+    let svr4 = server.request("qXfer:libraries-svr4:read::0,fff".bytes()) else { return }
+    assert(svr4.kind == server.req_unsupported)
+    let bad = server.request("m401000".bytes())
+    assert("{bad}" == "bad_request")
+    let stop = server.request("vCont;t".bytes())
+    assert("{stop}" == "bad_request")
+    print("PASS server-requests")
+}
+
 fn main() {
     signal_map_row()
     stop_reply_row()
     end_replies_row()
     supported_row()
     description_row()
+    listen_row()
+    requests_row()
 }
