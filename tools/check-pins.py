@@ -8,6 +8,29 @@ import tomllib
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def qemu_problems(q, content):
+    """What is wrong between QEMU's pin and the image recipe: the image builds the tarball the pin names, by its
+    digest, with the configure line the pin names; the pinned line is options only, never a host's path."""
+    bad = []
+    if q['source'] != 'https://download.qemu.org/qemu-%s.tar.xz' % q['version'] or q['version_line'] != 'QEMU emulator version ' + q['version']:
+        bad.append('qemu pin names another release than its version')
+    if ('curl -fsSL --proto =https -o /tmp/qemu.tar.xz %s;' % q['source']) not in content:
+        bad.append('qemu source differs from pin')
+    if ('printf "%%s  %%s\\n" %s /tmp/qemu.tar.xz | sha256sum -c -' % q['source_sha256']) not in content:
+        bad.append('qemu source check differs from pin')
+    if ('./configure --prefix=/opt/qemu-%s --python=/usr/bin/python3 %s;' % (q['version'], ' '.join(q['configure']))) not in content:
+        bad.append('qemu configure line differs from pin')
+    if not all(isinstance(x, str) and x.startswith('--') and x.split('=')[0] not in ('--prefix', '--python') for x in q['configure']):
+        bad.append('qemu configure is not a list of options, or names a host path')
+    return bad
+
+
+def manifest_problems(oracle, manifest):
+    """Every pinned oracle binary's digest is in the measured binary manifest."""
+    return ['binary manifest omits ' + name for name in ('gdb', 'llvm_dwarfdump', 'readelf', 'gcc', 'clang', 'gdbserver', 'qemu')
+            if oracle[name]['sha256'] not in manifest]
+
+
 def main():
     pins = tomllib.loads((ROOT / 'wolf-toolchain.toml').read_text())
     first = json.loads((ROOT / 'tests/pin-read-1.json').read_text())
@@ -57,23 +80,9 @@ def main():
         vector = oracle['readelf'][key]
         if not isinstance(vector, list) or not vector or not all(isinstance(x, str) and x.startswith('--') for x in vector):
             raise ValueError('readelf %s is not a list of options' % key)
-    # QEMU: the image builds the tarball the pin names, by its digest, with the configure line the pin names
-    q = oracle['qemu']
-    if q['source'] != 'https://download.qemu.org/qemu-%s.tar.xz' % q['version'] or q['version_line'] != 'QEMU emulator version ' + q['version']:
-        raise ValueError('qemu pin names another release than its version')
-    if ('curl -fsSL --proto =https -o /tmp/qemu.tar.xz %s;' % q['source']) not in content:
-        raise ValueError('qemu source differs from pin')
-    if ('printf "%%s  %%s\\n" %s /tmp/qemu.tar.xz | sha256sum -c -' % q['source_sha256']) not in content:
-        raise ValueError('qemu source check differs from pin')
-    configure = './configure --prefix=/opt/qemu-%s --python=/usr/bin/python3 %s;' % (q['version'], ' '.join(q['configure']))
-    if configure not in content:
-        raise ValueError('qemu configure line differs from pin')
-    if not all(isinstance(x, str) and x.startswith('--') and x.split('=')[0] not in ('--prefix', '--python') for x in q['configure']):
-        raise ValueError('qemu configure is not a list of options, or names a host path')
-    manifest = (ROOT / 'ci/oracle-binaries.lock').read_text()
-    for name in ('gdb', 'llvm_dwarfdump', 'readelf', 'gcc', 'clang', 'gdbserver', 'qemu'):
-        if oracle[name]['sha256'] not in manifest:
-            raise ValueError('binary manifest omits ' + name)
+    problems = qemu_problems(oracle['qemu'], content) + manifest_problems(oracle, (ROOT / 'ci/oracle-binaries.lock').read_text())
+    if problems:
+        raise ValueError(problems[0])
     print('PASS pin-metadata toolchains=2 oracle_binaries=7')
 
 
