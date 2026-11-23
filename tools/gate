@@ -108,6 +108,10 @@ if [ "$mode" = linux ]; then
   step dump-notes python3 -I tools/dump-matrix.py --sniff "$root/target/sniff" --platform linux --fixtures "$root/target/fixtures" \
     --modes notes --cores "$root/target/cores/s2" --cores "$root/target/cores/pax"
   step pax-sniff-static bash tools/build-static-sniff.sh "$wolf" "$root/target/sniff-static"
+  # S8: sniff-server, the stub, on loopback in this host over the static fixtures, its rows held to the pinned
+  # gdbserver live (tools/session-remote.py server names gdbserver and gdb by version and digest)
+  step server-build bash -c "'$wolf' build src/sniff_server.lu --no-cache -o '$root/target/sniff-server'"
+  step server-rows python3 -I tools/session-remote.py server --server "$root/target/sniff-server" --fixtures "$root/target/pax-fixtures" --out "$root/target/server-out"
 else
   # S3: the macOS arm64 backend. The rows need a task port and, for the oracle rows, the pinned lldb.
   step abi-probe-stable-macos python3 -I tools/check-abi.py capture --platform macos --compare
@@ -122,4 +126,7 @@ else
   mac_live_step session-expr-join python3 -I tools/session-exprs.py --sniff "$root/target/sniff" --values target/values/values.json --fixtures "$root/target/session-fixtures" --work "$root/target/s3v" --cwd "$root"
   mac_live_step session-unwind-basis python3 -I tools/session-unwind.py --sniff "$root/target/sniff" --fixtures "$root/target/session-fixtures" --work "$root/target/s3u" --platform macos --cwd "$root"
   mac_live_step session-perf python3 -I tools/session-perf.py --sniff "$root/target/sniff" --lldb "$debugger" --fixtures "$root/target/session-fixtures" --work "$root/target/s3p" --cwd "$root"
+  # S8: sniff-server is a Linux and PAX program, and sniff built for macOS cannot debug an x86-64 remote process
+  # (a later change): its rows are skipped by name here, and the count is held
+  step remote-server-skip python3 -I tools/session-remote.py skip --kind server --reason "sniff-server is a Linux and PAX program; sniff built for macOS cannot debug an x86-64 remote process (a later change)" --expect 28
 fi
