@@ -468,6 +468,11 @@ fn answer(mut st: Stub, d: List[byte]) -> str {
     if k == req_threads_next { return "l" }
     if k == req_features { return features(r) }
     if k == req_threads_xfer { return threads_document(st, r) }
+    if k == req_alive {
+        // OK while the thread is one of the program's (Packets: T thread-id), an error reply once it is gone
+        for tid in platform.target_task_ids(st.t) { if tid == r.num { return "OK" } }
+        return "E01"
+    }
     if !st.alive {
         if k == req_kill || k == req_detach { st.done = true; return "OK" }
         return "E01"
