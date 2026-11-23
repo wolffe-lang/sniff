@@ -455,6 +455,146 @@
    "prog": "c/workers/gcc-O0/prog",
    "symbol": "work",
    "why": "a program's new threads are traced from their start: a breakpoint a worker hits stops the program with a trap and qfThreadInfo lists more than one thread, as through the pinned gdbserver"
+  },
+  {
+   "name": "server-gdb-inferior-c-gcc-exit3",
+   "kind": "server",
+   "check": "gdb-session",
+   "row": "inferior-c-gcc-exit3",
+   "why": "the session row's commands on its static fixture: gdb through sniff-server equals gdb through the pinned gdbserver, with the named normalisations"
+  },
+  {
+   "name": "server-gdb-inferior-c-gcc-segv",
+   "kind": "server",
+   "check": "gdb-session",
+   "row": "inferior-c-gcc-segv",
+   "why": "the session row's commands on its static fixture: gdb through sniff-server equals gdb through the pinned gdbserver, with the named normalisations"
+  },
+  {
+   "name": "server-gdb-bp-gcc-func-line-addr",
+   "kind": "server",
+   "check": "gdb-session",
+   "row": "bp-gcc-func-line-addr",
+   "why": "the session row's commands on its static fixture: gdb through sniff-server equals gdb through the pinned gdbserver, with the named normalisations"
+  },
+  {
+   "name": "server-gdb-bp-gcc-main-and-delete",
+   "kind": "server",
+   "check": "gdb-session",
+   "row": "bp-gcc-main-and-delete",
+   "why": "the session row's commands on its static fixture: gdb through sniff-server equals gdb through the pinned gdbserver, with the named normalisations"
+  },
+  {
+   "name": "server-gdb-step-gcc-calls",
+   "kind": "server",
+   "check": "gdb-session",
+   "row": "step-gcc-calls",
+   "why": "the session row's commands on its static fixture: gdb through sniff-server equals gdb through the pinned gdbserver, with the named normalisations"
+  },
+  {
+   "name": "server-gdb-step-gcc-stepi",
+   "kind": "server",
+   "check": "gdb-session",
+   "row": "step-gcc-stepi",
+   "why": "the session row's commands on its static fixture: gdb through sniff-server equals gdb through the pinned gdbserver, with the named normalisations"
+  },
+  {
+   "name": "server-gdb-frame-gcc-bt-up-down",
+   "kind": "server",
+   "check": "gdb-session",
+   "row": "frame-gcc-bt-up-down",
+   "why": "the session row's commands on its static fixture: gdb through sniff-server equals gdb through the pinned gdbserver, with the named normalisations"
+  },
+  {
+   "name": "server-gdb-frame-gcc-leave",
+   "kind": "server",
+   "check": "gdb-session",
+   "row": "frame-gcc-leave",
+   "why": "the session row's commands on its static fixture: gdb through sniff-server equals gdb through the pinned gdbserver, with the named normalisations"
+  },
+  {
+   "name": "server-gdb-value-gcc-registers",
+   "kind": "server",
+   "check": "gdb-session",
+   "row": "value-gcc-registers",
+   "why": "the session row's commands on its static fixture: gdb through sniff-server equals gdb through the pinned gdbserver, with the named normalisations"
+  },
+  {
+   "name": "server-gdb-watch-gcc-global",
+   "kind": "server",
+   "check": "gdb-session",
+   "row": "watch-gcc-global",
+   "why": "the session row's commands on its static fixture: gdb through sniff-server equals gdb through the pinned gdbserver, with the named normalisations"
+  },
+  {
+   "name": "server-gdb-rwatch-gcc-global",
+   "kind": "server",
+   "check": "gdb-session",
+   "row": "rwatch-gcc-global",
+   "why": "the session row's commands on its static fixture: gdb through sniff-server equals gdb through the pinned gdbserver, with the named normalisations"
+  },
+  {
+   "name": "server-gdb-awatch-gcc-global",
+   "kind": "server",
+   "check": "gdb-session",
+   "row": "awatch-gcc-global",
+   "why": "the session row's commands on its static fixture: gdb through sniff-server equals gdb through the pinned gdbserver, with the named normalisations"
+  },
+  {
+   "name": "server-gdb-odd-gcc-signals",
+   "kind": "server",
+   "check": "gdb-session",
+   "row": "odd-gcc-signals",
+   "why": "the session row's commands on its static fixture: gdb through sniff-server equals gdb through the pinned gdbserver, with the named normalisations"
+  },
+  {
+   "name": "server-gdb-signals-gcc-run",
+   "kind": "server",
+   "check": "gdb-session",
+   "row": "signals-gcc-run",
+   "why": "the session row's commands on its static fixture: gdb through sniff-server equals gdb through the pinned gdbserver, with the named normalisations"
+  },
+  {
+   "name": "server-gdb-threads-gcc-info",
+   "kind": "server",
+   "check": "gdb-session",
+   "row": "threads-gcc-info",
+   "why": "the session row's commands on its static fixture: gdb through sniff-server equals gdb through the pinned gdbserver, with the named normalisations"
+  },
+  {
+   "name": "server-gdb-threads-gcc-switch",
+   "kind": "server",
+   "check": "gdb-session",
+   "row": "threads-gcc-switch",
+   "why": "the session row's commands on its static fixture: gdb through sniff-server equals gdb through the pinned gdbserver, with the named normalisations"
+  },
+  {
+   "name": "server-gdb-threads-gcc-signal",
+   "kind": "server",
+   "check": "gdb-session",
+   "row": "threads-gcc-signal",
+   "why": "the session row's commands on its static fixture: gdb through sniff-server equals gdb through the pinned gdbserver, with the named normalisations"
+  },
+  {
+   "name": "server-oracle-stable-step-gcc-calls",
+   "kind": "server",
+   "check": "oracle-stable",
+   "row": "step-gcc-calls",
+   "why": "the oracle's own stability: gdb through the pinned gdbserver, taken twice, is byte-equal once each run's port and pid are named"
+  },
+  {
+   "name": "server-oracle-stable-watch-gcc-global",
+   "kind": "server",
+   "check": "oracle-stable",
+   "row": "watch-gcc-global",
+   "why": "the oracle's own stability: gdb through the pinned gdbserver, taken twice, is byte-equal once each run's port and pid are named"
+  },
+  {
+   "name": "server-oracle-stable-threads-gcc-info",
+   "kind": "server",
+   "check": "oracle-stable",
+   "row": "threads-gcc-info",
+   "why": "the oracle's own stability: gdb through the pinned gdbserver, taken twice, is byte-equal once each run's port and pid are named"
   }
  ]
 }
