@@ -357,8 +357,10 @@ fn ev_unary(s: Session, mut x: Ex) -> Val {
             if !o.has_addr { return val_fail("Attempt to take address of value not located in memory.") }
             return Val { ok: true, why: "", ty: pointer_type(o.ty), bytes: bytes_of(o.addr, 8), addr: 0, has_addr: false, reg: -1 }
         }
-        if t.text == "(" && !x.wolf {
-            // a C cast: '(' type-name ')' operand
+        if t.text == "(" {
+            // a C cast: '(' type-name ')' operand. In a wolf frame too: wolf's units say they are C11, so the
+            // pinned gdb reads `(unsigned char) x` there as C does (measured on PAX's kernel), and wolf's grammar
+            // gives `(TYPE) operand` no other meaning
             let ty = try_cast_type(s, mut x)
             if ty != ty_none {
                 let v = ev_unary(s, mut x)
