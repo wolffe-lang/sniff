@@ -1,0 +1,41 @@
+# The protocol's signal numbers as the pinned gdbserver sends them: each of signals 1 to 31 raised once in a static
+# program, under gdbserver --once with the pinned gdb attached (`handle all stop print`, so no signal passes the stub
+# unreported), then continue and kill; the stop reply after the resume and the line gdb printed. Measured
+# 2026-11-23T14:09:56Z against:
+#   GNU gdbserver (Ubuntu 15.1-1ubuntu1~24.04.1) 15.1, sha256 507c37148786ac8bc49f3107408a7e93f4ee7818a796222ba6db222051c47ba7
+#   GNU gdb (Ubuntu 15.1-1ubuntu1~24.04.1) 15.1, sha256 3832cc070ae1716e322105d3b39fb398695e5f031c9d39224cf227a8c2b889f6
+#   the program raising the signal: sha256 2600be1928c986f5a428256ddd986fb61b8d15c42b1aa2147aa35834e1307026
+# sniff-server maps a host number to the protocol's through this file only. SIGKILL (9) cannot stop: the process
+# ends (gdbserver: X9;process:PID). SIGKILL and SIGSTOP are each held by a row of their own, not by this table.
+host	reply	protocol	gdb_name	gdb_line
+1	T01	1	SIGHUP	Program received signal SIGHUP, Hangup.
+2	T02	2	SIGINT	Program received signal SIGINT, Interrupt.
+3	T03	3	SIGQUIT	Program received signal SIGQUIT, Quit.
+4	T04	4	SIGILL	Program received signal SIGILL, Illegal instruction.
+5	T05	5	SIGTRAP	Program received signal SIGTRAP, Trace/breakpoint trap.
+6	T06	6	SIGABRT	Program received signal SIGABRT, Aborted.
+7	T0a	10	SIGBUS	Program received signal SIGBUS, Bus error.
+8	T08	8	SIGFPE	Program received signal SIGFPE, Arithmetic exception.
+9	X9;process:PID	-	SIGKILL	Program terminated with signal SIGKILL, Killed.
+10	T1e	30	SIGUSR1	Program received signal SIGUSR1, User defined signal 1.
+11	T0b	11	SIGSEGV	Program received signal SIGSEGV, Segmentation fault.
+12	T1f	31	SIGUSR2	Program received signal SIGUSR2, User defined signal 2.
+13	T0d	13	SIGPIPE	Program received signal SIGPIPE, Broken pipe.
+14	T0e	14	SIGALRM	Program received signal SIGALRM, Alarm clock.
+15	T0f	15	SIGTERM	Program received signal SIGTERM, Terminated.
+16	T8f	143	?	Program received signal ?, Unknown signal.
+17	T14	20	SIGCHLD	Program received signal SIGCHLD, Child status changed.
+18	T13	19	SIGCONT	Program received signal SIGCONT, Continued.
+19	T11	17	SIGSTOP	Program received signal SIGSTOP, Stopped (signal).
+20	T12	18	SIGTSTP	Program received signal SIGTSTP, Stopped (user).
+21	T15	21	SIGTTIN	Program received signal SIGTTIN, Stopped (tty input).
+22	T16	22	SIGTTOU	Program received signal SIGTTOU, Stopped (tty output).
+23	T10	16	SIGURG	Program received signal SIGURG, Urgent I/O condition.
+24	T18	24	SIGXCPU	Program received signal SIGXCPU, CPU time limit exceeded.
+25	T19	25	SIGXFSZ	Program received signal SIGXFSZ, File size limit exceeded.
+26	T1a	26	SIGVTALRM	Program received signal SIGVTALRM, Virtual timer expired.
+27	T1b	27	SIGPROF	Program received signal SIGPROF, Profiling timer expired.
+28	T1c	28	SIGWINCH	Program received signal SIGWINCH, Window size changed.
+29	T17	23	SIGIO	Program received signal SIGIO, I/O possible.
+30	T20	32	SIGPWR	Program received signal SIGPWR, Power fail/restart.
+31	T0c	12	SIGSYS	Program received signal SIGSYS, Bad system call.
