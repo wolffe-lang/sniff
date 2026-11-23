@@ -17,6 +17,8 @@ const tk_op: int = 3
 const tk_dollar: int = 4
 const tk_float: int = 5
 const tk_char: int = 6
+/// A name in single quotes ('a.b'), as gdb quotes a symbol whose name is not an identifier in C.
+const tk_quoted: int = 7
 
 /// One token: its kind, its text and its byte offset in the expression.
 struct Tok {
@@ -99,6 +101,14 @@ fn tokenize(text: str) -> List[Tok] {
                 i = j + 1
                 continue
             }
+            // more than one character before the closing quote: a quoted name
+            var k = i + 1
+            while k < b.len && b[k] as int != 39 { k += 1 }
+            if k < b.len {
+                (mut out).push(Tok { kind: tk_quoted, text: sub_text(b, i + 1, k), pos: start })
+                i = k + 1
+                continue
+            }
         }
         let two = if i + 1 < b.len { sub_text(b, i, i + 2) } else { "" }
         let three = if i + 2 < b.len { sub_text(b, i, i + 3) } else { "" }
@@ -158,7 +168,41 @@ fn eval_expr(s: Session, text: str) -> Val {
     let v = ev_expr(s, mut x)
     if !v.ok { return v }
     if x.toks[x.pos].kind != tk_end { return syntax_error(x) }
+    // a symbol with no debug information has no value of its own (measured: the pinned gdb's words)
+    if v.ty == ty_nodebug { return val_fail("'{v.why}' has unknown type; cast it to its declared type") }
     v
+}
+
+/// A name in single quotes: a variable or global by that name, else a data symbol with no debug information
+/// (its address, typed ty_nodebug, with its name in why for the messages).
+fn quoted_symbol(s: Session, name: str) -> Val {
+    let v = find_var(s, name)
+    if v.ok || v.why.len() > 0 { return v }
+    let g = find_global(s, name)
+    if g.ok || g.why.len() > 0 { return g }
+    var i = 0
+    while i < s.prog.dsyms.len {
+        if s.prog.dsyms[i].name == name {
+            let none: List[byte] = []
+            let at = if has_stack(s) { s.prog.dsyms[i].addr + s.base } else { s.prog.dsyms[i].addr }
+            return Val { ok: true, why: name, ty: ty_nodebug, bytes: none, addr: at, has_addr: true, reg: -1 }
+        }
+        i += 1
+    }
+    val_fail("No symbol \"{name}\" in current context.")
+}
+
+/// What a cast of a symbol with no debug information reads: a ty at its address.
+fn nodebug_as(s: Session, v: Val, ty: int) -> Val {
+    let size = ty_size(s.prog, ty)
+    if !has_stack(s) {
+        let b = file_bytes_at(s.prog, v.addr, size)
+        if b.len == size { return Val { ok: true, why: "", ty: ty, bytes: b, addr: v.addr, has_addr: true, reg: -1 } }
+        return val_fail("Cannot access memory at address 0x{v.addr:x}")
+    }
+    let r = src_read(s, v.addr, size)
+    if !r.ok { return val_fail("Cannot access memory at address 0x{v.addr:x}") }
+    Val { ok: true, why: "", ty: ty, bytes: r.data, addr: v.addr, has_addr: true, reg: -1 }
 }
 
 // ---- the climb ----------------------------------------------------------------------------
@@ -423,6 +467,7 @@ fn ev_primary(s: Session, mut x: Ex) -> Val {
     if t.kind == tk_num { return number_val(s, x, t.text) }
     if t.kind == tk_float { return double_val(t.text) }
     if t.kind == tk_char { return char_val(t.text) }
+    if t.kind == tk_quoted { return quoted_symbol(s, t.text) }
     if t.kind == tk_dollar {
         let body = t.text
         if body.len() == 0 || body == "$" {
@@ -763,6 +808,7 @@ fn compare(s: Session, x: Ex, op: str, a_in: Val, b_in: Val) -> Val {
 
 /// A value converted to type ty (a cast): integers truncate or extend, floats convert both ways.
 fn convert(s: Session, v_in: Val, ty: int) -> Val {
+    if v_in.ty == ty_nodebug { return nodebug_as(s, v_in, ty) }
     let v = coerce_ref(s, v_in)
     let (kt, st) = num_class(s, ty)
     let (kv, _) = num_class(s, v.ty)

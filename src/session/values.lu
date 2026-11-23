@@ -116,6 +116,9 @@ const ty_float: int = 0 - 13
 const ty_bool: int = 0 - 14
 const ty_lit_int: int = 0 - 15
 const ty_lit_float: int = 0 - 16
+/// A symbol of the program with no debug information (a data symbol of the ELF symbol table): its address
+/// alone, until a cast says what is there.
+const ty_nodebug: int = 0 - 17
 const ty_none: int = 0 - 999
 
 /// The synthetic type of a pointer to DIE k, or to one of C's builtin types (-1000 - k: -998 to -986).
