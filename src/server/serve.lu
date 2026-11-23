@@ -1,0 +1,539 @@
+// sniff-server's loop (the Server and Remote Stub nodes): start PROG under ptrace, listen on one address, take one
+// client, and answer each request until the client detaches, kills the program or closes. While one client is
+// attached a second gets the E.text reply to its first packet and is closed, by name. The loop waits on the client and
+// the listener together: with the program stopped it waits with no time limit, so a stopped program and a silent
+// client cost nothing; while it runs, each wait lasts run_poll_ms at most and is followed by a wait for the program
+// that never blocks, so the interrupt byte is seen within run_poll_ms.
+use remote
+use platform
+
+/// The longest wait on the sockets while the program runs, in milliseconds: the interrupt's bound.
+pub const run_poll_ms: int = 100
+
+/// The stub's refusal of a second client, its E.text reply (Standard Replies).
+pub const second_client_reply: str = "E.sniff-server serves one client at a time"
+
+// The g reply's registers in the description's order: 17 eight-byte slots of user_regs_struct (rax rbx rcx rdx rsi
+// rdi rbp rsp r8-r15 rip), then 7 four-byte ones (eflags cs ss ds es fs gs); fs_base and gs_base come last.
+fn g_slots8() -> List[int] { [10, 5, 11, 12, 13, 14, 4, 19, 9, 8, 7, 6, 3, 2, 1, 0, 16] }
+fn g_slots4() -> List[int] { [18, 17, 20, 23, 24, 25, 26] }
+
+// Each register's size in bytes, by its number in the description.
+fn reg_sizes() -> List[int] {
+    var s: List[int] = []
+    var i: int = 0
+    while i < 17 { (mut s).push(8); i += 1 }
+    i = 0
+    while i < 7 { (mut s).push(4); i += 1 }
+    i = 0
+    while i < 8 { (mut s).push(10); i += 1 }
+    i = 0
+    while i < 8 { (mut s).push(4); i += 1 }
+    i = 0
+    while i < 16 { (mut s).push(16); i += 1 }
+    (mut s).push(4)
+    (mut s).push(8)
+    (mut s).push(8)
+    s
+}
+
+struct Stub {
+    lfd: int,
+    cfd: int,
+    t: platform.Target,
+    pending: List[byte],
+    no_ack: bool,
+    running: bool,
+    alive: bool,
+    done: bool,
+    sel: int,
+    stepped: int,
+    last: str,
+    cursor: int,
+    bp_addrs: List[u64],
+    bp_bytes: List[byte],
+    w_addrs: List[u64],
+    w_lens: List[int],
+    w_kinds: List[int],
+    w_types: List[int],
+}
+
+fn say(text: str) {
+    eprint("sniff-server: {text}")
+}
+
+fn le(v: u64, n: int) -> List[byte] {
+    var out: List[byte] = []
+    var x = v
+    var i: int = 0
+    while i < n { (mut out).push((x & 255) as int as byte); x = x >> 8; i += 1 }
+    out
+}
+
+fn from_le(b: List[byte], at: int, n: int) -> u64 {
+    var v: u64 = 0
+    var i = n - 1
+    while i >= 0 { v = (v << 8) | (b[at + i] as int as u64); i -= 1 }
+    v
+}
+
+fn slice(b: List[byte], at: int, n: int) -> List[byte] {
+    var out: List[byte] = []
+    var i: int = 0
+    while i < n { if at + i < b.len { (mut out).push(b[at + i]) } else { (mut out).push(0 as byte) }; i += 1 }
+    out
+}
+
+fn append(mut out: List[byte], more: List[byte]) {
+    for x in more { (mut out).push(x) }
+}
+
+fn thread_of(st: Stub) -> platform.Target {
+    platform.target_thread(st.t, st.sel)
+}
+
+// Every register as the g reply holds it (the description's order and sizes); none when the registers cannot be read.
+fn register_file(st: Stub) -> List[byte] {
+    let tt = thread_of(st)
+    let r = platform.target_regs(tt)
+    var out: List[byte] = []
+    if r.len < 27 { return out }
+    let fp = platform.target_fpregs(tt)
+    for slot in g_slots8() { append(mut out, le(r[slot], 8)) }
+    for slot in g_slots4() { append(mut out, le(r[slot], 4)) }
+    var i: int = 0
+    while i < 8 { append(mut out, slice(fp, 32 + 16 * i, 10)); i += 1 }
+    // fctrl fstat ftag (FXSAVE's abridged tag byte) fiseg fioff foseg fooff fop, four bytes each
+    append(mut out, slice(fp, 0, 2))
+    append(mut out, le(0, 2))
+    append(mut out, slice(fp, 2, 2))
+    append(mut out, le(0, 2))
+    append(mut out, slice(fp, 4, 1))
+    append(mut out, le(0, 3))
+    append(mut out, slice(fp, 12, 4))
+    append(mut out, slice(fp, 8, 4))
+    append(mut out, slice(fp, 20, 4))
+    append(mut out, slice(fp, 16, 4))
+    append(mut out, slice(fp, 6, 2))
+    append(mut out, le(0, 2))
+    i = 0
+    while i < 16 { append(mut out, slice(fp, 160 + 16 * i, 16)); i += 1 }
+    append(mut out, slice(fp, 24, 4))
+    append(mut out, le(r[21], 8))
+    append(mut out, le(r[22], 8))
+    out
+}
+
+fn reg_offset(n: int) -> int {
+    let sizes = reg_sizes()
+    var off: int = 0
+    var i: int = 0
+    while i < n && i < sizes.len { off += sizes[i]; i += 1 }
+    off
+}
+
+// Write general register n (0-23 and fs_base, gs_base) from its bytes; false for any other register, which the stub
+// does not write (an FP register: PAX answers PTRACE_SETFPREGS with EIO).
+fn write_register(st: Stub, n: int, b: List[byte]) -> bool {
+    let sizes = reg_sizes()
+    if n < 0 || n >= sizes.len || b.len != sizes[n] { return false }
+    var slot: int = -1
+    if n < 17 { slot = g_slots8()[n] } else if n < 24 { slot = g_slots4()[n - 17] } else if n == 57 { slot = 21 } else if n == 58 { slot = 22 }
+    if slot < 0 { return false }
+    let tt = thread_of(st)
+    var r = platform.target_regs(tt)
+    if r.len < 27 { return false }
+    r[slot] = from_le(b, 0, b.len)
+    platform.target_set_regs(tt, r) >= 0
+}
+
+fn send(mut st: Stub, data: str) -> () ! ServerError {
+    let f = remote.frame(data, 1048576) else { return invalid }
+    net_write_bytes(st.cfd, f)?
+    if st.no_ack { return }
+    // the client's acknowledgment: `+`, or `-` for one resend (Packet Acknowledgment)
+    var tries: int = 0
+    while tries < 3 {
+        net_deadline(st.cfd, 2000)?
+        let got = net_read_bytes(st.cfd, 1) else |e| match e {
+            timeout => { return },
+            closed => { return closed },
+            io => { return io },
+        }
+        if got.len == 1 && got[0] as int == 43 { return }
+        if got.len == 1 && got[0] as int == 45 { net_write_bytes(st.cfd, f)? }
+        tries += 1
+    }
+}
+
+fn hex(b: List[byte]) -> str {
+    remote.hex_encode(b)
+}
+
+fn memory(st: Stub, addr: u64, n: int) -> str {
+    let got = platform.target_read(thread_of(st), addr, n)
+    if !got.ok || got.data.len == 0 { return "E01" }
+    var b = got.data
+    var i: int = 0
+    while i < st.bp_addrs.len {
+        let a = st.bp_addrs[i]
+        if a >= addr && a < addr + (b.len as u64) { b[(a - addr) as int] = st.bp_bytes[i] }
+        i += 1
+    }
+    hex(b)
+}
+
+fn point_index(st: Stub, addr: u64) -> int {
+    var i: int = 0
+    while i < st.bp_addrs.len { if st.bp_addrs[i] == addr { return i }; i += 1 }
+    -1
+}
+
+fn insert_break(mut st: Stub, addr: u64) -> str {
+    if point_index(st, addr) >= 0 { return "OK" }
+    let got = platform.target_read(st.t, addr, 1)
+    if !got.ok || got.data.len != 1 { return "E01" }
+    if !platform.target_write(st.t, addr, [204 as byte]) { return "E01" }
+    (mut st.bp_addrs).push(addr)
+    (mut st.bp_bytes).push(got.data[0])
+    "OK"
+}
+
+fn remove_break(mut st: Stub, addr: u64) -> str {
+    let i = point_index(st, addr)
+    if i < 0 { return "OK" }
+    let _ = platform.target_write(st.t, addr, [st.bp_bytes[i]])
+    var a: List[u64] = []
+    var b: List[byte] = []
+    var j: int = 0
+    while j < st.bp_addrs.len { if j != i { (mut a).push(st.bp_addrs[j]); (mut b).push(st.bp_bytes[j]) }; j += 1 }
+    st.bp_addrs = a
+    st.bp_bytes = b
+    "OK"
+}
+
+// The watches into every thread's debug registers.
+fn arm_watches(st: Stub) -> bool {
+    for tid in platform.target_task_ids(st.t) {
+        if platform.target_set_watches(platform.target_thread(st.t, tid), st.w_addrs, st.w_lens, st.w_kinds) != "" { return false }
+    }
+    true
+}
+
+fn watch(mut st: Stub, insert: bool, ty: int, addr: u64, n: int) -> str {
+    var a: List[u64] = []
+    var l: List[int] = []
+    var k: List[int] = []
+    var y: List[int] = []
+    var i: int = 0
+    while i < st.w_addrs.len {
+        if !(st.w_addrs[i] == addr && st.w_lens[i] == n && st.w_types[i] == ty) {
+            (mut a).push(st.w_addrs[i]); (mut l).push(st.w_lens[i]); (mut k).push(st.w_kinds[i]); (mut y).push(st.w_types[i])
+        }
+        i += 1
+    }
+    if insert {
+        if a.len >= platform.target_watch_slots(st.t) { return "E01" }
+        (mut a).push(addr)
+        (mut l).push(n)
+        (mut k).push(if ty == 2 { platform.watch_write } else { platform.watch_access })
+        (mut y).push(ty)
+    }
+    st.w_addrs = a
+    st.w_lens = l
+    st.w_kinds = k
+    st.w_types = y
+    if arm_watches(st) { "OK" } else { "E01" }
+}
+
+fn features(r: Request) -> str {
+    if r.annex != "target.xml" { return "E00" }
+    let text = description() else { return "E01" }
+    let d = text.bytes()
+    if r.offset >= d.len { return "l" }
+    var chunk: List[byte] = []
+    var i = r.offset
+    while i < d.len && i < r.offset + r.len { (mut chunk).push(d[i]); i += 1 }
+    let more = if i < d.len { "m" } else { "l" }
+    let body = str_from_utf8(chunk) else { "" }
+    "{more}{body}"
+}
+
+fn thread_list(st: Stub) -> str {
+    var s = "m"
+    var first = true
+    for tid in platform.target_task_ids(st.t) {
+        let h = remote.hex_u64(tid as u64)
+        s = if first { "{s}{h}" } else { "{s},{h}" }
+        first = false
+    }
+    s
+}
+
+// Resume after a resume request: the stepping thread (or the selected one) steps, every other thread continues; the
+// signal arrives in the client's numbering and is delivered by the host's.
+fn resume(mut st: Stub, r: Request) -> str {
+    var sig: int = 0
+    if r.sig != 0 {
+        let h = host_signal(r.sig) else { return "E.sniff-server has no measured host number for protocol signal {r.sig}" }
+        sig = h
+    }
+    let who = if r.num > 0 { r.num } else { st.sel }
+    if r.step {
+        if platform.target_step(platform.target_thread(st.t, who), sig) < 0 { return "E01" }
+        st.stepped = who
+    } else {
+        for tid in platform.target_task_ids(st.t) {
+            let s = if tid == who { sig } else { 0 }
+            let _ = platform.target_cont(platform.target_thread(st.t, tid), s)
+        }
+        st.stepped = 0
+    }
+    st.running = true
+    ""
+}
+
+// The reply for the stop the program just made, and the stub's own bookkeeping: a breakpoint's pc moved back to the
+// breakpoint (the stub's duty on x86 with swbreak), a watch's slot named, an exit or a kill ending the program.
+fn stopped(mut st: Stub, w: platform.Waited) -> str {
+    let status = w.status
+    st.sel = w.tid
+    if (status & 127) == 0 {
+        st.alive = false
+        st.running = false
+        let rep = exit_reply((status >> 8) & 255) else { return "W00" }
+        st.last = rep
+        return rep
+    }
+    if (status & 255) != 127 {
+        st.alive = false
+        st.running = false
+        let rep = killed_reply(status & 127) else { return "X09" }
+        st.last = rep
+        return rep
+    }
+    let sig = (status >> 8) & 255
+    if (status >> 16) != 0 {
+        // a ptrace event stop (a new thread): resume it, the client sees nothing
+        let _ = platform.target_cont(platform.target_thread(st.t, w.tid), 0)
+        return ""
+    }
+    st.running = false
+    var reason = ""
+    var addr: u64 = 0
+    if sig == 5 {
+        let tt = platform.target_thread(st.t, w.tid)
+        var r = platform.target_regs(tt)
+        let slot = platform.target_watch_hit(tt)
+        if slot >= 0 && slot < st.w_addrs.len {
+            reason = if st.w_types[slot] == 2 { "watch" } else { "awatch" }
+            addr = st.w_addrs[slot]
+        } else if r.len >= 27 && r[16] > 0 && st.stepped != w.tid && point_index(st, r[16] - 1) >= 0 {
+            r[16] = r[16] - 1
+            let _ = platform.target_set_regs(tt, r)
+            reason = "swbreak"
+        }
+    }
+    st.stepped = 0
+    let rep = stop_reply(sig, w.tid, reason, addr) else |e| {
+        say("signal {sig} has no measured protocol number ({e}): the stop is refused")
+        return "E.sniff-server has no measured protocol number for host signal {sig}"
+    }
+    st.last = rep
+    rep
+}
+
+// Answer one request; "" from a resume means the reply waits for the stop.
+fn answer(mut st: Stub, d: List[byte]) -> str {
+    let r = request(d) else |e| { return "E.sniff-server cannot read the request: {e}" }
+    let k = r.kind
+    if k == req_supported { let s = supported_reply() else { return "" }; return s }
+    if k == req_no_ack { return "OK" }
+    if k == req_why { return st.last }
+    if k == req_attached { return "0" }
+    if k == req_vcont_query { return "vCont;c;C;s;S" }
+    if k == req_thread { if r.num > 0 { st.sel = r.num }; return "OK" }
+    if k == req_current { let h = remote.hex_u64(st.sel as u64); return "QC{h}" }
+    if k == req_threads_first { st.cursor = 1; return thread_list(st) }
+    if k == req_threads_next { return "l" }
+    if k == req_features { return features(r) }
+    if !st.alive {
+        if k == req_kill || k == req_detach { st.done = true; return "OK" }
+        return "E01"
+    }
+    if k == req_regs { let b = register_file(st); if b.len == 0 { return "E01" }; return hex(b) }
+    if k == req_reg {
+        let b = register_file(st)
+        let sizes = reg_sizes()
+        if b.len == 0 || r.num < 0 || r.num >= sizes.len { return "E01" }
+        return hex(slice(b, reg_offset(r.num), sizes[r.num]))
+    }
+    if k == req_set_reg { if write_register(st, r.num, r.data) { return "OK" }; return "E01" }
+    if k == req_set_regs {
+        if r.data.len != reg_offset(59) { return "E01" }
+        var n: int = 0
+        while n < 24 {
+            if !write_register(st, n, slice(r.data, reg_offset(n), reg_sizes()[n])) { return "E01" }
+            n += 1
+        }
+        return "OK"
+    }
+    if k == req_read { return memory(st, r.addr, r.len) }
+    if k == req_write {
+        if !platform.target_write(st.t, r.addr, r.data) { return "E01" }
+        var i: int = 0
+        while i < st.bp_addrs.len {
+            let a = st.bp_addrs[i]
+            if a >= r.addr && a < r.addr + (r.data.len as u64) {
+                st.bp_bytes[i] = r.data[(a - r.addr) as int]
+                let _ = platform.target_write(st.t, a, [204 as byte])
+            }
+            i += 1
+        }
+        return "OK"
+    }
+    if k == req_insert || k == req_remove {
+        if r.num == 0 { if k == req_insert { return insert_break(mut st, r.addr) }; return remove_break(mut st, r.addr) }
+        if r.num == 2 || r.num == 4 { return watch(mut st, k == req_insert, r.num, r.addr, r.len) }
+        return ""
+    }
+    if k == req_resume { return resume(mut st, r) }
+    if k == req_detach {
+        var addrs: List[u64] = []
+        for a in st.bp_addrs { (mut addrs).push(a) }
+        for a in addrs { let _ = remove_break(mut st, a) }
+        let _ = platform.target_detach(st.t, st.t.pid)
+        st.alive = false
+        st.done = true
+        return "OK"
+    }
+    if k == req_kill {
+        let _ = platform.target_kill(st.t)
+        st.alive = false
+        st.done = true
+        return "OK"
+    }
+    ""
+}
+
+// One step of the receiver over the bytes from at (remote.scan), its refusal as the stub's own.
+fn scan_at(buf: List[byte], at: int) -> remote.Scan ! ServerError {
+    let s = remote.scan(buf, at) else { return invalid }
+    s
+}
+
+// A second client while one is attached: its first packet gets the E.text reply, then its connection is closed.
+fn refuse_second(lfd: int) {
+    let fd = net_accept(lfd) else { return }
+    say("refused a second client: one client at a time")
+    let _ = net_deadline(fd, 2000)
+    var buf: List[byte] = []
+    var seen = false
+    var reads: int = 0
+    while !seen && reads < 64 {
+        let none: List[byte] = []
+        let got = net_read_bytes(fd, 4096) else { none }
+        if got.len == 0 { reads = 64 }
+        for x in got { (mut buf).push(x) }
+        var at: int = 0
+        while at < buf.len && !seen {
+            let sc = scan_at(buf, at) else { return }
+            if sc.kind == remote.scan_packet { seen = true }
+            if sc.used == 0 { at = buf.len } else { at += sc.used }
+        }
+        reads += 1
+    }
+    let _ = net_write_bytes(fd, [43 as byte])
+    let f = remote.frame(second_client_reply, 1024) else { return }
+    let _ = net_write_bytes(fd, f)
+    let _ = net_close(fd)
+}
+
+// Read what the client sent, and answer every whole packet in it. false once the client has closed.
+fn client_bytes(mut st: Stub) -> bool {
+    let _ = net_deadline(st.cfd, 0)
+    let got = net_read_bytes(st.cfd, 4096) else { return false }
+    if got.len == 0 { return false }
+    for x in got { (mut st.pending).push(x) }
+    var at: int = 0
+    var going = true
+    while going && at < st.pending.len {
+        let sc = scan_at(st.pending, at) else {
+            say("a packet from the client is refused")
+            let none: List[byte] = []
+            st.pending = none
+            return true
+        }
+        if sc.kind == remote.scan_need || sc.used == 0 {
+            going = false
+        } else {
+            at += sc.used
+            if sc.kind == remote.scan_interrupt && st.running {
+                let _ = platform.target_tgkill(st.t, st.t.pid, st.t.pid, 2)
+            } else if sc.kind == remote.scan_packet {
+                if !st.no_ack {
+                    let ack = if sc.sum_ok { 43 } else { 45 }
+                    let _ = net_write_bytes(st.cfd, [ack as byte])
+                }
+                if sc.sum_ok {
+                    let text = str_from_utf8(sc.data) else { "" }
+                    let rep = answer(mut st, sc.data)
+                    if !(st.running && rep == "") { send(mut st, rep) else { return false } }
+                    // no-ack mode starts after the OK that agrees to it is acknowledged (Packet Acknowledgment)
+                    if text == "QStartNoAckMode" { st.no_ack = true }
+                }
+            }
+        }
+    }
+    var rest: List[byte] = []
+    var i = at
+    while i < st.pending.len { (mut rest).push(st.pending[i]); i += 1 }
+    st.pending = rest
+    true
+}
+
+/// Serve PROG to one client at a time on the address: returns the exit status for the process.
+pub fn serve(at: Listen, prog: str, args: List[str]) -> int {
+    let t = platform.target_spawn(prog, args, "", "")
+    if t.pid <= 0 { say("cannot start {prog}"); return 1 }
+    eprint("Process {prog} created; pid = {t.pid}")
+    let lfd = net_listen("{at.host}:{at.port}") else |e| {
+        say("cannot listen on {at.host}:{at.port}: {e}")
+        let _ = platform.target_kill(t)
+        return 1
+    }
+    let port = net_port(lfd) else { at.port }
+    eprint("Listening on {at.host}:{port}")
+    let cfd = net_accept(lfd) else |e| { say("no client: {e}"); let _ = platform.target_kill(t); return 1 }
+    let none: List[byte] = []
+    let no_addrs: List[u64] = []
+    let no_ints: List[int] = []
+    let first = stop_reply(5, t.pid, "", 0) else { "T05" }
+    var st = Stub { lfd: lfd, cfd: cfd, t: t, pending: none, no_ack: false, running: false, alive: true, done: false,
+                    sel: t.pid, stepped: 0, last: first, cursor: 0, bp_addrs: no_addrs, bp_bytes: none,
+                    w_addrs: no_addrs, w_lens: no_ints, w_kinds: no_ints, w_types: no_ints }
+    while !st.done {
+        let wait_ms = if st.running { run_poll_ms } else { 0 - 1 }
+        let nothing: List[int] = []
+        let ready = net_wait([st.cfd, st.lfd], wait_ms) else { nothing }
+        for fd in ready {
+            if fd == st.lfd { refuse_second(st.lfd) }
+        }
+        for fd in ready {
+            if fd == st.cfd && !client_bytes(mut st) {
+                if st.alive { say("the client closed: the program is killed"); let _ = platform.target_kill(st.t) }
+                st.done = true
+            }
+        }
+        if st.running && !st.done {
+            let w = platform.target_wait_any_now(st.t)
+            if w.tid > 0 {
+                let rep = stopped(mut st, w)
+                if rep != "" { send(mut st, rep) else { st.done = true } }
+            }
+        }
+    }
+    let _ = net_close(st.cfd)
+    let _ = net_close(st.lfd)
+    0
+}

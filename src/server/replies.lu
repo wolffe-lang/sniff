@@ -12,6 +12,10 @@ pub error ServerError = {
     bad_request,
     bad_address,
     non_loopback_refused,
+    io,
+    closed,
+    timeout,
+    invalid,
     not_built,
 }
 
