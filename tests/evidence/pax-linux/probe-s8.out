@@ -1,0 +1,26 @@
+a: wait4 0 for TRACEME's own stop -> stopped SIGSTOP
+a: PTRACE_CONT of the stopped child -> 0
+a: wait4 WNOHANG at once, while the traced child runs -> 0 (none)
+a: waitid WEXITED|WSTOPPED|WNOHANG while it runs -> 0, si_pid 0 (none)
+a: wait4 WNOHANG every 10 ms until it stops -> stopped SIGUSR1
+a: PTRACE_CONT suppressing SIGUSR1 -> 0
+a: wait4 WNOHANG every 10 ms until it exits -> exited 7
+a: wait4 WNOHANG once it is reaped -> -1 ECHILD
+b0: wait4 0 for TRACEME's own stop -> stopped SIGSTOP
+b0: a second thread's wait4 for the tracee's stop -> stopped SIGUSR1
+b0: the second thread's PTRACE_PEEKUSER of the stopped tracee -> ESRCH
+b0: the tracer thread's PTRACE_PEEKUSER of it -> a word
+b-wall: wait4 0 for TRACEME's own stop -> stopped SIGSTOP
+b-wall: a second thread's wait4 for the tracee's stop -> stopped SIGUSR1
+b-wall: the second thread's PTRACE_PEEKUSER of the stopped tracee -> ESRCH
+b-wall: the tracer thread's PTRACE_PEEKUSER of it -> a word
+c: wait4 0 for TRACEME's own stop -> stopped SIGSTOP
+c: poll of an empty pipe for 3 s while the tracee runs to its SIGUSR1 stop -> EINTR, SIGCHLD seen, before 2.5 s
+c: then wait4 WNOHANG -> stopped SIGUSR1
+d: wait4 0 for TRACEME's own stop -> stopped SIGSTOP
+d: PTRACE_GETFPREGS -> 0
+d: PTRACE_SETFPREGS of what GETFPREGS gave -> 0
+e: PTRACE_SEIZE of a running child -> 0
+e: PTRACE_INTERRUPT of it, running -> 0
+e: wait4 __WALL after the interrupt -> stopped SIGTRAP event-stop
+done -> ok

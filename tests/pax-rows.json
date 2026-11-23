@@ -44,6 +44,17 @@
   }
  },
  "probes": {
-  "dr": "tests/pax-probe/dr.c"
+  "dr": "tests/pax-probe/dr.c",
+  "s8": "tests/pax-probe/s8.c"
+ },
+ "probe_differences": {
+  "s8": [
+   {
+    "call": "d: PTRACE_SETFPREGS of what GETFPREGS gave",
+    "linux": "0",
+    "pax": "EIO",
+    "why": "PAX answers PTRACE_SETFPREGS with -EIO and prints its `ptrace: refused request 0x...0f` line: kernel/README.md lists the request as refused by name"
+   }
+  ]
  }
 }
