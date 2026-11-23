@@ -365,6 +365,12 @@ pub fn sort_lines(mut lines: List[LineEnt]) {
     while i < n { lines[i] = copy out[i]; i += 1 }
 }
 
+/// Whether an ELF symbol (its st_info, value and section index, and whether that section holds code) names code
+/// the session shows by name: a function symbol at an address in a section.
+pub fn elf_code_symbol(info: u64, value: u64, shndx: u64, exec: bool) -> bool {
+    (info & 15) == 2 && value != 0 && shndx != 0
+}
+
 /// Read the ELF file at path and build the session's view of it. A program
 /// without DWARF loads with has_info false; symbols still work.
 fn prog_load(path: str) -> Prog {
@@ -411,7 +417,8 @@ fn prog_load(path: str) -> Prog {
     var i: int = 0
     while i < elf.symbols.len {
         let s = copy elf.symbols[i]
-        if (s.info & 15) == 2 && s.value != 0 && s.section_index != 0 {
+        let exec = s.section_index < elf.sections.len as u64 && (elf.sections[s.section_index as int].flags & 4) != 0
+        if elf_code_symbol(s.info, s.value, s.section_index, exec) {
             (mut p.syms).push(Sym { name: span_text(data, s.name), addr: s.value, size: s.size })
         }
         if (s.info & 15) == 1 && s.value != 0 && s.section_index != 0 && s.size > 0 {
