@@ -63,7 +63,7 @@ fn ty_size(p: Prog, t: int) -> int {
     if t == ty_char || t == ty_uchar || t == ty_bool { return 1 }
     if t == ty_short || t == ty_ushort { return 2 }
     if t == ty_double || t == ty_lit_int || t == ty_lit_float { return 8 }
-    if t == ty_long || t == ty_ulong || t == ty_voidp || t == ty_codep || t <= 0 - 1000 { return 8 }
+    if t == ty_long || t == ty_ulong || t == ty_voidp || t == ty_codep || ty_is_ptr(t) { return 8 }
     let s = ty_strip(p, t)
     if s < 0 { return 1 }
     let tag = p.info.entries[s].tag
@@ -118,8 +118,14 @@ const ty_lit_int: int = 0 - 15
 const ty_lit_float: int = 0 - 16
 const ty_none: int = 0 - 999
 
-/// The synthetic type of a pointer to DIE k.
+/// The synthetic type of a pointer to DIE k, or to one of C's builtin types (-1000 - k: -998 to -986).
 fn ty_pointer_to(k: int) -> int { 0 - 1000 - k }
+
+/// One of C's builtin types a pointer can point to: int, long, unsigned long, and unsigned int to _Bool.
+fn ty_builtin(t: int) -> bool { t <= 0 - 2 && t >= 0 - 14 && t != ty_voidp && t != ty_codep }
+
+/// A pointer to a DIE or to a builtin type (ty_pointer_to's).
+fn ty_is_ptr(t: int) -> bool { t <= 0 - 1000 || ty_builtin(0 - 1000 - t) }
 
 /// gdb's spelling of a type.
 fn ty_name(p: Prog, t: int) -> str {
@@ -137,7 +143,7 @@ fn ty_name(p: Prog, t: int) -> str {
     if t == ty_float { return "float" }
     if t == ty_bool { return "bool" }
     if t == ty_lit_int { return "int" }
-    if t <= 0 - 1000 {
+    if ty_is_ptr(t) {
         let n = ty_name(p, 0 - 1000 - t)
         if n.ends_with("*") { return "{n}*" }
         return "{n} *"
@@ -266,10 +272,11 @@ fn format_bytes(p: Prog, s: Session, t: int, b: List[byte], top: bool) -> str {
         if v == 1 { return "true" }
         return "{v}"
     }
-    if t == ty_voidp || t == ty_codep || t <= 0 - 1000 {
+    if t == ty_voidp || t == ty_codep || ty_is_ptr(t) {
         let v = le_u64(b, 8)
         var text = hex_text(v)
-        let to_char = t <= 0 - 1000 && is_char_type(p, 0 - 1000 - t)
+        let k = 0 - 1000 - t
+        let to_char = ty_is_ptr(t) && (k == ty_char || k == ty_uchar || (k >= 0 && is_char_type(p, k)))
         if to_char && v != 0 {
             text = "{text} {read_cstring(s, v)}"
         }

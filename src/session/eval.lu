@@ -461,7 +461,7 @@ fn num_class(s: Session, ty: int) -> (int, int) {
     if ty == ty_double || ty == ty_lit_float { return (3, 8) }
     if ty == ty_float { return (3, 4) }
     if ty == ty_bool { return (4, 1) }
-    if ty == ty_voidp || ty == ty_codep || ty <= 0 - 1000 { return (5, 8) }
+    if ty == ty_voidp || ty == ty_codep || ty_is_ptr(ty) { return (5, 8) }
     let st = ty_strip(s.prog, ty)
     if st < 0 { return (0, 0) }
     let tag = s.prog.info.entries[st].tag
@@ -786,12 +786,12 @@ fn convert(s: Session, v_in: Val, ty: int) -> Val {
 
 /// The synthetic type of a pointer to ty.
 fn pointer_type(ty: int) -> int {
-    if ty >= 0 { return ty_pointer_to(ty) }
+    if ty >= 0 || ty_builtin(ty) { return ty_pointer_to(ty) }
     ty_voidp
 }
 
 fn pointee(s: Session, ty: int) -> int {
-    if ty <= 0 - 1000 { return 0 - 1000 - ty }
+    if ty_is_ptr(ty) { return 0 - 1000 - ty }
     let st = ty_strip(s.prog, ty)
     if st >= 0 && s.prog.info.entries[st].tag == tag_pointer { return attr_ref(s.prog, st, 73) }
     ty_none
@@ -808,7 +808,7 @@ fn deref(s: Session, v_in: Val) -> Val {
     let (k, _) = num_class(s, v.ty)
     if k != 5 { return val_fail("Attempt to take contents of a non-pointer value.") }
     let target = pointee(s, v.ty)
-    if target == ty_none || target < 0 { return val_fail("Attempt to take contents of a non-pointer value.") }
+    if target == ty_none || (target < 0 && !ty_builtin(target)) { return val_fail("Attempt to take contents of a non-pointer value.") }
     let at = as_u64(v.bytes)
     let size = ty_size(s.prog, target)
     let r = src_read(s, at, size)
