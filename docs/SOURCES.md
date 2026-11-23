@@ -310,3 +310,29 @@ none from those directories), and nothing else of its source.
 
 gdb and gdbserver ran only as the pinned binaries in the oracle container, and QEMU only as the binary built there.
 No debugger's, stub's, emulator's or kernel's source was read.
+
+## Consulted for S8's stub, sniff-server (2026-11-23)
+
+The stub side of the remote protocol came from the same nineteen GDB manual nodes listed above, read again from the
+stub's side, and nothing else about the protocol. The nodes it leans on most are Packets, Stop Reply Packets,
+General Query Packets (qSupported's features, `qXfer:features:read` and `qXfer:threads:read::offset,length` with its
+empty annex), Thread List Format (the thread list with each thread's name), Target Description Format, i386 Features
+and Interrupts. The processor facts came from Intel's manual.
+
+| Source | SHA-256 | Used for |
+|---|---|---|
+| Intel® 64 and IA-32 Architectures Software Developer's Manual, combined volumes ([the download](https://cdrdv2.intel.com/v1/dl/getContent/671200)), fetched twice with curl, the two copies byte-identical, the copies kept outside the repository | `a4a62e6a7ba11a76c7753a195b825087306812aac39b930973f9168ee599f321` | Volume 1's figure of EFLAGS, for the flag fields of the stub's description; the FXSAVE instruction's page in Volume 2A, for what the FXSAVE area's bytes mean: the abridged tag byte (one bit a register, in physical order), and the table that recreates the full tag word from each register's exponent, fraction and J bit (the stub's `ftag`, `src/server/x87.lu`); Volume 3B's debug registers: DR7's R/W and LEN fields (00 for an instruction breakpoint, with LEN 00), and that an instruction breakpoint is a fault taken before the instruction, so the stop's pc is the breakpoint's address |
+| man7.org: [poll(2)](https://man7.org/linux/man-pages/man2/poll.2.html), fetched twice, byte-identical | `411bb440dcaf29549937e84bbeb4de2ab19ba07becaf21071fc8146c02898c38` | the stub's one wait on its client and its listening socket: a negative timeout waits until one is ready, so a stopped program with a silent client costs no wakeups |
+
+The byte offsets of `user_fpregs_struct` (where PTRACE_GETFPREGS and PTRACE_SETFPREGS put the FXSAVE area) and the
+number of PTRACE_SETFPREGS come from `tools/abi-probe.c`, compiled in the oracle container, as the other platform
+constants do; the manual says what each byte means, not where the kernel puts it.
+
+### Binary observations, not sources
+
+- The signal numbers the stub sends (`tests/server-signals.tsv`): each of signals 1 to 31 raised under the pinned gdbserver, its stop reply read off the connection beside the name the pinned gdb printed for it in the same run. The file names gdbserver and gdb by version and SHA-256; a number not in it is refused by name.
+- What the pinned gdb sends a stub and in what order (qSupported, `?`, then `Hg` for the thread the stop names, before any breakpoint or register write), that it asks even a static program's stub for `qXfer:libraries-svr4`, and which of gdbserver's features change what gdb prints (Host I/O: a separate debug file read over the connection and a warning that file transfers can be slow; multiprocess: an inferior named by its pid; the thread list: each thread's name), all read from the pinned gdb's remote logs against the pinned gdbserver.
+- gdbserver's own answers (its qSupported reply, the empty reply to `Z3`), read off the connection.
+- That PAX answers PTRACE_SETFPREGS with EIO, so the stub answers a write of an x87 or SSE register on PAX with an error reply; and that a connection through QEMU's forwarded port to a guest's listener first held after 3.0 s and three resets, from which the PAX rows' retry bound (twenty times that) is set.
+
+gdbserver ran only as the pinned binary in the oracle container. No stub's source was read.
