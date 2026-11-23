@@ -165,6 +165,8 @@ fn requests_row() {
     assert(q.kind == server.req_vcont_query)
     let h = server.request("Hg4d2".bytes()) else { return }
     assert(h.kind == server.req_thread && h.annex == "g" && h.num == 1234)
+    let alive = server.request("T4d2".bytes()) else { return }
+    assert(alive.kind == server.req_alive && alive.num == 1234)
     let all = server.request("Hc-1".bytes()) else { return }
     assert(all.kind == server.req_thread && all.annex == "c" && all.num == -1)
     let p = server.request("p10".bytes()) else { return }
