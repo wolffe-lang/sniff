@@ -325,11 +325,37 @@ def first_line_diff(want, got):
     return 'equal'
 
 
-def probe_verdicts(skipped, got, linux):
+def expect_differences(want_o, out, named):
+    """PAX's answer with the probe's named differences applied: each named call's line, where Linux answers `linux`
+    and PAX `pax`, is compared as Linux's. Returns (the answer as compared, the notes, the problems): a named line that
+    PAX answers as Linux does is difference-stale, one PAX answers otherwise again is difference-moved, and one Linux
+    no longer answers as named is difference-golden."""
+    w, g = want_o.split('\n'), out.split('\n')
+    notes, bad = [], []
+    for d in named:
+        lw, lp = '%s -> %s' % (d['call'], d['linux']), '%s -> %s' % (d['call'], d['pax'])
+        if lw not in w:
+            bad.append('difference-golden: Linux no longer answers %r' % lw)
+            continue
+        i = w.index(lw)
+        here = g[i] if i < len(g) else '<end>'
+        if here == lp:
+            g[i] = lw
+            notes.append('%s (%s)' % (lp, d['why']))
+        elif here == lw:
+            bad.append('difference-stale: PAX answers %r as Linux does' % d['call'])
+        else:
+            bad.append('difference-moved: want %r got %r' % (lp, here))
+    return '\n'.join(g), notes, bad
+
+
+def probe_verdicts(skipped, got, linux, differences=None):
     """(verdict, name, why) for every probe and every skipped row. got: probe name -> (rc, out, err) from the
-    console; linux: probe name -> (out, rc), the golden. A skip whose gap is a probe PAX answers as Linux does is
-    FAIL skip-stale; one PAX answers otherwise is SKIP, witnessed by the first differing line; a harness skip is
-    SKIP; a probe no skip names is PASS or FAIL against Linux; a probe with no answer is FAIL."""
+    console; linux: probe name -> (out, rc), the golden; differences: probe name -> its named differences
+    (expect_differences), each of which PAX must show as named. A skip whose gap is a probe PAX answers as Linux does
+    is FAIL skip-stale; one PAX answers otherwise is SKIP, witnessed by the first differing line; a harness skip is
+    SKIP; a probe no skip names is PASS (naming the differences it expected) or FAIL against Linux; a probe with no
+    answer is FAIL."""
     res = []
     named = {r['gap'] for r in skipped if r.get('gap') not in (None, 'harness')}
     for name in sorted(linux):
@@ -341,8 +367,11 @@ def probe_verdicts(skipped, got, linux):
                     res.append(('SKIP', r['name'], 'reason=%s gap=%s witness=none' % (r['skip'], name)))
             continue
         rc, out, err = got[name]
-        same = out == want_o and str(rc).strip() == str(want_rc).strip() and err == ''
-        why = 'equal' if same else (first_line_diff(want_o, out) if out != want_o else
+        notes, bad = [], []
+        if differences and differences.get(name):
+            out, notes, bad = expect_differences(want_o, out, differences[name])
+        same = not bad and out == want_o and str(rc).strip() == str(want_rc).strip() and err == ''
+        why = 'equal' if same else bad[0] if bad else (first_line_diff(want_o, out) if out != want_o else
                                     'exit want %s got %s' % (str(want_rc).strip(), rc) if str(rc).strip() != str(want_rc).strip()
                                     else 'stderr %r' % err[:80])
         for r in skipped:
@@ -354,7 +383,8 @@ def probe_verdicts(skipped, got, linux):
             else:
                 res.append(('SKIP', r['name'], 'reason=%s gap=%s witness=%s' % (r['skip'], name, why)))
         if name not in named:
-            res.append(('PASS', 'probe-' + name, '') if same else ('FAIL', 'probe-' + name, why))
+            res.append(('PASS', 'probe-' + name, ('expected differences: ' + '; '.join(notes)) if notes else '') if same
+                       else ('FAIL', 'probe-' + name, why))
     for r in skipped:
         if r.get('gap') == 'harness':
             res.append(('SKIP', r['name'], 'reason=' + r['skip']))
@@ -431,7 +461,7 @@ def cmd_run(a):
         if rc != 0 and not got:
             print('FAIL %s machine did not halt and no row finished: %s' % (label, Path(str(serial) + '.verdict').read_text()[-300:].replace('\n', ' | ')))
     nskip = 0
-    for verdict, name, why in probe_verdicts(skipped, probe_got, linux):
+    for verdict, name, why in probe_verdicts(skipped, probe_got, linux, sess.load_probe_differences()):
         print('%s %s%s' % (verdict, name, (' ' + why) if why else ''))
         total_fail += verdict == 'FAIL'
         nskip += verdict == 'SKIP'
