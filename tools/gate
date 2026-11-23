@@ -35,6 +35,9 @@ step remote-harness-unit python3 -I tools/session-remote.py selftest
 remote_why="no kernel image on this host"
 [ "$mode" = macos ] && remote_why="sniff built for macOS has no x86-64 register, CFI or call tables for the kernel (a later change)"
 step remote-kernel-skip python3 -I tools/session-remote.py skip --reason "$remote_why" --expect 36
+# S8: sniff-server on PAX needs PAX's console image and KVM, which only the record host has (tools/gate-pax builds the
+# image, tools/gate-remote runs the rows): every gate host skips them by name, and the count is held
+step remote-server-pax-skip python3 -I tools/session-remote.py skip --kind server-pax --reason "the stub on PAX needs PAX's console image and KVM, which only the record host has" --expect 8
 step abi-constants python3 -I tools/check-abi.py check
 for platform in macos linux; do
   if [ -f "tests/evidence/$platform-session/record.json" ]; then
@@ -108,6 +111,7 @@ if [ "$mode" = linux ]; then
   step dump-notes python3 -I tools/dump-matrix.py --sniff "$root/target/sniff" --platform linux --fixtures "$root/target/fixtures" \
     --modes notes --cores "$root/target/cores/s2" --cores "$root/target/cores/pax"
   step pax-sniff-static bash tools/build-static-sniff.sh "$wolf" "$root/target/sniff-static"
+  step pax-server-static bash tools/build-static-sniff.sh "$wolf" "$root/target/sniff-server-static" src/sniff_server.lu pax-server-static
   # S8: sniff-server, the stub, on loopback in this host over the static fixtures, its rows held to the pinned
   # gdbserver live (tools/session-remote.py server names gdbserver and gdb by version and digest)
   step server-build bash -c "'$wolf' build src/sniff_server.lu --no-cache -o '$root/target/sniff-server'"
