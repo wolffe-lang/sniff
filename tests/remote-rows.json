@@ -1,0 +1,353 @@
+{
+ "about": "S8's kernel rows (tools/session-remote.py): one boot of PAX's console image each, at one processor, frozen at reset; the pinned gdb's transcript under KVM is the golden",
+ "rows": [
+  {
+   "name": "remote-kernel-connect",
+   "script": [
+    "target remote 127.0.0.1:@PORT@",
+    "info threads",
+    "kill"
+   ]
+  },
+  {
+   "name": "remote-kernel-regs-reset",
+   "script": [
+    "target remote 127.0.0.1:@PORT@",
+    "info registers rip",
+    "kill"
+   ]
+  },
+  {
+   "name": "remote-kernel-hbreak",
+   "script": [
+    "target remote 127.0.0.1:@PORT@",
+    "hbreak kmain",
+    "continue",
+    "bt",
+    "kill"
+   ]
+  },
+  {
+   "name": "remote-kernel-break-addr",
+   "script": [
+    "target remote 127.0.0.1:@PORT@",
+    "hbreak kmain",
+    "continue",
+    "delete",
+    "break *0xffffffff800bc623",
+    "continue",
+    "bt",
+    "kill"
+   ]
+  },
+  {
+   "name": "remote-kernel-finish",
+   "script": [
+    "target remote 127.0.0.1:@PORT@",
+    "hbreak kmain",
+    "continue",
+    "delete",
+    "break *0xffffffff800bc623",
+    "continue",
+    "finish",
+    "kill"
+   ]
+  },
+  {
+   "name": "remote-kernel-break-line",
+   "script": [
+    "target remote 127.0.0.1:@PORT@",
+    "hbreak kmain",
+    "continue",
+    "delete",
+    "break kmain_console.lu:560",
+    "continue",
+    "kill"
+   ]
+  },
+  {
+   "name": "remote-kernel-step",
+   "script": [
+    "target remote 127.0.0.1:@PORT@",
+    "hbreak kmain",
+    "continue",
+    "delete",
+    "break kmain_console.lu:560",
+    "continue",
+    "step",
+    "bt",
+    "kill"
+   ]
+  },
+  {
+   "name": "remote-kernel-locals",
+   "script": [
+    "target remote 127.0.0.1:@PORT@",
+    "hbreak kmain",
+    "continue",
+    "delete",
+    "break kmain_console.lu:560",
+    "continue",
+    "step",
+    "info locals",
+    "kill"
+   ]
+  },
+  {
+   "name": "remote-kernel-finish-value",
+   "script": [
+    "target remote 127.0.0.1:@PORT@",
+    "hbreak kmain",
+    "continue",
+    "delete",
+    "break kmain_console.lu:560",
+    "continue",
+    "step",
+    "finish",
+    "kill"
+   ]
+  },
+  {
+   "name": "remote-kernel-next",
+   "script": [
+    "target remote 127.0.0.1:@PORT@",
+    "hbreak kmain",
+    "continue",
+    "delete",
+    "break kmain_console.lu:560",
+    "continue",
+    "next",
+    "kill"
+   ]
+  },
+  {
+   "name": "remote-kernel-stepi",
+   "script": [
+    "target remote 127.0.0.1:@PORT@",
+    "hbreak kmain",
+    "continue",
+    "delete",
+    "break kmain_console.lu:560",
+    "continue",
+    "next",
+    "stepi",
+    "kill"
+   ]
+  },
+  {
+   "name": "remote-kernel-x",
+   "script": [
+    "target remote 127.0.0.1:@PORT@",
+    "hbreak kmain",
+    "continue",
+    "delete",
+    "break *0xffffffff800bc623",
+    "continue",
+    "x/4xg $sp",
+    "x/8xb 0xffffffff80117600",
+    "kill"
+   ]
+  },
+  {
+   "name": "remote-kernel-break-shadow",
+   "script": [
+    "target remote 127.0.0.1:@PORT@",
+    "hbreak kmain",
+    "continue",
+    "break *0xffffffff8011763c",
+    "x/2xb 0xffffffff8011763c",
+    "continue",
+    "x/2xb 0xffffffff8011763c",
+    "kill"
+   ]
+  },
+  {
+   "name": "remote-kernel-print",
+   "script": [
+    "target remote 127.0.0.1:@PORT@",
+    "hbreak kmain",
+    "continue",
+    "print (unsigned char) '_Wbootmark.blind.sbef3515187e1839'",
+    "print '_Wbootmark.blind.sbef3515187e1839'",
+    "print LIVE_REGION_BYTES",
+    "kill"
+   ]
+  },
+  {
+   "name": "remote-kernel-write-mem",
+   "script": [
+    "target remote 127.0.0.1:@PORT@",
+    "hbreak kmain",
+    "continue",
+    "set var *(unsigned char *) 0xffffffff806522d8 = 7",
+    "x/1xb 0xffffffff806522d8",
+    "set var *(unsigned char *) 0xffffffff806522d8 = 0",
+    "x/1xb 0xffffffff806522d8",
+    "kill"
+   ]
+  },
+  {
+   "name": "remote-kernel-write-reg",
+   "script": [
+    "target remote 127.0.0.1:@PORT@",
+    "hbreak kmain",
+    "continue",
+    "set var $rax = 0x1234",
+    "info registers rax",
+    "set var $rax = 0",
+    "info registers rax",
+    "kill"
+   ]
+  },
+  {
+   "name": "remote-kernel-watch",
+   "script": [
+    "target remote 127.0.0.1:@PORT@",
+    "hbreak kmain",
+    "continue",
+    "watch *(unsigned long *) 0xffffffff80652068",
+    "!interrupt 10 continue",
+    "delete",
+    "kill"
+   ]
+  },
+  {
+   "name": "remote-kernel-threads",
+   "script": [
+    "target remote 127.0.0.1:@PORT@",
+    "hbreak kmain",
+    "continue",
+    "info threads",
+    "kill"
+   ]
+  },
+  {
+   "name": "remote-kernel-regs",
+   "script": [
+    "target remote 127.0.0.1:@PORT@",
+    "hbreak kmain",
+    "continue",
+    "info registers",
+    "kill"
+   ]
+  },
+  {
+   "name": "remote-kernel-interrupt",
+   "script": [
+    "target remote 127.0.0.1:@PORT@",
+    "!interrupt 5 continue",
+    "info threads",
+    "kill"
+   ]
+  },
+  {
+   "name": "remote-kernel-detach",
+   "script": [
+    "target remote 127.0.0.1:@PORT@",
+    "hbreak kmain",
+    "continue",
+    "delete",
+    "detach",
+    "target remote 127.0.0.1:@PORT@",
+    "info threads",
+    "kill"
+   ]
+  },
+  {
+   "name": "remote-kernel-disconnect",
+   "script": [
+    "target remote 127.0.0.1:@PORT@",
+    "disconnect",
+    "target remote 127.0.0.1:@PORT@",
+    "kill"
+   ]
+  },
+  {
+   "name": "remote-kernel-kill",
+   "script": [
+    "target remote 127.0.0.1:@PORT@",
+    "kill",
+    "info threads"
+   ]
+  },
+  {
+   "name": "remote-kernel-reset-read",
+   "script": [
+    "target remote 127.0.0.1:@PORT@",
+    "x/2xg 0xffffffff80000000",
+    "kill"
+   ]
+  },
+  {
+   "name": "remote-kernel-reset-break-kvm",
+   "script": [
+    "target remote 127.0.0.1:@PORT@",
+    "break kmain",
+    "continue",
+    "info breakpoints",
+    "kill"
+   ],
+   "accel": "kvm"
+  },
+  {
+   "name": "remote-kernel-reset-break-tcg",
+   "script": [
+    "target remote 127.0.0.1:@PORT@",
+    "break kmain",
+    "continue",
+    "info breakpoints",
+    "kill"
+   ],
+   "accel": "tcg"
+  },
+  {
+   "name": "remote-refuse-no-listener",
+   "script": [
+    "target remote 127.0.0.1:1"
+   ],
+   "qemu": false
+  },
+  {
+   "name": "remote-refuse-bad-port",
+   "script": [
+    "target remote 127.0.0.1:70000"
+   ],
+   "qemu": false
+  },
+  {
+   "name": "remote-refuse-no-port",
+   "script": [
+    "target remote 127.0.0.1:"
+   ],
+   "qemu": false
+  },
+  {
+   "name": "remote-refuse-no-address",
+   "script": [
+    "target remote"
+   ],
+   "qemu": false
+  },
+  {
+   "name": "remote-refuse-detach",
+   "script": [
+    "detach"
+   ],
+   "qemu": false
+  },
+  {
+   "name": "remote-refuse-disconnect",
+   "script": [
+    "disconnect"
+   ],
+   "qemu": false
+  },
+  {
+   "name": "remote-refuse-kill",
+   "script": [
+    "kill"
+   ],
+   "qemu": false
+  }
+ ]
+}
