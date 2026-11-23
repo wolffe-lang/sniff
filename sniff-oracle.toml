@@ -9,7 +9,7 @@ bootstrap_ca_sha256 = "f9fbacd417b515450b831032cc39d18059e9874e67525679a43c16071
 # whose signed noble-updates index names the same SHA-256.
 bootstrap_ca_source = "https://snapshot.ubuntu.com/ubuntu/20261106T000000Z/pool/main/c/ca-certificates/ca-certificates_20260816ubuntu0.24.04.2_all.deb"
 bootstrap_image_sha256 = "ed9faeb7275e795b09d6e945c86dff0ba4cc6d55b65db3e32e94a17f7742d84f"
-packages_sha256 = "fa1287e475e359b52d248aed073f82531050dce2dc17d19ccc0f38d228faf5b4"
+packages_sha256 = "ee8f92ee1097b9f387959564ca1cedbaf3b8fbd66726af1fb4ae74821d1ba8ea"
 binary_manifest_sha256 = "73d53beb3699ec100ed72de28ed04e45e7d2d92e53ac2c523dedff4610951647"
 
 [gdb]
