@@ -74,6 +74,17 @@ core prpsinfo_fname_size 16
 core prpsinfo_psargs 56
 core prpsinfo_psargs_size 80
 core fpregset_size 512
+request PTRACE_SETFPREGS 15
+fpregs size 512
+fpregs cwd 0
+fpregs swd 2
+fpregs ftw 4
+fpregs fop 6
+fpregs rip 8
+fpregs rdp 16
+fpregs mxcsr 24
+fpregs st_space 32
+fpregs xmm_space 160
 wait exit0 raw=0 exited=1 exitstatus=0 signaled=0 termsig=-1
 wait exit3 raw=768 exited=1 exitstatus=3 signaled=0 termsig=-1
 wait exit255 raw=65280 exited=1 exitstatus=255 signaled=0 termsig=-1
