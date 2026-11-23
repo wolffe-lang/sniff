@@ -85,7 +85,37 @@ pub fn killed_reply(host_signal: int) -> str ! ServerError {
 /// The stub's reply to qSupported (General Query Packets): packets up to 0x4000 bytes, its description, no-ack mode,
 /// the actions in vCont?'s reply, and the swbreak stop reason. No multiprocess and no Host I/O.
 pub fn supported_reply() -> str ! ServerError {
-    "PacketSize=4000;qXfer:features:read+;QStartNoAckMode+;vContSupported+;swbreak+"
+    "PacketSize=4000;qXfer:features:read+;qXfer:threads:read+;QStartNoAckMode+;vContSupported+;swbreak+"
+}
+
+// A thread's name as an XML attribute's value: its markup characters escaped.
+fn xml_attr(t: str) -> str {
+    var out: List[byte] = []
+    for c in t.bytes() {
+        let k = c as int
+        let rep = if k == 38 { "&amp;" } else if k == 60 { "&lt;" } else if k == 62 { "&gt;" } else if k == 34 { "&quot;" } else { "" }
+        if rep == "" { (mut out).push(c) } else { for r in rep.bytes() { (mut out).push(r) } }
+    }
+    str_from_utf8(out) else { "" }
+}
+
+/// The qXfer:threads:read document (Thread List Format): each thread by its id in hex and, where it has one, its
+/// name (a thread with no name has none in the document).
+pub fn threads_xml(tids: List[int], names: List[str]) -> str {
+    var s = "<?xml version=\"1.0\"?>\n<threads>\n"
+    var i: int = 0
+    while i < tids.len {
+        let id = remote.hex_u64(tids[i] as u64)
+        let name = if i < names.len { names[i] } else { "" }
+        if name == "" {
+            s = "{s}<thread id=\"{id}\"/>\n"
+        } else {
+            let attr = xml_attr(name)
+            s = "{s}<thread id=\"{id}\" name=\"{attr}\"/>\n"
+        }
+        i += 1
+    }
+    "{s}</threads>\n"
 }
 
 // Registers (Target Description Format): each one's number is one more than the previous register's, so the order of

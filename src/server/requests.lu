@@ -52,6 +52,8 @@ pub const req_detach: int = 18
 pub const req_kill: int = 19
 /// `qXfer:features:read:annex:offset,length`.
 pub const req_features: int = 20
+/// `qXfer:threads:read::offset,length` (its annex is empty).
+pub const req_threads_xfer: int = 22
 /// `qAttached`: the stub created the process, so the reply is `0`.
 pub const req_attached: int = 21
 
@@ -214,6 +216,15 @@ pub fn request(d: List[byte]) -> Request ! ServerError {
     if t == "qAttached" || t.starts_with("qAttached:") { return req(req_attached) }
     if t == "QStartNoAckMode" { return req(req_no_ack) }
     if t == "qSupported" || t.starts_with("qSupported:") { return req(req_supported) }
+    if t.starts_with("qXfer:threads:read:") {
+        if d.len < 20 || d[19] as int != 58 { return bad_request }
+        var r = req(req_threads_xfer)
+        let (off, n) = addr_len(d, 20, d.len)?
+        if off > 1048576 { return bad_request }
+        r.offset = off as int
+        r.len = n
+        return r
+    }
     if t.starts_with("qXfer:features:read:") {
         let colon = index_of(d, 58, 20)
         if colon < 0 { return bad_request }
