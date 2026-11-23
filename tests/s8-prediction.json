@@ -189,7 +189,7 @@
   "globals": "the kernel's DWARF names only two addressed variables, both in the Rust runtime's compile unit: LIVE_REGION_BYTES (0xffffffff806524c0, core::sync::atomic::Atomic<usize>) and AMBIENT_REGION (0xffffffff806524b8). wolf's own globals are in the symbol table only (for example `_Wbootmark.blind.sbef3515187e1839`, a bss byte). So `print` of a kernel global is measured three ways (the Rust value, the symbol with no type, and the symbol cast to a type) and the rows take what sniff's printer already handles; a Rust-language value is out of PR 1's scope if gdb prints it in Rust's syntax. MEASURED: from a wolf frame gdb does not see LIVE_REGION_BYTES at all, and the symbol-only global needs a cast; so remote-kernel-print is the cast form, `print (unsigned char) '_Wbootmark.blind.sbef3515187e1839'`, which sniff's printer must take (a C cast of a symbol without debug information)"
  },
  "rows": {
-  "unit": "remote-packet-{frame,checksum-bad,ack,nack-resend,noack,escape,rle,rle-forbidden,hex,interrupt-byte,notification-refused,empty,error,error-text,size-cap,size-cap-past,reply-cap,reply-cap-past,resend-cap,resend-cap-past,reply-time,reply-time-past} and remote-tdesc-{parse,include,regnum-default,missing-core,types}: natively and on the checked machine, red first",
+  "unit": "remote-packet-{frame,checksum-bad,ack,nack-resend,noack,escape,rle,rle-forbidden,hex,interrupt-byte,notification-refused,empty,error,error-text,size-cap,size-cap-past,reply-cap,reply-cap-past,resend-cap,resend-cap-past,reply-time,reply-time-past} and remote-tdesc-{parse,include,regnum-default,missing-core,types,caps,caps-past}: natively and on the checked machine, red first",
   "kernel": "remote-kernel-{connect,tdesc,regs-reset,hbreak,break-addr,break-shadow,bt-entry,finish,break-line,step,locals,finish-value,next,stepi,x,print,write-mem,write-reg,watch,threads,interrupt,detach,disconnect,kill,reset-read,reset-break} and remote-refuse-{no-listener,bad-port,no-host,no-port,no-address,detach,disconnect,kill}. The kernel rows run as one session a boot in session A's order (measured: 16 s for the whole of A under either accelerator, so one boot per row is not needed), split where a row's own state needs a fresh boot (reset-read and reset-break boot their own). remote-kernel-watch watches a word the timer writes rather than LIVE_REGION_BYTES, which never changed; remote-kernel-write-reg writes a changed value and restores it",
   "where": {
    "hosted_linux": "the image, under TCG",
@@ -197,7 +197,8 @@
    "hosted_macos": "skipped by name: it has no pinned QEMU",
    "linux_kvm": "the image, under KVM (with the PAX legs)"
   },
-  "goldens": "tests/evidence/remote/ from gdb's side of the rows under KVM, with a unit row holding the qSupported reply and the description equal across KVM, TCG and the Mac (the measurement found them equal under KVM and TCG). QEMU's description reaches the repository by its sha256 only, never as text (client.description_text)"
+  "goldens": "tests/evidence/remote/ from gdb's side of the rows under KVM, with a unit row holding the qSupported reply and the description equal across KVM, TCG and the Mac (the measurement found them equal under KVM and TCG). QEMU's description reaches the repository by its sha256 only, never as text (client.description_text)",
+  "unit_scored": "as built: the 22 packet rows in src/remote_test.lu and 7 description rows in src/tdesc_test.lu (caps and caps-past added: 1024 registers, inclusions four deep, 1 MiB of text), every one natively and on the checked machine. The stand-in stub over a socket is not in U1: U1 is pure, and the socket rows belong to the transport with U2"
  },
  "plants": {
   "P1": {
