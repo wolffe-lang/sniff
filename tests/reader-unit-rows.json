@@ -180,6 +180,7 @@
     "remote-client-stops",
     "remote-client-memory",
     "remote-client-points",
+    "remote-client-unread-break",
     "remote-client-resume",
     "remote-client-ends",
     "remote-client-peek",

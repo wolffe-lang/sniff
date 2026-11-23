@@ -251,6 +251,21 @@ fn points_row() {
     print("PASS remote-client-points")
 }
 
+fn unread_break_row() {
+    // at reset, before paging, the covered byte cannot be read (E14) and QEMU under TCG still takes the Z0:
+    // the breakpoint is in, with no byte of its own for later reads to show in its place
+    var r = rig(rep("E14") + rep("OK") + rep("cc") + rep("OK")) else |e| { print("FAIL remote-client-unread-break {e}"); return }
+    let skip = heard(mut r.stub)
+    remote.insert_break(mut r.t, 4096) else |e| { print("FAIL remote-client-unread-break {e}"); return }
+    let m = remote.read_mem(r.t, 4096, 1) else { return }
+    assert(m.len == 1 && m[0] as int == 204)
+    remote.remove_break(mut r.t, 4096) else { return }
+    assert(heard(mut r.stub) == sent("m1000,1") + "+" + sent("Z0,1000,1") + "+" + sent("m1000,1") + "+" + sent("z0,1000,1") + "+")
+    assert(skip != "")
+    done(take r)
+    print("PASS remote-client-unread-break")
+}
+
 fn resume_row() {
     let hi = remote.hex_encode("Hi\n".bytes())
     var r = rig("+" + rep_noack("O" + hi) + rep_noack("T05thread:01;") + "+" + rep_noack("T05thread:01;") + "+") else |e| { print("FAIL remote-client-resume {e}"); return }
@@ -327,6 +342,7 @@ fn main() {
     stops_row()
     memory_row()
     points_row()
+    unread_break_row()
     resume_row()
     ends_row()
     peek_row()
