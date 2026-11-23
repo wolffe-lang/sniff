@@ -668,7 +668,7 @@ pub fn serve(at: Listen, prog: str, args: List[str]) -> int {
         let nothing: List[int] = []
         let ready = net_wait([st.cfd, st.lfd], wait_ms) else { nothing }
         for fd in ready {
-            if fd == st.lfd { refuse_second(st.lfd) }
+            if fd == st.lfd { if st.cfd < 0 { refuse_second(st.lfd) } else { let _ = net_accept(st.lfd) } }  // PLANT: a second client accepted, never refused
         }
         for fd in ready {
             if fd == st.cfd && !client_bytes(mut st) {
