@@ -4,11 +4,14 @@ A debugger written in [wolf](https://github.com/wolffe-lang/wolf-lang),
 for x86-64 Linux and PAX, and macOS arm64. The command language is GDB's;
 a Debug Adapter Protocol server is planned for editor integration.
 
-**Status: milestones S0 to S6 are met on Linux x86-64, macOS arm64 and PAX; core files (S7) are read on Linux, at PAX's console and on macOS; cores PAX writes itself come next.** `sniff -batch -x SCRIPT PROG` starts PROG
+**Status: milestones S0 to S6 are met on Linux x86-64, macOS arm64 and PAX; core files (S7) are read on Linux, at PAX's console and on macOS; cores PAX writes itself come next. S8's remote client is in; its remote process stub comes next.** `sniff -batch -x SCRIPT PROG` starts PROG
 (under `ptrace(2)` on Linux; as a suspended child with its task port and exception port on macOS) and debugs it with gdb's command language (breakpoints,
 stepping, frames, values, registers, watchpoints, threads (all-stop) and signals, `list` and `help`); `attach PID`, `detach` and
 `sniff -p PID PROG` take a running process instead, and `sniff -batch -x SCRIPT PROG CORE` (or `-c CORE`, or `core-file CORE`) reads
-a core file as a stopped program: an ELF core of a Linux program, or on macOS a Mach-O core lldb wrote. It is held to transcripts of the pinned gdb
+a core file as a stopped program: an ELF core of a Linux program, or on macOS a Mach-O core lldb wrote. On Linux,
+`target remote HOST:PORT` debugs a target over the GDB remote protocol (S8): held so far to QEMU's gdbstub on PAX's
+console kernel at one processor (reads, breakpoints including `hbreak`, stepping, the interrupt, watchpoints, `detach`,
+`disconnect` and `kill`); assignment over a remote target, and the Mac's kernel rows, come later. It is held to transcripts of the pinned gdb
 and, on macOS, to Apple's lldb (facts) and to lupin's values; `sniff dump` still prints the S1 reader views.
 On PAX it is a static program of the dev image and debugs static programs with PAX's ptrace (see notes/sn04-sniff-on-pax.md). [MAP](docs/MAP.md) separates planned
 capabilities from measured ones.
@@ -26,11 +29,12 @@ capabilities from measured ones.
 | C producers | GCC 13.3.0 and clang 18.1.3 on Linux; Apple clang 21.0.0 on macOS |
 | Wolf value oracle | lupin 0.1.60 |
 | Bootstrap compiler | wolf 0.2.38, whole release archives pinned by SHA-256 |
+| Remote targets (S8) | QEMU 11.1.2, built from its release tarball in the Linux image and on the Mac, binary SHA-256 pinned; gdbserver 15.1, the stub's reference, run only as a binary |
 
 `wolf-toolchain.toml` pins archive bytes, including wolf's bundled standard
 library and runtime. `sniff-oracle.toml`, `ci/packages.txt` and
 `ci/oracle-binaries.lock` bind the Linux image recipe, its complete package
-closure and the five oracle/producer binaries. The Linux image uses a dated
+closure and the seven oracle, producer and target binaries. The Linux image uses a dated
 archive snapshot and a digest-checked certificate bootstrap; an index failure
 stops the build. The bootstrap is the snapshot's own `ca-certificates`
 package, kept in `ci/bootstrap/` by SHA-256, so the image build fetches
@@ -120,7 +124,9 @@ the DAP specification; QEMU gdbstub documentation; Apple's published Mach-O
 and dSYM documentation and macOS SDK API declarations.
 
 Never read: source of GDB, gdbserver, LLDB, LLVM DWARF libraries, libdwarf,
-elfutils/libdw, gimli, delve, rr, radare2, binutils, XNU or another OS kernel.
+elfutils/libdw, gimli, delve, rr, radare2, binutils, XNU or another OS kernel,
+QEMU (beyond the build-script lines its build needs, and never its `gdbstub/`
+or `target/` directories), or any other implementation of the remote protocol.
 Oracle tools are run only as binaries, not inspected as implementations.
 Organisation-owned code may be consulted: wolf's DWARF emitter as producer
 documentation, fenrir's front end, PAX, and lupin's black-box behavior.
