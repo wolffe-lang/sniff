@@ -2002,12 +2002,19 @@
    "prog": "c/calls/clang-O0/prog",
    "core": "calls-break",
    "script": [
-    "x/1xg $sp"
+    "x/2xg $fp"
    ],
    "lldb": [
     "process status",
-    "memory read -s8 -fx -c1 $sp"
-   ]
+    "memory read -s8 -fx -c2 $fp"
+   ],
+   "frame": {
+    "at": "$fp",
+    "offsets": [
+     0
+    ],
+    "why": "count's frame record at its breakpoint, read from the core's stack. Word 0 is main's saved frame pointer, a stack address: the core is written afresh in each take, and its stack sits where lldb's environment put it (the /usr/bin/lldb shim adds four variables and moves it 352 bytes from where the stored evidence's lldb put it), so word 0 is compared as its distance from the address read. Word 1 is the return address into main, compared as it is: lldb starts the program without address-space randomisation, so the program's text is where its load commands put it in every take. A take in which the return address moves is a defect to find, not a reason to loosen this row."
+   }
   },
   {
    "name": "lldb-core-workers-threads",
