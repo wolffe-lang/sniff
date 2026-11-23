@@ -181,7 +181,7 @@ fn return_addr(s: Session, sp: u64) -> u64 {
 fn print_step_stop(mut s: Session, start_func: u64, start_cfa: u64, by_frame: bool) {
     compute_frames(mut s)
     let fr = copy s.frames[0]
-    let now_func = func_start(s.prog, fr.pc - s.base)
+    let now_func = func_start(s.prog, file_or_zero(fr.pc, s.base))
     var changed = now_func != start_func
     if by_frame && fr.cfa != start_cfa { changed = true }
     print_stop_frame(mut s, changed, "")
@@ -194,15 +194,15 @@ fn step_lines(mut s: Session, over: bool, until_mode: bool) -> str {
     compute_frames(mut s)
     let fr0 = copy s.frames[0]
     var pc = fr0.pc
-    let sal0 = find_sal(s.prog, pc - s.base)
+    let sal0 = find_sal(s.prog, file_or_zero(pc, s.base))
     if !sal0.ok || fr0.func < 0 {
         let fname = frame_func_name(s, fr0)
-        if func_start(s.prog, pc - s.base) == 0 { return "Cannot find bounds of current function" }
+        if func_start(s.prog, file_or_zero(pc, s.base)) == 0 { return "Cannot find bounds of current function" }
         emit_line(mut s, "Single stepping until exit from function {fname},")
         emit_line(mut s, "which has no line number information.")
         return finish_frame(mut s, 0, false, false)
     }
-    let start_func = func_start(s.prog, pc - s.base)
+    let start_func = func_start(s.prog, file_or_zero(pc, s.base))
     let start_cfa = fr0.cfa
     var cur_line = sal0.line
     var cur_func = start_func
@@ -239,7 +239,7 @@ fn step_lines(mut s: Session, over: bool, until_mode: bool) -> str {
         let sp = rsp_now(s)
         if call_made(s, prev_pc, prev_sp, pc, sp) {
             let ret = return_addr(s, sp)
-            let callee = pc - s.base
+            let callee = file_or_zero(pc, s.base)
             let cf = func_at(s.prog, callee)
             var has_lines = false
             if cf >= 0 {
@@ -260,7 +260,7 @@ fn step_lines(mut s: Session, over: bool, until_mode: bool) -> str {
             if pc >= range_lo && pc < range_hi { continue }
         }
         // left the line's range: where are we?
-        let file_pc = pc - s.base
+        let file_pc = file_or_zero(pc, s.base)
         let now_func = func_start(s.prog, file_pc)
         if now_func != cur_func || func_at(s.prog, file_pc) < 0 {
             let nf = func_at(s.prog, file_pc)
@@ -311,7 +311,7 @@ fn is_stmt_at(s: Session, file_pc: u64) -> bool {
 fn step_insns(mut s: Session, over: bool, n: int) -> str {
     if !s.alive { return "The program is not being run." }
     compute_frames(mut s)
-    let start_func = func_start(s.prog, s.frames[0].pc - s.base)
+    let start_func = func_start(s.prog, file_or_zero(s.frames[0].pc, s.base))
     let start_cfa = s.frames[0].cfa
     var k = 0
     while k < n {
@@ -377,7 +377,7 @@ fn finish_frame(mut s: Session, level: int, quiet: bool, tty: bool) -> str {
     if tty {
         emit_line(mut s, "Run till exit from #{level}  {frame_line(s, level, false)}")
     }
-    let start_func = func_start(s.prog, s.frames[0].pc - s.base)
+    let start_func = func_start(s.prog, file_or_zero(s.frames[0].pc, s.base))
     if run_to(mut s, caller.pc, callee.cfa) { return "" }
     compute_frames(mut s)
     print_stop_frame(mut s, true, "")

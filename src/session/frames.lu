@@ -133,7 +133,7 @@ fn unwind_fp_x86(s: Session, f: Frame) -> Frame ! {no_caller} {
     let rsp = f.regs[7]
     let rbp = f.regs[6]
     let pc = f.pc
-    let fs = func_start(s.prog, pc - s.base) + s.base
+    let start = func_start(s.prog, file_or_zero(pc, s.base))
     var cfa: u64 = rbp + 16
     var saved_rbp_at: u64 = rbp
     var rbp_saved = true
@@ -141,8 +141,8 @@ fn unwind_fp_x86(s: Session, f: Frame) -> Frame ! {no_caller} {
         // at ret: the frame is already torn down
         cfa = rsp + 8
         rbp_saved = false
-    } else if fs != s.base {
-        var a = fs
+    } else if start != 0 {
+        var a = start + s.base
         if byte_at(s, a) == 243 && byte_at(s, a + 1) == 15 && byte_at(s, a + 2) == 30 && byte_at(s, a + 3) == 250 { a += 4 }
         if byte_at(s, a) == 85 {
             if pc <= a {
@@ -175,13 +175,13 @@ fn unwind_fp(s: Session, f: Frame, level: int) -> Frame ! {no_caller} { unwind_a
 /// Unwind through the CFI rules of fde. The CFA of frame f is filled in.
 fn unwind_cfi(s: Session, f: Frame, fi: int, lookup: u64) -> Frame ! {no_caller} {
     let fdata = if s.cfi[fi].img { copy s.prog.img } else { copy s.prog.data }
-    unwind_rules(s, f, fdata, s.cfi[fi], lookup - s.base, s.base)
+    unwind_rules(s, f, fdata, s.cfi[fi], file_or_zero(lookup, s.base), s.base)
 }
 
 /// Unwind through the CFI rules of a shared library's fde (libs.lu).
 fn unwind_lib(s: Session, f: Frame, li: int, fi: int, lookup: u64) -> Frame ! {no_caller} {
     let base = s.libs[li].base
-    unwind_rules(s, f, s.libs[li].prog.data, s.libs[li].cfi[fi], lookup - base, base)
+    unwind_rules(s, f, s.libs[li].prog.data, s.libs[li].cfi[fi], file_or_zero(lookup, base), base)
 }
 
 /// Unwind frame f by the rules fde gives at file address file_pc, in a file whose load bias is base.
@@ -239,8 +239,8 @@ fn compute_frames(mut s: Session) {
     let stop_at = main_addr(s.prog)
     var level = 0
     while level < 4096 {
-        let lookup = if level == 0 { f.pc } else { f.pc - 1 }
-        let file_pc = lookup - s.base
+        let lookup = caller_lookup(f.pc, level)
+        let file_pc = file_or_zero(lookup, s.base)
         f.func = func_at(s.prog, file_pc)
         let fi = cfi_find(s.cfi, file_pc)
         let start = func_start(s.prog, file_pc)
@@ -253,7 +253,7 @@ fn compute_frames(mut s: Session) {
         } else {
             // a pc in a shared library: the library's own CFI, else the frame-pointer fallback
             let li = if in_image(s.prog, file_pc) { 0 - 1 } else { lib_at(mut s, lookup) }
-            let lfi = if li >= 0 { cfi_find(s.libs[li].cfi, lookup - s.libs[li].base) } else { 0 - 1 }
+            let lfi = if li >= 0 { cfi_find(s.libs[li].cfi, file_or_zero(lookup, s.libs[li].base)) } else { 0 - 1 }
             if lfi >= 0 {
                 f.fallback = false
                 f.basis = "cfi"

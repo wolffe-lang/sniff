@@ -80,7 +80,10 @@ fn mapped_libraries(s: Session) -> List[LibName] {
 }
 
 /// Whether library l holds runtime address addr in one of its sections.
-fn lib_covers(l: Lib, addr: u64) -> bool { addr >= l.base && in_image(l.prog, addr - l.base) }
+fn lib_covers(l: Lib, addr: u64) -> bool {
+    let (inside, file) = file_address(addr, l.base)
+    inside && in_image(l.prog, file)
+}
 
 /// macOS's system libraries are in the dyld shared cache, with no file to read: no file is named.
 #[cfg(target = "aarch64-apple-darwin")]
@@ -133,7 +136,7 @@ fn lib_func_name(s: Session, addr: u64) -> str {
     var i = 0
     while i < s.libs.len {
         if lib_covers(s.libs[i], addr) {
-            let y = lib_sym_at(s.libs[i].prog, addr - s.libs[i].base)
+            let y = lib_sym_at(s.libs[i].prog, file_or_zero(addr, s.libs[i].base))
             if y >= 0 { return sym_print_name(s.libs[i].prog.syms[y].name) }
             return ""
         }

@@ -69,7 +69,10 @@ fn symbol_address(p: Prog, name: str) -> Val {
 
 /// Runtime addresses to file addresses when a process is running.
 fn to_file_address(s: Session, a: u64) -> u64 {
-    if has_stack(s) && s.base != 0 && a >= s.base { return a - s.base }
+    if has_stack(s) && s.base != 0 {
+        let (inside, file) = file_address(a, s.base)
+        if inside { return file }
+    }
     a
 }
 
@@ -87,7 +90,7 @@ fn files_matching(p: Prog, name: str) -> List[int] {
 
 fn default_file(s: Session) -> int {
     if has_stack(s) && s.frames_ok && s.frames.len > 0 {
-        let sal = find_sal(s.prog, frame_lookup_pc(s, s.sel) - s.base)
+        let sal = find_sal(s.prog, file_or_zero(frame_lookup_pc(s, s.sel), s.base))
         if sal.ok { return sal.file }
     }
     let m = symbol_address(s.prog, "main")

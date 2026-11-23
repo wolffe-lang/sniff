@@ -187,7 +187,7 @@ fn list_here(mut s: Session) -> str {
     if has_stack(s) {
         if !s.frames_ok { compute_frames(mut s) }
         if s.frames.len > s.sel {
-            let sal = find_sal(s.prog, frame_lookup_pc(s, s.sel) - s.base)
+            let sal = find_sal(s.prog, file_or_zero(frame_lookup_pc(s, s.sel), s.base))
             if sal.ok { return list_centred(mut s, sal.file, sal.line) }
         }
     }

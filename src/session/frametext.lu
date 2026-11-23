@@ -174,8 +174,7 @@ fn frame_args(s: Session, fr: Frame) -> str {
 
 /// The name gdb shows for the function of a frame.
 fn frame_func_name(s: Session, fr: Frame) -> str {
-    let file_pc = fr.pc - s.base
-    let lookup = if fr.pc > 0 { file_pc } else { file_pc }
+    let lookup = file_or_zero(fr.pc, s.base)
     if fr.func >= 0 { return s.prog.funcs[fr.func].name }
     let y = sym_at(s.prog, lookup)
     if y >= 0 { return sym_print_name(s.prog.syms[y].name) }
@@ -185,9 +184,13 @@ fn frame_func_name(s: Session, fr: Frame) -> str {
 }
 
 /// The line-lookup pc of a frame: the innermost uses its pc, callers pc - 1.
-fn frame_lookup_pc(s: Session, level: int) -> u64 {
-    if level == 0 { return s.frames[level].pc }
-    s.frames[level].pc - 1
+fn frame_lookup_pc(s: Session, level: int) -> u64 { caller_lookup(s.frames[level].pc, level) }
+
+/// Where a frame's pc is looked up: its own pc innermost, else the byte before a caller's return address (inside its
+/// call). A pc of 0 (a call through a null pointer) is looked up as itself.
+fn caller_lookup(pc: u64, level: int) -> u64 {
+    if level == 0 || pc == 0 { return pc }
+    pc - 1
 }
 
 /// Libraries mapped from the dyld shared cache have no file to name on macOS.
@@ -221,10 +224,10 @@ fn solib_name(s: Session, file: str) -> str {
 /// "[0x... in ]func (args) at file:line" for frame `level`; print_pc forces the address.
 fn frame_line(s: Session, level: int, force_pc: bool) -> str {
     let fr = copy s.frames[level]
-    let lookup = frame_lookup_pc(s, level) - s.base
+    let lookup = file_or_zero(frame_lookup_pc(s, level), s.base)
     let sal = find_sal(s.prog, lookup)
     var show_pc = force_pc || level > 0
-    if level == 0 && !(sal.ok && sal.start == fr.pc - s.base && stmt_start(s.prog, sal.start)) { show_pc = true }
+    if level == 0 && !(sal.ok && sal.start == file_or_zero(fr.pc, s.base) && stmt_start(s.prog, sal.start)) { show_pc = true }
     var out = ""
     if show_pc { out = "{addr16(fr.pc)} in " }
     let name = frame_func_name(s, fr)

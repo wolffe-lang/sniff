@@ -184,8 +184,8 @@ fn unwind_arm64(s: Session, f: Frame, level: int) -> Frame ! {no_caller} {
     let sp = f.regs[31]
     let fp = f.regs[29]
     let lr = f.regs[30]
-    let lookup = if level == 0 { f.pc } else { f.pc - 1 }
-    let file_pc = lookup - s.base
+    let lookup = caller_lookup(f.pc, level)
+    let file_pc = file_or_zero(lookup, s.base)
     let fstart = func_start(s.prog, file_pc)
     var cfa: u64 = 0
     var fp_at: u64 = 0

@@ -2,10 +2,20 @@
 
 fn hex_plain(a: u64) -> str { "0x{a:x}" }
 
+/// A breakpoint's address as a file address: an absolute one in the program moves with its load base; one below the
+/// program, or one already a file address, stays as it is.
+fn bp_file(s: Session, addr: u64, abs: bool) -> u64 {
+    if !abs { return addr }
+    let (inside, file) = file_address(addr, s.base)
+    if inside { return file }
+    addr
+}
+
 fn break_message(s: Session, kind: str, num: int, addr: u64, abs: bool) -> str {
     let shown = if abs { addr } else { addr + s.base }
-    let sal = find_sal(s.prog, if abs && addr >= s.base { addr - s.base } else { addr })
-    if sal.ok && func_at(s.prog, if abs && addr >= s.base { addr - s.base } else { addr }) >= 0 {
+    let file = bp_file(s, addr, abs)
+    let sal = find_sal(s.prog, file)
+    if sal.ok && func_at(s.prog, file) >= 0 {
         return "{kind} {num} at {hex_plain(shown)}: file {s.prog.files[sal.file]}, line {sal.line}."
     }
     "{kind} {num} at {hex_plain(shown)}"
@@ -176,6 +186,6 @@ fn bp_row(mut s: Session, i: int) {
     }
     let disp = if b.temp { "del" } else { "keep" }
     let enb = if b.enabled { "y" } else { "n" }
-    emit_line(mut s, "{pad_right("{b.num}", 8)}{pad_right(if b.hw { "hw breakpoint" } else { "breakpoint" }, 15)}{pad_right(disp, 5)}{pad_right(enb, 4)}{pad_right(addr16(bp_rt(s, i)), 19)}{bp_what(s, if b.abs && b.addr >= s.base { b.addr - s.base } else { b.addr })}")
+    emit_line(mut s, "{pad_right("{b.num}", 8)}{pad_right(if b.hw { "hw breakpoint" } else { "breakpoint" }, 15)}{pad_right(disp, 5)}{pad_right(enb, 4)}{pad_right(addr16(bp_rt(s, i)), 19)}{bp_what(s, bp_file(s, b.addr, b.abs))}")
     bp_tail(mut s, b.cond, b.hits)
 }
