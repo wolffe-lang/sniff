@@ -108,24 +108,20 @@ fn register_file(st: Stub) -> List[byte] {
     let fp = platform.target_fpregs(tt)
     for slot in g_slots8() { append(mut out, le(r[slot], 8)) }
     for slot in g_slots4() { append(mut out, le(r[slot], 4)) }
-    var i: int = 0
-    while i < 8 { append(mut out, slice(fp, 32 + 16 * i, 10)); i += 1 }
-    // fctrl fstat ftag (FXSAVE's abridged tag byte) fiseg fioff foseg fooff fop, four bytes each
-    append(mut out, slice(fp, 0, 2))
-    append(mut out, le(0, 2))
-    append(mut out, slice(fp, 2, 2))
-    append(mut out, le(0, 2))
-    append(mut out, slice(fp, 4, 1))
-    append(mut out, le(0, 3))
-    append(mut out, slice(fp, 12, 4))
-    append(mut out, slice(fp, 8, 4))
-    append(mut out, slice(fp, 20, 4))
-    append(mut out, slice(fp, 16, 4))
-    append(mut out, slice(fp, 6, 2))
-    append(mut out, le(0, 2))
-    i = 0
-    while i < 16 { append(mut out, slice(fp, 160 + 16 * i, 16)); i += 1 }
-    append(mut out, slice(fp, 24, 4))
+    // st0-st7, fctrl to fop, xmm0-xmm15 and mxcsr from the FXSAVE area, each where fp_place puts it and padded to its
+    // size; ftag is the full tag word made from the area's abridged byte (x87.lu)
+    let sizes = reg_sizes()
+    var n: int = 24
+    while n < 57 {
+        if n == 34 {
+            append(mut out, le(x87_full_tag(fp) as u64, 4))
+        } else {
+            let (off, count) = fp_place(n)
+            append(mut out, slice(fp, off, count))
+            append(mut out, le(0, sizes[n] - count))
+        }
+        n += 1
+    }
     append(mut out, le(r[21], 8))
     append(mut out, le(r[22], 8))
     out
@@ -140,13 +136,16 @@ fn reg_offset(n: int) -> int {
 }
 
 // Where an x87 or SSE register sits in the FXSAVE area, and how many of its bytes are there: (-1, 0) for any other.
+// The offsets are user_fpregs_struct's, measured by the ABI probe (platform.fpregs_*): fiseg and foseg are the upper
+// halves of the instruction and operand pointers, and ftag is the abridged byte (written through x87.lu).
 fn fp_place(n: int) -> (int, int) {
-    if n >= 24 && n < 32 { return (32 + 16 * (n - 24), 10) }
-    if n >= 40 && n < 56 { return (160 + 16 * (n - 40), 16) }
-    let offs = [0, 2, 4, 12, 8, 20, 16, 6]
+    if n >= 24 && n < 32 { return (platform.fpregs_st + 16 * (n - 24), 10) }
+    if n >= 40 && n < 56 { return (platform.fpregs_xmm + 16 * (n - 40), 16) }
+    let offs = [platform.fpregs_cwd, platform.fpregs_swd, platform.fpregs_ftw, platform.fpregs_rip + 4, platform.fpregs_rip,
+                platform.fpregs_rdp + 4, platform.fpregs_rdp, platform.fpregs_fop]
     let lens = [2, 2, 1, 4, 4, 4, 4, 2]
     if n >= 32 && n < 40 { return (offs[n - 32], lens[n - 32]) }
-    if n == 56 { return (24, 4) }
+    if n == 56 { return (platform.fpregs_mxcsr, 4) }
     (-1, 0)
 }
 
@@ -162,9 +161,14 @@ fn write_register(st: Stub, n: int, b: List[byte]) -> bool {
         if off < 0 { return false }
         let tt = thread_of(st)
         var fp = platform.target_fpregs(tt)
-        if fp.len != 512 { return false }
-        var i: int = 0
-        while i < count { fp[off + i] = b[i]; i += 1 }
+        if fp.len != platform.fpregs_size { return false }
+        if n == 34 {
+            let full = (b[0] as int) | ((b[1] as int) << 8)
+            fp[off] = x87_abridged_tag(full) as byte
+        } else {
+            var i: int = 0
+            while i < count { fp[off + i] = b[i]; i += 1 }
+        }
         return platform.target_set_fpregs(tt, fp)
     }
     let tt = thread_of(st)
@@ -276,6 +280,11 @@ fn watch(mut st: Stub, insert: bool, ty: int, addr: u64, n: int) -> str {
 fn features(r: Request) -> str {
     if r.annex != "target.xml" { return "E00" }
     let text = description() else { return "E01" }
+    xfer_chunk(text, r)
+}
+
+// A qXfer reply: the part of text at the request's offset and length, `m` when more follows, `l` when it is the last.
+fn xfer_chunk(text: str, r: Request) -> str {
     let d = text.bytes()
     if r.offset >= d.len { return "l" }
     var chunk: List[byte] = []
@@ -284,6 +293,14 @@ fn features(r: Request) -> str {
     let more = if i < d.len { "m" } else { "l" }
     let body = str_from_utf8(chunk) else { "" }
     "{more}{body}"
+}
+
+// The thread list with names (qXfer:threads:read): each thread's name is the kernel's (its comm).
+fn threads_document(st: Stub, r: Request) -> str {
+    let tids = platform.target_task_ids(st.t)
+    var names: List[str] = []
+    for tid in tids { (mut names).push(platform.target_thread_name(st.t, st.t.pid, tid)) }
+    xfer_chunk(threads_xml(tids, names), r)
 }
 
 fn thread_list(st: Stub) -> str {
@@ -450,6 +467,7 @@ fn answer(mut st: Stub, d: List[byte]) -> str {
     if k == req_threads_first { st.cursor = 1; return thread_list(st) }
     if k == req_threads_next { return "l" }
     if k == req_features { return features(r) }
+    if k == req_threads_xfer { return threads_document(st, r) }
     if !st.alive {
         if k == req_kill || k == req_detach { st.done = true; return "OK" }
         return "E01"
