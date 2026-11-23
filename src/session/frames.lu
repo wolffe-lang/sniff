@@ -145,6 +145,18 @@ pub fn fallback_rule(in_code: bool, at_ret: bool, before_push: bool, after_push:
     unwind_frame_pointer
 }
 
+/// The address of the arm64 instruction before pc, when there is one (a pc below 4, as a call through a null
+/// pointer leaves it, has none).
+pub fn arm64_insn_before(pc: u64) -> (bool, u64) {
+    (true, pc - 4)
+}
+
+/// Whether an arm64 frame takes its caller from the link register with its frame unchanged: innermost, at a pc whose
+/// instruction cannot be read. Not built yet.
+pub fn arm64_lr_rule(level: int, readable: bool) -> bool {
+    false
+}
+
 /// A frame whose CFA and caller registers come from the frame pointer, with
 /// gdb's prologue/epilogue cases for a function with no CFI (x86-64).
 fn unwind_fp_x86(s: Session, f: Frame, in_code: bool) -> Frame ! {no_caller} {

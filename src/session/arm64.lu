@@ -215,7 +215,12 @@ fn unwind_arm64(s: Session, f: Frame, level: int) -> Frame ! {no_caller} {
         }
     }
     let outside = fstart == 0 && !in_image(s.prog, file_pc)
-    if basis == "" && level == 0 && outside && insn_at(s, f.pc - 4) == 3556773889 {
+    if basis == "" && arm64_lr_rule(level, src_read(s, f.pc, 4).ok) {
+        cfa = sp
+        basis = "prologue"
+    }
+    let (before_ok, before) = arm64_insn_before(f.pc)
+    if basis == "" && level == 0 && outside && before_ok && insn_at(s, before) == 3556773889 {
         cfa = sp
         basis = "syscall"
     }
