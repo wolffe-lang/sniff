@@ -1,5 +1,5 @@
 {
- "about": "S8's kernel rows (tools/session-remote.py): one boot of PAX's console image each, at one processor, frozen at reset; the pinned gdb's transcript under KVM is the golden",
+ "about": "S8's remote rows (tools/session-remote.py). The kernel rows: one boot of PAX's console image each, at one processor, frozen at reset; the pinned gdb's transcript under KVM is the golden. The server rows (kind server): sniff-server on loopback in this host with one static fixture, its client the harness or the pinned gdb",
  "rows": [
   {
    "name": "remote-kernel-connect",
@@ -391,6 +391,27 @@
     "Reading symbols from KERNEL...",
     "sniff's hbreak needs a remote target (`target remote HOST:PORT`)."
    ]
+  },
+  {
+   "name": "server-refuse-second-client",
+   "kind": "server",
+   "check": "refuse-second",
+   "prog": "c/calls/gcc-O0/prog",
+   "why": "one client at a time: while the first client is attached, a second gets the stub's E.text reply to its first packet and its connection is closed, sniff-server says so by name, and the first client's session goes on"
+  },
+  {
+   "name": "server-refuse-non-loopback",
+   "kind": "server",
+   "check": "refuse-non-loopback",
+   "prog": "c/calls/gcc-O0/prog",
+   "why": "the protocol has no authentication and gives whoever connects control of the program: a HOST that is not a loopback address is refused by name and binds nothing, unless --non-loopback asks for it by name"
+  },
+  {
+   "name": "server-loopback-default",
+   "kind": "server",
+   "check": "loopback-default",
+   "prog": "c/calls/gcc-O0/prog",
+   "why": "`:PORT` listens on 127.0.0.1 alone, as the kernel's socket table shows, and says so"
   }
  ]
 }
