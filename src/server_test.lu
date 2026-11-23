@@ -34,6 +34,17 @@ fn signal_map_row() {
     assert("{past}" == "unmeasured_signal")
     let zero = server.protocol_signal(0)
     assert("{zero}" == "unmeasured_signal")
+    // the other way, for the client's C sig: the same table read back
+    let back = server.host_signal(30) else |e| { print("FAIL server-signal-map host {e}"); return }
+    assert(back == 10)
+    let back_trap = server.host_signal(5) else { return }
+    assert(back_trap == 5)
+    let back_unknown = server.host_signal(143) else { return }
+    assert(back_unknown == 16)
+    let back_kill = server.host_signal(9) else { return }
+    assert(back_kill == 9)
+    let none = server.host_signal(99)
+    assert("{none}" == "unmeasured_signal")
     print("PASS server-signal-map")
 }
 
