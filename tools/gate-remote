@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# The S8 kernel rows on the record host: sniff over QEMU's gdbstub on PAX's console image at one processor, held to
+# the pinned gdb's goldens, under KVM and then under TCG as a step of its own, so both accelerators' answers are on
+# record by name. Every END is a real child exit.
+#   tools/gate-remote PAXTREE KERNEL.elf IMAGE.iso QEMU SNIFF OUTDIR
+set -uo pipefail
+[ $# -eq 6 ] || { echo 'usage: gate-remote PAXTREE KERNEL IMAGE QEMU SNIFF OUTDIR'; exit 2; }
+root=$(cd "$(dirname "$0")/.." && pwd)
+pax=$1 kernel=$2 image=$3 qemu=$4 sniff=$5 out=$6
+mkdir -p "$out"
+rc=0
+step() { # name cmd...
+  local name=$1 start=$SECONDS r=0; shift
+  printf 'START %s\n' "$name"
+  "$@" > "$out/$name.log" 2>&1 || r=$?
+  grep -E '^(PASS|FAIL|SKIP|OWN|remote rows)' "$out/$name.log" | sed -E 's/^(PASS|SKIP|OWN|remote rows)/  \1/'
+  printf 'END %s exit=%s secs=%s\n' "$name" "$r" "$((SECONDS-start))"
+  [ "$r" = 0 ] || rc=1
+}
+step remote-identity bash -c 'echo "PASS remote-identity kernel_sha256=$(sha256sum "$0" | cut -c1-64) image_sha256=$(sha256sum "$1" | cut -c1-64) qemu=$("$2" --version | head -1)"' "$kernel" "$image" "$qemu"
+step remote-harness-unit python3 -I "$root/tools/session-remote.py" selftest
+step remote-kernel-kvm python3 -I "$root/tools/session-remote.py" check --kernel "$kernel" --image "$image" --pax "$pax" --qemu "$qemu" --sniff "$sniff" --accel kvm --out "$out/kvm"
+step remote-kernel-tcg python3 -I "$root/tools/session-remote.py" check --kernel "$kernel" --image "$image" --pax "$pax" --qemu "$qemu" --sniff "$sniff" --accel tcg --out "$out/tcg"
+exit "$rc"

@@ -28,6 +28,13 @@ step session-harness-unit python3 -I tests/test_session.py
 step session-rows-inventory python3 -I tools/session.py verify
 step pax-rows-inventory python3 -I tools/session.py --set pax verify
 step pax-harness-unit python3 -I tools/session-pax.py selftest
+step remote-harness-unit python3 -I tools/session-remote.py selftest
+# S8: the kernel rows need PAX's console image, which only the record host builds (tools/gate-remote runs them
+# there under KVM and TCG); every other host skips them by name, and the count is held. sniff built for the Mac
+# picks arm64 at compile time and has no x86-64 tables for the kernel: its rows come with the arch made a run-time choice.
+remote_why="no kernel image on this host"
+[ "$mode" = macos ] && remote_why="sniff built for macOS has no x86-64 register, CFI or call tables for the kernel (a later change)"
+step remote-kernel-skip python3 -I tools/session-remote.py skip --reason "$remote_why" --expect 34
 step abi-constants python3 -I tools/check-abi.py check
 for platform in macos linux; do
   if [ -f "tests/evidence/$platform-session/record.json" ]; then

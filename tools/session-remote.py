@@ -4,7 +4,8 @@
   session-remote.py capture --kernel ELF --image ISO --pax PAXTREE --qemu QEMU --gdb GDB --accel kvm|tcg [--only RE] [--out DIR]
   session-remote.py check   --kernel ELF --image ISO --pax PAXTREE --qemu QEMU --sniff SNIFF --accel kvm|tcg [--only RE] [--out DIR]
   session-remote.py gdb-check (as check, with --gdb: the goldens hold for this accelerator and this run)
-  session-remote.py skip --reason TEXT      one SKIP line a row, and the count, where no kernel image is
+  session-remote.py skip --reason TEXT [--expect N]   one SKIP line a row and the count (held at N), where no
+                                            kernel image is
   session-remote.py selftest                the normalisation and the script forms, no machine
 
 Rows: tests/remote-rows.json. Goldens: tests/evidence/remote/NAME.out, gdb's transcript under KVM on the record host,
@@ -293,6 +294,10 @@ def cmd_skip(a):
     for row in rows:
         print('SKIP remote %s reason=%s' % (row['name'], row.get('skip') or a.reason))
     print('remote rows (skip): 0 pass, 0 fail, %d skip' % len(rows))
+    # the count is held: a row that stops being listed here stops being skipped by name, and shows
+    if a.expect is not None and len(rows) != a.expect:
+        print('FAIL remote-skip-count %d rows skipped where %d are held' % (len(rows), a.expect))
+        return 1
     return 0
 
 
@@ -351,6 +356,7 @@ def main():
         q.add_argument('--out', default=str(ROOT / 'target/remote-out'))
     sk = sub.add_parser('skip')
     sk.add_argument('--reason', required=True)
+    sk.add_argument('--expect', type=int, help='the held number of rows, refused by name when the row file differs')
     sub.add_parser('selftest')
     a = p.parse_args()
     if a.mode == 'skip':
