@@ -5,7 +5,6 @@
 // Type definitions (vector, union, flags, struct, enum) are skipped by name: a register's bitsize
 // already gives its width. Pure: the client fetches each annex this module names and hands the texts
 // back. Every cap has a unit row at its value and one past it (src/tdesc_test.lu).
-// Until the reader is built, every description is refused.
 
 /// Refusals of a description, each by name.
 pub error TdescError = {
@@ -52,16 +51,284 @@ pub struct Desc {
     pub regs: List[Reg],
 }
 
+struct Walk {
+    architecture: str,
+    osabi: str,
+    features: List[str],
+    regs: List[Reg],
+    lowered: List[str],
+    feature: str,
+    next: int,
+    seen: int,
+}
+
+struct Tag {
+    name: str,
+    attrs: List[str],
+    closing: bool,
+    empty: bool,
+    end: int,
+}
+
+fn sub(d: List[byte], start: int, end: int) -> str {
+    var out: List[byte] = []
+    var i = start
+    while i < end { (mut out).push(d[i]); i += 1 }
+    str_from_utf8(out) else { "" }
+}
+
+fn starts(d: List[byte], at: int, s: str) -> bool {
+    let p = s.bytes()
+    if at + p.len > d.len { return false }
+    var i: int = 0
+    while i < p.len {
+        if d[at + i] != p[i] { return false }
+        i += 1
+    }
+    true
+}
+
+fn find(d: List[byte], at: int, s: str) -> int {
+    var i = at
+    while i < d.len {
+        if starts(d, i, s) { return i }
+        i += 1
+    }
+    -1
+}
+
+fn space(c: int) -> bool {
+    c == 32 || c == 9 || c == 10 || c == 13
+}
+
+fn name_byte(c: int) -> bool {
+    (c >= 97 && c <= 122) || (c >= 65 && c <= 90) || (c >= 48 && c <= 57) || c == 45 || c == 95 || c == 58 || c == 46
+}
+
+/// The five predefined entities of XML in an attribute value or text.
+fn unescape(s: str) -> str {
+    let d = s.bytes()
+    var out: List[byte] = []
+    var i: int = 0
+    while i < d.len {
+        if d[i] as int == 38 {
+            if starts(d, i, "&lt;") { (mut out).push(60 as byte); i += 4; continue }
+            if starts(d, i, "&gt;") { (mut out).push(62 as byte); i += 4; continue }
+            if starts(d, i, "&amp;") { (mut out).push(38 as byte); i += 5; continue }
+            if starts(d, i, "&quot;") { (mut out).push(34 as byte); i += 6; continue }
+            if starts(d, i, "&apos;") { (mut out).push(39 as byte); i += 6; continue }
+        }
+        (mut out).push(d[i])
+        i += 1
+    }
+    str_from_utf8(out) else { "" }
+}
+
+/// The tag at d[at] (which is `<`): its name, its attributes as name, value pairs, whether it closes
+/// an element (`</x>`) or is empty (`<x/>`), and the index past its `>`.
+fn tag(d: List[byte], at: int) -> Tag ! TdescError {
+    var i = at + 1
+    var closing = false
+    if i < d.len && d[i] as int == 47 { closing = true; i += 1 }
+    let n0 = i
+    while i < d.len && name_byte(d[i] as int) { i += 1 }
+    if i == n0 { return bad_xml }
+    let name = sub(d, n0, i)
+    var attrs: List[str] = []
+    while i < d.len {
+        while i < d.len && space(d[i] as int) { i += 1 }
+        if i >= d.len { return bad_xml }
+        let c = d[i] as int
+        if c == 62 { return Tag { name: name, attrs: attrs, closing: closing, empty: false, end: i + 1 } }
+        if c == 47 {
+            if i + 1 < d.len && d[i + 1] as int == 62 {
+                return Tag { name: name, attrs: attrs, closing: closing, empty: true, end: i + 2 }
+            }
+            return bad_xml
+        }
+        let a0 = i
+        while i < d.len && name_byte(d[i] as int) { i += 1 }
+        if i == a0 { return bad_xml }
+        let an = sub(d, a0, i)
+        while i < d.len && space(d[i] as int) { i += 1 }
+        if i >= d.len || d[i] as int != 61 { return bad_xml }
+        i += 1
+        while i < d.len && space(d[i] as int) { i += 1 }
+        if i >= d.len { return bad_xml }
+        let q = d[i] as int
+        if q != 34 && q != 39 { return bad_xml }
+        i += 1
+        let v0 = i
+        while i < d.len && d[i] as int != q { i += 1 }
+        if i >= d.len { return bad_xml }
+        (mut attrs).push(an)
+        (mut attrs).push(unescape(sub(d, v0, i)))
+        i += 1
+    }
+    bad_xml
+}
+
+fn attr(t: Tag, name: str) -> str {
+    var i: int = 0
+    while i + 1 < t.attrs.len {
+        if t.attrs[i] == name { return t.attrs[i + 1] }
+        i += 2
+    }
+    ""
+}
+
+fn has_attr(t: Tag, name: str) -> bool {
+    var i: int = 0
+    while i + 1 < t.attrs.len {
+        if t.attrs[i] == name { return true }
+        i += 2
+    }
+    false
+}
+
+/// A decimal number of at most nine digits.
+fn decimal(s: str) -> int ! TdescError {
+    let d = s.bytes()
+    if d.len == 0 || d.len > 9 { return bad_number }
+    var v: int = 0
+    for b in d {
+        let c = b as int
+        if c < 48 || c > 57 { return bad_number }
+        v = v * 10 + (c - 48)
+    }
+    v
+}
+
+fn trim(s: str) -> str {
+    let d = s.bytes()
+    var a: int = 0
+    var z = d.len
+    while a < z && space(d[a] as int) { a += 1 }
+    while z > a && space(d[z - 1] as int) { z -= 1 }
+    sub(d, a, z)
+}
+
+fn lower(s: str) -> str {
+    var out: List[byte] = []
+    for b in s.bytes() {
+        let c = b as int
+        if c >= 65 && c <= 90 { (mut out).push((c + 32) as byte) } else { (mut out).push(b) }
+    }
+    str_from_utf8(out) else { "" }
+}
+
+fn annex_text(annexes: List[Annex], name: str) -> str ! TdescError {
+    for a in annexes {
+        if a.name == name { return a.text }
+    }
+    unknown_include
+}
+
+fn walk(text: str, annexes: List[Annex], depth: int, mut w: Walk) -> () ! TdescError {
+    if depth > include_cap { return include_depth }
+    let d = text.bytes()
+    w.seen += d.len
+    if w.seen > text_cap { return description_too_long }
+    var i: int = 0
+    while i < d.len {
+        if d[i] as int != 60 { i += 1; continue }
+        if starts(d, i, "<!--") {
+            let e = find(d, i + 4, "-->")
+            if e < 0 { return bad_xml }
+            i = e + 3
+            continue
+        }
+        if starts(d, i, "<?") {
+            let e = find(d, i + 2, "?>")
+            if e < 0 { return bad_xml }
+            i = e + 2
+            continue
+        }
+        if starts(d, i, "<!") {
+            let e = find(d, i + 2, ">")
+            if e < 0 { return bad_xml }
+            i = e + 1
+            continue
+        }
+        let t = tag(d, i)?
+        i = t.end
+        if t.closing {
+            if t.name == "feature" { w.feature = "" }
+            continue
+        }
+        if t.name == "architecture" || t.name == "osabi" {
+            if t.empty { continue }
+            let e = find(d, i, "<")
+            if e < 0 { return bad_xml }
+            let v = unescape(trim(sub(d, i, e)))
+            if t.name == "architecture" { w.architecture = v } else { w.osabi = v }
+            i = e
+            continue
+        }
+        if t.name == "feature" {
+            w.feature = attr(t, "name")
+            (mut w.features).push(w.feature)
+            continue
+        }
+        if t.name == "xi:include" {
+            let href = attr(t, "href")
+            let inner = annex_text(annexes, href)?
+            walk(inner, annexes, depth + 1, mut w)?
+            continue
+        }
+        if t.name == "reg" {
+            let name = attr(t, "name")
+            if name == "" { return no_register_name }
+            let ln = lower(name)
+            for seen in w.lowered {
+                if seen == ln { return duplicate_register }
+            }
+            if w.regs.len >= register_cap { return too_many_registers }
+            let bits = decimal(attr(t, "bitsize"))?
+            var num = w.next
+            if has_attr(t, "regnum") { num = decimal(attr(t, "regnum"))? }
+            var ty = attr(t, "type")
+            if ty == "" { ty = "int" }
+            (mut w.regs).push(Reg { name: name, bitsize: bits, regnum: num, type_name: ty, group: attr(t, "group"), feature: w.feature })
+            (mut w.lowered).push(ln)
+            w.next = num + 1
+            continue
+        }
+    }
+}
+
 /// The annex names a text includes (`xi:include href=...`), in order: the client fetches each with
 /// qXfer before `parse`, and again for the names those texts include.
 pub fn includes(text: str) -> List[str] {
-    []
+    let d = text.bytes()
+    var out: List[str] = []
+    var i: int = 0
+    while i < d.len {
+        let at = find(d, i, "<xi:include")
+        if at < 0 { break }
+        let t = tag(d, at) else { break }
+        let h = attr(t, "href")
+        if h != "" { (mut out).push(h) }
+        i = t.end
+    }
+    out
 }
 
 /// The description from `target.xml`'s text, each inclusion replaced by its annex's text in place, so
 /// registers are numbered in document order across annexes (Target Description Format).
 pub fn parse(main: str, annexes: List[Annex]) -> Desc ! TdescError {
-    bad_xml
+    let none_f: List[str] = []
+    let none_r: List[Reg] = []
+    let none_l: List[str] = []
+    var w = Walk { architecture: "", osabi: "", features: none_f, regs: none_r, lowered: none_l, feature: "", next: 0, seen: 0 }
+    walk(main, annexes, 0, mut w)?
+    Desc { architecture: w.architecture, osabi: w.osabi, features: w.features, regs: w.regs }
+}
+
+fn i386_core_names() -> List[str] {
+    ["rax", "rbx", "rcx", "rdx", "rsi", "rdi", "rbp", "rsp", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15",
+     "rip", "eflags", "cs", "ss", "ds", "es", "fs", "gs", "st0", "st1", "st2", "st3", "st4", "st5", "st6", "st7",
+     "fctrl", "fstat", "ftag", "fiseg", "fioff", "foseg", "fooff", "fop"]
 }
 
 /// What an x86-64 description lacks of the i386 Features node's required set: the feature
@@ -69,21 +336,50 @@ pub fn parse(main: str, annexes: List[Annex]) -> Desc ! TdescError {
 /// segment registers, st0-st7 and the eight x87 control registers), compared without case. Empty
 /// when nothing is missing.
 pub fn missing_i386_core(d: Desc) -> List[str] {
-    ["org.gnu.gdb.i386.core"]
+    var out: List[str] = []
+    var has = false
+    for f in d.features {
+        if f == "org.gnu.gdb.i386.core" { has = true }
+    }
+    if !has {
+        (mut out).push("org.gnu.gdb.i386.core")
+        return out
+    }
+    for n in i386_core_names() {
+        var found = false
+        for r in d.regs {
+            if r.feature == "org.gnu.gdb.i386.core" && lower(r.name) == n { found = true }
+        }
+        if !found { (mut out).push(n) }
+    }
+    out
 }
 
 /// The register a name gives, without case; -1 when the description has none of that name.
 pub fn regnum_of(d: Desc, name: str) -> int {
+    let want = lower(name)
+    for r in d.regs {
+        if lower(r.name) == want { return r.regnum }
+    }
     -1
 }
 
 /// Where register `regnum`'s bytes start in a `g` reply: registers appear in increasing number,
 /// each bitsize / 8 bytes (Target Description Format, regnum). -1 when no register has that number.
 pub fn g_offset(d: Desc, regnum: int) -> int {
-    -1
+    var found = false
+    var off: int = 0
+    for r in d.regs {
+        if r.regnum == regnum { found = true }
+        if r.regnum < regnum { off += r.bitsize / 8 }
+    }
+    if !found { return -1 }
+    off
 }
 
 /// The bytes of a whole `g` reply the description lays out.
 pub fn g_size(d: Desc) -> int {
-    0
+    var n: int = 0
+    for r in d.regs { n += r.bitsize / 8 }
+    n
 }
