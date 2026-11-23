@@ -244,7 +244,7 @@
     "score": "added: hbreak is new user-visible surface. It is a remote target's Z1; on a process, a core, or with nothing to debug, sniff refuses it by name, where gdb would set a hardware breakpoint. The row holds sniff's own words"
    },
    {
-    "rows": "the unit row holding QEMU's qSupported reply and description equal across KVM, TCG and the Mac, and each take's QEMU line naming their sha256s",
+    "rows": "the unit row holding QEMU's qSupported reply and description equal across KVM, TCG and the Mac, and each run's QEMU line naming their sha256s",
     "predicted": "in PR 1",
     "score": "moved with the Mac's rows to the follow-up, whose cross-host equality they hold: on Linux one pinned binary serves KVM and TCG alike (the measurement found the reply and description equal under both), and each run now prints its QEMU line (version, binary sha256, accelerator) and refuses by name a QEMU that is not this host's pin"
    }
