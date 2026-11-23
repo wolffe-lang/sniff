@@ -1,0 +1,75 @@
+// The transport: one TCP connection to a stub (Connecting: `target remote HOST:PORT`), carrying the
+// packet layer's frames with its acknowledgments, resends and reply time (Overview, Packet
+// Acknowledgment), and the interrupt byte (Interrupts). Bytes read but not yet scanned stay in the
+// link between calls, so a reply that arrives with its acknowledgment is never lost.
+// Until the transport is built, every connection is refused.
+
+use std.net
+
+/// Refusals of the transport: the socket's own, and the packet layer's, each by name.
+pub error LinkError = {
+    refused,
+    timeout,
+    closed,
+    io,
+    invalid,
+    packet_too_long,
+    reply_too_long,
+    unescaped_byte,
+    bad_hex,
+    bad_escape,
+    bad_run_length,
+    notification_refused,
+    resend_limit,
+    reply_timeout,
+}
+
+/// One connection: its socket, its acknowledgment state, the bytes read and not yet scanned, the
+/// milliseconds it waits for an acknowledgment or a reply (reply_ms; a unit row sets less), and the
+/// most data it sends in one packet.
+pub struct Link {
+    pub sock: net.Socket,
+    pub ack: Ack,
+    pub pending: List[byte],
+    pub wait_ms: int,
+    pub cap: int,
+}
+
+/// Connect to ADDR (`HOST:PORT`): a connection nobody answers is `refused`.
+pub fn open(addr: str) -> Link ! LinkError {
+    refused
+}
+
+/// Close the connection, sending nothing (Connecting: `disconnect`).
+pub fn shut(take l: Link) -> () ! LinkError {
+    net.close(take l.sock)?
+}
+
+/// Send one packet. With acknowledgments on, wait for `+`; after a `-`, or wait_ms with nothing, send
+/// it again, at most resend_cap times; then the command fails with resend_limit.
+pub fn send(mut l: Link, data: str) -> () ! LinkError {
+    io
+}
+
+/// The next packet's data as framed (escapes and runs not yet undone), acknowledged with `+`; one with
+/// a wrong checksum is answered `-` and waited for again, at most resend_cap times. ms <= 0 waits with
+/// no limit (a stop reply after a resumption); otherwise ms passing is reply_timeout.
+pub fn receive(mut l: Link, ms: int) -> List[byte] ! LinkError {
+    io
+}
+
+/// Send a packet and return its reply's data with runs expanded (a text or hex reply).
+pub fn request(mut l: Link, data: str) -> List[byte] ! LinkError {
+    io
+}
+
+/// Send a packet and return its reply's data with runs expanded and escapes undone (binary data, as in
+/// qXfer's replies).
+pub fn request_binary(mut l: Link, data: str) -> List[byte] ! LinkError {
+    io
+}
+
+/// Write the interrupt byte 0x03, outside any packet (Interrupts).
+pub fn interrupt(mut l: Link) -> () ! LinkError {
+    io
+}
