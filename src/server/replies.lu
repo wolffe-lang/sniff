@@ -2,44 +2,120 @@
 // tests/server-signals.tsv), the stop replies (Stop Reply Packets), qSupported's reply (General Query Packets) and
 // the stub's own target description (Target Description Format, i386 Features). Pure: no I/O.
 // Every function below has a unit row (src/server_test.lu).
+use remote
 
 /// Refusals of the stub's replies, each by name.
 pub error ServerError = {
     unmeasured_signal,
     bad_status,
+    bad_reason,
     not_built,
+}
+
+// The measured table, by host number: tests/server-signals.tsv's protocol column, SIGKILL's (9) from its X reply; -1
+// where nothing was measured (0 is no signal). A harness unit holds this list equal to the file.
+fn measured() -> List[int] {
+    [-1, 1, 2, 3, 4, 5, 6, 10, 8, 9, 30, 11, 31, 13, 14, 15, 143, 20, 19, 17, 18, 21, 22, 16, 24, 25, 26, 27, 28, 23, 32, 12]
 }
 
 /// The protocol's number for a host signal, through the measured table only; a number the table does not hold is
 /// unmeasured_signal.
 pub fn protocol_signal(host: int) -> int ! ServerError {
-    return not_built
+    let t = measured()
+    if host < 1 || host >= t.len { return unmeasured_signal }
+    if t[host] < 0 { return unmeasured_signal }
+    t[host]
+}
+
+// Two hex digits for a number from 0 to 255 (Overview: a stop reply's AA).
+fn hex2(n: int) -> str {
+    remote.hex_encode([n as byte])
 }
 
 /// The stop reply for a stop by a host signal (Stop Reply Packets): `T AA`, then the stop's reason when it has one
 /// (`swbreak:`, or `watch:`, `rwatch:` or `awatch:` with the address), then `thread:TID;`.
 pub fn stop_reply(host_signal: int, tid: int, reason: str, addr: u64) -> str ! ServerError {
-    return not_built
+    let p = protocol_signal(host_signal)?
+    var why = ""
+    if reason == "swbreak" {
+        why = "swbreak:;"
+    } else if reason == "watch" || reason == "rwatch" || reason == "awatch" {
+        why = "{reason}:{remote.hex_u64(addr)};"
+    } else if reason != "" {
+        return bad_reason
+    }
+    let aa = hex2(p)
+    let thread = remote.hex_u64(tid as u64)
+    "T{aa}{why}thread:{thread};"
 }
 
 /// The reply for a process that exited with a status (Stop Reply Packets): `W AA`; a status outside 0 to 255 is
 /// bad_status.
 pub fn exit_reply(status: int) -> str ! ServerError {
-    return not_built
+    if status < 0 || status > 255 { return bad_status }
+    "W{hex2(status)}"
 }
 
 /// The reply for a process a signal ended (Stop Reply Packets): `X AA`, the signal's protocol number; SIGKILL, which
 /// can never stop, is the one the stub sees most.
 pub fn killed_reply(host_signal: int) -> str ! ServerError {
-    return not_built
+    let p = protocol_signal(host_signal)?
+    "X{hex2(p)}"
 }
 
-/// The stub's reply to qSupported (General Query Packets): the features it offers.
+/// The stub's reply to qSupported (General Query Packets): packets up to 0x4000 bytes, its description, no-ack mode,
+/// the actions in vCont?'s reply, and the swbreak stop reason. No multiprocess and no Host I/O.
 pub fn supported_reply() -> str ! ServerError {
-    return not_built
+    "PacketSize=4000;qXfer:features:read+;QStartNoAckMode+;vContSupported+;swbreak+"
 }
 
-/// The stub's target description (Target Description Format, i386 Features).
+// Registers (Target Description Format): each one's number is one more than the previous register's, so the order of
+// these lines is the order of the g reply.
+fn regs(names: List[str], bits: int, ty: str, group: str) -> str {
+    var s = ""
+    for name in names { s = "{s}    <reg name=\"{name}\" bitsize=\"{bits}\" type=\"{ty}\" group=\"{group}\"/>\n" }
+    s
+}
+
+// EFLAGS's named bits, from the Intel SDM's figure of the register (a processor manual, not a debugger's source).
+fn eflags_type() -> str {
+    let names = ["CF", "PF", "AF", "ZF", "SF", "TF", "IF", "DF", "OF", "NT", "RF", "VM", "AC", "VIF", "VIP", "ID"]
+    let bits = [0, 2, 4, 6, 7, 8, 9, 10, 11, 14, 16, 17, 18, 19, 20, 21]
+    var s = "    <flags id=\"x86_eflags\" size=\"4\">\n"
+    var i: int = 0
+    while i < names.len {
+        s = "{s}      <field name=\"{names[i]}\" start=\"{bits[i]}\" end=\"{bits[i]}\"/>\n"
+        i += 1
+    }
+    "{s}    </flags>\n"
+}
+
+/// The stub's target description, written from the Target Description Format and i386 Features nodes: the
+/// architecture i386:x86-64, org.gnu.gdb.i386.core (rax-r15, rip, eflags, the six segment selectors, st0-st7 and
+/// fctrl-fop), org.gnu.gdb.i386.sse (xmm0-xmm15 and mxcsr) and org.gnu.gdb.i386.segments (fs_base and gs_base). No
+/// AVX feature: PAX cannot read the extended state, and Linux serves the same description.
 pub fn description() -> str ! ServerError {
-    return not_built
+    let top = "<?xml version=\"1.0\"?>\n<!DOCTYPE target SYSTEM \"gdb-target.dtd\">\n<target version=\"1.0\">\n  <architecture>i386:x86-64</architecture>\n"
+    let core = "  <feature name=\"org.gnu.gdb.i386.core\">\n"
+    let flags = eflags_type()
+    let gen = regs(["rax", "rbx", "rcx", "rdx", "rsi", "rdi"], 64, "int64", "general")
+    let frame = regs(["rbp", "rsp"], 64, "data_ptr", "general")
+    let high = regs(["r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15"], 64, "int64", "general")
+    let pc = regs(["rip"], 64, "code_ptr", "general")
+    let fl = regs(["eflags"], 32, "x86_eflags", "general")
+    let seg = regs(["cs", "ss", "ds", "es", "fs", "gs"], 32, "int32", "general")
+    let st = regs(["st0", "st1", "st2", "st3", "st4", "st5", "st6", "st7"], 80, "i387_ext", "float")
+    let fp = regs(["fctrl", "fstat", "ftag", "fiseg", "fioff", "foseg", "fooff", "fop"], 32, "int", "float")
+    let sse = "  </feature>\n  <feature name=\"org.gnu.gdb.i386.sse\">\n"
+    let vectors = "    <vector id=\"v4f\" type=\"ieee_single\" count=\"4\"/>\n    <vector id=\"v2d\" type=\"ieee_double\" count=\"2\"/>\n    <vector id=\"v16u8\" type=\"uint8\" count=\"16\"/>\n    <vector id=\"v8u16\" type=\"uint16\" count=\"8\"/>\n    <vector id=\"v4u32\" type=\"uint32\" count=\"4\"/>\n    <vector id=\"v2u64\" type=\"uint64\" count=\"2\"/>\n"
+    let vunion = "    <union id=\"vec128\">\n      <field name=\"v4_float\" type=\"v4f\"/>\n      <field name=\"v2_double\" type=\"v2d\"/>\n      <field name=\"v16_int8\" type=\"v16u8\"/>\n      <field name=\"v8_int16\" type=\"v8u16\"/>\n      <field name=\"v4_int32\" type=\"v4u32\"/>\n      <field name=\"v2_int64\" type=\"v2u64\"/>\n      <field name=\"uint128\" type=\"uint128\"/>\n    </union>\n"
+    var names: List[str] = []
+    var i: int = 0
+    while i < 16 { (mut names).push("xmm{i}"); i += 1 }
+    let xmm = regs(names, 128, "vec128", "vector")
+    let csr = regs(["mxcsr"], 32, "int", "vector")
+    let segs = "  </feature>\n  <feature name=\"org.gnu.gdb.i386.segments\">\n"
+    let bases = regs(["fs_base", "gs_base"], 64, "int", "general")
+    let tail = "  </feature>\n</target>\n"
+    "{top}{core}{flags}{gen}{frame}{high}{pc}{fl}{seg}{st}{fp}{sse}{vectors}{vunion}{xmm}{csr}{segs}{bases}{tail}"
 }
