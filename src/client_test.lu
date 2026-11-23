@@ -1,0 +1,304 @@
+//! member: false
+// The client over the transport, against a stand-in stub on loopback (sniff's own code): every reply is
+// written before the client speaks, and what the client sent is read back after. The descriptions here
+// are written from the GDB manual's Target Description Format and i386 Features nodes.
+
+use remote
+use std.net
+
+fn rep(d: str) -> str {
+    let sum: List[byte] = [remote.checksum(d.bytes()) as byte]
+    "+$" + d + "#" + remote.hex_encode(sum)
+}
+
+fn rep_noack(d: str) -> str {
+    let sum: List[byte] = [remote.checksum(d.bytes()) as byte]
+    "$" + d + "#" + remote.hex_encode(sum)
+}
+
+fn sent(d: str) -> str {
+    let f = remote.frame(d, remote.send_cap_max) else { return "unframed" }
+    str_from_utf8(f) else { "" }
+}
+
+fn reg(n: str, bits: int, extra: str) -> str {
+    "<reg name=\"{n}\" bitsize=\"{bits}\"{extra}/>"
+}
+
+fn core_text(skip: str) -> str {
+    var out = "<feature name=\"org.gnu.gdb.i386.core\">"
+    for n in ["rax", "rbx", "rcx", "rdx", "rsi", "rdi", "rbp", "rsp", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15", "rip"] {
+        if n != skip { out = out + reg(n, 64, "") }
+    }
+    out = out + reg("eflags", 32, "")
+    for s in ["cs", "ss", "ds", "es", "fs", "gs"] { out = out + reg(s, 32, "") }
+    for k in ["st0", "st1", "st2", "st3", "st4", "st5", "st6", "st7"] { out = out + reg(k, 80, " type=\"i387_ext\"") }
+    for c in ["fctrl", "fstat", "ftag", "fiseg", "fioff", "foseg", "fooff", "fop"] { out = out + reg(c, 32, "") }
+    out = out + "</feature><feature name=\"org.gnu.gdb.i386.sse\">"
+    var i: int = 0
+    while i < 16 { out = out + reg("xmm{i}", 128, ""); i += 1 }
+    out + reg("mxcsr", 32, "") + "</feature>"
+}
+
+fn main_text() -> str {
+    "<target version=\"1.0\"><architecture>i386:x86-64</architecture><xi:include href=\"core.xml\"/></target>"
+}
+
+fn le(v: u64) -> List[byte] {
+    var out: List[byte] = []
+    var x = v
+    var i: int = 0
+    while i < 8 { (mut out).push((x & 255) as int as byte); x = x >> 8; i += 1 }
+    out
+}
+
+// A g reply for the description above: rsp and rip set, the rest zero, 536 bytes.
+fn g_reply() -> str {
+    var b: List[byte] = []
+    var i: int = 0
+    while i < 536 { (mut b).push(0 as byte); i += 1 }
+    let hi: u64 = 4294967295
+    let rsp = le((hi - 32767) << 32 | 210070768)
+    let rip = le(hi << 32 | 2148628019)
+    i = 0
+    while i < 8 { b[56 + i] = rsp[i]; b[128 + i] = rip[i]; i += 1 }
+    remote.hex_encode(b)
+}
+
+fn start_replies(features: str, core: str) -> str {
+    let c = core.bytes()
+    var half: List[byte] = []
+    var rest: List[byte] = []
+    var i: int = 0
+    while i < c.len { if i < c.len / 2 { (mut half).push(c[i]) } else { (mut rest).push(c[i]) }; i += 1 }
+    let a = str_from_utf8(half) else { "" }
+    let z = str_from_utf8(rest) else { "" }
+    rep(features) + rep("vCont;c;C;s;S") + rep("T05core:01;") + rep("l" + main_text()) + rep("m" + a) + rep("l" + z) +
+        rep("m01") + rep("l") + rep("QC01") + rep(g_reply())
+}
+
+fn start_sent(core: str) -> str {
+    let half = core.bytes().len / 2
+    sent("qSupported:" + remote.sniff_features) + "+" + sent("vCont?") + "+" + sent("?") + "+" +
+        sent("qXfer:features:read:target.xml:0,1000") + "+" + sent("qXfer:features:read:core.xml:0,1000") + "+" +
+        sent("qXfer:features:read:core.xml:" + remote.hex_u64(half as u64) + ",1000") + "+" +
+        sent("qfThreadInfo") + "+" + sent("qsThreadInfo") + "+" + sent("qC") + "+" + sent("g") + "+"
+}
+
+struct Rig {
+    t: remote.Target,
+    stub: net.Socket,
+    srv: net.Listener,
+}
+
+fn heard(mut s: net.Socket) -> str {
+    net.set_deadline(mut s, 100) else { return "deadline-refused" }
+    var out: List[byte] = []
+    var more = true
+    while more {
+        let got = net.read_bytes(mut s, 65536) else |e| match e {
+            timeout => {
+                more = false
+                []
+            },
+            closed => {
+                more = false
+                []
+            },
+            io => {
+                return "io"
+            },
+        }
+        for x in got { (mut out).push(x) }
+    }
+    str_from_utf8(out) else { "<binary>" }
+}
+
+fn says(mut s: net.Socket, text: str) {
+    net.write_bytes(mut s, text.bytes()) else { return }
+}
+
+fn text(d: List[byte]) -> str {
+    str_from_utf8(d) else { "<binary>" }
+}
+
+fn bench(script: str) -> (remote.Link, net.Socket, net.Listener) ! {refused, timeout, closed, io, invalid, packet_too_long, reply_too_long, unescaped_byte, bad_hex, bad_escape, bad_run_length, notification_refused, resend_limit, reply_timeout} {
+    var srv = net.listen(net.loopback(0))?
+    let port = net.port(srv)?
+    var link = remote.open(net.loopback(port))?
+    link.wait_ms = 500
+    var stub = net.accept(mut srv)?
+    says(mut stub, script)
+    (link, stub, srv)
+}
+
+fn rig(extra: str) -> Rig ! remote.ClientError {
+    let (link, stub, srv) = bench(start_replies("PacketSize=4000;qXfer:features:read+;vContSupported+", core_text("")) + extra)?
+    let t = remote.start(take link)?
+    Rig { t: t, stub: stub, srv: srv }
+}
+
+fn done(take r: Rig) {
+    remote.disconnect(take r.t) else { return }
+    net.close(take r.stub) else { return }
+    net.close_listener(take r.srv) else { return }
+}
+
+fn start_row() {
+    var r = rig("") else |e| { print("FAIL remote-client-start {e}"); return }
+    assert(heard(mut r.stub) == start_sent(core_text("")))
+    assert(r.t.packet_size == 16384 && r.t.link.cap == 16384 && r.t.vcont == "vCont;c;C;s;S")
+    assert(r.t.stop.kind == remote.stop_signal && r.t.stop.code == 5 && r.t.stop.core == 1 && r.t.stop.thread == "")
+    assert(r.t.desc.architecture == "i386:x86-64" && r.t.desc.regs.len == 57)
+    assert(r.t.annexes.len == 2 && r.t.annexes[1] == "core.xml")
+    assert(r.t.threads.len == 1 && r.t.threads[0] == "01" && r.t.current == "01")
+    let rip = remote.reg_u64(mut r.t, "rip") else { return }
+    assert(remote.hex_u64(rip) == "ffffffff80117633")
+    let rsp = remote.reg_u64(mut r.t, "RSP") else { return }
+    assert(remote.hex_u64(rsp) == "ffff80000c856cf0")
+    let none = remote.reg_u64(mut r.t, "ymm0h")
+    assert("{none}" == "no_register")
+    let wide = remote.reg_u64(mut r.t, "xmm0")
+    assert("{wide}" == "no_register")
+    done(take r)
+    print("PASS remote-client-start")
+}
+
+fn no_ack_row() {
+    let script = rep("PacketSize=4000;QStartNoAckMode+;qXfer:features:read+") + rep("OK") + rep_noack("") + rep_noack("S05") +
+        rep_noack("l" + main_text()) + rep_noack("l" + core_text("")) + rep_noack("l") + rep_noack("QC01") + rep_noack(g_reply())
+    let (link, stub, srv) = bench(script) else { return }
+    var s = stub
+    let t = remote.start(take link) else |e| { print("FAIL remote-client-noack {e}"); return }
+    let want = sent("qSupported:" + remote.sniff_features) + "+" + sent("QStartNoAckMode") + "+" + sent("vCont?") + sent("?") +
+        sent("qXfer:features:read:target.xml:0,1000") + sent("qXfer:features:read:core.xml:0,1000") + sent("qfThreadInfo") + sent("qC") + sent("g")
+    assert(heard(mut s) == want)
+    assert(t.vcont == "" && t.stop.code == 5 && t.threads.len == 0 && t.current == "01")
+    remote.disconnect(take t) else { return }
+    net.close(take s) else { return }
+    net.close_listener(take srv) else { return }
+    print("PASS remote-client-noack")
+}
+
+fn refusals_row() {
+    let (l1, s1, v1) = bench(rep("PacketSize=4000") + rep("") + rep("T05core:01;")) else { return }
+    let r1 = remote.start(take l1)
+    assert("{r1}" == "no_description")
+    net.close(take s1) else { return }
+    net.close_listener(take v1) else { return }
+    let (l2, s2, v2) = bench(rep("PacketSize=4000;qXfer:features:read+") + rep("") + rep("T05core:01;") + rep("l" + main_text()) + rep("l" + core_text("rip"))) else { return }
+    let r2 = remote.start(take l2)
+    assert("{r2}" == "core_incomplete")
+    net.close(take s2) else { return }
+    net.close_listener(take v2) else { return }
+    print("PASS remote-client-refusals")
+}
+
+fn stops_row() {
+    let a = remote.parse_stop("T05thread:p01.01;".bytes()) else { return }
+    assert(a.kind == remote.stop_signal && a.code == 5 && a.thread == "p01.01" && a.core == -1 && a.reason == "")
+    let b = remote.parse_stop("T02thread:01;core:0;06:e0ff;foo:bar;".bytes()) else { return }
+    assert(b.code == 2 && b.thread == "01" && b.core == 0 && b.regnums.len == 1 && b.regnums[0] == 6 && b.values[0] == "e0ff")
+    let w = remote.parse_stop("T05watch:ffffffff806524c0;thread:01;".bytes()) else { return }
+    assert(w.reason == "watch" && remote.hex_u64(w.addr) == "ffffffff806524c0")
+    let sw = remote.parse_stop("T05swbreak:;".bytes()) else { return }
+    assert(sw.reason == "swbreak")
+    let s = remote.parse_stop("S0b".bytes()) else { return }
+    assert(s.kind == remote.stop_signal && s.code == 11)
+    let e = remote.parse_stop("W00".bytes()) else { return }
+    assert(e.kind == remote.stop_exited && e.code == 0)
+    let k = remote.parse_stop("X09".bytes()) else { return }
+    assert(k.kind == remote.stop_killed && k.code == 9)
+    let bad = remote.parse_stop("Q".bytes())
+    assert("{bad}" == "bad_stop")
+    let odd = remote.parse_stop("T05thread".bytes())
+    assert("{odd}" == "bad_stop")
+    print("PASS remote-client-stops")
+}
+
+fn memory_row() {
+    var r = rig(rep("0001020304050607") + rep("08090a0b0c0d0e0f") + rep("1011") + rep("E14") + rep("48") + rep("OK") + rep("cc") + rep("OK")) else |e| { print("FAIL remote-client-memory {e}"); return }
+    let before = heard(mut r.stub)
+    r.t.link.cap = 16
+    let m = remote.read_mem(mut r.t, 4096, 18) else { return }
+    assert(m.len == 18 && m[0] as int == 0 && m[17] as int == 17)
+    let bad = remote.read_mem(mut r.t, 0, 4)
+    assert("{bad}" == "stub_error")
+    remote.insert_break(mut r.t, 4100) else { return }
+    let shadow = remote.read_mem(mut r.t, 4100, 1) else { return }
+    assert(shadow.len == 1 && shadow[0] as int == 72)
+    remote.write_mem(mut r.t, 8192, [1 as byte, 255 as byte]) else { return }
+    let after = heard(mut r.stub)
+    assert(before == start_sent(core_text("")))
+    assert(after == sent("m1000,8") + "+" + sent("m1008,8") + "+" + sent("m1010,2") + "+" + sent("m0,4") + "+" + sent("m1004,1") + "+" +
+        sent("Z0,1004,1") + "+" + sent("m1004,1") + "+" + sent("M2000,2:01ff") + "+")
+    done(take r)
+    print("PASS remote-client-memory")
+}
+
+fn points_row() {
+    var r = rig(rep("48") + rep("E22") + rep("") + rep("OK") + rep("OK")) else |e| { print("FAIL remote-client-points {e}"); return }
+    let skip = heard(mut r.stub)
+    let refused = remote.insert_break(mut r.t, 4096)
+    assert("{refused}" == "insert_refused" && r.t.bp_addrs.len == 0)
+    let hw = remote.insert_point(mut r.t, 1, 4096, 1)
+    assert("{hw}" == "unsupported")
+    remote.insert_point(mut r.t, 2, 8192, 8) else { return }
+    remote.remove_point(mut r.t, 2, 8192, 8) else { return }
+    assert(heard(mut r.stub) == sent("m1000,1") + "+" + sent("Z0,1000,1") + "+" + sent("Z1,1000,1") + "+" + sent("Z2,2000,8") + "+" + sent("z2,2000,8") + "+")
+    assert(skip != "")
+    done(take r)
+    print("PASS remote-client-points")
+}
+
+fn resume_row() {
+    let hi = remote.hex_encode("Hi\n".bytes())
+    var r = rig("+" + rep_noack("O" + hi) + rep_noack("T05thread:01;") + "+" + rep_noack("T05thread:01;") + "+") else |e| { print("FAIL remote-client-resume {e}"); return }
+    let skip = heard(mut r.stub)
+    remote.resume(mut r.t, false) else { return }
+    remote.wait_stop(mut r.t, 0) else { return }
+    assert(r.t.console == "Hi\n" && r.t.stop.code == 5 && r.t.current == "01" && !r.t.regs_fresh)
+    remote.resume(mut r.t, true) else { return }
+    remote.wait_stop(mut r.t, 500) else { return }
+    assert(heard(mut r.stub) == sent("vCont;c") + "++" + sent("vCont;s:01") + "+")
+    r.t.vcont = ""
+    remote.resume(mut r.t, false) else { return }
+    let quiet = remote.wait_stop(mut r.t, 50)
+    assert("{quiet}" == "reply_timeout")
+    remote.interrupt_target(mut r.t) else { return }
+    let tail = heard(mut r.stub).bytes()
+    assert(tail.len == 6 && tail[0] as int == 36 && tail[1] as int == 99 && tail[5] as int == 3)
+    assert(skip != "")
+    done(take r)
+    print("PASS remote-client-resume")
+}
+
+fn ends_row() {
+    var r = rig(rep("OK")) else |e| { print("FAIL remote-client-ends {e}"); return }
+    let skip = heard(mut r.stub)
+    var s = r.stub
+    remote.detach(take r.t) else { return }
+    assert(heard(mut s) == sent("D") + "+")
+    net.close(take s) else { return }
+    net.close_listener(take r.srv) else { return }
+    var k = rig("+") else { return }
+    let skip2 = heard(mut k.stub)
+    var s2 = k.stub
+    remote.kill(take k.t) else { return }
+    assert(heard(mut s2) == sent("k"))
+    net.close(take s2) else { return }
+    net.close_listener(take k.srv) else { return }
+    assert(skip != "" && skip2 != "")
+    print("PASS remote-client-ends")
+}
+
+fn main() {
+    start_row()
+    no_ack_row()
+    refusals_row()
+    stops_row()
+    memory_row()
+    points_row()
+    resume_row()
+    ends_row()
+}

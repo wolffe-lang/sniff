@@ -171,5 +171,15 @@
     "remote-link-interrupt",
     "remote-link-closed",
     "remote-link-refused"
+  ],
+  "client_test.lu": [
+    "remote-client-start",
+    "remote-client-noack",
+    "remote-client-refusals",
+    "remote-client-stops",
+    "remote-client-memory",
+    "remote-client-points",
+    "remote-client-resume",
+    "remote-client-ends"
   ]
 }
