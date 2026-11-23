@@ -432,6 +432,29 @@
     "1000"
    ],
    "why": "the interrupt byte stops a running program with SIGINT's T02 within 500 ms, five times the loop's 100 ms wait; the row states the time measured"
+  },
+  {
+   "name": "server-z1-hbreak",
+   "kind": "server",
+   "check": "z1-hbreak",
+   "prog": "c/calls/gcc-O0/prog",
+   "symbol": "depth_sum",
+   "why": "Z1 sets a breakpoint the stub keeps in a debug register (an execute point): accepted, and the program stops with a trap at it, as through the pinned gdbserver"
+  },
+  {
+   "name": "server-fp-write",
+   "kind": "server",
+   "check": "fp-write",
+   "prog": "c/calls/gcc-O0/prog",
+   "why": "an SSE register written with P reads back with p, as through the pinned gdbserver (on Linux; PAX answers PTRACE_SETFPREGS with EIO, which its own row names)"
+  },
+  {
+   "name": "server-threads",
+   "kind": "server",
+   "check": "threads",
+   "prog": "c/workers/gcc-O0/prog",
+   "symbol": "work",
+   "why": "a program's new threads are traced from their start: a breakpoint a worker hits stops the program with a trap and qfThreadInfo lists more than one thread, as through the pinned gdbserver"
   }
  ]
 }
