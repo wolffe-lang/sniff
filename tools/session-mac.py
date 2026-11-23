@@ -299,6 +299,16 @@ def facts_lldb(text):
 ENV_BASE = {'PATH': '/usr/bin:/bin:/usr/sbin:/sbin', 'LC_ALL': 'C', 'TZ': 'UTC', 'TERM': 'dumb'}
 
 
+def lldb_path(lldb):
+    """The lldb a take runs. A bare name is the one the harness's own PATH finds, not the caller's, so on macOS the
+    gate's `lldb` is /usr/bin/lldb: the shim that runs the selected developer directory's lldb (xcode-select -p) with
+    four variables added to its environment, which the program it starts inherits."""
+    import shutil
+    if os.sep in lldb:
+        return lldb
+    return shutil.which(lldb, path=ENV_BASE['PATH']) or '%s (not on %s)' % (lldb, ENV_BASE['PATH'])
+
+
 class Hung(subprocess.TimeoutExpired):
     """A process this harness started (lldb, sniff) that did not finish in its time. A system prompt (an
     authorization dialog for a debugger) can hold a debugger forever with no CPU: the process is ended by the
@@ -412,7 +422,8 @@ def make_cores(rows, lldb, fixtures, work, timeout=120):
             if path.exists():
                 path.unlink()
             continue
-        print('CORE %s bytes=%d secs=%.1f style=%s' % (name, size, time.time() - start, c.get('style', 'modified-memory')))
+        print('CORE %s bytes=%d secs=%.1f style=%s lldb=%s' % (name, size, time.time() - start, c.get('style', 'modified-memory'),
+                                                               lldb_path(lldb)))
         made[name] = path
     for r in rows:
         if r.get('core') in made and r.get('file') == 'truncated':
@@ -532,10 +543,52 @@ def with_sleeper(r, prog, run_one):
 def comparable(row, facts):
     """Facts as a row compares them. A process attached to was mapped where macOS chose (address-space
     randomisation, which a debugger turns off only for a program it starts), so an attach row's breakpoint
-    addresses differ from take to take; its breakpoint number, file and line are compared."""
-    if not row.get('attach'):
-        return [list(f) for f in facts]
-    return [list(f[:2]) + list(f[3:]) if f[0] == 'bpset' else list(f) for f in facts]
+    addresses differ from take to take; its breakpoint number, file and line are compared.
+
+    A core row's stack sits where what lldb gave the program above the stack put it, and the core is written afresh
+    in each take: the /usr/bin/lldb shim's four variables move it 352 bytes from where the stored evidence's lldb put
+    it. A row whose "frame" names the stack words it reads compares those as their distance from the address read
+    (frame_relative), and every other word as it is; the row says why in its own text."""
+    out = [list(f) for f in facts]
+    if row.get('attach'):
+        out = [f[:2] + f[3:] if f[0] == 'bpset' else f for f in out]
+    if row.get('frame'):
+        out = [frame_relative(f, row['frame']) if f[0] == 'mem' else f for f in out]
+    return out
+
+
+def frame_relative(fact, frame):
+    """A memory fact read at a frame: the address is the frame's register, each word the frame names is its distance
+    from that address ('$fp+32'), and each other word stays as read."""
+    at, addr = frame['at'], fact[1]
+    return ['mem', at, ['%s%+d' % (at, w - addr) if i in frame['offsets'] else w for i, w in enumerate(fact[2])]]
+
+
+XG = re.compile(r'^x/(\d+)xg (\$\w+)$')
+LLDB_READ = re.compile(r'^memory read -s8 -fx -c(\d+) (\$\w+)$')
+
+
+def frame_problems(row):
+    """What the inventory refuses in a row's "frame": no reason in the row's own text; sniff (x/Nxg) and lldb
+    (memory read -s8 -fx -cN) not reading the same count of words once each at the frame's register; an offset
+    outside the words read."""
+    fr = row.get('frame')
+    if fr is None:
+        return []
+    name, bad = row.get('name', '?'), []
+    if not str(fr.get('why', '')).strip():
+        bad.append('%s: its frame gives no reason' % name)
+    s = [m.groups() for m in map(XG.match, row.get('script', [])) if m]
+    l = [m.groups() for m in map(LLDB_READ.match, row.get('lldb', [])) if m]
+    if len(s) != 1 or len(l) != 1:
+        return bad + ['%s: a frame row reads memory once on each side (x/Nxg REG, memory read -s8 -fx -cN REG)' % name]
+    (sn, sat), (ln, lat) = s[0], l[0]
+    if sn != ln or not sat == lat == fr.get('at'):
+        bad.append('%s: sniff reads %s words at %s, lldb %s at %s, its frame is at %s' % (name, sn, sat, ln, lat, fr.get('at')))
+    offs = fr.get('offsets')
+    if not offs or not all(isinstance(i, int) and 0 <= i < int(sn) for i in offs):
+        bad.append('%s: frame offsets %r are not among the %s words read' % (name, offs, sn))
+    return bad
 
 
 def lldb_script_rows(rows):
@@ -824,6 +877,7 @@ def cmd_verify(a):
             bad.append('%s reads core %s, not in the cores table' % (r['name'], r['core']))
         if r.get('form', 'dash-c') not in ('dash-c', 'positional', 'dash-c-only') or r.get('file', 'core') not in ('core', 'missing', 'truncated'):
             bad.append('%s: a core row\'s form is dash-c, positional or dash-c-only and its file core, missing or truncated' % r['name'])
+        bad += frame_problems(r)
     bad += ['core %s: no row reads it' % n for n in sorted(set(cores) - used)]
     covered = set(names) | set(spec['excluded'])
     for name in lin:
