@@ -280,6 +280,11 @@ class MacFrameFacts(unittest.TestCase):
         self.assertNotEqual(smac.comparable(row, self.CAPTURED), smac.comparable(row, self.MOVED))
         self.assertEqual(smac.comparable(row, self.CAPTURED), self.CAPTURED)
 
+    def test_a_frame_row_says_where_each_side_read(self):
+        self.assertEqual(smac.frame_note(self.ROW, self.CAPTURED, self.MOVED),
+                         ' [$fp read at: lldb 0x16fdff4b0, sniff 0x16fdff350, sniff-lldb -352]')
+        self.assertEqual(smac.frame_note({}, self.CAPTURED, self.MOVED), '')
+
     def test_the_inventory_refuses_a_bad_frame(self):
         self.assertEqual(smac.frame_problems(self.ROW), [])
         bad = lambda **kw: smac.frame_problems(dict(self.ROW, **kw))
