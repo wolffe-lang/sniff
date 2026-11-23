@@ -246,6 +246,73 @@ class MacCoreFacts(unittest.TestCase):
             self.assertEqual(list((Path(d) / 'cores').glob('*.core')), [])
 
 
+class MacFrameFacts(unittest.TestCase):
+    """A core is written afresh in each take, and its stack sits where what lldb gave the program above the stack
+    put it: the /usr/bin/lldb shim adds four variables to the environment, and the stack top moves 352 bytes. A
+    frame row compares the stack words its "frame" names as their distance from the address read, and every other
+    word as it is; a row without one compares every address as it is."""
+    FRAME = {'at': '$fp', 'offsets': [0], 'why': 'word 0 is a stack address; word 1 is a return address'}
+    ROW = {'name': 'r', 'kind': 'lldb', 'core': 'k', 'script': ['x/2xg $fp'],
+           'lldb': ['process status', 'memory read -s8 -fx -c2 $fp'], 'frame': FRAME}
+    # the frame record of count at its breakpoint: main's frame pointer (stack), then the return address into main
+    CAPTURED = [['died', 'SIGTRAP'], ['mem', 0x16fdff4b0, [0x16fdff4d0, 0x100000408]]]
+    MOVED = [['died', 'SIGTRAP'], ['mem', 0x16fdff4b0 - 352, [0x16fdff4d0 - 352, 0x100000408]]]
+
+    def test_a_stack_moved_352_bytes_compares_equal(self):
+        self.assertEqual(smac.comparable(self.ROW, self.CAPTURED), smac.comparable(self.ROW, self.MOVED))
+        self.assertEqual(smac.comparable(self.ROW, self.MOVED)[1], ['mem', '$fp', ['$fp+32', 0x100000408]])
+
+    def test_a_wrong_return_address_is_red(self):
+        wrong = [self.MOVED[0], ['mem', self.MOVED[1][1], [self.MOVED[1][2][0], 0x10000040c]]]
+        self.assertNotEqual(smac.comparable(self.ROW, self.CAPTURED), smac.comparable(self.ROW, wrong))
+
+    def test_a_wrong_offset_is_red(self):
+        a = self.MOVED[1][1]
+        wrong = [self.MOVED[0], ['mem', a, [a + 48, 0x100000408]]]
+        self.assertNotEqual(smac.comparable(self.ROW, self.CAPTURED), smac.comparable(self.ROW, wrong))
+
+    def test_a_missing_word_is_red(self):
+        a = self.MOVED[1][1]
+        self.assertNotEqual(smac.comparable(self.ROW, self.CAPTURED), smac.comparable(self.ROW, [self.MOVED[0], ['mem', a, [a + 32]]]))
+
+    def test_a_row_without_a_frame_compares_every_address(self):
+        row = {k: v for k, v in self.ROW.items() if k != 'frame'}
+        self.assertNotEqual(smac.comparable(row, self.CAPTURED), smac.comparable(row, self.MOVED))
+        self.assertEqual(smac.comparable(row, self.CAPTURED), self.CAPTURED)
+
+    def test_the_inventory_refuses_a_bad_frame(self):
+        self.assertEqual(smac.frame_problems(self.ROW), [])
+        bad = lambda **kw: smac.frame_problems(dict(self.ROW, **kw))
+        self.assertTrue(bad(frame=dict(self.FRAME, offsets=[2])))       # past the two words read
+        self.assertTrue(bad(frame=dict(self.FRAME, why='')))            # no reason in the row's own text
+        self.assertTrue(bad(frame=dict(self.FRAME, at='$sp')))          # not where the row reads
+        self.assertTrue(bad(script=['x/1xg $fp']))                       # sniff and lldb read different counts
+        self.assertTrue(bad(lldb=['process status']))                    # no memory read at all
+
+    def test_each_core_line_names_the_lldb_that_wrote_it(self):
+        import contextlib, io, re
+        with tempfile.TemporaryDirectory() as d:
+            lldb = Path(d) / 'lldb'
+            lldb.write_text('#!/bin/sh\nfor a; do case "$a" in "process save-core "*) set -- $a; '
+                            'printf %064d 0 > "$5"; exit 0;; esac; done\nexit 1\n')
+            lldb.chmod(0o755)
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                made = smac.make_cores([{'core': 'calls-break'}], str(lldb), d, str(Path(d) / 'w'), 10)
+                smac.delete_cores(str(Path(d) / 'w'))
+            self.assertEqual(list(made), ['calls-break'])
+            self.assertRegex(buf.getvalue(), r'(?m)^CORE calls-break bytes=64 .* lldb=%s$' % re.escape(str(lldb)))
+        # a bare name is the one the harness's own PATH finds, whatever PATH the caller had
+        keep = os.environ.get('PATH', '')
+        os.environ['PATH'] = '/nowhere'
+        try:
+            found = smac.lldb_path('sh')
+        finally:
+            os.environ['PATH'] = keep
+        self.assertTrue(found.endswith('/sh') and os.path.dirname(found) in smac.ENV_BASE['PATH'].split(':'), found)
+        self.assertEqual(smac.lldb_path('no-such-debugger'), 'no-such-debugger (not on %s)' % smac.ENV_BASE['PATH'])
+
+
 class MacRefusalDrops(unittest.TestCase):
     """The eight core-gcc-refuse-* rows run on macOS against gdb's Linux goldens: their two drops are exact and
     anchored, applied to both sides alike and counted; a line that merely contains the words stays."""
