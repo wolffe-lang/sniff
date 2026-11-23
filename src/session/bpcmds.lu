@@ -11,8 +11,19 @@ fn break_message(s: Session, kind: str, num: int, addr: u64, abs: bool) -> str {
     "{kind} {num} at {hex_plain(shown)}"
 }
 
+/// hbreak LOCATION: a breakpoint the target keeps by its own means (a remote target's `Z1`), needing no byte
+/// written; sniff's own words refuse it without a remote target, whose stub is what offers it.
+fn cmd_hbreak(mut s: Session, rest: str) -> str {
+    if !s.remote_on { return "sniff's hbreak needs a remote target (`target remote HOST:PORT`)." }
+    break_at(mut s, rest, false, true)
+}
+
 /// break LOCATION / tbreak LOCATION
 fn cmd_break(mut s: Session, rest: str, temp: bool) -> str {
+    break_at(mut s, rest, temp, false)
+}
+
+fn break_at(mut s: Session, rest: str, temp: bool, hw: bool) -> str {
     let spec = rest.trim()
     if spec.len() == 0 { return "No default breakpoint location." }
     var location = spec
@@ -32,10 +43,10 @@ fn cmd_break(mut s: Session, rest: str, temp: bool) -> str {
     s.bp_next += 1
     var i = 0
     while i < r.addrs.len {
-        (mut s.bps).push(Bp { num: num, addr: r.addrs[i], hits: 0, temp: temp, enabled: true, internal: false, abs: r.abs, ignore: 0, loc: i + 1, nloc: r.addrs.len, orig: 0, inserted: false, cond: cond, watch_end: 0 })
+        (mut s.bps).push(Bp { num: num, addr: r.addrs[i], hits: 0, temp: temp, enabled: true, internal: false, abs: r.abs, ignore: 0, loc: i + 1, nloc: r.addrs.len, orig: 0, inserted: false, cond: cond, watch_end: 0, hw: hw })
         i += 1
     }
-    let kind = if temp { "Temporary breakpoint" } else { "Breakpoint" }
+    let kind = if hw { "Hardware assisted breakpoint" } else if temp { "Temporary breakpoint" } else { "Breakpoint" }
     if r.addrs.len == 1 {
         emit_line(mut s, break_message(s, kind, num, r.addrs[0], r.abs))
     } else {
@@ -165,6 +176,6 @@ fn bp_row(mut s: Session, i: int) {
     }
     let disp = if b.temp { "del" } else { "keep" }
     let enb = if b.enabled { "y" } else { "n" }
-    emit_line(mut s, "{pad_right("{b.num}", 8)}{pad_right("breakpoint", 15)}{pad_right(disp, 5)}{pad_right(enb, 4)}{pad_right(addr16(bp_rt(s, i)), 19)}{bp_what(s, if b.abs && b.addr >= s.base { b.addr - s.base } else { b.addr })}")
+    emit_line(mut s, "{pad_right("{b.num}", 8)}{pad_right(if b.hw { "hw breakpoint" } else { "breakpoint" }, 15)}{pad_right(disp, 5)}{pad_right(enb, 4)}{pad_right(addr16(bp_rt(s, i)), 19)}{bp_what(s, if b.abs && b.addr >= s.base { b.addr - s.base } else { b.addr })}")
     bp_tail(mut s, b.cond, b.hits)
 }

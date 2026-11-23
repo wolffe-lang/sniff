@@ -27,6 +27,8 @@ struct Bp {
     pub cond: str,
     /// For an internal breakpoint at a watch's scope end, that watch's number; else 0.
     pub watch_end: int,
+    /// A hardware breakpoint (`hbreak`): a remote target's `Z1`, no byte written.
+    pub hw: bool,
 }
 
 /// How a resume ended.

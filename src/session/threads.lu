@@ -154,6 +154,7 @@ fn is_clone_event(st: int) -> bool {
 /// that stop is reported first. Returns false when the selected thread could not be resumed.
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 fn resume_all(mut s: Session, sig: int) -> bool {
+    if s.remote_on { return remote_resume(mut s, false) }
     var i = 0
     while i < s.thr.len {
         if s.thr[i].pending >= 0 { return true }
@@ -211,6 +212,7 @@ fn stop_others(mut s: Session) {
 /// program's end. New threads and the ends of threads are printed on the way, as they happen.
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 fn wait_stop(mut s: Session) -> int {
+    if s.remote_on { return remote_wait(mut s) }
     loop {
         var i = 0
         while i < s.thr.len {
@@ -265,6 +267,7 @@ fn wait_stop(mut s: Session) -> int {
 /// and resumes it with the reply, so every thread stops and runs together.
 #[cfg(target = "aarch64-apple-darwin")]
 fn resume_all(mut s: Session, sig: int) -> bool {
+    if s.remote_on { return remote_resume(mut s, false) }
     if platform.target_cont(s.target, sig) < 0 { return false }
     var i = 0
     while i < s.thr.len {
@@ -278,6 +281,7 @@ fn resume_all(mut s: Session, sig: int) -> bool {
 /// numbered and announced, one no longer listed has ended, and the thread that took the exception is selected.
 #[cfg(target = "aarch64-apple-darwin")]
 fn wait_stop(mut s: Session) -> int {
+    if s.remote_on { return remote_wait(mut s) }
     let st = platform.target_wait(s.target)
     var i = 0
     while i < s.thr.len {

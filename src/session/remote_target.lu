@@ -5,6 +5,7 @@
 
 use platform
 use remote
+use std.signal
 
 /// The x86-64 register slots in the platform's order (Linux's user_regs_struct), by the names a target
 /// description gives them: a slot the description has no register for (orig_rax) reads 0.
@@ -176,4 +177,74 @@ fn remote_kill(mut s: Session) {
     remote.kill(take t) else { }
     remote_forget(mut s)
     emit_line(mut s, "[Inferior 1 (process 1) killed]")
+}
+
+/// Insert a breakpoint at a: `Z0` (with the covered byte read first, which later reads show in its place), or
+/// `Z1` for hbreak. False when the stub refuses it (an address it cannot map yet, as under KVM before paging).
+fn remote_insert(mut s: Session, a: u64, hw: bool) -> bool {
+    if s.rt.len == 0 { return false }
+    var ok = true
+    if hw {
+        remote.insert_point(mut s.rt[0], 1, a, 1) else { ok = false }
+    } else {
+        remote.insert_break(mut s.rt[0], a) else { ok = false }
+    }
+    ok
+}
+
+/// Remove what remote_insert inserted.
+fn remote_remove(mut s: Session, a: u64, hw: bool) {
+    if s.rt.len == 0 { return }
+    if hw {
+        remote.remove_point(mut s.rt[0], 1, a, 1) else { }
+    } else {
+        remote.remove_break(mut s.rt[0], a) else { }
+    }
+}
+
+/// Resume the remote target (one instruction when step): vCont when the stub lists it, else `c` or `s`.
+/// The terminal's interrupt is heard as an event from now until the stop.
+fn remote_resume(mut s: Session, step: bool) -> bool {
+    if s.rt.len == 0 { return false }
+    s.rt_regs_ok = false
+    s.frames_ok = false
+    s.rt_signalled = false
+    flush_out(mut s)
+    signal.listen(signal.interrupt()) else { }
+    var ok = true
+    remote.resume(mut s.rt[0], step) else { ok = false }
+    ok
+}
+
+/// Wait for the remote target's stop, in 100 ms waits: between them a terminal interrupt (SIGINT) is sent on as
+/// the interrupt byte 0x03 (Interrupts), and the wait goes on for its stop reply. The stop as a wait status, as
+/// classify() reads a process's: a signal stop is (signal << 8) | 0x7f, an exit its status << 8, a kill its
+/// signal; -1 for a lost connection.
+fn remote_wait(mut s: Session) -> int {
+    if s.rt.len == 0 { return 0 - 1 }
+    var waiting = true
+    var lost = false
+    while waiting {
+        var timed = false
+        remote.wait_stop(mut s.rt[0], 100) else |e| match e {
+            reply_timeout => { timed = true },
+            _ => { lost = true },
+        }
+        if lost { waiting = false } else if timed {
+            let heard = signal.poll(signal.interrupt()) else { 0 }
+            if heard != 0 { remote.interrupt_target(s.rt[0]) else { } }
+        } else {
+            waiting = false
+        }
+    }
+    if lost {
+        remote_forget(mut s)
+        return 0 - 1
+    }
+    let kind = s.rt[0].stop.kind
+    let code = s.rt[0].stop.code
+    remote_refresh(mut s)
+    if kind == remote.stop_exited { return code * 256 }
+    if kind == remote.stop_killed { return code }
+    code * 256 + 127
 }

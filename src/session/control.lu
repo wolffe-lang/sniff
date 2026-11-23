@@ -130,6 +130,10 @@ fn insert_all(mut s: Session) -> int {
                 s.bps[i].orig = s.bps[twin].orig
                 s.bps[i].inserted = true
                 placed = true
+            } else if s.remote_on {
+                // a remote target keeps its breakpoints itself: Z0 (or Z1 for hbreak), no byte written here
+                placed = remote_insert(mut s, a, s.bps[i].hw)
+                s.bps[i].inserted = placed
             } else {
                 let insn = platform.arch_bp_insn()
                 let r = src_read(s, a, insn.len)
@@ -155,7 +159,18 @@ fn remove_all(mut s: Session) {
     while i >= 0 {
         if s.bps[i].inserted {
             let a = bp_rt(s, i)
-            let _ = platform.target_write(s.target, a, unpack_bytes(s.bps[i].orig, platform.arch_bp_insn().len))
+            // the first breakpoint at an address (the last removed) takes the stub's copy out
+            var first = true
+            var k: int = 0
+            while k < i {
+                if s.bps[k].inserted && bp_rt(s, k) == a { first = false }
+                k += 1
+            }
+            if s.remote_on {
+                if first { remote_remove(mut s, a, s.bps[i].hw) }
+            } else {
+                let _ = platform.target_write(s.target, a, unpack_bytes(s.bps[i].orig, platform.arch_bp_insn().len))
+            }
             s.bps[i].inserted = false
         }
         i -= 1
@@ -235,7 +250,8 @@ fn classify(mut s: Session, st: int, stepping: bool) -> Event {
     if sig == 5 {
         let pc = current_pc(s)
         if !stepping && pc > 0 && (st >> 16) != 259 {
-            let adjust = platform.arch_trap_adjust()
+            // a remote stub reports a breakpoint at its own address (as QEMU's does: measured)
+            let adjust = if s.remote_on { 0 as u64 } else { platform.arch_trap_adjust() }
             let at = bp_at(s, pc - adjust)
             if at >= 0 {
                 if adjust > 0 { set_pc(s, pc - adjust) }
@@ -266,6 +282,11 @@ fn step_insn(mut s: Session) -> Event {
     let sig = take_signal(mut s)
     let refused = arm_watches(mut s)
     if refused.len() > 0 { s.errmsg = refused; return Event { kind: ev_error, signal: 0, code: 0, bp: -1 } }
+    if s.remote_on {
+        if !remote_resume(mut s, true) { return lost() }
+        let st = remote_wait(mut s)
+        return classify(mut s, st, true)
+    }
     if platform.target_step(s.target, sig) < 0 { s.alive = false; return lost() }
     var st = platform.target_wait(s.target)
     if st >= 0 && platform.status_stopped(st) && platform.status_stop_signal(st) == 5 {
