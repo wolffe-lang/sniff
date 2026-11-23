@@ -297,8 +297,9 @@ def first_diff(want, got):
     return ''
 
 
-def load_rows(only):
-    rows = json.loads(ROWS.read_text())['rows']
+def load_rows(only, kind='kernel'):
+    # a row's kind: the kernel rows (sniff or gdb over QEMU's gdbstub) unless it says server (sniff-server's rows)
+    rows = [r for r in json.loads(ROWS.read_text())['rows'] if r.get('kind', 'kernel') == kind]
     if only:
         rows = [r for r in rows if re.search(only, r['name'])]
     return rows
@@ -375,7 +376,7 @@ def cmd_run(a):
 
 
 def cmd_skip(a):
-    rows = load_rows(None)
+    rows = load_rows(None, a.kind)
     for row in rows:
         print('SKIP remote %s reason=%s' % (row['name'], row.get('skip') or a.reason))
     print('remote rows (skip): 0 pass, 0 fail, %d skip' % len(rows))
@@ -384,6 +385,192 @@ def cmd_skip(a):
         print('FAIL remote-skip-count %d rows skipped where %d are held' % (len(rows), a.expect))
         return 1
     return 0
+
+
+# sniff-server's rows (kind server): the stub on loopback in this host, its client this harness or the pinned gdb. Each
+# row's check names what it holds; the stub is started by its recorded pid and ended by it.
+SERVER_CHECKS = ('refuse-second', 'refuse-non-loopback', 'loopback-default')
+LISTENING = re.compile(r'^Listening on (\S+):(\d+)$', re.M)
+
+
+def frame(data):
+    b = data.encode()
+    return b'$' + b + b'#' + ('%02x' % (sum(b) % 256)).encode()
+
+
+def read_packet(s, limit=5.0):
+    """The first packet's data off the socket within limit seconds, acknowledgments skipped; None if it closed or
+    timed out first."""
+    buf, end = b'', time.time() + limit
+    while time.time() < end:
+        s.settimeout(max(0.05, end - time.time()))
+        try:
+            chunk = s.recv(4096)
+        except OSError:
+            return None
+        if not chunk:
+            return None
+        buf += chunk
+        i = buf.find(b'$')
+        j = buf.find(b'#', i + 1) if i >= 0 else -1
+        if i >= 0 and j >= 0 and len(buf) >= j + 3:
+            return buf[i + 1:j].decode(errors='backslashreplace')
+    return None
+
+
+def ask(s, data):
+    s.sendall(frame(data))
+    got = read_packet(s)
+    if got is not None:
+        s.sendall(b'+')
+    return got
+
+
+def closed(s, limit=5.0):
+    s.settimeout(limit)
+    try:
+        return s.recv(64) == b''
+    except OSError:
+        return False
+
+
+def tcp_sockets(port):
+    """(local address in /proc/net/tcp's hex, state) of every socket on this TCP port."""
+    found = []
+    for line in Path('/proc/net/tcp').read_text().splitlines()[1:]:
+        f = line.split()
+        addr, hexport = f[1].split(':')
+        if int(hexport, 16) == port:
+            found.append((addr, f[3]))
+    return found
+
+
+def start_server(a, args, out, name):
+    log = out / (name + '.server')
+    p = subprocess.Popen([a.server] + args, stdout=open(log, 'w'), stderr=subprocess.STDOUT)
+    end = time.time() + 20
+    while time.time() < end and p.poll() is None and not LISTENING.search(log.read_text(errors='replace')):
+        time.sleep(0.05)
+    return p, LISTENING.search(log.read_text(errors='replace'))
+
+
+def end_server(p, name):
+    try:
+        p.wait(10)
+    except subprocess.TimeoutExpired:
+        print('sniff-server %d still running 10 s after row %s: TERM to its recorded pid' % (p.pid, name))
+        p.terminate()
+        p.wait()
+
+
+def check_refuse_second(a, row, out):
+    """While one client is attached a second is refused by name: it gets the stub's E.text reply to its first packet and
+    its connection is closed, sniff-server says so, and the first client's session goes on."""
+    want = 'E.sniff-server serves one client at a time'
+    p, up = start_server(a, ['127.0.0.1:0', str(Path(a.fixtures) / row['prog'])], out, row['name'])
+    problems = []
+    try:
+        if not up:
+            return 'sniff-server never said it was listening', ''
+        port = int(up.group(2))
+        first = socket.create_connection(('127.0.0.1', port), timeout=5)
+        r1 = ask(first, 'qSupported:swbreak+;vContSupported+')
+        if not r1 or 'PacketSize=' not in r1:
+            problems.append('the first client got %r to qSupported' % r1)
+        second = socket.create_connection(('127.0.0.1', port), timeout=5)
+        r2 = ask(second, 'qSupported:swbreak+')
+        if r2 != want:
+            problems.append('the second client got %r, not %r' % (r2, want))
+        if not closed(second):
+            problems.append('the second connection was not closed')
+        second.close()
+        r3 = ask(first, '?')
+        if not r3 or r3[0] not in 'TS':
+            problems.append('the first client lost its session: %r to ?' % r3)
+        first.sendall(frame('k'))
+        first.close()
+    finally:
+        end_server(p, row['name'])
+    said = (out / (row['name'] + '.server')).read_text(errors='replace')
+    if 'sniff-server: refused a second client: one client at a time' not in said:
+        problems.append('sniff-server did not say it refused the second client')
+    return '; '.join(problems), 'the second client got %r and was closed; the first went on' % want
+
+
+def check_refuse_non_loopback(a, row, out):
+    """A HOST that is not loopback is refused by name, binding nothing, unless --non-loopback asks for it by name."""
+    prog = str(Path(a.fixtures) / row['prog'])
+    port = free_port()
+    problems = []
+    r = subprocess.run([a.server, '0.0.0.0:%d' % port, prog], capture_output=True, text=True, timeout=20)
+    (out / (row['name'] + '.refused')).write_text(r.stdout + r.stderr)
+    words = 'sniff-server: 0.0.0.0 is not a loopback address'
+    if r.returncode == 0 or words not in r.stderr or '--non-loopback' not in r.stderr:
+        problems.append('without --non-loopback: exit %d, %r' % (r.returncode, r.stderr.strip()[:160]))
+    if tcp_sockets(port):
+        problems.append('a socket was bound on port %d without --non-loopback' % port)
+    p, up = start_server(a, ['--non-loopback', '0.0.0.0:%d' % port, prog], out, row['name'])
+    try:
+        if not up:
+            problems.append('with --non-loopback sniff-server never said it was listening')
+        elif ('00000000', '0A') not in tcp_sockets(port):
+            problems.append('with --non-loopback the listener is %r, not 0.0.0.0 listening' % tcp_sockets(port))
+        if up:
+            c = socket.create_connection(('127.0.0.1', port), timeout=5)
+            c.sendall(frame('k'))
+            c.close()
+    finally:
+        end_server(p, row['name'])
+    return '; '.join(problems), 'refused by name without --non-loopback (%s); listening on 0.0.0.0 with it' % words
+
+
+def check_loopback_default(a, row, out):
+    """`:PORT` listens on 127.0.0.1 alone (the kernel's socket table) and says so."""
+    port = free_port()
+    p, up = start_server(a, [':%d' % port, str(Path(a.fixtures) / row['prog'])], out, row['name'])
+    problems = []
+    try:
+        if not up:
+            return 'sniff-server never said it was listening', ''
+        if up.group(1) != '127.0.0.1' or int(up.group(2)) != port:
+            problems.append('it said Listening on %s:%s' % (up.group(1), up.group(2)))
+        if tcp_sockets(port) != [('0100007F', '0A')]:
+            problems.append('the sockets on port %d are %r, not 127.0.0.1 listening alone' % (port, tcp_sockets(port)))
+        c = socket.create_connection(('127.0.0.1', port), timeout=5)
+        c.sendall(frame('k'))
+        c.close()
+    finally:
+        end_server(p, row['name'])
+    return '; '.join(problems), 'listening on 127.0.0.1:PORT alone'
+
+
+def cmd_server(a):
+    out = Path(a.out).resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    counts = {'pass': 0, 'fail': 0, 'skip': 0}
+    checks = {'refuse-second': check_refuse_second, 'refuse-non-loopback': check_refuse_non_loopback,
+              'loopback-default': check_loopback_default}
+    for row in load_rows(a.only, 'server'):
+        if row.get('skip'):
+            print('SKIP remote %s reason=%s' % (row['name'], row['skip']))
+            counts['skip'] += 1
+            continue
+        if not Path(a.server).is_file():
+            print('FAIL remote %s no sniff-server at %s' % (row['name'], a.server))
+            counts['fail'] += 1
+            continue
+        try:
+            why, held = checks[row['check']](a, row, out)
+        except (OSError, subprocess.SubprocessError) as e:
+            why, held = '%s: %s' % (type(e).__name__, e), ''
+        if why:
+            print('FAIL remote %s %s' % (row['name'], why))
+            counts['fail'] += 1
+        else:
+            print('PASS remote %s [%s]' % (row['name'], held))
+            counts['pass'] += 1
+    print('remote rows (server): %d pass, %d fail, %d skip' % (counts['pass'], counts['fail'], counts['skip']))
+    return 1 if counts['fail'] else 0
 
 
 def cmd_selftest(_a):
@@ -442,7 +629,11 @@ def cmd_selftest(_a):
     rows = json.loads(ROWS.read_text())['rows']
     names = [r['name'] for r in rows]
     assert len(names) == len(set(names)), 'duplicate row names'
-    for r in rows:
+    assert frame('qC') == b'$qC#b4' and frame('') == b'$#00'
+    for r in [r for r in rows if r.get('kind') == 'server']:
+        assert r['name'].startswith('server-') and r.get('check') in SERVER_CHECKS, r['name']
+        assert r.get('prog', '').startswith('c/') and r.get('why'), 'a server row names its fixture and says what it holds: ' + r['name']
+    for r in [r for r in rows if r.get('kind', 'kernel') == 'kernel']:
         assert r['name'].startswith(('remote-kernel-', 'remote-refuse-')), r['name']
         assert r.get('accel') in (None, 'kvm', 'tcg'), r['name']
         assert set(r.get('normalise', [])) <= {'watch-values', 'stop-location'}, r['name']
@@ -453,7 +644,7 @@ def cmd_selftest(_a):
             assert isinstance(r['own'], list) and r.get('why'), 'an own row says why gdb is not its oracle: ' + r['name']
         assert isinstance(r['script'], list) and r['script'], r['name']
         assert not any('xml-tdesc' in line for line in r['script']), 'a row may not print QEMU\'s description: ' + r['name']
-    print('PASS session-remote-selftest rows=%d' % len(rows))
+    print('PASS session-remote-selftest rows=%d (kernel %d, server %d)' % (len(rows), len(load_rows(None)), len(load_rows(None, 'server'))))
     return 0
 
 
@@ -469,7 +660,13 @@ def main():
         q.add_argument('--accel', choices=('kvm', 'tcg'), required=True)
         q.add_argument('--only')
         q.add_argument('--out', default=str(ROOT / 'target/remote-out'))
+    sv = sub.add_parser('server')
+    sv.add_argument('--server', required=True, help='the sniff-server binary')
+    sv.add_argument('--fixtures', required=True, help='the static session fixtures')
+    sv.add_argument('--only')
+    sv.add_argument('--out', default=str(ROOT / 'target/server-out'))
     sk = sub.add_parser('skip')
+    sk.add_argument('--kind', choices=('kernel', 'server'), default='kernel')
     sk.add_argument('--reason', required=True)
     sk.add_argument('--expect', type=int, help='the held number of rows, refused by name when the row file differs')
     sub.add_parser('selftest')
@@ -478,6 +675,8 @@ def main():
         return cmd_skip(a)
     if a.mode == 'selftest':
         return cmd_selftest(a)
+    if a.mode == 'server':
+        return cmd_server(a)
     return cmd_run(a)
 
 
