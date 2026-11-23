@@ -254,7 +254,7 @@ class MacFrameFacts(unittest.TestCase):
     FRAME = {'at': '$fp', 'offsets': [0], 'why': 'word 0 is a stack address; word 1 is a return address'}
     ROW = {'name': 'r', 'kind': 'lldb', 'core': 'k', 'script': ['x/2xg $fp'],
            'lldb': ['process status', 'memory read -s8 -fx -c2 $fp'], 'frame': FRAME}
-    # the frame record of count at its breakpoint: main's frame pointer (stack), then the return address into main
+    # depth_sum's frame record at its breakpoint: main's frame pointer (stack), then the return address into main
     CAPTURED = [['died', 'SIGTRAP'], ['mem', 0x16fdff4b0, [0x16fdff4d0, 0x100000408]]]
     MOVED = [['died', 'SIGTRAP'], ['mem', 0x16fdff4b0 - 352, [0x16fdff4d0 - 352, 0x100000408]]]
 
