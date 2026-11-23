@@ -362,7 +362,9 @@ fn cmd_x(mut s: Session, rest: str) -> str {
         while k < per_line && i < count {
             let r = src_read(s, addr, size)
             if !r.ok {
-                if k > 0 { emit_line(mut s, line) }
+                // the address and its label, and the tab before the item, come first: the error ends that
+                // line (measured at a terminal: `0xffffffff80000000 <_start>:\tCannot access memory at ...`)
+                emit(mut s, "{line}\t")
                 return "Cannot access memory at address 0x{addr:x}"
             }
             let raw = as_u64(r.data)
