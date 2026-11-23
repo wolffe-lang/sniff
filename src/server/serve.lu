@@ -510,10 +510,18 @@ fn answer(mut st: Stub, d: List[byte]) -> str {
     }
     if k == req_resume { return resume(mut st, r) }
     if k == req_detach {
+        // every breakpoint out and the debug registers cleared (an armed one would trap a program no one traces),
+        // then every thread let go: a thread left traced would take the program with it when the stub exits, by the
+        // trace's EXITKILL
         var addrs: List[u64] = []
         for a in st.bp_addrs { (mut addrs).push(a) }
         for a in addrs { let _ = remove_break(mut st, a) }
-        let _ = platform.target_detach(st.t, st.t.pid)
+        st.w_addrs = no_u64s()
+        st.w_lens = no_ints()
+        st.w_kinds = no_ints()
+        st.w_types = no_ints()
+        let _ = arm_watches(st)
+        for tid in platform.target_task_ids(st.t) { let _ = platform.target_detach(st.t, tid) }
         st.alive = false
         st.done = true
         return "OK"
