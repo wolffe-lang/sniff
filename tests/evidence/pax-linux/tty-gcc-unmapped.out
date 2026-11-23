@@ -1,0 +1,8 @@
+Reading symbols from /work/target/pax-fixtures/c/calls/gcc-O0/prog...
+Breakpoint 1 at 0x10
+Starting program: /work/target/pax-fixtures/c/calls/gcc-O0/prog 
+Warning:
+Cannot insert breakpoint 1.
+Cannot access memory at address 0x10
+
+[Inferior 1 (process <PID>) killed]
