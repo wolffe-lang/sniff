@@ -1,0 +1,13 @@
+Reading symbols from KERNEL...
+Remote debugging using 127.0.0.1:PORT
+0x000000000000fff0 in ?? ()
+Continuing.
+
+Program received signal SIGINT, Interrupt.
+0xffffffff80000786 in pax_idle ()
+Ending remote debugging.
+Remote debugging using 127.0.0.1:PORT
+
+Program received signal SIGTRAP, Trace/breakpoint trap.
+0xffffffff80000786 in pax_idle ()
+[Inferior 1 (process 1) killed]
