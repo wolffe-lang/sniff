@@ -404,7 +404,7 @@ def cmd_skip(a):
 # sniff-server's rows (kind server): the stub on loopback in this host, its client this harness or the pinned gdb. Each
 # row's check names what it holds; the stub is started by its recorded pid and ended by it.
 SERVER_CHECKS = ('refuse-second', 'refuse-non-loopback', 'loopback-default', 'idle-cost', 'interrupt-latency',
-                 'z1-hbreak', 'fp-write', 'fp-tag', 'threads', 'gdb-session', 'oracle-stable')
+                 'z1-hbreak', 'fp-write', 'fp-tag', 'threads', 'detach', 'gdb-session', 'oracle-stable')
 SESSION_ROWS = ROOT / 'tests/session-rows.json'
 # what gdb prints differently through the two stubs, by design, each by name: only through gdbserver, which offers Host
 # I/O, does gdb read files over the connection, so only there does it print the two lines of that feature (a separate
@@ -776,6 +776,30 @@ def check_fp_tag(a, row, out):
         w = ask(c, 'P22=ff3f0000')
         return {'fctrl to fop': before, 'P ftag': w, 'ftag read back': ask(c, 'p22')}
     return check_same(a, row, out, steps, 'the x87 control registers, and the tag word written and read back')
+
+
+def check_detach(a, row, out):
+    """D with a breakpoint and a watchpoint set: the stub takes both out and lets the program go, and it runs to its
+    end on its own (the sleeper's last line, `done N`, comes into the stub's log). Held to gdbserver."""
+    def steps(c, prog):
+        z0 = ask(c, 'Z0,%x,1' % symbol(prog, 'nap'))
+        z2 = ask(c, 'Z2,%x,4' % symbol(prog, 'ticks'))
+        return {'Z0': z0, 'Z2': z2, 'D': ask(c, 'D')}
+    mine, theirs, why = both_stubs(a, row, out, steps)
+    if why:
+        return why, ''
+    if oracle_silent(theirs):
+        return 'the oracle gave no reply (gdbserver %r): nothing compared' % (theirs,), ''
+    want = 'done %s' % row['args'][0]
+    for who, got in (('sniff-server', mine), ('gdbserver', theirs)):
+        log = out / ('%s.%s' % (row['name'], who))
+        end = time.time() + 10
+        while time.time() < end and want not in log.read_text(errors='replace'):
+            time.sleep(0.1)
+        got['ran to its end'] = want in log.read_text(errors='replace')
+    if mine != theirs:
+        return 'the detach: sniff-server %r, gdbserver %r' % (mine, theirs), ''
+    return '', 'the detach equal to gdbserver\'s: %r' % mine
 
 
 def check_threads(a, row, out):
@@ -1183,7 +1207,7 @@ def cmd_server(a):
     checks = {'refuse-second': check_refuse_second, 'refuse-non-loopback': check_refuse_non_loopback,
               'loopback-default': check_loopback_default, 'idle-cost': check_idle_cost,
               'interrupt-latency': check_interrupt_latency, 'z1-hbreak': check_z1_hbreak, 'fp-write': check_fp_write,
-              'fp-tag': check_fp_tag,
+              'fp-tag': check_fp_tag, 'detach': check_detach,
               'threads': check_threads, 'gdb-session': check_gdb_session, 'oracle-stable': check_oracle_stable}
     print(oracle_line())
     for row in load_rows(a.only, 'server'):
