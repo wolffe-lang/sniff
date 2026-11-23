@@ -408,6 +408,16 @@
    ]
   },
   {
+   "name": "tty-gcc-unmapped",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "break *0x10",
+    "run",
+    "kill"
+   ],
+   "tty": true
+  },
+  {
    "name": "step-gcc-finish-types",
    "prog": "c/values/gcc-O0/prog",
    "script": [
