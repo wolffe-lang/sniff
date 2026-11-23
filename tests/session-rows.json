@@ -399,6 +399,15 @@
    "expect_rc": 1
   },
   {
+   "name": "x-gcc-unreadable",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "break main",
+    "run",
+    "x/2xg 0"
+   ]
+  },
+  {
    "name": "step-gcc-finish-types",
    "prog": "c/values/gcc-O0/prog",
    "script": [
