@@ -1387,6 +1387,15 @@ def cmd_selftest(_a):
     assert s == 'Breakpoint 1 at 0x4018d9: file m.c, line 20.\n0x0000000000401e58 in __libc_start_call_main ()\n', repr(s)
     assert native_normalise('x\n0x0000000000401740 in _start ()\n') == 'x\n0x0000000000401740 in _start ()\n'
     assert len([r for r in rows if r.get('check') == 'native-golden']) == 1, 'one fixture is held to its native golden'
+    # a red is the row's own comparison: a driver exception, a stub that never listened, and either side's silence
+    # are faults by name, never a comparison's FAIL
+    def broken(_a, _row, _out):
+        raise BrokenPipeError(32, 'Broken pipe')
+    assert run_check(broken, None, {}, None)[0].startswith(FAULT), run_check(broken, None, {}, None)
+    assert compare({'g': None}, {'g': '00'}, 'w')[0].startswith(FAULT) and compare({'g': '00'}, {'g': None}, 'w')[0].startswith(FAULT)
+    assert not compare({'g': '01'}, {'g': '00'}, 'w')[0].startswith(FAULT) and compare({'g': '01'}, {'g': '00'}, 'w')[0]
+    assert compare({'Z1': '', 'stop': '-'}, {'Z1': 'OK', 'stop': 'T05'}, 'w')[0].startswith('w: sniff-server ')
+    assert compare({'g': '00'}, {'g': '00'}, 'w') == ('', "w equal to gdbserver's: {'g': '00'}")
     # a thread list may come one id a reply (qfThreadInfo, then qsThreadInfo until `l`), as gdbserver gives it
     replies = iter(['m5f3', 'm5f4', 'm5f5', 'l'])
     assert thread_ids(lambda q: next(replies)) == ['5f3', '5f4', '5f5']

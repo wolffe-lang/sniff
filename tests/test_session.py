@@ -167,6 +167,44 @@ class GateRemoteQemuLine(unittest.TestCase):
         self.assertIn('  ' + image, said.splitlines())
 
 
+class RedIsAComparison(unittest.TestCase):
+    """A server row's red is its own comparison: run through the real harness against stand-in stubs (tests/
+    standin_stub.py, the pinned gdbserver's place taken by one on PATH), a stub that closes the connection is a fault
+    by name, a stub that answers otherwise is the comparison's FAIL, and the same answers pass."""
+
+    def row(self, mode):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / 'bin').mkdir()
+            stand_in = ROOT / 'tests/standin_stub.py'
+            for name, m in (('gdbserver', 'oracle'), ('stub', mode)):
+                f = d / 'bin' / name
+                f.write_text('#!/bin/sh\nexec %s -I %s %s "$@"\n' % (sys.executable, stand_in, m))
+                f.chmod(0o755)
+            (d / 'fx/c/calls/gcc-O0').mkdir(parents=True)
+            (d / 'fx/c/calls/gcc-O0/prog').write_text('')
+            p = subprocess.run([sys.executable, '-I', str(ROOT / 'tools/session-remote.py'), 'server', '--server', str(d / 'bin/stub'),
+                                '--fixtures', str(d / 'fx'), '--only', '^server-fp-tag$', '--out', str(d / 'out')],
+                               capture_output=True, text=True, timeout=120,
+                               env={'PATH': str(d / 'bin') + os.pathsep + os.environ['PATH'], 'LC_ALL': 'C'})
+        return [ln for ln in p.stdout.splitlines() if ln.startswith(('PASS remote server-fp-tag', 'FAIL remote server-fp-tag'))]
+
+    def test_a_stub_that_closes_the_connection_is_a_fault(self):
+        got = self.row('close')
+        self.assertEqual(len(got), 1, got)
+        self.assertTrue(got[0].startswith('FAIL remote server-fp-tag fault: '), got)
+
+    def test_a_stub_that_answers_otherwise_is_the_comparison(self):
+        got = self.row('other')
+        self.assertEqual(len(got), 1, got)
+        self.assertTrue(got[0].startswith('FAIL remote server-fp-tag the x87 control registers'), got)
+
+    def test_the_same_answers_pass(self):
+        got = self.row('oracle')
+        self.assertEqual(len(got), 1, got)
+        self.assertTrue(got[0].startswith('PASS remote server-fp-tag '), got)
+
+
 class ServerSignalTable(unittest.TestCase):
     """sniff-server's signal numbers are the measured table's (tests/server-signals.tsv), never written from memory:
     the stub's list, by host number, equals the file's protocol column (SIGKILL's from its X reply), and the file names
