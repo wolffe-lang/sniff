@@ -1,0 +1,66 @@
+{
+ "schema": 1,
+ "milestone": "S8a, PR 2",
+ "written_before_code": "2026-11-23",
+ "scope": "S8a's second PR: sniff-server, a stub for one process over the GDB remote protocol, on Linux and on PAX, with the pinned gdb and sniff as its clients. It branches from the first PR's head and is stacked on it until that merges. When it merges, S8a is met.",
+ "status": "written before any sniff-server code. The first measurement (PAX's TCP round trip through a forwarded port, gdbserver's stop replies for signals 1 to 31, and gdb's packet logs through gdbserver over the same fixtures) is PENDING: its results are filled in from its run before the stub's first line, and every later change to this file scores a prediction against what was measured",
+ "first_commits": {
+  "what": "before this file, three commits finish the kernel rows' record: gate-remote's step can be sourced (no change), a harness unit that is red while the record drops the QEMU line (737f99f), and the gate passing each kernel step's QEMU line on, with a kernel step that passes on none for its accelerator failing by name (d0f1a6b)",
+  "predicted": "the record host's kernel steps pass on `QEMU version='QEMU emulator version 11.1.2' sha256=… accel=kvm binary=…` and the same for tcg, and no `FAIL remote-qemu-line` line appears; the harness units' four GateRemoteQemuLine tests pass on every host"
+ },
+ "measured_before_code": {
+  "order": "the PAX round trip first: the PAX rows depend on it, so if it fails they wait for a decision and nothing is built on a guess. Then the signal table, then gdb through gdbserver",
+  "oracles": {
+   "gdb": "the pinned gdb, 15.1 (Ubuntu 15.1-1ubuntu1~24.04.1), sha256 3832cc070ae1716e322105d3b39fb398695e5f031c9d39224cf227a8c2b889f6, run only as a binary, `set debug remote 1` to its standard error",
+   "gdbserver": "the pinned gdbserver, 15.1 (Ubuntu 15.1-1ubuntu1~24.04.1), sha256 507c37148786ac8bc49f3107408a7e93f4ee7818a796222ba6db222051c47ba7, run only as a binary: what it answers is read off gdb's logs, as QEMU's was. Its source is never read",
+   "fixtures": "the session rows' static C fixtures, built by tools/build-session.py in the oracle image, and one new fixture that raises a signal named on its command line"
+  },
+  "pax_round_trip": "PENDING: on PAX's console kernel, a static program listens on a TCP port inside QEMU's user network; the host connects through `hostfwd=tcp:127.0.0.1:H-:G` and makes one round trip of a known byte string",
+  "signal_table": "PENDING: for each of signals 1 to 31, the fixture raises it under gdbserver with gdb attached; recorded: the host's number, the protocol number in gdbserver's T reply, and the name gdb prints, in one file that names the gdbserver version and digest it was measured against",
+  "gdbserver_logs": "PENDING: gdb through gdbserver over the fixtures of the server rows, with `set debug remote 1`: the order of packets gdb sends to a process stub, gdbserver's qSupported reply, its description, and its replies to each request"
+ },
+ "server": {
+  "shape": "`sniff-server HOST:PORT PROG [ARGS]` and `sniff-server :PORT PROG [ARGS]` (the manual's Server node). One static program, built for Linux and for PAX from sniff's own target code, serving one process over the packet layer of the first PR",
+  "listening": "the default address is loopback: `:PORT` listens on 127.0.0.1 only. A HOST that is not a loopback address is refused by name unless `--non-loopback` is given. The usage text and the README say plainly that the protocol has no authentication and gives whoever connects control of the program",
+  "packets": "qSupported and QStartNoAckMode; `?` and the stop replies T (with thread:, swbreak:, watch:, rwatch:, awatch:), W and X; g, p, P and G; m and M; Z0 and z0 (int3 written by POKEDATA, the covered byte restored on removal and shown as covered in m); Z1 to Z4 and z1 to z4 (the debug registers by POKEUSER); vCont?, vCont;c, ;s and ;t, and plain c and s; qfThreadInfo and qsThreadInfo (threads through PTRACE_O_TRACECLONE), qC, Hg and Hc; D and k; the interrupt byte 0x03 (PTRACE_INTERRUPT on a seized process); qXfer:features:read:target.xml with sniff-server's own description. Anything else: the empty reply (Standard Replies)",
+  "description": "written here from the Target Description Format and i386 Features nodes: architecture i386:x86-64, org.gnu.gdb.i386.core (rax-r15, rip, eflags, the six segment selectors, st0-st7, fctrl-fop) and org.gnu.gdb.i386.sse (xmm0-xmm15, mxcsr). No AVX feature, because PAX cannot read the extended state; Linux serves the same description, so one golden holds on both. A unit holds it byte for byte",
+  "fp_writes": "on PAX a P or G of an x87 or SSE register is answered with an error reply, because PAX answers PTRACE_SETFPREGS with EIO; on Linux it is written",
+  "signals": "the stub maps a host signal number to the protocol's only through the measured table; a number the table does not hold is refused by name in sniff-server's words. sniff's client prints the name of an observed number, and `unknown signal N` otherwise",
+  "caps": "one client at a time: a second connect while one is attached is refused by name; a packet's size (the PacketSize the stub offers, with a row at it and one past it); the stub does not resume the program while no client is attached"
+ },
+ "rows": {
+  "harness": "the remote rows' harness, with a row kind for the stub's rows; one inventory and one held skip count",
+  "server_linux_gdb": "the pinned gdb through sniff-server over the static fixtures: break by function, by line and by address, bt, finish, step, next, stepi, info registers, x, print, info locals, a watchpoint, threads, a signal, exit and kill. Held to gdb's native goldens of the same fixtures, normalised by name (the connect lines, `Remote debugging using`, and the inferior lines gdb prints over a remote target)",
+  "server_linux_replies": "the stub's reply to each request of the session above, compared packet by packet with gdbserver's reply to the same request, read off gdb's logs through each stub. Each by-design difference (PacketSize, features the stub does not offer, thread ids) is named in its row",
+  "server_linux_sniff": "sniff through sniff-server, the same fixtures and commands, held to the same native goldens",
+  "server_refuse": "a second client while one is attached; an unknown packet; an FP register write on PAX; a connect to no listener; a non-loopback HOST without --non-loopback; and `:PORT` bound to 127.0.0.1 (read from the kernel's socket table)",
+  "server_description": "gdb's `maint print xml-tdesc` through the stub, and the unit holding the description",
+  "server_pax": "sniff-server in PAX's console image behind the forwarded port, gdb and sniff as clients from the host: break, bt, step, finish, x, a signal, exit. Under KVM only, as the other PAX rows run; held to the same goldens with the PAX legs' named normalisation",
+  "units": "the stub's packet dispatch, the signal table, the description, the breakpoint shadow in m, and the debug-register encoding for Z1 to Z4; natively and on the checked machine, red first",
+  "where": "the Linux rows in the oracle image, on hosted Linux and on the record host (gdb, gdbserver and sniff-server meet on loopback in one container, so no kernel image is needed); the PAX rows on the record host with the PAX legs; the units on every host. macOS skips the stub's rows by name in one line: a macOS sniff cannot debug an x86-64 remote process until sniff carries its target's architecture, and sniff-server is a Linux and PAX program. The skip count is held",
+  "predicted_count": "about 40 rows and their units"
+ },
+ "plants": {
+  "P2": {
+   "what": "the stub's T reply carries the host's signal number, not the protocol's",
+   "red_at": "PENDING the signal table: a row whose host and protocol numbers differ, named from the measurement. Not a breakpoint row: Linux's SIGTRAP is 5 and the protocol's trap is 05, so the plant is green there. If no signal the fixtures raise has differing numbers, the row that goes red raises one that does, and this file says which",
+   "branch": "a plant branch beside the PR's, pushed before the verify"
+  }
+ },
+ "honesty": {
+  "not_known_before_code": [
+   "whether PAX's TCP through a forwarded port carries a round trip on the console kernel",
+   "which signal numbers differ between the host and the protocol",
+   "the order of packets gdb sends to a process stub, and which qSupported features gdbserver offers",
+   "how gdb words a second client refused, and a stub that refuses a packet",
+   "whether gdb asks a static program's stub for a library list"
+  ],
+  "clean_room": "the nineteen nodes of the GDB manual consulted for the first PR are the only protocol source. gdbserver and gdb are run only as binaries, and what they do is read off gdb's logs and transcripts as observations. No source of gdb, gdbserver, QEMU, lldb or any other implementation of the protocol is read, and no secondary text about it. gdb's signals.h stays closed: every signal number is an observation"
+ },
+ "decided_before_code": {
+  "replies": "compared packet by packet with gdbserver's, as observed behaviour of the binary",
+  "goldens": "sniff's transcripts through the stub are held to gdb's native goldens of the same fixtures: one oracle for a fixture, whatever the path",
+  "pax_accelerator": "the PAX rows run under KVM only",
+  "rows_file": "the stub's rows live in the remote harness under a row kind"
+ }
+}
