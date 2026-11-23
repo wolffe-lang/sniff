@@ -391,9 +391,10 @@ fn cont_event(mut s: Session) -> Event {
         let bad = insert_all(mut s)
         if bad >= 0 {
             let at = bp_rt(s, bad)
-            // at a terminal the pinned gdb ends the warning with `Command aborted.` (measured over a remote
-            // target; a process at a terminal is its own row); a command file stops at the warning
-            let aborted = if s.tty { "\nCommand aborted." } else { "" }
+            // over a remote target at a terminal the pinned gdb ends the warning with `Command aborted.`
+            // (measured: QEMU under KVM at reset); a process does not, at a terminal or in a command file
+            // (measured), and a remote target in a command file has not been seen, so it takes the process's form
+            let aborted = if s.tty && s.remote_on { "\nCommand aborted." } else { "" }
             s.errmsg = "Warning:\nCannot insert breakpoint {s.bps[bad].num}.\nCannot access memory at address 0x{at:x}\n{aborted}"
             return Event { kind: ev_error, signal: 0, code: 0, bp: bad }
         }
