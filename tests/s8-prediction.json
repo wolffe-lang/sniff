@@ -1,0 +1,193 @@
+{
+ "schema": 1,
+ "milestone": "S8a, PR 1",
+ "written_before_code": "2026-11-23",
+ "scope": "S8a's first PR: the remote protocol's packet layer (U1), and `target remote` to QEMU's gdbstub on PAX's console kernel at one processor, from Linux and from the Mac (U2). The stub (sniff-server, U3) and four processors (U4) are predicted in their own files when their PRs start.",
+ "status": "written before code: the manual read, the predictions, and what the pinned gdb and the pinned QEMU did before any sniff code (on a Linux host with KVM, and the Mac's boot timing). Where a measurement refuted a prediction, both are kept and the entry says so",
+ "measured_before_code": {
+  "oracles": {
+   "gdb": "GNU gdb (Ubuntu 15.1-1ubuntu1~24.04.1) 15.1, the pinned binary in the oracle image (sha256 3832cc070ae1716e322105d3b39fb398695e5f031c9d39224cf227a8c2b889f6), run only as a binary: on a pty with echo off, `gdb -nx -q -iex 'set confirm off' -iex 'set pagination off' KERNEL`, one command a prompt, `set debug remote 1` to its standard error and `set remotelogfile` for the bytes on the wire",
+   "qemu": "QEMU 11.1.2 from the upstream tarball (sha256 731b5681e4bb18be313231579b8efd0296c5b015fa36dc533874b639ba838016), configured `--target-list=x86_64-softmmu --enable-slirp --disable-docs --disable-werror --disable-download`; the image's binary b5cb670e0eda020fba60bb3249226d7ae424695fe2d190ad3ff76de1abcef447, the Mac's 541fbcb72ebc65249c372cf352a9b105e1ef43975194f37ebab29a10430f3a97. A target by behaviour only: what it answers is read off gdb's logs",
+   "machine": "PAX's tools/qemu-run at pax 5409025: q35, `-cpu max`, 256 MiB, one processor, no NIC, SeaBIOS from QEMU's own firmware, the image as a CD-ROM, `-gdb tcp:127.0.0.1:PORT -S` (the processor frozen at reset)",
+   "kernel": "PAX trunk 5409025's console kernel, kmain_console.elf, 3,989,496 bytes, sha256 069fe42870b495d1c3e838a45c1fcddd6136c63812703125c270e762e9d0123e (built in PAX's image; DW_AT_comp_dir /pax/kernel, so the sources are read at /pax/kernel/...). DWARF from wolf 0.2.35 (DW_LANG_C11) with CFI in .debug_frame; text at 0xffffffff80000000",
+   "image": "the kernel with an initramfs of the console's shell only: pelt as /bin/sh (sha256 bebcab46df895a66fa32c4f3aaf0f1d74c3336776f2a6d00c501380cf030cc31), bore's cat (527303f3b7898e1f30ad30297d0487752237889482c5a74a49836c0f52def90b) and env (edb4a92490d272c979453797f5458dd71e3c1d67341c6db1c7e7c7cc1bb29713), and the run list `/bin/env HOME=/ /bin/sh -i` (the PAX legs' image less sniff and the rows); cpio sha256 fe18ac3561dbd17f673ae4a248557e79313a0dcfefcde333621294bb1a807acc, wrapped by tools/mkimage with boot/limine-initramfs-quiet.conf into pax-s8.iso, sha256 73283354e1045ec7cbdf7eac47a30cb7b64a327f989c9f212c135a1dac1e13eb",
+   "hosts": "a Linux host with KVM, running the oracle image under KVM and under TCG (the measurement, a shared machine, so nothing timed there); a Mac (macOS arm64) running its own build of the pinned QEMU under TCG, boot only (no debugger before code)"
+  },
+  "manual": {
+   "source": "the GDB manual's HTML nodes, each fetched twice with curl and byte-identical",
+   "nodes": {
+    "Overview": "003bf05dfd54733042bd8646e282094671057a1ec89bbff37d95d3a174ccc490",
+    "Standard Replies": "2fc5f5ccb709ae6b99d84516c9068093e5b3d647ed03006adfeaf749775a0e3b",
+    "Packets": "44dfada09e55839aecff010e443469a592a4eb8eb653dfa28ca7b3836b887800",
+    "Stop Reply Packets": "041824625f6f4bf73159da0461b3e2c7bbe569890cc81ffeccea549543401831",
+    "General Query Packets": "40aff051f25a9093935653ab2f187af8e3fd07b568b12174927172237ada122f",
+    "Architecture-Specific Protocol Details": "6230db97aaaa7ba9cad527452fd383c3cd05b50593543aa52660edc5de0de411",
+    "Interrupts": "c379e8030a0062227d4725d185e198cbb663d7ba28626052978647286a275ce3",
+    "Packet Acknowledgment": "d5e096207878b6a5f55d116f1ffd2ba84118e6c49eb796e4ef5140385f9a0aef",
+    "Examples": "ffe579bc55ccba223b1e4c1b939da426df6f4c0c82420613f43bc3a90e592b16",
+    "Thread List Format": "24583ba195dcc22c2d9135a8a8b99809fb7ae5dbed8be98a612bc656d480c773",
+    "Retrieving Descriptions": "b39ea1f169e56e649161d11b5f4d482888f2a1cc3f55f77c36c0ec2d8363acd6",
+    "Target Description Format": "87199c9dae5d363351a15a6ff184426c921d6a969a69f83746758aab8f2ad0d8",
+    "Predefined Target Types": "fafecc554d65e7b6fdb8c71f7471b2ce2ad523cc5f6f3a1966ed01aa0aa18deb",
+    "Standard Target Features": "9230c68cb95cab3a0ddab1a542fb6c3fbfb23e50729ec8c71b34cc7586af12c5",
+    "i386 Features": "41dbd9b9059490e7cbdc840740f3cae6b13a3e91365a84ef5a7943e5b685695d",
+    "Connecting": "72289aedd1322546b59ab5e91aba10f21b950981b1a26c0459908e513b444434",
+    "Server": "2fb2714a31ec3b18c2a236a90e3f8c5506f604a6cbb804d532f7f8644743f10b",
+    "Remote Configuration": "05cf33981e244a622300d6110127b23ba7c0562839fa422e69ec35d77df8a8c2",
+    "Remote Stub": "5b77acc3302941b270a03c9266cc45c67c3185069fdc7ca7e699a376225a2cd2"
+   },
+   "read": "all nineteen in full on 2026-11-23, before any code. Architecture-Specific Protocol Details covers only ARM and MIPS, whose details are not read. Not read, by the closed list: tracepoints, agent expressions, Host I/O, File-I/O, non-stop and notifications, branch trace, and the library-list and memory-map formats",
+   "pointers_not_followed": "Remote Stub names the stub sources shipped with gdb and remote.c; Standard Target Features and Target Description Format point to gdb/features and gdb-target.dtd; Stop Reply Packets says the signal numbers are defined by include/gdb/signals.h; General Query Packets' qL and qP point to remote.c. All are gdb's source and none is read"
+  },
+  "runs": {
+   "linux": "the Linux host, 2026-11-23 07:46:35-07:47:17Z, every step exit 0; results' SHA256SUMS a5d4cb2ea4a885e77dbc648e143f81e67fe191dce42ae0120e011bb3e808cd00, log b363a27792b91b20113c08a250fbe2bdc94b95e0adaf3191c65b6fe0234bedfe. Sessions A (connect, the description, three breakpoint forms, bt, registers, x, step, finish, next, stepi, print, writes, a watchpoint, two interrupts, info threads, detach, reconnect and disconnect, reconnect and kill), B (a read and a software breakpoint at reset), C (the refusals, no QEMU) and T (the prompt timed), each under KVM and under TCG; every step ended at gdb's prompt. Session A's transcript, its target description and its last connection's wire bytes are byte-identical under KVM and TCG",
+   "mac": "the Mac, 2026-11-23 07:55:23-07:55:41Z, the Mac's pinned QEMU (541fbcb7...) through PAX's qemu-run at 5409025 on the same pax-s8.iso, TCG: the stub listening 0.19, 0.08 and 0.07 s after qemu-run's start; the console's `$ ` after 5.53, 5.53 and 5.46 s (the kernel's own count, entry to first program: 3205, 3212 and 3202 ms). Log 5130844c2a46de2f449cd6166edd30ca2899ce45609fe53a1a084915707a90e6, SHA256SUMS 7df98e6665e4e9d1ac51e36f69e6337a44460c90e9976808b288c99ec28f8541",
+   "linux_boot_indicative": "the Linux measurement's boot on a shared machine, not a timing: the prompt 1.20 s after qemu-run's start under KVM (the kernel's count 533 ms) and 3.71 s under TCG (2247 ms)",
+   "driver": "The measurement's driver sent gdb's standard error to the packet log, so gdb's error lines (a refused print, a failed read, the refusals of session C) are in each session's .debug file, in order, and not in its transcript. The rows' own harness keeps both on the terminal, as tools/session.py does"
+  }
+ },
+ "packet_layer": {
+  "unit": "U1, PR 1: framing, acknowledgment, escapes, run-length decoding, hex, the interrupt byte and the caps, in sniff's own code under src/remote/, with unit rows natively and on the checked machine, red first",
+  "framing": "`$` DATA `#` CC, CC the two hex digits of the sum of DATA's bytes modulo 256 (Overview). sniff sends lower-case digits and accepts either case. Numbers are hex with leading zeros suppressed (Overview); sniff sends them so and accepts leading zeros",
+  "acknowledgment": "each packet is answered `+` (received) or `-` (resend), both ways (Overview, Packet Acknowledgment). A packet sniff receives with a wrong checksum gets `-`; a `-` from the stub makes sniff send the same packet again",
+  "no_ack": "sniff sends QStartNoAckMode only when the qSupported reply holds `QStartNoAckMode+`; after the stub's `OK`, sniff acknowledges that reply with `+` and then neither sends nor expects acknowledgments for the rest of the connection; checksums are still sent and checked (Packet Acknowledgment; General Query Packets, QStartNoAckMode). MEASURED: QEMU 11.1.2 does not offer QStartNoAckMode (measured), so against QEMU sniff stays in acknowledgment mode; the no-ack rows run on the stand-in stub only",
+  "escape": "binary data escapes `#`, `$` and `}` (and `*` in a stub's replies) as `}` then the byte XOR 0x20 (Overview). sniff decodes it in binary replies (qXfer's `m` and `l` data); the packets sniff sends carry no binary data in PR 1, so it never needs to escape",
+  "run_length": "a reply may hold `C*N`: C repeated N-29 more times, N printable, never `#` or `$` (Overview). sniff decodes it in every reply and never sends it",
+  "interrupt": "the single byte 0x03, outside any packet, while the target runs (Interrupts); a 0x03 inside a packet is data. sniff sends it on the user's interrupt and then waits for the stop reply",
+  "notifications": "a `%` packet (a notification) is refused by name: notifications belong to non-stop mode, outside the closed list",
+  "standard_replies": "an empty reply (`$#00`) means the packet is not supported; `E` and two hex digits is an error whose number the protocol does not define; `E.` and text is an error in words (Standard Replies). The `m` reply carries `E.text` only after `error-message` in qSupported (Packets, General Query Packets); sniff does not send `error-message`",
+  "caps": {
+   "packet_size": "the stub's `PacketSize=` from qSupported is the most data sniff sends in one packet (General Query Packets, PacketSize); sniff caps it at 16384; without the feature, the size is taken from the length of the `g` reply's data, as the manual says gdb guesses it. A reply's data is refused by name past 65536 bytes after decoding. Rows: each cap at its value and one past. MEASURED: QEMU answers PacketSize=20020 (131104 bytes), so sniff's own cap of 16384 is the one that applies",
+   "retransmissions": "a packet answered `-`, or not acknowledged in the reply time, is sent again at most 3 times; the fourth failure ends the command by name and leaves the connection as gdb would (gdb's words when a stub stops answering are not in the closed list and were not measured in U0, so sniff's words are its own and the row says so). Rows: 3 resends, then the fourth",
+   "reply_time": "2 seconds for an acknowledgment and for a reply to a packet that does not resume the target, the default the manual gives for `set remotetimeout` (Remote Configuration); a resumption's stop reply has no time limit, and the interrupt is the way out (Interrupts). Rows: a reply at the limit and one past it, on a stand-in stub"
+  },
+  "stand_in_stub": "U1's unit rows drive the packet layer against byte strings and against a small stand-in stub inside the unit test (sniff's own code, scripted replies over a socket pair), never against another implementation"
+ },
+ "client": {
+  "unit": "U2, PR 1: `target remote HOST:PORT`, `disconnect`, `detach`, `kill`, and the session commands over a remote target, as a third source behind src/session/source.lu's src_* reads (beside the live process and the core)",
+  "connect": [
+   "`target remote HOST:PORT` and `target remote :PORT` (Connecting); TCP only in PR 1. sniff's refusals of the forms Connecting lists but sniff does not take (a serial device, `|` command, udp) are by name in sniff's words",
+   "after the TCP connect, in order: `qSupported` with sniff's features, QStartNoAckMode when offered, `?` for the stop that holds the target (Packets, `?`), the target description (Retrieving Descriptions), the thread list, and the registers of the stopped thread",
+   "sniff's qSupported features (General Query Packets): `swbreak+;hwbreak+;vContSupported+;xmlRegisters=i386`. Not `multiprocess`, so thread ids are plain (Packets, thread-id syntax) and `W`, `X` and `D` carry no pid; not `error-message`, not the event features",
+   "the description: `qXfer:features:read:target.xml:OFFSET,LENGTH`, then each `xi:include` annex the same way, reading `m` chunks until `l` (General Query Packets, qXfer read; Target Description Format, Inclusion)",
+   "MEASURED, what the pinned gdb sent to QEMU at connect, in order (measured): qSupported, vCont?, vMustReplyEmpty, Hgp0.0, qXfer:features:read of target.xml and of i386-64bit.xml in three 0x1000-byte chunks, qTStatus, ?, qfThreadInfo/qsThreadInfo, qAttached:1, Hc-1, qC, qOffsets, g, the thread list again, m of one byte at the pc, qSymbol::. sniff's own order is the one above it; qTStatus, qAttached, qOffsets, qSymbol and vMustReplyEmpty belong to features sniff does not have and are not sent"
+  ],
+  "description": "parsed as the Target Description Format's subset sniff needs: `<architecture>`, `<feature name=...>`, `<reg name= bitsize= regnum= type= group=>` with regnum's default one more than the previous register's and 0 first, and `<xi:include href=...>`. Types: the predefined ones by name (Predefined Target Types) and `<vector>`, `<union>`, `<flags>` and `<struct>` read for their sizes and names. sniff requires `org.gnu.gdb.i386.core` with rax-r15, rip, eflags, cs, ss, ds, es, fs, gs, st0-st7 and fctrl-fop, takes `org.gnu.gdb.i386.sse` when present (i386 Features), and shows other features' registers as the description names them (Standard Target Features). A description that lacks a required register is refused by name. MEASURED (measured): QEMU's target.xml is `<architecture>i386:x86-64</architecture>` and one `xi:include` of i386-64bit.xml, which holds one feature, org.gnu.gdb.i386.core, with all 66 registers: rax-r15 and rip (64), eflags and cs-gs (32), fs_base, gs_base, k_gs_base, cr0, cr2, cr3, cr4, cr8 and efer (64), st0-st7 (80), fctrl-fop (32), xmm0-xmm15 (128) and mxcsr (32), numbered 0 to 65 in that order. There is no org.gnu.gdb.i386.sse feature, so the SSE registers are taken from the core feature by name, and the prediction that QEMU sends a separate sse feature was wrong. The g reply is 608 bytes. The annex carries a Free Software Foundation copyright comment: it is QEMU's copy of a file from gdb's features directory, read here only as QEMU's reply on the wire (as the clean room allows for QEMU's behaviour); sniff-server's own description (PR 2) is written from the i386 Features node's words and is never copied from it",
+  "registers": "`g` gives every register in regnum order, two hex digits a byte in target order (little-endian), `x`s for a register the stub cannot read (Packets, g); `p N` reads one register (regnum in hex). `P N=R` writes one (Packets). sniff reads with `g` and falls back to `p` when `g`'s reply is short of a register",
+  "memory": "`m ADDR,LEN` reads LEN bytes as hex pairs, possibly fewer (Packets, m); `M ADDR,LEN:XX` writes, `OK` or an error (Packets, M). A read past the packet size is split. A short or error reply is gdb's `Cannot access memory at address 0x...`",
+  "breakpoints": "`Z0,ADDR,KIND` and `z0,...` for a software breakpoint, `Z1` for a hardware one, `Z2`, `Z3` and `Z4` for write, read and access watchpoints (Packets, z and Z). KIND for x86: the manual leaves it to the architecture (Packets, Z0) and its x86 node is not in the list (Architecture-Specific Protocol Details names only ARM and MIPS); MEASURED: the pinned gdb sends KIND 1 for Z0 and Z1 on x86-64 (measured), the length of int3, and sniff sends 1; Z2 carries the watched length (8 for an 8-byte word). An empty reply means the type is not supported; an error means the stub could not insert it. MEASURED (measured): under KVM QEMU puts a software breakpoint into guest memory, so an m of its address reads 0xcc; under TCG the same read gives the original byte. gdb's transcripts were equal because gdb shows its own breakpoints' original bytes; sniff does the same, from the byte it read before the Z0, so x, the disassembly and the CFI reads never depend on the accelerator",
+  "resume": "`vCont?` once; then `vCont;c` and `vCont;s:TID` when listed, else `c` and `s` (Packets, vCont and vCont?). The stop reply is waited for with no time limit",
+  "stop_replies": "`T AA n:r;...` with register values, `thread:TID`, `core:N`, and one stop reason of `watch:ADDR`, `rwatch:ADDR`, `awatch:ADDR`, `swbreak:` or `hwbreak:`; unknown n:r pairs ignored; `S AA`; `W AA` exit; `X AA` killed by a signal; `O XX` console output printed as it comes (Stop Reply Packets). Register values in a T reply are taken in place of the `g` read for those registers",
+  "signals": "the manual defines only `05`, the trap signal (Stop Reply Packets); it gives every other number's meaning to gdb's source, which stays closed, include/gdb/signals.h included. So every number sniff names is a binary observation paired with the name printed in the same run: for the client, QEMU's stop reply in the pinned gdb's packet log beside the signal name gdb printed (observed in the Linux measurement's session A, under KVM and TCG: `T02thread:p01.01;` after the 0x03, printed `Program received signal SIGINT, Interrupt.`; `T05core:01;` at a reconnect, printed `Program received signal SIGTRAP, Trace/breakpoint trap.`; 05 at every breakpoint and step. So PR 1's table holds 02 SIGINT and 05 SIGTRAP, each with that measurement as its source). sniff's table of protocol numbers holds only observed numbers and records the measurement that observed each; a number never observed prints as an unknown signal, by name. The stub's numbers (PR 2) come from gdbserver's T reply for a fixture raising each of signals 1 to 31",
+  "threads": "`qfThreadInfo` then `qsThreadInfo` until `l` (General Query Packets); `qC` for the current thread; `Hg TID` before `g`, `p`, `m` of another thread (Packets, H). At one processor QEMU names one thread; the mechanism is built here for U4",
+  "end": "`detach` sends `D` and closes after `OK` (Packets, D; Connecting, detach); `disconnect` closes the socket and sends nothing, leaving the target stopped (Connecting, disconnect); `kill` sends `k` and expects no reply, a closed connection counting as success (Packets, k). MEASURED (measured): gdb, having offered multiprocess, sent `D;1` and `vKill;1`, each answered OK, and QEMU ended after vKill (`QEMU: Terminated via GDBstub`); `disconnect` sent nothing. sniff offers no multiprocess and sends `D` and `k`; whether QEMU ends on `k` as on vKill is the first thing sniff's own development runs read",
+  "session": "`break` by function, `file:line` and `*ADDR`, from the kernel ELF's DWARF; `hbreak`; `watch`; `continue`; `stepi`, `step`, `next` and `finish` built on `s` and breakpoints as for a live process; `bt` by the CFI in .debug_frame with the stack read by `m`; `info registers` and `info all-registers` from the description; `x`; `print`; `info locals`; `info threads`; the interrupt"
+ },
+ "qemu": {
+  "predicted": [
+   "QEMU's qSupported reply names PacketSize and qXfer:features:read+; whether it offers QStartNoAckMode+, vContSupported+ or the stop reasons was left to the measurement (see predicted_outcome)",
+   "its target description has architecture i386:x86-64 and the features org.gnu.gdb.i386.core and org.gnu.gdb.i386.sse; any further features (segment bases, control registers) are QEMU's own (measured; see predicted_outcome)",
+   "frozen at reset, `?` answers a T or S reply with signal 05 for thread 1, and rip reads 0xfff0 (the reset vector's offset in real mode); the description is the 64-bit one even in real mode",
+   "one thread at one processor; `qfThreadInfo` lists it and `qThreadExtraInfo` (not sent by sniff) names the processor",
+   "under TCG a software breakpoint can be inserted at the kernel's virtual address before paging exists; under KVM the insertion needs the address mapped, so a `break kmain` at reset is refused where an `hbreak kmain` is not (session B decides)",
+   "an `m` of the kernel's address at reset is an error reply (session B decides)",
+   "after `detach` the machine runs on; a reconnect stops it again (session A decides)",
+   "`k` ends QEMU, closing the connection (session A decides)"
+  ],
+  "measured": {
+   "qSupported": "PacketSize=20020;qXfer:features:read+;vContSupported+;multiprocess+ (to the pinned gdb's offer of multiprocess+, swbreak+, hwbreak+, qRelocInsn+, fork-events+, vfork-events+, exec-events+, vContSupported+, QThreadEvents+, QThreadOptions+, no-resumed+, memory-tagging+ and xmlRegisters=i386)",
+   "vCont?": "vCont;c;C;s;S",
+   "empty_replies": "vMustReplyEmpty, qTStatus, qOffsets, qSymbol::, and X (gdb's binary-write probe before an M)",
+   "stop_at_connect": "`?` answers `T05core:01;`: signal 05, a core field, and no thread field; rip reads 0xfff0 and gdb prints `0x000000000000fff0 in ?? ()`",
+   "threads": "qfThreadInfo `mp01.01` then `l` (multiprocess form, as gdb offered it), qC `QCp01.01`, qThreadExtraInfo `CPU#0 [running]` while stopped at a breakpoint and `CPU#0 [halted ]` after an interrupt in the idle loop",
+   "stops": "`T05thread:p01.01;` at a breakpoint, a step and a finish; `T02thread:p01.01;` after the interrupt byte; no swbreak or hwbreak reason (not offered); the 10-second watchpoint run never stopped for the watchpoint (the watched word did not change), so a watch stop reply is not measured",
+   "errors": "E14 for an m of an address the processor cannot translate (the kernel's text at reset; the idle loop's frame pointer); E22 for a Z0 at an unmapped address under KVM, where TCG answers OK and stops there",
+   "writes": "M of one byte answered OK. The register write wrote back the value it read and gdb sent no P or G for it, so P is not measured; its row writes a different value and restores it, and gdb's side of the rows measures it",
+   "accelerators": "the description, the qSupported reply and every reply in session A are equal under KVM and TCG apart from register values that hold the CPU's identity or the time stamp counter (rdx at reset, rax at identity.mark_entry) and the 0xcc of a KVM breakpoint. The transcripts are byte-identical",
+   "sha256": "the target description as gdb printed it (maint print xml-tdesc): A.tdesc.xml, equal under KVM and TCG, in the evidence's SHA256SUMS"
+  },
+  "predicted_outcome": [
+   "qSupported names PacketSize and qXfer:features:read+: right; QStartNoAckMode+ not offered; vContSupported+ and multiprocess+ offered",
+   "core and sse features: wrong, one core feature holds everything (see client.description)",
+   "05 for thread 1 at reset, rip 0xfff0: right about 05 and rip; the reply names a core, not a thread",
+   "one thread named by its processor: right",
+   "a software breakpoint at reset refused under KVM and accepted under TCG: right (E22 against OK); hbreak works under both",
+   "an m of the kernel's address at reset is an error: right (E14)",
+   "a reconnect after detach stops the machine: right",
+   "kill ends QEMU: right, by vKill (gdb's multiprocess form)"
+  ]
+ },
+ "transcripts": {
+  "held_to": "gdb's transcripts of session A over the same QEMU and kernel ELF, normalised by name. The packets sniff sends are its own and are held to the manual, not to gdb's packet sequence",
+  "predicted_forms": [
+   "connect: `Remote debugging using 127.0.0.1:PORT`, then the reset location `0x000000000000fff0 in ?? ()`",
+   "`hbreak kmain`: `Hardware assisted breakpoint 1 at 0x...: file kmain_console.lu, line 553.`; the stop: a blank line, `Breakpoint 1, kmain () at kmain_console.lu:553` and the source line read from /pax/kernel/kmain_console.lu",
+   "`break *ADDR` at identity.mark_entry's entry: `Breakpoint 2 at 0xffffffff800bc623: file .../identity.lu, line 322.` (the file as DWARF names it); `bt` from the entry, before its prologue, by the CFI: `#0  identity.mark_entry () at ...`, `#1  0x... in kmain () at kmain_console.lu:553`, then the boot code's frame or the end of the stack (see measured_forms)",
+   "`finish`: `Run till exit from #0 ...` then the caller's location; no `Value returned` for a function without a result",
+   "`step` into bootlog.start from line 560, `info locals` in it (hhdm, a, j0, j1, p, st and the rest, in DWARF's order), `finish` with `Value returned is $N = ...`",
+   "`info threads`: one row, `* 1    Thread 1.1 (...)` with QEMU's extra info (see measured_forms)",
+   "the interrupt: `Program received signal SIGINT, Interrupt.` and the location where the processor was (the form only; the location is normalised)",
+   "`detach`: `Detaching from program: ..., Remote target` and `[Inferior 1 (process 1) detached]`; `disconnect`: `Ending remote debugging.`; `kill`: `[Inferior 1 (process 1) killed]` (measured all three; see measured_forms)"
+  ],
+  "normalisations": "the port; the kernel's path in detach's line; nothing else at the fixed breakpoints: the measurement's transcripts are byte-identical under KVM and TCG. The rows avoid printing registers that hold the CPU's identity or the time stamp counter (rdx at reset, rax at identity.mark_entry's entry), and the interrupt row checks the form of the stop only",
+  "measured_forms": [
+   "connect: `Remote debugging using 127.0.0.1:PORT` then `0x000000000000fff0 in ?? ()`",
+   "`hbreak kmain`: `Hardware assisted breakpoint 1 at 0xffffffff80117633: file ./kmain_console.lu, line 553.` (the file as DWARF names it, with `./`); the stop: a blank line, `Breakpoint 1, kmain () at ./kmain_console.lu:553` and `553\\t    identity.mark_entry() // ...`",
+   "`bt` in kmain: `#0  kmain () at ./kmain_console.lu:553` and `#1  0xffffffff80000014 in _start ()`, and nothing after: the boot code ends the stack",
+   "`break *0xffffffff800bc623`: `Breakpoint 2 at 0xffffffff800bc623: file ./identity/identity.lu, line 322.`; the stop `Breakpoint 2, 0xffffffff800bc623 in identity.mark_entry ()` with `    at ./identity/identity.lu:322` on its own line; `bt` three frames, the entry's caller found by the CFI before the prologue",
+   "`finish` from identity.mark_entry: `Run till exit from #0  ...` and `kmain () at ./kmain_console.lu:556`, no value; from bootlog.start: `0xffffffff80117658 in kmain () at ./kmain_console.lu:560`, and no `Value returned` line either (bootlog.start's DWARF gives no result type)",
+   "`step` at line 560 enters `bootlog.start () at ./bootlog/bootlog.lu:139`; `info locals` there: hhdm, a, j0, j1, p, st, m (the same values under KVM and TCG)",
+   "`next` then `stepi`: `563\\t    let handed = fb.judge()` and `0xffffffff8011766b\\t563\\t...`; `x/2i $pc` disassembles (`call   *%rax`): disassembly is outside PR 1, so that row is gdb's only",
+   "`print LIVE_REGION_BYTES`: `No symbol \"LIVE_REGION_BYTES\" in current context.` (the Rust unit's variable is not visible from a wolf frame); `print '_Wbootmark.blind...'`: `... has unknown type; cast it to its declared type`; with the cast: `$1 = 0 '\\000'`",
+   "`watch *(unsigned long *) ADDR`: `Hardware watchpoint 4: *(unsigned long *) 0xffffffff806524c0`",
+   "the interrupt: a blank line, `Program received signal SIGINT, Interrupt.`, `0xffffffff80000786 in pax_idle ()`; `bt 1` there: `Backtrace stopped: Cannot access memory at address 0xffffd00000020000`",
+   "`info threads`: `* 1    Thread 1.1 (CPU#0 [running]) kmain () at ./kmain_console.lu:553`, and `(CPU#0 [halted ])` in the idle loop",
+   "`detach`: `Detaching from program: KERNEL, process 1`, `Ending remote debugging.`, `[Inferior 1 (process 1) detached]`; a reconnect prints `Program received signal SIGTRAP, Trace/breakpoint trap.` and the location; `disconnect`: `Ending remote debugging.`; `kill`: `[Inferior 1 (process 1) killed]`",
+   "session B under KVM: `x/2xg` of the kernel at reset prints the address line and `Cannot access memory at address 0xffffffff80000000`; `continue` with `break kmain` prints `Warning:`, `Cannot insert breakpoint 1.`, `Cannot access memory at address 0xffffffff80117633`, a blank line and `Command aborted.`; under TCG the same `continue` stops at kmain",
+   "session C: `detach` and `kill` with no target: `The program is not being run.`; `disconnect`: ``You can't do that when your target is `exec'``; `target remote 127.0.0.1:1` and `:70000`: `could not connect: Connection refused.`; an unresolvable name: `NAME:PORT: cannot resolve name: Temporary failure in name resolution`; `127.0.0.1:`: `Missing port on hostname '127.0.0.1:'`; no address: the three-line `To open a remote debug connection, you need to specify what` paragraph; `info threads`: `No threads.`"
+  ]
+ },
+ "kernel_symbols": {
+  "breakpoints": "kmain (0xffffffff80117600, kmain_console.lu:553), reached on every boot; its first callee identity.mark_entry (0xffffffff800bc623); kmain_console.lu:560, `bootmark.start(bootlog.start())`",
+  "globals": "the kernel's DWARF names only two addressed variables, both in the Rust runtime's compile unit: LIVE_REGION_BYTES (0xffffffff806524c0, core::sync::atomic::Atomic<usize>) and AMBIENT_REGION (0xffffffff806524b8). wolf's own globals are in the symbol table only (for example `_Wbootmark.blind.sbef3515187e1839`, a bss byte). So `print` of a kernel global is measured three ways (the Rust value, the symbol with no type, and the symbol cast to a type) and the rows take what sniff's printer already handles; a Rust-language value is out of PR 1's scope if gdb prints it in Rust's syntax. MEASURED: from a wolf frame gdb does not see LIVE_REGION_BYTES at all, and the symbol-only global needs a cast; so remote-kernel-print is the cast form, `print (unsigned char) '_Wbootmark.blind.sbef3515187e1839'`, which sniff's printer must take (a C cast of a symbol without debug information)"
+ },
+ "rows": {
+  "unit": "remote-packet-{frame,checksum-bad,ack,nack-resend,noack,escape,rle,rle-forbidden,hex,interrupt-byte,notification-refused,empty,error,error-text,size-cap,size-cap-past,reply-cap,reply-cap-past,resend-cap,resend-cap-past,reply-time,reply-time-past} and remote-tdesc-{parse,include,regnum-default,missing-core,types}: natively and on the checked machine, red first",
+  "kernel": "remote-kernel-{connect,tdesc,regs-reset,hbreak,break-addr,bt-entry,finish,break-line,step,locals,finish-value,next,stepi,x,print,write-mem,write-reg,watch,threads,interrupt,detach,disconnect,kill,reset-read,reset-break} and remote-refuse-{no-listener,bad-port,no-host,no-port,no-address,detach,disconnect,kill}. The kernel rows run as one session a boot in session A's order (measured: 16 s for the whole of A under either accelerator, so one boot per row is not needed), split where a row's own state needs a fresh boot (reset-read and reset-break boot their own). remote-kernel-watch watches a word the timer writes rather than LIVE_REGION_BYTES, which never changed; remote-kernel-write-reg writes a changed value and restores it",
+  "where": {
+   "hosted_linux": "the image, under TCG",
+   "mac": "sniff on the Mac against the Mac's pinned QEMU under TCG, held to the same goldens; the Mac's local run is these rows' only macOS evidence. The Mac boots the image to the console in about 5.5 s under TCG and its stub listens within 0.2 s (mac-boot)",
+   "hosted_macos": "skipped by name: it has no pinned QEMU",
+   "linux_kvm": "the image, under KVM (with the PAX legs)"
+  },
+  "goldens": "tests/evidence/remote/ from gdb's side of the rows under KVM, with a unit row holding the qSupported reply and the description equal across KVM, TCG and the Mac (the measurement found them equal under KVM and TCG). QEMU's description reaches the repository by its sha256 only, never as text: the annex QEMU sends is its copy of a file from gdb's features directory, and the clean room keeps that file out of sniff"
+ },
+ "plants": {
+  "P1": {
+   "what": "in the `m` reply's decoder, each 8-byte word's bytes reversed",
+   "red_at": "remote-kernel-x by name (x/4xg $sp prints each word byte-reversed); the unit row remote-packet-hex is a regression guard and is said to be one",
+   "branch": "a plant branch beside the PR's, pushed before the verify"
+  }
+ },
+ "honesty": {
+  "not_known_before_code": [
+   "whether QEMU ends on `k` (gdb used vKill) and what it answers when the client offers no multiprocess (thread ids then plain)",
+   "a watchpoint's stop reply (the measurement's watched word never changed)",
+   "the P packet's reply (the measurement wrote back an unchanged value and gdb sent nothing)",
+   "how gdb words a stub that stops answering (outside the closed list and not measured)"
+  ],
+  "clean_room": "the nineteen nodes above are the only protocol source. QEMU's and gdb's behaviour is read off gdb's logs and transcripts as binary observations. No source of gdb, gdbserver, QEMU, lldb or any other implementation of the protocol was read, and no secondary text about it. QEMU's command line comes from PAX's tools/qemu-run (org code) and `qemu-system-x86_64 -help`",
+  "known_after_measurement": [
+   "QEMU's description and qSupported reply are equal under KVM and TCG (measured)",
+   "`info locals` at the fixed breakpoint reads the same values under KVM and TCG (measured)",
+   "the boot code that calls kmain ends the stack at _start (measured)",
+   "QEMU stops the machine when a debugger reconnects after detach (measured)"
+  ]
+ },
+ "decided_before_code": {
+  "signal_numbers": {
+   "question": "the protocol's signal numbers, which the closed list defines only for 05 (Stop Reply Packets points to gdb's include/gdb/signals.h for the rest)",
+   "decision": "every number sniff names is a binary observation paired with the name printed in the same run: for the client, QEMU's stop reply beside gdb's printed name; for the stub (PR 2), gdbserver's T reply for a fixture raising each of signals 1 to 31. The table records which measurement observed each number, and an unobserved number prints as unknown by name. gdb's source stays closed, signals.h included. The stub's plant then goes red at a row whose host and protocol numbers differ, named from that measurement, because Linux's SIGTRAP is 5 and the protocol's trap is 05"
+  }
+ }
+}
