@@ -1247,6 +1247,17 @@ def cmd_selftest(_a):
                           'warning: File transfers from remote targets can be slow. Use "set sysroot" to access files locally instead.\n')
     assert n == '[Inferior 1 (INFERIOR) killed]\nRemote debugging using 127.0.0.1:PORT\n* 1    Thread TID "prog" main ()\n', repr(n)
     assert session_normalise('[Inferior 1 (Remote target) killed]\n') == '[Inferior 1 (INFERIOR) killed]\n'
+    # the packet driver opens as the pinned gdb does (its remote log: `?`, then Hg for the thread the stop names)
+    assert hg_for('T05thread:4d2;') == 'Hg4d2' and hg_for('T0506:00;07:90;thread:p13.13;core:5;') == 'Hgp13.13'
+    assert hg_for('W00') is None and hg_for(None) is None
+    # an oracle that gave no reply is no comparison
+    assert oracle_silent({'Z1': None, 'stop': 'T05'}) and not oracle_silent({'Z1': '', 'stop': 'T05'})
+    # gdbserver's per-run ids, named in its own stability check as in the session rows
+    assert stable_normalise('[New Thread 595.608]\n[Inferior 1 (process 595) exited normally]\n') == \
+        stable_normalise('[New Thread 612.625]\n[Inferior 1 (process 612) exited normally]\n')
+    # on PAX the initial stack is the kernel's, not Linux's: the PAX set's own stack rule, by name
+    assert pax_normalise('0x7fffffffeb50:\t0x00000001\t0x00000002\n') == pax_normalise('0x7fffffffece0:\t0x00000001\t0x00000002\n')
+    assert pax_normalise('0x404028 <cell>:\t0x01\n') == '0x404028 <cell>:\t0x01\n'
     for r in [r for r in rows if r.get('kind') == 'server-pax']:
         assert r['name'].startswith('server-pax-') and r.get('check') in PAX_CHECKS and r.get('why'), r['name']
         if r['check'] == 'pax-session':
