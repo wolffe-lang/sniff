@@ -136,14 +136,34 @@ fn reg_offset(n: int) -> int {
     off
 }
 
-// Write general register n (0-23 and fs_base, gs_base) from its bytes; false for any other register, which the stub
-// does not write (an FP register: PAX answers PTRACE_SETFPREGS with EIO).
+// Where an x87 or SSE register sits in the FXSAVE area, and how many of its bytes are there: (-1, 0) for any other.
+fn fp_place(n: int) -> (int, int) {
+    if n >= 24 && n < 32 { return (32 + 16 * (n - 24), 10) }
+    if n >= 40 && n < 56 { return (160 + 16 * (n - 40), 16) }
+    let offs = [0, 2, 4, 12, 8, 20, 16, 6]
+    let lens = [2, 2, 1, 4, 4, 4, 4, 2]
+    if n >= 32 && n < 40 { return (offs[n - 32], lens[n - 32]) }
+    if n == 56 { return (24, 4) }
+    (-1, 0)
+}
+
+// Write register n from its bytes: a general one through the user registers, an x87 or SSE one through the FXSAVE area
+// (PTRACE_SETFPREGS); false when the kernel refuses (PAX answers PTRACE_SETFPREGS with EIO).
 fn write_register(st: Stub, n: int, b: List[byte]) -> bool {
     let sizes = reg_sizes()
     if n < 0 || n >= sizes.len || b.len != sizes[n] { return false }
     var slot: int = -1
     if n < 17 { slot = g_slots8()[n] } else if n < 24 { slot = g_slots4()[n - 17] } else if n == 57 { slot = 21 } else if n == 58 { slot = 22 }
-    if slot < 0 { return false }
+    if slot < 0 {
+        let (off, count) = fp_place(n)
+        if off < 0 { return false }
+        let tt = thread_of(st)
+        var fp = platform.target_fpregs(tt)
+        if fp.len != 512 { return false }
+        var i: int = 0
+        while i < count { fp[off + i] = b[i]; i += 1 }
+        return platform.target_set_fpregs(tt, fp)
+    }
     let tt = thread_of(st)
     var r = platform.target_regs(tt)
     if r.len < 27 { return false }
