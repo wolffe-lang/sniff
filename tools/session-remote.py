@@ -149,12 +149,57 @@ def run_tty(argv, lines, prompt, env, timeout):
     return bytes(buf).decode(errors='replace'), os.waitstatus_to_exitcode(status), ends
 
 
+FRAME_AT_ADDRESS = re.compile(r'0x[0-9a-f]+ in [^\s(]+ \(.*\)(?: at \S+:(?P<line>\d+))?')
+FRAME_AT_LINE = re.compile(r'[^\s(]+ \(.*\) at \S+:(?P<line>\d+)')
+LET_GO = '[Inferior 1 (process 1) detached]'
+
+
+def frame_size(lines, j):
+    """How many lines from lines[j] are one frame in either of gdb's two forms: `0x... in NAME (ARGS)`, with ` at
+    FILE:LINE` or without, and `NAME (ARGS) at FILE:LINE` (a stop at a line's first instruction). A frame that names a
+    line is followed by that line's source, `LINE<tab>...`, which is part of it; without that line it is no frame.
+    0 when lines[j] is in neither form."""
+    if j >= len(lines):
+        return 0
+    m = FRAME_AT_ADDRESS.fullmatch(lines[j]) or FRAME_AT_LINE.fullmatch(lines[j])
+    if not m:
+        return 0
+    line = m.group('line')
+    if line is None:
+        return 1
+    return 2 if j + 1 < len(lines) and lines[j + 1].startswith(line + '\t') else 0
+
+
+def stop_location(t):
+    """The frame a connect prints right after a detach let the machine run: `[Inferior 1 (process 1) detached]`, the
+    connect's `Remote debugging using ...` line, the blank line and `Program received signal ...` when gdb prints them,
+    then the frame, which becomes <LOCATION>. Every line around it stays as it came."""
+    lines = t.split('\n')
+    out = []
+    i = 0
+    while i < len(lines):
+        out.append(lines[i])
+        if lines[i] != LET_GO or i + 1 >= len(lines) or not lines[i + 1].startswith('Remote debugging using '):
+            i += 1
+            continue
+        out.append(lines[i + 1])
+        j = i + 2
+        if j + 1 < len(lines) and lines[j] == '' and lines[j + 1].startswith('Program received signal '):
+            out += lines[j:j + 2]
+            j += 2
+        n = frame_size(lines, j)
+        if n:
+            out.append('<LOCATION>')
+        i = j + n
+    return '\n'.join(out)
+
+
 def normalise(text, port, kernel, sess, names=()):
     """The port, the kernel's path and the terminal, always; a row's own normalisations by name: `watch-values` (a
-    watchpoint's old and new values, which the time decides) and `stop-location` (where a machine left running was when
-    a connect stopped it: a frame line `0x... in ...` right after `Program received signal`). Each replaces a value in a
-    line that must be there and leaves the line: the hit's own line, the signal's line and the frame line stay asserted,
-    so a transcript that lacks one still differs from its golden."""
+    watchpoint's old and new values, which the time decides) and `stop-location` (where a machine a detach let run was
+    when the next connect stopped it: stop_location). Each replaces a value in a line that must be there: the hit's own
+    line, the connect's line, the signal's line and a frame in one of gdb's two forms stay asserted, so a transcript
+    that lacks one, or prints a line in neither form, still differs from its golden."""
     fired = set()
     t = sess.normalize_tty(text, fired)
     if port:
@@ -163,7 +208,7 @@ def normalise(text, port, kernel, sess, names=()):
     if 'watch-values' in names:
         t = re.sub(r'^(Old|New) value = .*$', r'\1 value = <VALUE>', t, flags=re.M)
     if 'stop-location' in names:
-        t = re.sub(r'^(Program received signal [^\n]*\n)0x[0-9a-f]+ in [^\n]+$', r'\1<LOCATION>', t, flags=re.M)
+        t = stop_location(t)
     return t
 
 
