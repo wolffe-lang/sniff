@@ -121,6 +121,44 @@ class BaseCensus(unittest.TestCase):
         self.assertEqual(found, [], 'a load base subtracted outside file_address')
 
 
+class GateRemoteQemuLine(unittest.TestCase):
+    """The record carries each kernel step's QEMU line (its version, its binary's sha256, the accelerator): gate-remote
+    passes the line on, and a kernel step that passed on none for its accelerator fails by name, so no filter can drop
+    the line from the record unseen."""
+
+    LINE = "QEMU version='QEMU emulator version 11.1.2' sha256=%s accel=%s binary=/opt/qemu/bin/qemu-system-x86_64"
+
+    def gate(self, script):
+        # gate-remote sourced: its step functions over a scratch $out, then one stand-in step, then the gate's rc
+        with tempfile.TemporaryDirectory() as out:
+            p = subprocess.run(['bash', '-c', 'out=$1; rc=0; source "$2"; ' + script + '; echo "rc=$rc"', 'gate',
+                                out, str(ROOT / 'tools/gate-remote')],
+                               capture_output=True, text=True, cwd=ROOT, env={'PATH': os.environ['PATH'], 'LC_ALL': 'C'})
+        return p.stdout + p.stderr
+
+    def stand_in(self, accel):
+        return "printf '%%s\\nPASS remote r\\n' \"%s\"" % (self.LINE % ('0' * 64, accel))
+
+    def test_a_step_passes_its_qemu_line_on(self):
+        said = self.gate('step remote-kernel-kvm ' + self.stand_in('kvm'))
+        self.assertIn('  ' + self.LINE % ('0' * 64, 'kvm'), said.splitlines())
+
+    def test_a_kernel_step_with_its_qemu_line_passes(self):
+        said = self.gate('kernel_step kvm remote-kernel-kvm ' + self.stand_in('kvm'))
+        self.assertNotIn('FAIL remote-qemu-line', said)
+        self.assertIn('rc=0', said.splitlines())
+
+    def test_a_kernel_step_without_a_qemu_line_fails_by_name(self):
+        said = self.gate("kernel_step tcg remote-kernel-tcg printf 'PASS remote r\\n'")
+        self.assertIn('FAIL remote-qemu-line accel=tcg', said)
+        self.assertIn('rc=1', said.splitlines())
+
+    def test_another_accelerators_qemu_line_does_not_count(self):
+        said = self.gate('kernel_step tcg remote-kernel-tcg ' + self.stand_in('kvm'))
+        self.assertIn('FAIL remote-qemu-line accel=tcg', said)
+        self.assertIn('rc=1', said.splitlines())
+
+
 class XstateSize(unittest.TestCase):
     """gdb's warnings that a core's XSAVE section is not the size its layouts give for the host's processor: larger
     (`Unexpected size of section`, a runner whose XSAVE area carries AMX tile state) or smaller (`... too small`, an
