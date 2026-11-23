@@ -132,5 +132,5 @@ else
   mac_live_step session-perf python3 -I tools/session-perf.py --sniff "$root/target/sniff" --lldb "$debugger" --fixtures "$root/target/session-fixtures" --work "$root/target/s3p" --cwd "$root"
   # S8: sniff-server is a Linux and PAX program, and sniff built for macOS cannot debug an x86-64 remote process
   # (a later change): its rows are skipped by name here, and the count is held
-  step remote-server-skip python3 -I tools/session-remote.py skip --kind server --reason "sniff-server is a Linux and PAX program; sniff built for macOS cannot debug an x86-64 remote process (a later change)" --expect 31
+  step remote-server-skip python3 -I tools/session-remote.py skip --kind server --reason "sniff-server is a Linux and PAX program; sniff built for macOS cannot debug an x86-64 remote process (a later change)" --expect 32
 fi

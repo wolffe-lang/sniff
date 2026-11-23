@@ -471,7 +471,17 @@
    "args": [
     "25"
    ],
-   "why": "D with a breakpoint and a watchpoint set: both are taken out and every thread let go, and the program runs to its end on its own, held to gdbserver"
+   "why": "D as gdb sends it (each breakpoint and watchpoint removed first): every thread let go, and the program runs to its end on its own, held to gdbserver"
+  },
+  {
+   "name": "server-detach-leftover",
+   "kind": "server",
+   "check": "detach-own",
+   "prog": "c/sleeper/gcc-O0/prog",
+   "args": [
+    "25"
+   ],
+   "why": "the stub's own row, with no oracle: D with a breakpoint and a watchpoint still set, which the stub takes out itself, so the program runs to its end; the pinned gdbserver leaves them, and its program never ends on its own (measured), so it is no oracle here"
   },
   {
    "name": "server-gdb-inferior-c-gcc-exit3",

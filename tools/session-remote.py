@@ -1408,6 +1408,22 @@ def cmd_selftest(_a):
     assert s == 'Breakpoint 1 at 0x4018d9: file m.c, line 20.\n0x0000000000401e58 in __libc_start_call_main ()\n', repr(s)
     assert native_normalise('x\n0x0000000000401740 in _start ()\n') == 'x\n0x0000000000401740 in _start ()\n'
     assert len([r for r in rows if r.get('check') == 'native-golden']) == 1, 'one fixture is held to its native golden'
+    # replies decoded as the manual's Overview says: run-length encoding ('0* ' is 0000, '0*"00' is 00000000) and the
+    # '}' escape (the next byte XOR 0x20)
+    assert decode_reply('0* ') == '0000' and decode_reply('0*"00') == '00000000' and decode_reply('a}]b') == 'a}b'
+    left, right = socket.socketpair()
+    try:
+        enc = b'1*!ff* '
+        left.sendall(b'+$' + enc + b'#' + ('%02x' % (sum(enc) % 256)).encode())
+        assert read_packet(right, 2.0) == '1111ffff', 'read_packet decodes the reply'
+    finally:
+        left.close()
+        right.close()
+    # a refusal's command that never exits is a comparison (still running, not refused), never an exception
+    rc, err, running = refusal_run([sys.executable, '-c', 'import time; time.sleep(30)'], 1.0)
+    assert running and rc is None, (rc, running)
+    rc, err, running = refusal_run([sys.executable, '-c', 'import sys; sys.stderr.write("no"); sys.exit(2)'], 5.0)
+    assert not running and rc == 2 and err == 'no', (rc, err, running)
     # a red is the row's own comparison: a driver exception, a stub that never listened, and either side's silence
     # are faults by name, never a comparison's FAIL
     def broken(_a, _row, _out):
