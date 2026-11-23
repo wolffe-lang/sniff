@@ -209,6 +209,9 @@
     "!interrupt 10 continue",
     "delete",
     "kill"
+   ],
+   "normalise": [
+    "watch-values"
    ]
   },
   {
@@ -249,8 +252,10 @@
     "delete",
     "detach",
     "target remote 127.0.0.1:@PORT@",
-    "info threads",
     "kill"
+   ],
+   "normalise": [
+    "stop-location"
    ]
   },
   {

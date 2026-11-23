@@ -144,12 +144,19 @@ def run_tty(argv, lines, prompt, env, timeout):
     return bytes(buf).decode(errors='replace'), os.waitstatus_to_exitcode(status), ends
 
 
-def normalise(text, port, kernel, sess):
+def normalise(text, port, kernel, sess, names=()):
+    """The port, the kernel's path and the terminal, always; a row's own normalisations by name: `watch-values` (a
+    watchpoint's old and new values, which the time decides) and `stop-location` (where a machine left running was when
+    a connect stopped it: the line after `Program received signal`)."""
     fired = set()
     t = sess.normalize_tty(text, fired)
     if port:
         t = t.replace('127.0.0.1:%d' % port, '127.0.0.1:PORT')
     t = t.replace(str(kernel), 'KERNEL')
+    if 'watch-values' in names:
+        t = re.sub(r'^(Old|New) value = .*$', r'\1 value = <VALUE>', t, flags=re.M)
+    if 'stop-location' in names:
+        t = re.sub(r'^(Program received signal [^\n]*\n)[^\n]*$', r'\1<LOCATION>', t, flags=re.M)
     return t
 
 
@@ -192,7 +199,7 @@ def run_row(a, row, sess, out):
             qr.terminate()
             qr.wait()
     bad = [line for line, how in ends if not how.endswith('prompt')]
-    return normalise(text, port, kernel, sess), ('no prompt after: ' + bad[0]) if bad else ''
+    return normalise(text, port, kernel, sess, row.get('normalise', [])), ('no prompt after: ' + bad[0]) if bad else ''
 
 
 def first_diff(want, got):
@@ -266,12 +273,17 @@ def cmd_selftest(_a):
     assert t == 'Detaching from program: KERNEL, process 1\n', repr(t)
     assert script_lines({'script': ['target remote 127.0.0.1:@PORT@', '!interrupt 5 continue']}, 7) == ['target remote 127.0.0.1:7', '!interrupt 5 continue']
     assert first_diff('a\nb\n', 'a\nc\n') == "line 2: want 'b' got 'c'"
+    w = normalise('Old value = 0\r\nNew value = 10468460\r\n', 0, Path('/k'), sess, ['watch-values'])
+    assert w == 'Old value = <VALUE>\nNew value = <VALUE>\n', repr(w)
+    s = normalise('\r\nProgram received signal SIGTRAP, Trace/breakpoint trap.\r\n0xffffffff800001e3 in pax_inb ()\r\n', 0, Path('/k'), sess, ['stop-location'])
+    assert s == '\nProgram received signal SIGTRAP, Trace/breakpoint trap.\n<LOCATION>\n', repr(s)
     rows = json.loads(ROWS.read_text())['rows']
     names = [r['name'] for r in rows]
     assert len(names) == len(set(names)), 'duplicate row names'
     for r in rows:
         assert r['name'].startswith(('remote-kernel-', 'remote-refuse-')), r['name']
         assert r.get('accel') in (None, 'kvm', 'tcg'), r['name']
+        assert set(r.get('normalise', [])) <= {'watch-values', 'stop-location'}, r['name']
         assert isinstance(r['script'], list) and r['script'], r['name']
         assert not any('xml-tdesc' in line for line in r['script']), 'a row may not print QEMU\'s description: ' + r['name']
     print('PASS session-remote-selftest rows=%d' % len(rows))
