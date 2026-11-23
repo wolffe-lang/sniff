@@ -79,8 +79,8 @@
   "resume": "`vCont?` once; then `vCont;c` and `vCont;s:TID` when listed, else `c` and `s` (Packets, vCont and vCont?). The stop reply is waited for with no time limit",
   "stop_replies": "`T AA n:r;...` with register values, `thread:TID`, `core:N`, and one stop reason of `watch:ADDR`, `rwatch:ADDR`, `awatch:ADDR`, `swbreak:` or `hwbreak:`; unknown n:r pairs ignored; `S AA`; `W AA` exit; `X AA` killed by a signal; `O XX` console output printed as it comes (Stop Reply Packets). Register values in a T reply are taken in place of the `g` read for those registers",
   "signals": "the manual defines only `05`, the trap signal (Stop Reply Packets); it gives every other number's meaning to gdb's source, which stays closed, include/gdb/signals.h included. So every number sniff names is a binary observation paired with the name printed in the same run: for the client, QEMU's stop reply in the pinned gdb's packet log beside the signal name gdb printed (observed in the Linux measurement's session A, under KVM and TCG: `T02thread:p01.01;` after the 0x03, printed `Program received signal SIGINT, Interrupt.`; `T05core:01;` at a reconnect, printed `Program received signal SIGTRAP, Trace/breakpoint trap.`; 05 at every breakpoint and step. So PR 1's table holds 02 SIGINT and 05 SIGTRAP, each with that measurement as its source). sniff's table of protocol numbers holds only observed numbers and records the measurement that observed each; a number never observed prints as an unknown signal, by name. The stub's numbers (PR 2) come from gdbserver's T reply for a fixture raising each of signals 1 to 31",
-  "threads": "`qfThreadInfo` then `qsThreadInfo` until `l` (General Query Packets); `qC` for the current thread; `Hg TID` before `g`, `p`, `m` of another thread (Packets, H). At one processor QEMU names one thread; the mechanism is built here for U4",
-  "end": "`detach` sends `D` and closes after `OK` (Packets, D; Connecting, detach); `disconnect` closes the socket and sends nothing, leaving the target stopped (Connecting, disconnect); `kill` sends `k` and expects no reply, a closed connection counting as success (Packets, k). MEASURED (measured): gdb, having offered multiprocess, sent `D;1` and `vKill;1`, each answered OK, and QEMU ended after vKill (`QEMU: Terminated via GDBstub`); `disconnect` sent nothing. sniff offers no multiprocess and sends `D` and `k`; whether QEMU ends on `k` as on vKill is the first thing sniff's own development runs read",
+  "threads": "`qfThreadInfo` then `qsThreadInfo` until `l` (General Query Packets); `qC` for the current thread; `Hg TID` before `g`, `p`, `m` of another thread (Packets, H). At one processor QEMU names one thread; the mechanism is built here for U4. MEASURED by the same run: with no multiprocess offered, qfThreadInfo answers `m01` and qC `QC01` (plain thread ids), qSupported's reply is unchanged, and `?` still answers `T05core:01;`",
+  "end": "`detach` sends `D` and closes after `OK` (Packets, D; Connecting, detach); `disconnect` closes the socket and sends nothing, leaving the target stopped (Connecting, disconnect); `kill` sends `k` and expects no reply, a closed connection counting as success (Packets, k). MEASURED (measured): gdb, having offered multiprocess, sent `D;1` and `vKill;1`, each answered OK, and QEMU ended after vKill (`QEMU: Terminated via GDBstub`); `disconnect` sent nothing. sniff offers no multiprocess and sends `D` and `k`. MEASURED by sniff's first development run (2026-11-23 08:10Z, sniff's packet layer against the Mac's pinned QEMU, frozen at reset): `k` is acknowledged with `+`, the connection closes, and QEMU ends (`QEMU: Terminated via GDBstub`) within 0.2 s, so `k` serves and vKill is not needed",
   "session": "`break` by function, `file:line` and `*ADDR`, from the kernel ELF's DWARF; `hbreak`; `watch`; `continue`; `stepi`, `step`, `next` and `finish` built on `s` and breakpoints as for a live process; `bt` by the CFI in .debug_frame with the stack read by `m`; `info registers` and `info all-registers` from the description; `x`; `print`; `info locals`; `info threads`; the interrupt",
   "description_text": "the annex QEMU sends is a third party's copyrighted file (it carries the Free Software Foundation's notice: QEMU's copy of a file from gdb's features directory). sniff parses it off the wire at run time and never carries it: no copy of it, in whole or in part, is in this repository, in fixtures, goldens, recorded wire logs or test inputs. A unit row that needs a description uses one written here from the Target Description Format and i386 Features nodes; a row about QEMU's own description names it by sha256 only. sniff-server's description (PR 2) is written from the i386 Features node alone"
  },
@@ -138,7 +138,7 @@
    },
    {
     "predicted": "kill ends QEMU",
-    "score": "right for gdb's vKill; `k`, which sniff sends, is not yet exercised"
+    "score": "right: by gdb's vKill and by sniff's `k`"
    },
    {
     "predicted": "a register write is answered (P)",
@@ -208,7 +208,6 @@
  },
  "honesty": {
   "not_known_before_code": [
-   "whether QEMU ends on `k` (gdb used vKill) and what it answers when the client offers no multiprocess (thread ids then plain)",
    "a watchpoint's stop reply (the measurement's watched word never changed)",
    "the P packet's reply (the measurement wrote back an unchanged value and gdb sent nothing)",
    "how gdb words a stub that stops answering (outside the closed list and not measured)"
@@ -218,7 +217,8 @@
    "QEMU's description and qSupported reply are equal under KVM and TCG (measured)",
    "`info locals` at the fixed breakpoint reads the same values under KVM and TCG (measured)",
    "the boot code that calls kmain ends the stack at _start (measured)",
-   "QEMU stops the machine when a debugger reconnects after detach (measured)"
+   "QEMU stops the machine when a debugger reconnects after detach (measured)",
+   "QEMU ends on `k`, and gives plain thread ids when the client offers no multiprocess (sniff's first development run)"
   ]
  },
  "decided_before_code": {
