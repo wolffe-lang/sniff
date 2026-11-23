@@ -4,7 +4,6 @@
 // m, M, p, vCont, z and Z), General Query Packets (qC, qfThreadInfo and qsThreadInfo, qSupported,
 // QStartNoAckMode, qXfer:features:read), Stop Reply Packets, and Retrieving Descriptions. sniff
 // offers no multiprocess, so thread ids are plain, and `D` and `k` carry no pid.
-// Until the client is built, every target is refused.
 
 /// Refusals of the client: the transport's, a description's, and its own, each by name.
 pub error ClientError = {
@@ -92,132 +91,414 @@ pub struct Target {
     pub console: str,
 }
 
+fn text_of(d: List[byte]) -> str {
+    str_from_utf8(d) else { "" }
+}
+
+fn from(d: List[byte], start: int) -> List[byte] {
+    var out: List[byte] = []
+    var i = start
+    while i < d.len { (mut out).push(d[i]); i += 1 }
+    out
+}
+
+fn split(s: str, sep: int) -> List[str] {
+    let d = s.bytes()
+    var out: List[str] = []
+    var cur: List[byte] = []
+    for b in d {
+        if b as int == sep {
+            (mut out).push(text_of(cur))
+            cur = []
+        } else {
+            (mut cur).push(b)
+        }
+    }
+    (mut out).push(text_of(cur))
+    out
+}
+
 /// A feature's value in a qSupported reply: the text after `NAME=`, `+` or `-` for a flag, `?` for
 /// one to probe, or empty when the reply does not mention it.
 pub fn feature_value(features: str, name: str) -> str {
+    for f in split(features, 59) {
+        if f == name + "+" { return "+" }
+        if f == name + "-" { return "-" }
+        if f == name + "?" { return "?" }
+        if f.starts_with(name + "=") {
+            let d = f.bytes()
+            return text_of(from(d, name.bytes().len + 1))
+        }
+    }
     ""
 }
 
 /// Whether vCont's reply to `vCont?` lists an action (`c`, `C`, `s`, `S`, `t` or `r`).
 pub fn vcont_has(vcont: str, action: str) -> bool {
+    let parts = split(vcont, 59)
+    if parts.len == 0 || parts[0] != "vCont" { return false }
+    for p in parts {
+        if p == action { return true }
+    }
     false
+}
+
+fn no_stop() -> Stop {
+    let n: List[int] = []
+    let v: List[str] = []
+    Stop { kind: 0, code: 0, thread: "", core: -1, reason: "", addr: 0, regnums: n, values: v }
+}
+
+fn hex_int(s: str) -> int ! ClientError {
+    let v = parse_hex(s.bytes())?
+    if v > 1073741823 { return bad_stop }
+    v as int
 }
 
 /// A stop reply's data parsed (Stop Reply Packets). `n:r` pairs with a name sniff does not know are
 /// skipped, as the node says a client must.
 pub fn parse_stop(d: List[byte]) -> Stop ! ClientError {
-    bad_stop
+    if d.len < 3 { return bad_stop }
+    let k = d[0] as int
+    var s = no_stop()
+    let num = hex_int(text_of([d[1], d[2]]))?
+    s.code = num
+    if k == 87 { s.kind = stop_exited } else if k == 88 { s.kind = stop_killed } else if k == 83 || k == 84 { s.kind = stop_signal } else { return bad_stop }
+    if k != 84 { return s }
+    for pair in split(text_of(from(d, 3)), 59) {
+        if pair == "" { continue }
+        let kv = split(pair, 58)
+        if kv.len < 2 { return bad_stop }
+        let key = kv[0]
+        let val = kv[1]
+        if key == "thread" {
+            s.thread = val
+        } else if key == "core" {
+            s.core = hex_int(val)?
+        } else if key == "watch" || key == "rwatch" || key == "awatch" {
+            s.reason = key
+            s.addr = parse_hex(val.bytes())?
+        } else if key == "swbreak" || key == "hwbreak" {
+            s.reason = key
+        } else {
+            let n = parse_hex(key.bytes()) else { continue }
+            (mut s.regnums).push(n as int)
+            (mut s.values).push(val)
+        }
+    }
+    s
+}
+
+fn check(d: List[byte]) -> () ! ClientError {
+    let kind = reply_kind(d)
+    if kind == reply_empty { return unsupported }
+    if kind == reply_error || kind == reply_error_text { return stub_error }
+}
+
+/// One annex by qXfer:features:read, read in chunks until the stub answers `l`.
+fn fetch_annex(mut l: Link, name: str) -> str ! ClientError {
+    var out: List[byte] = []
+    var off: int = 0
+    var more = true
+    while more {
+        let r = request_binary(mut l, "qXfer:features:read:{name}:{hex_u64(off as u64)},{hex_u64(annex_chunk as u64)}")?
+        if r.len == 0 { return unsupported }
+        let first = r[0] as int
+        if first == 69 && reply_kind(r) != reply_data { return stub_error }
+        if first != 109 && first != 108 { return bad_reply }
+        var i: int = 1
+        while i < r.len { (mut out).push(r[i]); i += 1 }
+        off += r.len - 1
+        if first == 108 { more = false }
+        if out.len > text_cap { return description_too_long }
+    }
+    str_from_utf8(out) else { return bad_xml }
+}
+
+/// Every annex the description names, `target.xml` first, then each inclusion once; the description
+/// they make, and the annexes' names in the order fetched.
+fn fetch_description(mut l: Link) -> (Desc, List[str]) ! ClientError {
+    var names: List[str] = ["target.xml"]
+    var annexes: List[Annex] = []
+    var i: int = 0
+    while i < names.len {
+        if names.len > annex_cap { return include_depth }
+        let t = fetch_annex(mut l, names[i])?
+        for n in includes(t) {
+            var known = false
+            for m in names {
+                if m == n { known = true }
+            }
+            if !known { (mut names).push(n) }
+        }
+        (mut annexes).push(Annex { name: names[i], text: t })
+        i += 1
+    }
+    let desc = parse(annexes[0].text, annexes)?
+    if missing_i386_core(desc).len > 0 { return core_incomplete }
+    (desc, names)
 }
 
 /// The thread list (General Query Packets, qfThreadInfo then qsThreadInfo until `l`).
 pub fn read_threads(mut t: Target) -> () ! ClientError {
-    t.regs_fresh = false
-    unsupported
+    var ids: List[str] = []
+    var r = request(mut t.link, "qfThreadInfo")?
+    var more = true
+    while more {
+        if r.len == 0 { return unsupported }
+        if r[0] as int == 108 {
+            more = false
+        } else if r[0] as int == 109 {
+            for id in split(text_of(from(r, 1)), 44) { (mut ids).push(id) }
+            r = request(mut t.link, "qsThreadInfo")?
+        } else {
+            return bad_reply
+        }
+    }
+    t.threads = ids
 }
 
 /// The registers of the current thread by `g` (Packets, g): two hex digits a byte in target order, and
 /// `x`s for bytes the stub cannot read.
 pub fn read_registers(mut t: Target) -> () ! ClientError {
-    t.regs_fresh = false
-    unsupported
+    let r = request(mut t.link, "g")?
+    check(r)?
+    if r.len % 2 != 0 { return bad_hex }
+    var regs: List[byte] = []
+    var unread: List[bool] = []
+    var i: int = 0
+    while i < r.len {
+        if r[i] as int == 120 && r[i + 1] as int == 120 {
+            (mut regs).push(0 as byte)
+            (mut unread).push(true)
+        } else {
+            let one = hex_decode([r[i], r[i + 1]])?
+            (mut regs).push(one[0])
+            (mut unread).push(false)
+        }
+        i += 2
+    }
+    t.regs = regs
+    t.unread = unread
+    t.regs_fresh = true
 }
 
 /// A register's value by name, little-endian, from the last `g` read (read again when stale); a
 /// register past 64 bits, or one the stub could not read, is refused by name.
 pub fn reg_u64(mut t: Target, name: str) -> u64 ! ClientError {
-    t.regs_fresh = false
-    no_register
+    if !t.regs_fresh { read_registers(mut t)? }
+    let n = regnum_of(t.desc, name)
+    if n < 0 { return no_register }
+    let off = g_offset(t.desc, n)
+    var bits: int = 0
+    for r in t.desc.regs {
+        if r.regnum == n { bits = r.bitsize }
+    }
+    let size = bits / 8
+    if size > 8 || off < 0 || off + size > t.regs.len { return no_register }
+    var v: u64 = 0
+    var i = size - 1
+    while i >= 0 {
+        if t.unread[off + i] { return no_register }
+        v = (v << 8) | (t.regs[off + i] as int as u64)
+        i -= 1
+    }
+    v
 }
 
 /// LEN bytes at ADDR by `m` (Packets, m), split so each reply fits the packet size; a short reply ends
 /// the read early. An error reply is gdb's `Cannot access memory`. A byte under an inserted software
 /// breakpoint reads as the byte the breakpoint covers, whatever the stub keeps in memory.
 pub fn read_mem(mut t: Target, addr: u64, len: int) -> List[byte] ! ClientError {
-    t.regs_fresh = false
-    unsupported
+    var out: List[byte] = []
+    var step = t.link.cap / 2
+    if step < 1 { step = 1 }
+    var done: int = 0
+    var more = true
+    while more && done < len {
+        var n = len - done
+        if n > step { n = step }
+        let a = addr + (done as u64)
+        let r = request(mut t.link, "m{hex_u64(a)},{hex_u64(n as u64)}")?
+        if r.len == 0 { return stub_error }
+        if reply_kind(r) == reply_error || reply_kind(r) == reply_error_text { return stub_error }
+        let got = hex_decode(r)?
+        for b in got { (mut out).push(b) }
+        done += got.len
+        if got.len < n { more = false }
+    }
+    var k: int = 0
+    while k < t.bp_addrs.len {
+        let at = t.bp_addrs[k]
+        if at >= addr && at < addr + (out.len as u64) {
+            out[(at - addr) as int] = t.bp_bytes[k]
+        }
+        k += 1
+    }
+    out
 }
 
 /// Write bytes at ADDR by `M` (Packets, M).
 pub fn write_mem(mut t: Target, addr: u64, data: List[byte]) -> () ! ClientError {
-    t.regs_fresh = false
-    unsupported
+    let r = request(mut t.link, "M{hex_u64(addr)},{hex_u64(data.len as u64)}:{hex_encode(data)}")?
+    check(r)?
+    if reply_kind(r) != reply_ok { return bad_reply }
+}
+
+fn z(mut t: Target, packet: str) -> () ! ClientError {
+    let r = request(mut t.link, packet)?
+    let kind = reply_kind(r)
+    if kind == reply_empty { return unsupported }
+    if kind == reply_error || kind == reply_error_text { return insert_refused }
+    if kind != reply_ok { return bad_reply }
 }
 
 /// A software breakpoint by `Z0,ADDR,1` (KIND 1, the length of int3, as the pinned gdb sends it), after
 /// reading the byte it covers, which later reads show in its place.
 pub fn insert_break(mut t: Target, addr: u64) -> () ! ClientError {
-    t.regs_fresh = false
-    unsupported
+    let orig = read_mem(mut t, addr, 1) else { return insert_refused }
+    if orig.len != 1 { return insert_refused }
+    z(mut t, "Z0,{hex_u64(addr)},1")?
+    (mut t.bp_addrs).push(addr)
+    (mut t.bp_bytes).push(orig[0])
 }
 
 /// Remove a software breakpoint by `z0,ADDR,1`.
 pub fn remove_break(mut t: Target, addr: u64) -> () ! ClientError {
-    t.regs_fresh = false
-    unsupported
+    z(mut t, "z0,{hex_u64(addr)},1")?
+    var a: List[u64] = []
+    var b: List[byte] = []
+    var i: int = 0
+    while i < t.bp_addrs.len {
+        if t.bp_addrs[i] != addr {
+            (mut a).push(t.bp_addrs[i])
+            (mut b).push(t.bp_bytes[i])
+        }
+        i += 1
+    }
+    t.bp_addrs = a
+    t.bp_bytes = b
 }
 
 /// A hardware breakpoint (`Z1`/`z1`, KIND 1) or a write, read or access watchpoint (`Z2`, `Z3`,
 /// `Z4`, KIND the watched length): TYPE is the packet's digit.
 pub fn insert_point(mut t: Target, kind: int, addr: u64, len: int) -> () ! ClientError {
-    t.regs_fresh = false
-    unsupported
+    z(mut t, "Z{kind},{hex_u64(addr)},{hex_u64(len as u64)}")?
 }
 
 /// Remove what insert_point inserted.
 pub fn remove_point(mut t: Target, kind: int, addr: u64, len: int) -> () ! ClientError {
-    t.regs_fresh = false
-    unsupported
+    z(mut t, "z{kind},{hex_u64(addr)},{hex_u64(len as u64)}")?
 }
 
 /// Resume the target: `vCont;c`, or `vCont;s:THREAD` for one step, when vCont lists the action, else
 /// `c` or `s` (Packets). The stop reply is read by wait_stop.
 pub fn resume(mut t: Target, step: bool) -> () ! ClientError {
+    var p = if step { "s" } else { "c" }
+    if step && vcont_has(t.vcont, "s") {
+        p = if t.current == "" { "vCont;s" } else { "vCont;s:{t.current}" }
+    } else if !step && vcont_has(t.vcont, "c") {
+        p = "vCont;c"
+    }
+    send(mut t.link, p)?
     t.regs_fresh = false
-    unsupported
 }
 
 /// Wait up to MS (no limit when MS <= 0) for the stop reply to a resumption; it lands in `stop`.
 /// Console output (`O`) is kept in `console` and waited past. Nothing in MS is reply_timeout, so a
 /// caller can look for the user's interrupt and call interrupt_target() before waiting again.
 pub fn wait_stop(mut t: Target, ms: int) -> () ! ClientError {
-    t.regs_fresh = false
-    unsupported
+    var waiting = true
+    while waiting {
+        let raw = receive(mut t.link, ms)?
+        let d = decode(raw, false)?
+        if d.len > 1 && d[0] as int == 79 && reply_kind(d) != reply_ok {
+            let o = hex_decode(from(d, 1))?
+            t.console = t.console + text_of(o)
+        } else {
+            waiting = false
+            let s = parse_stop(d)?
+            if s.thread != "" { t.current = s.thread }
+            t.stop = s
+            t.regs_fresh = false
+        }
+    }
 }
 
 /// The interrupt byte, while the target runs (Interrupts); its stop reply comes to wait_stop.
 pub fn interrupt_target(mut t: Target) -> () ! ClientError {
-    t.regs_fresh = false
-    unsupported
+    interrupt(mut t.link)?
 }
 
 /// Select the thread `g`, `m` and the rest act on (Packets, `Hg`).
 pub fn select_thread(mut t: Target, id: str) -> () ! ClientError {
+    let r = request(mut t.link, "Hg{id}")?
+    check(r)?
+    t.current = id
     t.regs_fresh = false
-    unsupported
 }
 
 /// Connect: qSupported with sniff's features; QStartNoAckMode when the stub offers it; `vCont?`; `?`
 /// for the stop that holds the target; the description (refused by name when the stub offers none or
 /// it lacks the i386 core's registers); the threads and the current one (`qC`); the registers.
 pub fn start(take l: Link) -> Target ! ClientError {
-    shut(take l)?
-    no_description
+    var link = l
+    let f = text_of(request(mut link, "qSupported:{sniff_features}")?)
+    let ps = feature_value(f, "PacketSize")
+    var size: int = 0
+    if ps != "" && ps != "-" {
+        let v = parse_hex(ps.bytes())?
+        if v > 1073741823 { size = 1073741823 } else { size = v as int }
+    }
+    link.cap = send_cap(size, 0)
+    if feature_value(f, "QStartNoAckMode") == "+" {
+        let ok = request(mut link, "QStartNoAckMode")?
+        if reply_kind(ok) == reply_ok { start_no_ack(mut link.ack) }
+    }
+    let vc = text_of(request(mut link, "vCont?")?)
+    let why = request(mut link, "?")?
+    let stop = parse_stop(why)?
+    if feature_value(f, "qXfer:features:read") != "+" { return no_description }
+    let (desc, names) = fetch_description(mut link)?
+    let stop_thread = "{stop.thread}"
+    let none_s: List[str] = []
+    let none_b: List[byte] = []
+    let none_f: List[bool] = []
+    let none_a: List[u64] = []
+    let none_c: List[byte] = []
+    var t = Target { link: link, features: f, packet_size: size, vcont: vc, desc: desc, annexes: names, threads: none_s,
+                     current: "", stop: stop, regs: none_b, unread: none_f, regs_fresh: false, bp_addrs: none_a,
+                     bp_bytes: none_c, console: "" }
+    read_threads(mut t)?
+    let qc = request(mut t.link, "qC")?
+    if qc.len > 2 && qc[0] as int == 81 && qc[1] as int == 67 { t.current = text_of(from(qc, 2)) }
+    if t.current == "" && stop_thread != "" { t.current = stop_thread }
+    read_registers(mut t)?
+    if !t.regs_fresh { return bad_reply }
+    if g_size(t.desc) > t.regs.len { t.link.cap = send_cap(size, t.regs.len * 2) }
+    t
 }
 
 /// `target remote ADDR`: open the connection and start.
 pub fn connect(addr: str) -> Target ! ClientError {
-    refused
+    let l = open(addr)?
+    start(take l)?
 }
 
 /// `detach`: `D`, an `OK`, and the connection closed (Packets, D; Connecting).
 pub fn detach(take t: Target) -> () ! ClientError {
-    shut(take t.link)?
+    var x = t
+    let r = request(mut x.link, "D")?
+    shut(take x.link)?
+    check(r)?
 }
 
 /// `kill`: `k`, which has no reply (Packets, k); the connection is closed whether or not the stub
 /// closes it first.
 pub fn kill(take t: Target) -> () ! ClientError {
-    shut(take t.link)?
+    var x = t
+    send(mut x.link, "k") else { }
+    shut(take x.link) else { }
 }
 
 /// `disconnect`: close the connection and send nothing; the target stays stopped (Connecting).
