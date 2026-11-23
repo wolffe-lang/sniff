@@ -1,0 +1,45 @@
+// sniff-server's words to its client: the protocol's number for a host signal (measured, never read from a header:
+// tests/server-signals.tsv), the stop replies (Stop Reply Packets), qSupported's reply (General Query Packets) and
+// the stub's own target description (Target Description Format, i386 Features). Pure: no I/O.
+// Every function below has a unit row (src/server_test.lu).
+
+/// Refusals of the stub's replies, each by name.
+pub error ServerError = {
+    unmeasured_signal,
+    bad_status,
+    not_built,
+}
+
+/// The protocol's number for a host signal, through the measured table only; a number the table does not hold is
+/// unmeasured_signal.
+pub fn protocol_signal(host: int) -> int ! ServerError {
+    return not_built
+}
+
+/// The stop reply for a stop by a host signal (Stop Reply Packets): `T AA`, then the stop's reason when it has one
+/// (`swbreak:`, or `watch:`, `rwatch:` or `awatch:` with the address), then `thread:TID;`.
+pub fn stop_reply(host_signal: int, tid: int, reason: str, addr: u64) -> str ! ServerError {
+    return not_built
+}
+
+/// The reply for a process that exited with a status (Stop Reply Packets): `W AA`; a status outside 0 to 255 is
+/// bad_status.
+pub fn exit_reply(status: int) -> str ! ServerError {
+    return not_built
+}
+
+/// The reply for a process a signal ended (Stop Reply Packets): `X AA`, the signal's protocol number; SIGKILL, which
+/// can never stop, is the one the stub sees most.
+pub fn killed_reply(host_signal: int) -> str ! ServerError {
+    return not_built
+}
+
+/// The stub's reply to qSupported (General Query Packets): the features it offers.
+pub fn supported_reply() -> str ! ServerError {
+    return not_built
+}
+
+/// The stub's target description (Target Description Format, i386 Features).
+pub fn description() -> str ! ServerError {
+    return not_built
+}
