@@ -1,0 +1,226 @@
+// The client side of the remote protocol over one connection: the connect sequence, the target
+// description, threads, registers, memory, breakpoints and watchpoints, resumption and stop replies,
+// and the ends of a session. Each packet's form is the GDB manual's: Packets (?, c, s, D, g, H, k,
+// m, M, p, vCont, z and Z), General Query Packets (qC, qfThreadInfo and qsThreadInfo, qSupported,
+// QStartNoAckMode, qXfer:features:read), Stop Reply Packets, and Retrieving Descriptions. sniff
+// offers no multiprocess, so thread ids are plain, and `D` and `k` carry no pid.
+// Until the client is built, every target is refused.
+
+/// Refusals of the client: the transport's, a description's, and its own, each by name.
+pub error ClientError = {
+    refused,
+    timeout,
+    closed,
+    io,
+    invalid,
+    packet_too_long,
+    reply_too_long,
+    unescaped_byte,
+    bad_hex,
+    bad_escape,
+    bad_run_length,
+    notification_refused,
+    resend_limit,
+    reply_timeout,
+    bad_xml,
+    bad_number,
+    no_register_name,
+    duplicate_register,
+    unknown_include,
+    include_depth,
+    too_many_registers,
+    description_too_long,
+    no_description,
+    core_incomplete,
+    bad_stop,
+    bad_reply,
+    unsupported,
+    stub_error,
+    no_register,
+    insert_refused,
+}
+
+/// What sniff tells the stub it supports (General Query Packets, qSupported): the two stop reasons,
+/// vCont's list of actions, and that it reads x86-64 XML descriptions.
+pub const sniff_features: str = "swbreak+;hwbreak+;vContSupported+;xmlRegisters=i386"
+/// How much of an annex one qXfer read asks for.
+pub const annex_chunk: int = 4096
+/// The most annexes one description may name.
+pub const annex_cap: int = 16
+
+/// A stop reply's kind: the target stopped with a signal (`T` or `S`), exited (`W`), or was ended by
+/// a signal (`X`).
+pub const stop_signal: int = 1
+/// `W AA`: the process exited with status AA.
+pub const stop_exited: int = 2
+/// `X AA`: the process ended with signal AA.
+pub const stop_killed: int = 3
+
+/// One stop reply (Stop Reply Packets): its kind and number, the `thread:` and `core:` fields (empty
+/// and -1 when absent), the stop reason (`watch`, `rwatch`, `awatch`, `swbreak`, `hwbreak`, or empty)
+/// with a watch's data address, and the register values it carried, by number, as hex.
+pub struct Stop {
+    pub kind: int,
+    pub code: int,
+    pub thread: str,
+    pub core: int,
+    pub reason: str,
+    pub addr: u64,
+    pub regnums: List[int],
+    pub values: List[str],
+}
+
+/// One connected target: its link, the stub's features and vCont actions, the description and the
+/// annexes it came from, the threads and the current one, the last stop, the registers of the last
+/// `g` read (with each byte the stub could not read marked), the software breakpoints inserted with
+/// the byte each covers, and the console output the stub sent (`O`).
+pub struct Target {
+    pub link: Link,
+    pub features: str,
+    pub packet_size: int,
+    pub vcont: str,
+    pub desc: Desc,
+    pub annexes: List[str],
+    pub threads: List[str],
+    pub current: str,
+    pub stop: Stop,
+    pub regs: List[byte],
+    pub unread: List[bool],
+    pub regs_fresh: bool,
+    pub bp_addrs: List[u64],
+    pub bp_bytes: List[byte],
+    pub console: str,
+}
+
+/// A feature's value in a qSupported reply: the text after `NAME=`, `+` or `-` for a flag, `?` for
+/// one to probe, or empty when the reply does not mention it.
+pub fn feature_value(features: str, name: str) -> str {
+    ""
+}
+
+/// Whether vCont's reply to `vCont?` lists an action (`c`, `C`, `s`, `S`, `t` or `r`).
+pub fn vcont_has(vcont: str, action: str) -> bool {
+    false
+}
+
+/// A stop reply's data parsed (Stop Reply Packets). `n:r` pairs with a name sniff does not know are
+/// skipped, as the node says a client must.
+pub fn parse_stop(d: List[byte]) -> Stop ! ClientError {
+    bad_stop
+}
+
+/// The thread list (General Query Packets, qfThreadInfo then qsThreadInfo until `l`).
+pub fn read_threads(mut t: Target) -> () ! ClientError {
+    t.regs_fresh = false
+    unsupported
+}
+
+/// The registers of the current thread by `g` (Packets, g): two hex digits a byte in target order, and
+/// `x`s for bytes the stub cannot read.
+pub fn read_registers(mut t: Target) -> () ! ClientError {
+    t.regs_fresh = false
+    unsupported
+}
+
+/// A register's value by name, little-endian, from the last `g` read (read again when stale); a
+/// register past 64 bits, or one the stub could not read, is refused by name.
+pub fn reg_u64(mut t: Target, name: str) -> u64 ! ClientError {
+    t.regs_fresh = false
+    no_register
+}
+
+/// LEN bytes at ADDR by `m` (Packets, m), split so each reply fits the packet size; a short reply ends
+/// the read early. An error reply is gdb's `Cannot access memory`. A byte under an inserted software
+/// breakpoint reads as the byte the breakpoint covers, whatever the stub keeps in memory.
+pub fn read_mem(mut t: Target, addr: u64, len: int) -> List[byte] ! ClientError {
+    t.regs_fresh = false
+    unsupported
+}
+
+/// Write bytes at ADDR by `M` (Packets, M).
+pub fn write_mem(mut t: Target, addr: u64, data: List[byte]) -> () ! ClientError {
+    t.regs_fresh = false
+    unsupported
+}
+
+/// A software breakpoint by `Z0,ADDR,1` (KIND 1, the length of int3, as the pinned gdb sends it), after
+/// reading the byte it covers, which later reads show in its place.
+pub fn insert_break(mut t: Target, addr: u64) -> () ! ClientError {
+    t.regs_fresh = false
+    unsupported
+}
+
+/// Remove a software breakpoint by `z0,ADDR,1`.
+pub fn remove_break(mut t: Target, addr: u64) -> () ! ClientError {
+    t.regs_fresh = false
+    unsupported
+}
+
+/// A hardware breakpoint (`Z1`/`z1`, KIND 1) or a write, read or access watchpoint (`Z2`, `Z3`,
+/// `Z4`, KIND the watched length): TYPE is the packet's digit.
+pub fn insert_point(mut t: Target, kind: int, addr: u64, len: int) -> () ! ClientError {
+    t.regs_fresh = false
+    unsupported
+}
+
+/// Remove what insert_point inserted.
+pub fn remove_point(mut t: Target, kind: int, addr: u64, len: int) -> () ! ClientError {
+    t.regs_fresh = false
+    unsupported
+}
+
+/// Resume the target: `vCont;c`, or `vCont;s:THREAD` for one step, when vCont lists the action, else
+/// `c` or `s` (Packets). The stop reply is read by wait_stop.
+pub fn resume(mut t: Target, step: bool) -> () ! ClientError {
+    t.regs_fresh = false
+    unsupported
+}
+
+/// Wait up to MS (no limit when MS <= 0) for the stop reply to a resumption; it lands in `stop`.
+/// Console output (`O`) is kept in `console` and waited past. Nothing in MS is reply_timeout, so a
+/// caller can look for the user's interrupt and call interrupt_target() before waiting again.
+pub fn wait_stop(mut t: Target, ms: int) -> () ! ClientError {
+    t.regs_fresh = false
+    unsupported
+}
+
+/// The interrupt byte, while the target runs (Interrupts); its stop reply comes to wait_stop.
+pub fn interrupt_target(mut t: Target) -> () ! ClientError {
+    t.regs_fresh = false
+    unsupported
+}
+
+/// Select the thread `g`, `m` and the rest act on (Packets, `Hg`).
+pub fn select_thread(mut t: Target, id: str) -> () ! ClientError {
+    t.regs_fresh = false
+    unsupported
+}
+
+/// Connect: qSupported with sniff's features; QStartNoAckMode when the stub offers it; `vCont?`; `?`
+/// for the stop that holds the target; the description (refused by name when the stub offers none or
+/// it lacks the i386 core's registers); the threads and the current one (`qC`); the registers.
+pub fn start(take l: Link) -> Target ! ClientError {
+    shut(take l)?
+    no_description
+}
+
+/// `target remote ADDR`: open the connection and start.
+pub fn connect(addr: str) -> Target ! ClientError {
+    refused
+}
+
+/// `detach`: `D`, an `OK`, and the connection closed (Packets, D; Connecting).
+pub fn detach(take t: Target) -> () ! ClientError {
+    shut(take t.link)?
+}
+
+/// `kill`: `k`, which has no reply (Packets, k); the connection is closed whether or not the stub
+/// closes it first.
+pub fn kill(take t: Target) -> () ! ClientError {
+    shut(take t.link)?
+}
+
+/// `disconnect`: close the connection and send nothing; the target stays stopped (Connecting).
+pub fn disconnect(take t: Target) -> () ! ClientError {
+    shut(take t.link)?
+}
