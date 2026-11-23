@@ -27,6 +27,7 @@ REQUESTS = {
     'PTRACE_TRACEME': 'req_traceme', 'PTRACE_PEEKDATA': 'req_peekdata', 'PTRACE_POKEDATA': 'req_pokedata',
     'PTRACE_CONT': 'req_cont', 'PTRACE_KILL': 'req_kill', 'PTRACE_SINGLESTEP': 'req_singlestep',
     'PTRACE_GETREGS': 'req_getregs', 'PTRACE_SETREGS': 'req_setregs', 'PTRACE_GETFPREGS': 'req_getfpregs',
+    'PTRACE_SETFPREGS': 'req_setfpregs',
     'PTRACE_DETACH': 'req_detach', 'PTRACE_SETOPTIONS': 'req_setoptions', 'PTRACE_GETEVENTMSG': 'req_geteventmsg',
     'PTRACE_O_TRACEFORK': 'opt_tracefork', 'PTRACE_O_TRACEVFORK': 'opt_tracevfork',
     'PTRACE_O_EXITKILL': 'opt_exitkill', 'ADDR_NO_RANDOMIZE': 'addr_no_randomize',
@@ -40,6 +41,10 @@ SIGINFO = {'size': 'siginfo_size', 'si_signo': 'siginfo_signo', 'si_code': 'sigi
            'si_addr': 'siginfo_addr'}
 # struct user fields the probe measures (S5's debug registers), byte offsets and sizes
 USER = {'u_debugreg': 'user_debugreg_offset', 'u_debugreg_size': 'user_debugreg_size'}
+# user_fpregs_struct (S8's stub reads and writes the x87 and SSE registers there): its size and byte offsets
+FPREGS = {'size': 'fpregs_size', 'cwd': 'fpregs_cwd', 'swd': 'fpregs_swd', 'ftw': 'fpregs_ftw', 'fop': 'fpregs_fop',
+          'rip': 'fpregs_rip', 'rdp': 'fpregs_rdp', 'mxcsr': 'fpregs_mxcsr', 'st_space': 'fpregs_st',
+          'xmm_space': 'fpregs_xmm'}
 # the core reader's descriptor layouts (S7): probe name -> core_NAME in src/readers/core.lu
 CORE = ['prstatus_size', 'prstatus_cursig', 'prstatus_pid', 'prstatus_reg', 'prstatus_reg_size', 'prpsinfo_size',
         'prpsinfo_pid', 'prpsinfo_fname', 'prpsinfo_fname_size', 'prpsinfo_psargs', 'prpsinfo_psargs_size',
@@ -103,6 +108,10 @@ def check(_args):
             seen[w[1]] = int(w[2])
             if consts.get(USER[w[1]]) != int(w[2]):
                 bad.append('user %s is %s in the probe and %s in types.lu' % (w[1], w[2], consts.get(USER[w[1]])))
+        elif w[0] == 'fpregs' and w[1] in FPREGS:
+            seen['fpregs ' + w[1]] = int(w[2])
+            if consts.get(FPREGS[w[1]]) != int(w[2]):
+                bad.append('fpregs %s is %s in the probe and %s in types.lu' % (w[1], w[2], consts.get(FPREGS[w[1]])))
         elif w[0] == 'siginfo' and w[1] in SIGINFO:
             seen['siginfo ' + w[1]] = int(w[2])
             if consts.get(SIGINFO[w[1]]) != int(w[2]):
@@ -121,6 +130,9 @@ def check(_args):
     for name in USER:
         if name not in seen:
             bad.append('probe output lacks user ' + name)
+    for name in FPREGS:
+        if 'fpregs ' + name not in seen:
+            bad.append('probe output lacks fpregs ' + name)
     for name in SIGINFO:
         if 'siginfo ' + name not in seen:
             bad.append('probe output lacks siginfo ' + name)
@@ -156,7 +168,7 @@ def check(_args):
         for b in bad:
             print('FAIL abi-constants: ' + b)
         return 1
-    print('PASS abi-constants requests=%d regs=%d user=%d siginfo=%d core=%d machcore=%d waits=%d' % (len(REQUESTS), len(REGS), len(USER), len(SIGINFO), len(CORE), len(MACHCORE), len(expect)))
+    print('PASS abi-constants requests=%d regs=%d user=%d fpregs=%d siginfo=%d core=%d machcore=%d waits=%d' % (len(REQUESTS), len(REGS), len(USER), len(FPREGS), len(SIGINFO), len(CORE), len(MACHCORE), len(expect)))
     return 0
 
 
