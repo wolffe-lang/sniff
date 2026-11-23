@@ -365,13 +365,17 @@ fn z(mut t: Target, packet: str) -> () ! ClientError {
 }
 
 /// A software breakpoint by `Z0,ADDR,1` (KIND 1, the length of int3, as the pinned gdb sends it), after
-/// reading the byte it covers, which later reads show in its place.
+/// reading the byte it covers, which later reads show in its place. The stub alone decides whether the breakpoint
+/// goes in: a byte that cannot be read yet (an address not mapped at reset) is no refusal, and leaves nothing to
+/// show (QEMU under TCG takes such a Z0; under KVM it refuses it).
 pub fn insert_break(mut t: Target, addr: u64) -> () ! ClientError {
-    let orig = read_mem(t, addr, 1) else { return insert_refused }
-    if orig.len != 1 { return insert_refused }
+    var have = true
+    let orig = read_mem(t, addr, 1) else { have = false; [] }
     z(mut t, "Z0,{hex_u64(addr)},1")?
-    (mut t.bp_addrs).push(addr)
-    (mut t.bp_bytes).push(orig[0])
+    if have && orig.len == 1 {
+        (mut t.bp_addrs).push(addr)
+        (mut t.bp_bytes).push(orig[0])
+    }
 }
 
 /// Remove a software breakpoint by `z0,ADDR,1`.
