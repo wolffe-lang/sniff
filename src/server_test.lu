@@ -88,10 +88,11 @@ fn end_replies_row() {
 }
 
 fn supported_row() {
-    // the stub features it offers (General Query Packets): packets up to 0x4000 bytes, its description, no-ack mode,
-    // the actions in vCont?'s reply, and the swbreak stop reason; nothing else (no multiprocess, no Host I/O)
+    // the stub features it offers (General Query Packets): packets up to 0x4000 bytes, its description, its thread
+    // list with names, no-ack mode, the actions in vCont?'s reply, and the swbreak stop reason; nothing else (no
+    // multiprocess, no Host I/O)
     let s = server.supported_reply() else |e| { print("FAIL server-supported {e}"); return }
-    assert(s == "PacketSize=4000;qXfer:features:read+;QStartNoAckMode+;vContSupported+;swbreak+")
+    assert(s == "PacketSize=4000;qXfer:features:read+;qXfer:threads:read+;QStartNoAckMode+;vContSupported+;swbreak+")
     print("PASS server-supported")
 }
 
@@ -178,6 +179,10 @@ fn requests_row() {
     assert(kill.kind == server.req_kill)
     let empty = server.request("vMustReplyEmpty".bytes()) else { return }
     assert(empty.kind == server.req_unsupported)
+    let th = server.request("qXfer:threads:read::0,fff".bytes()) else { return }
+    assert(th.kind == server.req_threads_xfer && th.offset == 0 && th.len == 4095)
+    let th_annex = server.request("qXfer:threads:read:x:0,fff".bytes())
+    assert("{th_annex}" == "bad_request")
     let svr4 = server.request("qXfer:libraries-svr4:read::0,fff".bytes()) else { return }
     assert(svr4.kind == server.req_unsupported)
     let bad = server.request("m401000".bytes())
@@ -185,6 +190,58 @@ fn requests_row() {
     let stop = server.request("vCont;t".bytes())
     assert("{stop}" == "bad_request")
     print("PASS server-requests")
+}
+
+fn threads_xml_row() {
+    // Thread List Format: each thread by its id in hex, with its name where it has one, the name's markup escaped
+    let none: List[int] = []
+    let no_names: List[str] = []
+    assert(server.threads_xml(none, no_names) == "<?xml version=\"1.0\"?>\n<threads>\n</threads>\n")
+    let x = server.threads_xml([1234, 1235], ["prog", ""])
+    assert(x == "<?xml version=\"1.0\"?>\n<threads>\n<thread id=\"4d2\" name=\"prog\"/>\n<thread id=\"4d3\"/>\n</threads>\n")
+    let odd = server.threads_xml([1], ["a<b&\"c\">"])
+    assert(odd == "<?xml version=\"1.0\"?>\n<threads>\n<thread id=\"1\" name=\"a&lt;b&amp;&quot;c&quot;&gt;\"/>\n</threads>\n")
+    print("PASS server-threads-xml")
+}
+
+fn fxsave(swd: int, ftw: int) -> List[byte] {
+    var b: List[byte] = []
+    var i: int = 0
+    while i < 512 { (mut b).push(0 as byte); i += 1 }
+    b[2] = (swd & 255) as byte
+    b[3] = ((swd >> 8) & 255) as byte
+    b[4] = ftw as byte
+    b
+}
+
+fn x87_tag_row() {
+    // the Intel SDM's FXSAVE: the abridged byte, one bit a register (0 empty), and the full word, two bits a register
+    // in physical order (00 valid, 01 zero, 10 special, 11 empty), its classes from each register's value (Table 1-41)
+    assert(server.x87_full_tag(fxsave(0, 0)) == 65535)
+    assert(server.x87_abridged_tag(65535) == 0)
+    assert(server.x87_abridged_tag(16383) == 128)
+    // R7 in use and holding zero (exponent and significand all zero): its tag is zero, 01
+    assert(server.x87_full_tag(fxsave(0, 128)) == 32767)
+    // one value pushed (TOP 7): ST0 is R7, and 1.0 (exponent 0x3fff, the J bit set) is valid, 00
+    var one = fxsave(7 << 11, 128)
+    one[39] = 128 as byte
+    one[40] = 255 as byte
+    one[41] = 63 as byte
+    assert(server.x87_full_tag(one) == 16383)
+    // an infinity (exponent all ones) is special, 10
+    var inf = fxsave(7 << 11, 128)
+    inf[39] = 128 as byte
+    inf[40] = 255 as byte
+    inf[41] = 127 as byte
+    assert(server.x87_full_tag(inf) == 49151)
+    // a denormal (exponent zero, a nonzero significand) is special too
+    var den = fxsave(7 << 11, 128)
+    den[32] = 1 as byte
+    assert(server.x87_full_tag(den) == 49151)
+    // too short to be an FXSAVE area: every register empty
+    let short: List[byte] = []
+    assert(server.x87_full_tag(short) == 65535)
+    print("PASS server-x87-tag")
 }
 
 fn main() {
@@ -195,4 +252,6 @@ fn main() {
     description_row()
     listen_row()
     requests_row()
+    threads_xml_row()
+    x87_tag_row()
 }

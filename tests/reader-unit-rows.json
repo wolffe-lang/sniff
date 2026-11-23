@@ -205,6 +205,8 @@
     "server-supported",
     "server-description",
     "server-listen-address",
-    "server-requests"
+    "server-requests",
+    "server-threads-xml",
+    "server-x87-tag"
   ]
 }
