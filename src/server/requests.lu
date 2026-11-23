@@ -1,6 +1,7 @@
 // What a client asks of sniff-server: the address the stub listens on (the Server node: `sniff-server HOST:PORT PROG`)
 // and each request packet's kind and fields (Packets, General Query Packets). Pure: no I/O.
 // Every function below has a unit row (src/server_test.lu).
+use remote
 
 /// The address the stub listens on.
 pub struct Listen {
@@ -67,15 +68,224 @@ pub struct Request {
     pub data: List[byte],
 }
 
+fn req(kind: int) -> Request {
+    let none: List[byte] = []
+    Request { kind: kind, addr: 0, len: 0, num: -1, step: false, sig: 0, annex: "", offset: 0, data: none }
+}
+
+fn bytes_of(d: List[byte], a: int, z: int) -> List[byte] {
+    var out: List[byte] = []
+    var i = a
+    while i < z && i < d.len { (mut out).push(d[i]); i += 1 }
+    out
+}
+
+fn text_of(d: List[byte], a: int, z: int) -> str {
+    str_from_utf8(bytes_of(d, a, z)) else { "" }
+}
+
+fn index_of(d: List[byte], c: int, from: int) -> int {
+    var i = from
+    while i < d.len { if d[i] as int == c { return i }; i += 1 }
+    -1
+}
+
+fn hex_field(d: List[byte], a: int, z: int) -> u64 ! ServerError {
+    let v = remote.parse_hex(bytes_of(d, a, z)) else { return bad_request }
+    v
+}
+
+// A dotted address's part: 0 to 255 in decimal, or -1.
+fn octet(s: str) -> int {
+    let d = s.bytes()
+    if d.len == 0 || d.len > 3 { return -1 }
+    var v: int = 0
+    for b in d {
+        let c = b as int
+        if c < 48 || c > 57 { return -1 }
+        v = v * 10 + (c - 48)
+    }
+    if v > 255 { return -1 }
+    v
+}
+
+fn decimal_port(s: str) -> int ! ServerError {
+    let d = s.bytes()
+    if d.len == 0 || d.len > 5 { return bad_address }
+    var v: int = 0
+    for b in d {
+        let c = b as int
+        if c < 48 || c > 57 { return bad_address }
+        v = v * 10 + (c - 48)
+    }
+    if v < 1 || v > 65535 { return bad_address }
+    v
+}
+
 /// `[HOST]:PORT`. An empty HOST and `localhost` listen on 127.0.0.1, and any 127.x.y.z address is loopback too; any
 /// other HOST is non_loopback_refused unless non_loopback is given, because the protocol has no authentication and
 /// gives whoever connects control of the program. No colon, or a PORT outside 1 to 65535, is bad_address.
 pub fn listen_address(spec: str, non_loopback: bool) -> Listen ! ServerError {
-    return not_built
+    let b = spec.bytes()
+    var colon: int = -1
+    var i: int = 0
+    while i < b.len { if b[i] as int == 58 { colon = i }; i += 1 }
+    if colon < 0 { return bad_address }
+    let host = text_of(b, 0, colon)
+    let port = decimal_port(text_of(b, colon + 1, b.len))?
+    if host == "" || host == "localhost" { return Listen { host: "127.0.0.1", port: port } }
+    let parts = host.split(".")
+    if parts.len != 4 { return bad_address }
+    for p in parts { if octet(p) < 0 { return bad_address } }
+    if parts[0] != "127" && !non_loopback { return non_loopback_refused }
+    Listen { host: host, port: port }
+}
+
+// `addr,length` from a, to z.
+fn addr_len(d: List[byte], a: int, z: int) -> (u64, int) ! ServerError {
+    let comma = index_of(d, 44, a)
+    if comma < 0 || comma >= z { return bad_request }
+    let addr = hex_field(d, a, comma)?
+    let n = hex_field(d, comma + 1, z)?
+    if n > 65536 { return bad_request }
+    (addr, n as int)
+}
+
+// A thread-id (thread-id syntax, without multiprocess): hex, `0` for any, `-1` for all.
+fn thread_id(d: List[byte], a: int, z: int) -> int ! ServerError {
+    if z - a == 2 && d[a] as int == 45 && d[a + 1] as int == 49 { return 0 - 1 }
+    let v = hex_field(d, a, z)?
+    if v > 2147483647 { return bad_request }
+    v as int
+}
+
+// The actions of a vCont packet from a (after `vCont;`): the first that steps or carries a signal names the thread it
+// is for; `c` alone resumes every thread; `t` is a stop, refused here because the stub stops a thread only for the
+// interrupt byte.
+fn vcont(d: List[byte], a: int) -> Request ! ServerError {
+    var r = req(req_resume)
+    var at = a
+    var any = false
+    while at < d.len {
+        var end = index_of(d, 59, at)
+        if end < 0 { end = d.len }
+        let colon = index_of(d, 58, at)
+        let stop = if colon >= 0 && colon < end { colon } else { end }
+        let action = d[at] as int
+        var who: int = -1
+        if stop < end { who = thread_id(d, stop + 1, end)? }
+        if action == 99 && stop == at + 1 {
+            any = true
+        } else if action == 115 && stop == at + 1 {
+            if !r.step { r.step = true; r.num = who }
+            any = true
+        } else if (action == 67 || action == 83) && stop == at + 3 {
+            let s = hex_field(d, at + 1, at + 3)?
+            let n = s as int
+            if r.sig == 0 { r.sig = n; if !r.step { r.num = who } }
+            if action == 83 && !r.step { r.step = true; r.num = who }
+            any = true
+        } else {
+            return bad_request
+        }
+        at = end + 1
+    }
+    if !any { return bad_request }
+    r
 }
 
 /// The request a packet's data asks for; a malformed one of a kind the stub serves is bad_request, and any other
 /// packet is req_unsupported.
 pub fn request(d: List[byte]) -> Request ! ServerError {
-    return not_built
+    if d.len == 0 { return req(req_unsupported) }
+    let t = str_from_utf8(d) else { return req(req_unsupported) }
+    let c = d[0] as int
+    if t == "?" { return req(req_why) }
+    if t == "g" { return req(req_regs) }
+    if t == "D" { return req(req_detach) }
+    if t == "k" || t.starts_with("vKill;") { return req(req_kill) }
+    if t == "c" { return req(req_resume) }
+    if t == "s" { var r = req(req_resume); r.step = true; return r }
+    if t == "vCont?" { return req(req_vcont_query) }
+    if t.starts_with("vCont;") { return vcont(d, 6) }
+    if t == "qfThreadInfo" { return req(req_threads_first) }
+    if t == "qsThreadInfo" { return req(req_threads_next) }
+    if t == "qC" { return req(req_current) }
+    if t == "qAttached" || t.starts_with("qAttached:") { return req(req_attached) }
+    if t == "QStartNoAckMode" { return req(req_no_ack) }
+    if t == "qSupported" || t.starts_with("qSupported:") { return req(req_supported) }
+    if t.starts_with("qXfer:features:read:") {
+        let colon = index_of(d, 58, 20)
+        if colon < 0 { return bad_request }
+        var r = req(req_features)
+        r.annex = text_of(d, 20, colon)
+        let (off, n) = addr_len(d, colon + 1, d.len)?
+        if off > 1048576 { return bad_request }
+        r.offset = off as int
+        r.len = n
+        return r
+    }
+    if (c == 67 || c == 83) && d.len == 3 {
+        let s = hex_field(d, 1, 3)?
+        var r = req(req_resume)
+        r.sig = s as int
+        r.step = c == 83
+        return r
+    }
+    if c == 72 && d.len >= 3 && (d[1] as int == 103 || d[1] as int == 99) {
+        var r = req(req_thread)
+        r.annex = text_of(d, 1, 2)
+        r.num = thread_id(d, 2, d.len)?
+        return r
+    }
+    if c == 112 && d.len >= 2 {
+        let n = hex_field(d, 1, d.len)?
+        var r = req(req_reg)
+        r.num = n as int
+        return r
+    }
+    if c == 80 {
+        let eq = index_of(d, 61, 1)
+        if eq < 0 { return bad_request }
+        let n = hex_field(d, 1, eq)?
+        var r = req(req_set_reg)
+        r.num = n as int
+        r.data = remote.hex_decode(bytes_of(d, eq + 1, d.len)) else { return bad_request }
+        return r
+    }
+    if c == 71 && d.len >= 3 {
+        var r = req(req_set_regs)
+        r.data = remote.hex_decode(bytes_of(d, 1, d.len)) else { return bad_request }
+        return r
+    }
+    if c == 109 {
+        var r = req(req_read)
+        let (a, n) = addr_len(d, 1, d.len)?
+        r.addr = a
+        r.len = n
+        return r
+    }
+    if c == 77 {
+        let colon = index_of(d, 58, 1)
+        if colon < 0 { return bad_request }
+        var r = req(req_write)
+        let (a, n) = addr_len(d, 1, colon)?
+        r.addr = a
+        r.len = n
+        r.data = remote.hex_decode(bytes_of(d, colon + 1, d.len)) else { return bad_request }
+        if r.data.len != n { return bad_request }
+        return r
+    }
+    if (c == 90 || c == 122) && d.len >= 6 && d[2] as int == 44 {
+        let k = (d[1] as int) - 48
+        if k < 0 || k > 4 { return req(req_unsupported) }
+        let kind = if c == 90 { req_insert } else { req_remove }
+        var r = req(kind)
+        r.num = k
+        let (a, n) = addr_len(d, 3, d.len)?
+        r.addr = a
+        r.len = n
+        return r
+    }
+    req(req_unsupported)
 }
