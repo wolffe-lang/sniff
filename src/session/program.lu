@@ -366,9 +366,14 @@ pub fn sort_lines(mut lines: List[LineEnt]) {
 }
 
 /// Whether an ELF symbol (its st_info, value and section index, and whether that section holds code) names code
-/// the session shows by name: a function symbol at an address in a section.
+/// the session shows by name: a function symbol at an address in a section, or a global symbol with no type in a
+/// section of code, as an assembler's entry label is (PAX's kernel's `_start`, which the pinned gdb names frames
+/// and addresses by: measured).
 pub fn elf_code_symbol(info: u64, value: u64, shndx: u64, exec: bool) -> bool {
-    (info & 15) == 2 && value != 0 && shndx != 0
+    if value == 0 || shndx == 0 { return false }
+    let kind = info & 15
+    if kind == 2 { return true }
+    kind == 0 && (info >> 4) == 1 && exec
 }
 
 /// Read the ELF file at path and build the session's view of it. A program
