@@ -381,7 +381,8 @@ fn cmd_info_threads(mut s: Session, rest: str) -> str {
     var width = 9
     for k in rows {
         let id = thr_target_id(mut s, k)
-        let t = if s.core_on { id } else { "{id} \"{thr_name(s, k)}\"" }
+        // a core's threads and a remote target's carry no name (the stub's extra information is in the id)
+        let t = if s.core_on || s.remote_on { id } else { "{id} \"{thr_name(s, k)}\"" }
         if t.len() > width { width = t.len() }
         (mut ids).push(t)
     }
