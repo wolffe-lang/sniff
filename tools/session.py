@@ -21,7 +21,8 @@ Normalisations, each named in every PASS/FAIL line only when it fired:
   ticks   (rows that name it in "normalise") the tick a breakpoint after an attach lands on: the
           sleeper's progress when the debugger arrived
   tty     (tty rows) carriage returns and the prompt text
-  wrap80  (tty rows) gdb's 80-column wrap of a long frame line ("\n    at ")
+  wrap80  (tty rows) gdb's 80-column wrap of a long frame line ("\n    at ") and of a breakpoint row's
+          location (`in FUNC `, then `at FILE:LINE` under the What column)
   heap    (PAX set) an address in the program's break becomes <HEAP>. A static program's break starts
           at the page above its highest loaded byte on Linux (its random offset is off under both
           debuggers) and on PAX (kernel/vm's `start`), and PAX refuses a break more than 64 MiB above
@@ -574,6 +575,9 @@ def run_pty(argv, cmds, prompt, work, timeout=60):
     return buf.decode(errors='replace'), '', proc.returncode
 
 
+BP_ROW_WRAP = re.compile(r'^(\d+(?:\.\d+)?\s+(?:hw )?breakpoint\s.* in \S+) \n {51}(at \S+:\d+)$', re.M)
+
+
 def normalize_tty(text, fired):
     t = text.replace('\r\n', '\n').replace('\r', '')
     if t != text:
@@ -583,6 +587,11 @@ def normalize_tty(text, fired):
     t = re.sub(r'\n    at ', ' at ', t)
     if '\n    at ' in text.replace('\r\n', '\n'):
         fired.add('wrap80')
+    # a breakpoint row's location, wrapped under the What column (51: a 64-bit address's table)
+    joined = BP_ROW_WRAP.sub(r'\1 \2', t)
+    if joined != t:
+        fired.add('wrap80')
+        t = joined
     return t
 
 
