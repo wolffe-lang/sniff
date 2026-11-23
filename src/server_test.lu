@@ -1,0 +1,114 @@
+//! member: false
+// sniff-server's replies (Stop Reply Packets, General Query Packets, Target Description Format) and the protocol's
+// signal numbers as the pinned gdbserver was measured to send them (tests/server-signals.tsv).
+use server
+use remote
+
+fn none() -> List[remote.Annex] {
+    let n: List[remote.Annex] = []
+    n
+}
+
+fn signal_map_row() {
+    // measured: SIGUSR1 (host 10) is 30, SIGBUS (7) is 10, SIGSYS (31) is 12, SIGSTOP (19) is 17, and SIGSTKFLT (16)
+    // is 143, which gdb prints as `?, Unknown signal.`; SIGTRAP and SIGSEGV are the host's numbers
+    let usr1 = server.protocol_signal(10) else |e| { print("FAIL server-signal-map {e}"); return }
+    assert(usr1 == 30)
+    let bus = server.protocol_signal(7) else { return }
+    assert(bus == 10)
+    let sys = server.protocol_signal(31) else { return }
+    assert(sys == 12)
+    let stop = server.protocol_signal(19) else { return }
+    assert(stop == 17)
+    let stkflt = server.protocol_signal(16) else { return }
+    assert(stkflt == 143)
+    let trap = server.protocol_signal(5) else { return }
+    assert(trap == 5)
+    let segv = server.protocol_signal(11) else { return }
+    assert(segv == 11)
+    // SIGKILL never stops; its number is the one an X reply carries (measured: X9)
+    let kill = server.protocol_signal(9) else { return }
+    assert(kill == 9)
+    // a number the table does not hold is refused by name: none past 31, and 0 is no signal
+    let past = server.protocol_signal(32)
+    assert("{past}" == "unmeasured_signal")
+    let zero = server.protocol_signal(0)
+    assert("{zero}" == "unmeasured_signal")
+    print("PASS server-signal-map")
+}
+
+fn stop_reply_row() {
+    // T AA, the stop's reason when it has one, then thread:TID; (Stop Reply Packets), the signal by its protocol number
+    let usr1 = server.stop_reply(10, 1234, "", 0) else |e| { print("FAIL server-stop-reply {e}"); return }
+    assert(usr1 == "T1ethread:4d2;")
+    let sw = server.stop_reply(5, 1234, "swbreak", 0) else { return }
+    assert(sw == "T05swbreak:;thread:4d2;")
+    let w = server.stop_reply(5, 1234, "watch", 4210728) else { return }
+    assert(w == "T05watch:404028;thread:4d2;")
+    let rw = server.stop_reply(5, 1234, "rwatch", 4210728) else { return }
+    assert(rw == "T05rwatch:404028;thread:4d2;")
+    let aw = server.stop_reply(5, 1234, "awatch", 4210728) else { return }
+    assert(aw == "T05awatch:404028;thread:4d2;")
+    let unknown = server.stop_reply(16, 1234, "", 0) else { return }
+    assert(unknown == "T8fthread:4d2;")
+    let past = server.stop_reply(33, 1234, "", 0)
+    assert("{past}" == "unmeasured_signal")
+    print("PASS server-stop-reply")
+}
+
+fn end_replies_row() {
+    // W AA for an exit status, X AA for the signal that ended the process (Stop Reply Packets): two hex digits, and no
+    // multiprocess field, which the stub does not offer
+    let three = server.exit_reply(3) else |e| { print("FAIL server-end-replies {e}"); return }
+    assert(three == "W03")
+    let top = server.exit_reply(255) else { return }
+    assert(top == "Wff")
+    let over = server.exit_reply(256)
+    assert("{over}" == "bad_status")
+    let killed = server.killed_reply(9) else { return }
+    assert(killed == "X09")
+    let segv = server.killed_reply(11) else { return }
+    assert(segv == "X0b")
+    let usr1 = server.killed_reply(10) else { return }
+    assert(usr1 == "X1e")
+    let past = server.killed_reply(40)
+    assert("{past}" == "unmeasured_signal")
+    print("PASS server-end-replies")
+}
+
+fn supported_row() {
+    // the stub features it offers (General Query Packets): packets up to 0x4000 bytes, its description, no-ack mode,
+    // the actions in vCont?'s reply, and the swbreak stop reason; nothing else (no multiprocess, no Host I/O)
+    let s = server.supported_reply() else |e| { print("FAIL server-supported {e}"); return }
+    assert(s == "PacketSize=4000;qXfer:features:read+;QStartNoAckMode+;vContSupported+;swbreak+")
+    print("PASS server-supported")
+}
+
+fn description_row() {
+    // the stub's own description, written from the Target Description Format and i386 Features nodes, read back by
+    // sniff's own description reader: the i386 core complete, the SSE feature, fs_base and gs_base, and no AVX
+    let text = server.description() else |e| { print("FAIL server-description {e}"); return }
+    let d = remote.parse(text, none()) else |e| { print("FAIL server-description parse {e}"); return }
+    assert(d.architecture == "i386:x86-64")
+    assert(remote.missing_i386_core(d).len == 0)
+    assert(d.features.len == 3)
+    assert(d.features[0] == "org.gnu.gdb.i386.core")
+    assert(d.features[1] == "org.gnu.gdb.i386.sse")
+    assert(d.features[2] == "org.gnu.gdb.i386.segments")
+    assert(remote.regnum_of(d, "rax") == 0)
+    assert(remote.regnum_of(d, "rip") == 16)
+    assert(remote.regnum_of(d, "xmm15") >= 0)
+    assert(remote.regnum_of(d, "mxcsr") >= 0)
+    assert(remote.regnum_of(d, "fs_base") >= 0)
+    assert(remote.regnum_of(d, "gs_base") >= 0)
+    assert(remote.regnum_of(d, "ymm0h") < 0)
+    print("PASS server-description")
+}
+
+fn main() {
+    signal_map_row()
+    stop_reply_row()
+    end_replies_row()
+    supported_row()
+    description_row()
+}

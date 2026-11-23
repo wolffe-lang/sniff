@@ -197,5 +197,12 @@
     "session-fallback-nowhere",
     "session-arm64-insn-before",
     "session-arm64-lr-rule"
+  ],
+  "server_test.lu": [
+    "server-signal-map",
+    "server-stop-reply",
+    "server-end-replies",
+    "server-supported",
+    "server-description"
   ]
 }

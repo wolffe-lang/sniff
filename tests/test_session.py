@@ -159,6 +159,31 @@ class GateRemoteQemuLine(unittest.TestCase):
         self.assertIn('rc=1', said.splitlines())
 
 
+class ServerSignalTable(unittest.TestCase):
+    """sniff-server's signal numbers are the measured table's (tests/server-signals.tsv), never written from memory:
+    the stub's list, by host number, equals the file's protocol column (SIGKILL's from its X reply), and the file names
+    the gdbserver it was measured against."""
+
+    TABLE = ROOT / 'tests/server-signals.tsv'
+
+    def test_the_stub_table_is_the_measured_table(self):
+        import re
+        want = [-1] * 32
+        for line in self.TABLE.read_text().splitlines():
+            if line[:1].isdigit():
+                host, reply, proto = line.split('\t')[:3]
+                want[int(host)] = int(proto) if proto != '-' else int(re.match(r'X([0-9a-f]+)', reply).group(1), 16)
+        m = re.search(r'fn measured\(\) -> List\[int\] \{\s*\[([^\]]*)\]', (ROOT / 'src/server/replies.lu').read_text())
+        self.assertIsNotNone(m, "no measured() table in src/server/replies.lu")
+        got = [int(x) for x in m.group(1).replace('\n', ' ').split(',') if x.strip()]
+        self.assertEqual(got, want)
+
+    def test_the_table_names_what_it_was_measured_against(self):
+        text = self.TABLE.read_text()
+        self.assertIn('GNU gdbserver (Ubuntu 15.1-1ubuntu1~24.04.1) 15.1, sha256 507c37148786ac8bc49f3107408a7e93f4ee7818a796222ba6db222051c47ba7', text)
+        self.assertEqual(sum(1 for line in text.splitlines() if line[:1].isdigit()), 31)
+
+
 class XstateSize(unittest.TestCase):
     """gdb's warnings that a core's XSAVE section is not the size its layouts give for the host's processor: larger
     (`Unexpected size of section`, a runner whose XSAVE area carries AMX tile state) or smaller (`... too small`, an
