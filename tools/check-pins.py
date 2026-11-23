@@ -57,11 +57,24 @@ def main():
         vector = oracle['readelf'][key]
         if not isinstance(vector, list) or not vector or not all(isinstance(x, str) and x.startswith('--') for x in vector):
             raise ValueError('readelf %s is not a list of options' % key)
+    # QEMU: the image builds the tarball the pin names, by its digest, with the configure line the pin names
+    q = oracle['qemu']
+    if q['source'] != 'https://download.qemu.org/qemu-%s.tar.xz' % q['version'] or q['version_line'] != 'QEMU emulator version ' + q['version']:
+        raise ValueError('qemu pin names another release than its version')
+    if ('curl -fsSL --proto =https -o /tmp/qemu.tar.xz %s;' % q['source']) not in content:
+        raise ValueError('qemu source differs from pin')
+    if ('printf "%%s  %%s\\n" %s /tmp/qemu.tar.xz | sha256sum -c -' % q['source_sha256']) not in content:
+        raise ValueError('qemu source check differs from pin')
+    configure = './configure --prefix=/opt/qemu-%s --python=/usr/bin/python3 %s;' % (q['version'], ' '.join(q['configure']))
+    if configure not in content:
+        raise ValueError('qemu configure line differs from pin')
+    if not all(isinstance(x, str) and x.startswith('--') and x.split('=')[0] not in ('--prefix', '--python') for x in q['configure']):
+        raise ValueError('qemu configure is not a list of options, or names a host path')
     manifest = (ROOT / 'ci/oracle-binaries.lock').read_text()
-    for name in ('gdb', 'llvm_dwarfdump', 'readelf', 'gcc', 'clang'):
+    for name in ('gdb', 'llvm_dwarfdump', 'readelf', 'gcc', 'clang', 'gdbserver', 'qemu'):
         if oracle[name]['sha256'] not in manifest:
             raise ValueError('binary manifest omits ' + name)
-    print('PASS pin-metadata toolchains=2 oracle_binaries=5')
+    print('PASS pin-metadata toolchains=2 oracle_binaries=7')
 
 
 if __name__ == '__main__':
