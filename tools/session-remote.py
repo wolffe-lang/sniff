@@ -404,7 +404,7 @@ def cmd_skip(a):
 # sniff-server's rows (kind server): the stub on loopback in this host, its client this harness or the pinned gdb. Each
 # row's check names what it holds; the stub is started by its recorded pid and ended by it.
 SERVER_CHECKS = ('refuse-second', 'refuse-non-loopback', 'loopback-default', 'idle-cost', 'interrupt-latency',
-                 'z1-hbreak', 'fp-write', 'fp-tag', 'threads', 'detach', 'gdb-session', 'oracle-stable')
+                 'z1-hbreak', 'fp-write', 'fp-tag', 'threads', 'detach', 'gdb-session', 'oracle-stable', 'native-golden')
 SESSION_ROWS = ROOT / 'tests/session-rows.json'
 # what gdb prints differently through the two stubs, by design, each by name: only through gdbserver, which offers Host
 # I/O, does gdb read files over the connection, so only there does it print the two lines of that feature (a separate
@@ -904,6 +904,42 @@ def check_gdb_session(a, row, out):
         len(mine.splitlines()), ', '.join(n for n, _rx, _to in SESSION_NORMALISE))
 
 
+# One fixture through the stub is held to the pinned gdb's native golden as well (tests/evidence/pax-linux, the same
+# static build): gdb's transcript through the stub against what gdb printed debugging the program itself. Only two
+# lines differ, both gdb's own on a remote target, each dropped by name from the stub's side alone: the stop a remote
+# target reports on connecting (the program at its first instruction, which a native `run` never shows), and gdb's
+# line on leaving a remote target at the end of batch mode (a native session ends without one).
+NATIVE_NORMALISE = (
+    ('connect-stop', re.compile(r'\A0x[0-9a-f]{16} in _start \(\)\n'), ''),
+    ('remote-kill', re.compile(r'^\[Inferior 1 \(Remote target\) killed\]\n\Z', re.M), ''),
+)
+NATIVE_GOLD = ROOT / 'tests/evidence/pax-linux'
+
+
+def native_normalise(text):
+    for _name, rx, to in NATIVE_NORMALISE:
+        text = rx.sub(to, text)
+    return text
+
+
+def check_native_golden(a, row, out):
+    """gdb through sniff-server on the session row's static fixture against the pinned gdb's native golden for it
+    (its standard output, then its standard error), with NATIVE_NORMALISE's two named drops."""
+    got = session_script(row['row'])
+    if got is None:
+        return 'session row %s is not one plain run' % row['row'], ''
+    prog, args, cmds = got
+    want = (NATIVE_GOLD / (row['row'] + '.out')).read_text() + (NATIVE_GOLD / (row['row'] + '.err')).read_text()
+    mine = gdb_through(a, 'sniff-server', Path(a.fixtures) / prog, args, cmds, out, row['name'] + '.sniff-server')
+    if mine is None:
+        return 'the stub never listened, or gdb did not end in 120 s', ''
+    d = first_diff(want, native_normalise(mine))
+    if d:
+        return d, ''
+    return '', "gdb through sniff-server equals the pinned gdb's native golden (%d lines; dropped from the stub's side: %s)" % (
+        len(want.splitlines()), ', '.join(n for n, _rx, _to in NATIVE_NORMALISE))
+
+
 def check_oracle_stable(a, row, out):
     """The oracle's own stability: gdb through the pinned gdbserver, taken twice on the session row's fixture, is
     byte-equal once each run's port is named."""
@@ -1207,7 +1243,7 @@ def cmd_server(a):
     checks = {'refuse-second': check_refuse_second, 'refuse-non-loopback': check_refuse_non_loopback,
               'loopback-default': check_loopback_default, 'idle-cost': check_idle_cost,
               'interrupt-latency': check_interrupt_latency, 'z1-hbreak': check_z1_hbreak, 'fp-write': check_fp_write,
-              'fp-tag': check_fp_tag, 'detach': check_detach,
+              'fp-tag': check_fp_tag, 'detach': check_detach, 'native-golden': check_native_golden,
               'threads': check_threads, 'gdb-session': check_gdb_session, 'oracle-stable': check_oracle_stable}
     print(oracle_line())
     for row in load_rows(a.only, 'server'):
@@ -1297,7 +1333,7 @@ def cmd_selftest(_a):
     assert latency_problems('T02thread:4d2;', 0.51) and latency_problems('T05thread:4d2;', 0.1) and latency_problems(None, 0.1)
     for r in [r for r in rows if r.get('kind') == 'server']:
         assert r['name'].startswith('server-') and r.get('check') in SERVER_CHECKS, r['name']
-        if r['check'] in ('gdb-session', 'oracle-stable'):
+        if r['check'] in ('gdb-session', 'oracle-stable', 'native-golden'):
             assert session_script(r['row']) is not None and r.get('why'), 'a session row names one plain session row: ' + r['name']
         else:
             assert r.get('prog', '').startswith('c/') and r.get('why'), 'a server row names its fixture and says what it holds: ' + r['name']
@@ -1306,6 +1342,12 @@ def cmd_selftest(_a):
                           'warning: File transfers from remote targets can be slow. Use "set sysroot" to access files locally instead.\n')
     assert n == '[Inferior 1 (INFERIOR) killed]\nRemote debugging using 127.0.0.1:PORT\n* 1    Thread TID "prog" main ()\n', repr(n)
     assert session_normalise('[Inferior 1 (Remote target) killed]\n') == '[Inferior 1 (INFERIOR) killed]\n'
+    # the native golden's two drops, each from the stub's side only, and nothing else
+    s = native_normalise('0x0000000000401740 in _start ()\nBreakpoint 1 at 0x4018d9: file m.c, line 20.\n'
+                         '0x0000000000401e58 in __libc_start_call_main ()\n[Inferior 1 (Remote target) killed]\n')
+    assert s == 'Breakpoint 1 at 0x4018d9: file m.c, line 20.\n0x0000000000401e58 in __libc_start_call_main ()\n', repr(s)
+    assert native_normalise('x\n0x0000000000401740 in _start ()\n') == 'x\n0x0000000000401740 in _start ()\n'
+    assert len([r for r in rows if r.get('check') == 'native-golden']) == 1, 'one fixture is held to its native golden'
     # the packet driver opens as the pinned gdb does (its remote log: `?`, then Hg for the thread the stop names)
     assert hg_for('T05thread:4d2;') == 'Hg4d2' and hg_for('T0506:00;07:90;thread:p13.13;core:5;') == 'Hgp13.13'
     assert hg_for('W00') is None and hg_for(None) is None
