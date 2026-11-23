@@ -1,0 +1,57 @@
+// The x87 tag word, from the Intel SDM's FXSAVE (a processor manual): the FXSAVE area PTRACE_GETFPREGS gives keeps
+// an abridged byte, one bit a register in physical order R0 to R7 (0 empty, 1 in use); gdb's ftag register is the
+// full tag word, two bits a register (00 valid, 01 zero, 10 special, 11 empty), each in-use register's class read
+// from its 80-bit value (the manual's table for recreating the full word). Pure: no I/O. Unit row: server-x87-tag.
+use platform
+
+// The class of the 80-bit value at byte `at`: 64 bits of significand (bit 63 the J bit), then 15 bits of exponent.
+fn x87_class(fp: List[byte], at: int) -> int {
+    let exp = ((fp[at + 8] as int) | ((fp[at + 9] as int) << 8)) & 32767
+    let j = ((fp[at + 7] as int) >> 7) & 1
+    var frac_zero = ((fp[at + 7] as int) & 127) == 0
+    var i: int = 0
+    while i < 7 {
+        if (fp[at + i] as int) != 0 { frac_zero = false }
+        i += 1
+    }
+    if exp == 32767 { return 2 }
+    if exp == 0 {
+        if frac_zero && j == 0 { return 1 }
+        return 2
+    }
+    if j == 1 { return 0 }
+    2
+}
+
+/// gdb's ftag, the full tag word, from an FXSAVE area: a register whose abridged bit is 0 is empty (11); one in use
+/// is classed by its value, register Rj being ST((j - TOP) mod 8), TOP in bits 11 to 13 of the status word. An area
+/// too short to hold the registers gives every register empty.
+pub fn x87_full_tag(fp: List[byte]) -> int {
+    if fp.len < platform.fpregs_size { return 65535 }
+    let abridged = fp[platform.fpregs_ftw] as int
+    let swd = (fp[platform.fpregs_swd] as int) | ((fp[platform.fpregs_swd + 1] as int) << 8)
+    let top = (swd >> 11) & 7
+    var full: int = 0
+    var j: int = 0
+    while j < 8 {
+        var tag: int = 3
+        if ((abridged >> j) & 1) == 1 {
+            let st = (j - top + 8) % 8
+            tag = x87_class(fp, platform.fpregs_st + 16 * st)
+        }
+        full = full | (tag << (2 * j))
+        j += 1
+    }
+    full
+}
+
+/// The abridged byte FXSAVE keeps for a full tag word: a register's bit is 1 unless its tag is empty (11).
+pub fn x87_abridged_tag(full: int) -> int {
+    var b: int = 0
+    var j: int = 0
+    while j < 8 {
+        if ((full >> (2 * j)) & 3) != 3 { b = b | (1 << j) }
+        j += 1
+    }
+    b
+}
