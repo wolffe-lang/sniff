@@ -157,5 +157,8 @@
     "remote-tdesc-types",
     "remote-tdesc-caps",
     "remote-tdesc-caps-past"
+  ],
+  "link_test.lu": [
+    "remote-net-loopback"
   ]
 }

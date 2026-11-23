@@ -1,0 +1,20 @@
+//! member: false
+// The transport and its stand-in stub (sniff's own code over loopback sockets, scripted replies written before the
+// client speaks). First row: std.net itself, a loopback round trip, which needs the package's `net` capability.
+
+use std.net
+
+fn main() {
+    var srv = net.listen(net.loopback(0)) else { print("FAIL listen"); return }
+    let port = net.port(srv) else { print("FAIL port"); return }
+    var cli = net.connect(net.loopback(port)) else { print("FAIL connect"); return }
+    var conn = net.accept(mut srv) else { print("FAIL accept"); return }
+    let up: List[byte] = [43 as byte]
+    net.write_bytes(mut cli, up) else { print("FAIL write"); return }
+    let got = net.read_bytes(mut conn, 8) else { print("FAIL read"); return }
+    assert(got.len == 1 && got[0] as int == 43)
+    print("PASS remote-net-loopback")
+    net.close(take cli) else { return }
+    net.close(take conn) else { return }
+    net.close_listener(take srv) else { return }
+}
