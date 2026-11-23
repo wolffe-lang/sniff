@@ -136,9 +136,11 @@ pub const unwind_after_push: int = 2
 pub const unwind_frame_pointer: int = 3
 
 /// Which rule a frame takes: whether its pc is in code the session knows (the program's image or a library's),
-/// is a ret, is at or before its function's `push %rbp`, or just past it.
+/// is a ret, is at or before its function's `push %rbp`, or just past it. A pc in no code (a call through a null
+/// pointer stops at 0) is where a call just went: the return address is at the stack pointer and the frame pointer
+/// is still the caller's (measured: the pinned gdb names the calling function as frame 1).
 pub fn fallback_rule(in_code: bool, at_ret: bool, before_push: bool, after_push: bool) -> int {
-    if at_ret || before_push { return unwind_at_entry }
+    if !in_code || at_ret || before_push { return unwind_at_entry }
     if after_push { return unwind_after_push }
     unwind_frame_pointer
 }
@@ -157,7 +159,7 @@ fn unwind_fp_x86(s: Session, f: Frame, in_code: bool) -> Frame ! {no_caller} {
         if byte_at(s, a) == 243 && byte_at(s, a + 1) == 15 && byte_at(s, a + 2) == 30 && byte_at(s, a + 3) == 250 { a += 4 }
         if byte_at(s, a) == 85 { push_at = a }
     }
-    let at_ret = byte_at(s, pc) == 195
+    let at_ret = in_code && byte_at(s, pc) == 195
     let rule = fallback_rule(in_code, at_ret, push_at != 0 && pc <= push_at, push_at != 0 && pc == push_at + 1)
     var cfa: u64 = rbp + 16
     var saved_rbp_at: u64 = rbp
