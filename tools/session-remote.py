@@ -406,11 +406,14 @@ def cmd_skip(a):
 SERVER_CHECKS = ('refuse-second', 'refuse-non-loopback', 'loopback-default', 'idle-cost', 'interrupt-latency',
                  'z1-hbreak', 'fp-write', 'threads', 'gdb-session', 'oracle-stable')
 SESSION_ROWS = ROOT / 'tests/session-rows.json'
-# what gdb prints differently through the two stubs, by design, each by name: only through gdbserver (which offers Host
-# I/O) does gdb read a separate debug file over it; only through gdbserver (which offers multiprocess) does gdb name the
-# inferior by its pid and a thread as PID.TID; and each run's port is its own
+# what gdb prints differently through the two stubs, by design, each by name: only through gdbserver, which offers Host
+# I/O, does gdb read files over the connection, so only there does it print the two lines of that feature (a separate
+# debug file read from the remote target, and its warning that file transfers from remote targets can be slow); only
+# through gdbserver (which offers multiprocess) does gdb name the inferior by its pid and a thread as PID.TID; and each
+# run's port is its own
 SESSION_NORMALISE = (
-    ('host-io-debug-file', re.compile(r'^Reading \S+ from remote target\.\.\.\n', re.M), ''),
+    ('host-io', re.compile(r'^(?:Reading \S+ from remote target\.\.\.|warning: File transfers from remote targets can be slow\. '
+                           r'Use "set sysroot" to access files locally instead\.)\n', re.M), ''),
     ('inferior-name', re.compile(r'\[Inferior 1 \((?:process \d+|Remote target)\)'), '[Inferior 1 (INFERIOR)'),
     ('port', re.compile(r'127\.0\.0\.1:\d+'), '127.0.0.1:PORT'),
     ('thread-id', re.compile(r'\bThread (?:\d+\.)?\d+\b'), 'Thread TID'),
