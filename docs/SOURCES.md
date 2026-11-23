@@ -332,7 +332,7 @@ constants do; the manual says what each byte means, not where the kernel puts it
 
 - The signal numbers the stub sends (`tests/server-signals.tsv`): each of signals 1 to 31 raised under the pinned gdbserver, its stop reply read off the connection beside the name the pinned gdb printed for it in the same run. The file names gdbserver and gdb by version and SHA-256; a number not in it is refused by name.
 - What the pinned gdb sends a stub and in what order (qSupported, `?`, then `Hg` for the thread the stop names, before any breakpoint or register write), that it asks even a static program's stub for `qXfer:libraries-svr4`, and which of gdbserver's features change what gdb prints (Host I/O: a separate debug file read over the connection and a warning that file transfers can be slow; multiprocess: an inferior named by its pid; the thread list: each thread's name), all read from the pinned gdb's remote logs against the pinned gdbserver.
-- gdbserver's own answers (its qSupported reply, the empty reply to `Z3`), read off the connection.
+- gdbserver's own answers, read off the connection: its qSupported reply, the empty reply to `Z3`, `p` and `P`, its replies run-length encoded, its thread list one id a reply, every x87 register in use tagged valid in `ftag` whatever it holds, and breakpoints and watchpoints left in on a `D` sent with them set.
 - That PAX answers PTRACE_SETFPREGS with EIO, so the stub answers a write of an x87 or SSE register on PAX with an error reply; and that a connection through QEMU's forwarded port to a guest's listener first held after 3.0 s and three resets, from which the PAX rows' retry bound (twenty times that) is set.
 
 gdbserver ran only as the pinned binary in the oracle container. No stub's source was read.
