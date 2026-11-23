@@ -682,6 +682,18 @@ def symbol(prog, name):
     return None
 
 
+def hg_for(stop):
+    """The Hg the pinned gdb sends after `?` (its remote log): the thread the stop reply names, or None."""
+    m = re.search(r'thread:([^;]+);', stop or '')
+    return 'Hg' + m.group(1) if m else None
+
+
+def oracle_silent(answers):
+    """True when the oracle gave no reply to some request (None): such a row compares nothing."""
+    vals = answers.values() if isinstance(answers, dict) else answers
+    return any(v is None or (isinstance(v, (list, dict)) and oracle_silent(v)) for v in vals)
+
+
 def both_stubs(a, row, out, steps):
     """steps(socket, prog) run against sniff-server and then against the pinned gdbserver, each on its own free port
     with the row's fixture and arguments: (sniff-server's answers, gdbserver's), or a reason one never listened."""
@@ -699,7 +711,11 @@ def both_stubs(a, row, out, steps):
             end_server(p, row['name'])
             return None, None, '%s never said it was listening' % who
         c = socket.create_connection(('127.0.0.1', port), timeout=5)
+        # the pinned gdb's own opening, in its order (its remote log): qSupported, `?`, then Hg for the thread named
         ask(c, 'qSupported:swbreak+;vContSupported+')
+        h = hg_for(ask(c, '?'))
+        if h:
+            ask(c, h)
         try:
             got[who] = steps(c, prog)
         finally:
@@ -722,6 +738,8 @@ def check_same(a, row, out, steps, what):
     mine, theirs, why = both_stubs(a, row, out, steps)
     if why:
         return why, ''
+    if oracle_silent(theirs):
+        return 'the oracle gave no reply (gdbserver %r): nothing compared' % (theirs,), ''
     if mine != theirs:
         return '%s: sniff-server %r, gdbserver %r' % (what, mine, theirs), ''
     return '', '%s equal to gdbserver\'s: %r' % (what, mine)
@@ -735,7 +753,7 @@ def check_z1_hbreak(a, row, out):
         stop = resumed(c) if z == 'OK' else None
         rip = ask(c, 'p10') if stop else None
         at = int.from_bytes(bytes.fromhex(rip), 'little') == addr if rip and len(rip) == 16 else None
-        return {'Z1': z, 'stop': (stop or '')[:3], 'rip at the breakpoint': at}
+        return {'Z1': z, 'stop': stop[:3] if stop else None, 'rip at the breakpoint': at}
     return check_same(a, row, out, steps, 'Z1, the stop and the pc')
 
 
@@ -745,7 +763,7 @@ def check_fp_write(a, row, out):
     def steps(c, prog):
         w = ask(c, 'P28=' + value)
         r = ask(c, 'p28')
-        return {'P xmm0': w, 'p xmm0 is the value': r == value}
+        return {'P xmm0': w, 'p xmm0 is the value': (r == value) if r is not None else None}
     return check_same(a, row, out, steps, 'the write and the read back')
 
 
@@ -769,7 +787,7 @@ def check_threads(a, row, out):
         stop = resumed(c) if z == 'OK' else None
         first = ask(c, 'qfThreadInfo') if stop else ''
         ids = [x for x in (first or '')[1:].split(',') if x] if (first or '').startswith('m') else []
-        return {'Z0': z, 'stop': (stop or '')[:3], 'threads listed': len(ids) >= 2}
+        return {'Z0': z, 'stop': stop[:3] if stop else None, 'threads listed': (len(ids) >= 2) if first is not None else None}
     return check_same(a, row, out, steps, 'the stop and the thread list')
 
 
@@ -824,6 +842,25 @@ def session_normalise(text):
     return text
 
 
+def stable_normalise(text):
+    """gdbserver's transcript with what is each run's own named (the port, the inferior's pid, the thread ids), as the
+    session rows name them: its own stability is held over the rest."""
+    for name, rx, to in SESSION_NORMALISE:
+        if name in ('port', 'inferior-name', 'thread-id'):
+            text = rx.sub(to, text)
+    return text
+
+
+# On PAX the initial stack is the kernel's, not Linux's: an address on the stack is named <STACK> by the rule the PAX
+# set's rows already use for the same cause (tools/session.py's `stack`), here by the name `stack`.
+PAX_STACK_HEX = re.compile(r'0x7ff[0-9a-f]{9}\b')
+PAX_STACK_DEC = re.compile(r'\b140[67][0-9]{11}\b')
+
+
+def pax_normalise(text):
+    return PAX_STACK_DEC.sub('<STACK>', PAX_STACK_HEX.sub('<STACK>', session_normalise(text)))
+
+
 def check_gdb_session(a, row, out):
     """gdb through sniff-server against gdb through the pinned gdbserver: one session row's commands on its static
     fixture, both transcripts with the named normalisations, held equal."""
@@ -855,14 +892,10 @@ def check_oracle_stable(a, row, out):
     two = gdb_through(a, 'gdbserver', prog, args, cmds, out, row['name'] + '.second')
     if one is None or two is None:
         return 'gdbserver never listened, or gdb did not end in 120 s', ''
-    port = SESSION_NORMALISE[2]
-    a1, a2 = port[1].sub(port[2], one), port[1].sub(port[2], two)
-    a1 = SESSION_NORMALISE[1][1].sub(SESSION_NORMALISE[1][2], a1)
-    a2 = SESSION_NORMALISE[1][1].sub(SESSION_NORMALISE[1][2], a2)
-    d = first_diff(a1, a2)
+    d = first_diff(stable_normalise(one), stable_normalise(two))
     if d:
         return 'gdbserver\'s transcript changed between two runs: ' + d, ''
-    return '', 'gdbserver\'s transcript held by a second run (%d lines; only the port and the pid named)' % len(one.splitlines())
+    return '', 'gdbserver\'s transcript held by a second run (%d lines; named: port, inferior-name, thread-id)' % len(one.splitlines())
 
 
 # sniff-server's rows on PAX (kind server-pax). The stub runs in PAX's console image under KVM as a static program, one
@@ -1102,7 +1135,7 @@ def cmd_server_pax(a):
             if theirs.get(name) is None:
                 why = 'no oracle: gdbserver never listened, or gdb did not end'
             else:
-                why = first_diff(session_normalise(theirs[name]), session_normalise(mine[name]))
+                why = first_diff(pax_normalise(theirs[name]), pax_normalise(mine[name]))
         elif mine[name] != PAX_FP_WANT:
             why = 'answers %r, not %r' % (mine[name], PAX_FP_WANT)
         if why:
@@ -1114,7 +1147,7 @@ def cmd_server_pax(a):
             counts['fail'] += 1
             continue
         n, took = reached[name]
-        held = ('gdb through sniff-server on PAX equals gdb through gdbserver on Linux (%d lines; normalised: %s)' %
+        held = ('gdb through sniff-server on PAX equals gdb through gdbserver on Linux (%d lines; normalised: %s, stack)' %
                 (len(mine[name].splitlines()), ', '.join(x for x, _rx, _to in SESSION_NORMALISE))
                 if r['check'] == 'pax-session' else 'PAX refuses the SSE write by name: %r' % mine[name])
         print('PASS remote %s [%s; connected at attempt %d after %.1f s, %s]' % (name, held, n, took, bound))
