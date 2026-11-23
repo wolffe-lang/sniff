@@ -19,6 +19,7 @@
 
 #define REQ(n) printf("request %s %d\n", #n, (int)(n))
 #define OFF(f) printf("regs %s %d\n", #f, (int)(offsetof(struct user_regs_struct, f) / 8))
+#define FPOFF(f) printf("fpregs %s %d\n", #f, (int)offsetof(struct user_fpregs_struct, f))
 
 static void status(const char *name, int code, int sig) {
     pid_t p = fork();
@@ -72,6 +73,10 @@ int main(void) {
     printf("core prpsinfo_psargs %d\n", (int)offsetof(struct elf_prpsinfo, pr_psargs));
     printf("core prpsinfo_psargs_size %d\n", (int)sizeof(((struct elf_prpsinfo *)0)->pr_psargs));
     printf("core fpregset_size %d\n", (int)sizeof(elf_fpregset_t));
+    /* S8: the stub writes the x87 and SSE registers back with SETFPREGS, at these byte offsets of user_fpregs_struct */
+    REQ(PTRACE_SETFPREGS);
+    printf("fpregs size %d\n", (int)sizeof(struct user_fpregs_struct));
+    FPOFF(cwd); FPOFF(swd); FPOFF(ftw); FPOFF(fop); FPOFF(rip); FPOFF(rdp); FPOFF(mxcsr); FPOFF(st_space); FPOFF(xmm_space);
     status("exit0", 0, 0); status("exit3", 3, 0); status("exit255", 255, 0);
     status("sigsegv", 0, SIGSEGV); status("sigkill", 0, SIGKILL); status("sigabrt", 0, SIGABRT);
     /* the stop at exec: PTRACE_TRACEME, then exec; first stop status */
