@@ -1348,6 +1348,21 @@ def cmd_selftest(_a):
     assert s == 'Breakpoint 1 at 0x4018d9: file m.c, line 20.\n0x0000000000401e58 in __libc_start_call_main ()\n', repr(s)
     assert native_normalise('x\n0x0000000000401740 in _start ()\n') == 'x\n0x0000000000401740 in _start ()\n'
     assert len([r for r in rows if r.get('check') == 'native-golden']) == 1, 'one fixture is held to its native golden'
+    # a thread list may come one id a reply (qfThreadInfo, then qsThreadInfo until `l`), as gdbserver gives it
+    replies = iter(['m5f3', 'm5f4', 'm5f5', 'l'])
+    assert thread_ids(lambda q: next(replies)) == ['5f3', '5f4', '5f5']
+    replies = iter(['m4d2,4d3', 'l'])
+    assert thread_ids(lambda q: next(replies)) == ['4d2', '4d3']
+    assert thread_ids(lambda q: None) is None and thread_ids(lambda q: '') is None
+    # registers by g and G (gdbserver answers p and P with the empty reply): fields at the description's byte offsets
+    g = '00' * G_RIP + '7740400000000000' + '00' * 400
+    assert g_field(g, G_RIP, 8) == 0x404077 and g_with(g, G_RIP, '01').startswith('00' * G_RIP + '01404000')
+    assert (G_RIP, G_FCTRL, G_FTAG, G_XMM0) == (128, 244, 252, 276)
+    # the spinning threads' pcs and the thread table's padding, named
+    a = session_normalise('  Id   Target Id             Frame \n* 1    Thread 595.595 "prog" 0x00000000004019c2 in spin (flag=1)\n')
+    b = session_normalise('  Id   Target Id         Frame \n* 1    Thread 595 "prog" 0x00000000004019d8 in spin (flag=1)\n')
+    assert a == b, (a, b)
+    assert stable_normalise('  2    Thread 7.8 "prog" 0x00000000004019c2 in spin (x)\n') == stable_normalise('  2    Thread 7.8 "prog" 0x00000000004019d8 in spin (x)\n')
     # the packet driver opens as the pinned gdb does (its remote log: `?`, then Hg for the thread the stop names)
     assert hg_for('T05thread:4d2;') == 'Hg4d2' and hg_for('T0506:00;07:90;thread:p13.13;core:5;') == 'Hgp13.13'
     assert hg_for('W00') is None and hg_for(None) is None
