@@ -66,7 +66,9 @@ struct Prog {
     pub info: readers.DwarfInfo,
     pub has_info: bool,
     pub units: List[Unit],
+    /// Each line table file's name as shown, and the path its source is read from.
     pub files: List[str],
+    pub file_paths: List[str],
     pub lines: List[LineEnt],
     pub funcs: List[Func],
     pub syms: List[Sym],
@@ -122,7 +124,7 @@ fn prog_failed(why: str) -> Prog {
             has_split_dwarf: false, has_compact_unwind: false },
         info: readers.DwarfInfo { info: copy none, abbrev: copy none, units: [], entries: [], attributes: [],
             tables: [], die_count: 0, abbreviation_tables_read: 0, fuel_remaining: 0 },
-        has_info: false, units: [], files: [], lines: [], funcs: [], syms: [], dsyms: [], entry: 0, pie: false, maps: [],
+        has_info: false, units: [], files: [], file_paths: [], lines: [], funcs: [], syms: [], dsyms: [], entry: 0, pie: false, maps: [],
         img: [], isecs: readers.DebugSections { format: 0, info: copy sec, abbrev: copy sec, line: copy sec, str: copy sec,
             line_str: copy sec, str_offsets: copy sec, addr: copy sec, ranges: copy sec, rnglists: copy sec,
             loc: copy sec, loclists: copy sec, frame: copy sec, eh_frame: copy sec, types: copy sec,
@@ -207,11 +209,12 @@ fn join_path(dir: str, name: str) -> str {
     "{dir}/{name}"
 }
 
-fn line_file_name(data: List[byte], t: readers.DwarfLineTable, u: Unit, index: int) -> str {
+/// A line table's file: the name the session shows and the path it reads the source from.
+fn line_file_name(data: List[byte], t: readers.DwarfLineTable, u: Unit, index: int) -> (str, str) {
     // DWARF 5 numbers files from 0; DWARF 4 from 1 (0 means the CU itself).
     var k = index
     if t.version < 5 { k = index - 1 }
-    if k < 0 || k >= t.files.len { return u.name }
+    if k < 0 || k >= t.files.len { return (u.name, join_path(u.comp_dir, u.name)) }
     let entry = copy t.files[k]
     let name = span_text(data, entry.name)
     var dir = ""
@@ -221,32 +224,40 @@ fn line_file_name(data: List[byte], t: readers.DwarfLineTable, u: Unit, index: i
     } else {
         if d > 0 && d - 1 < t.directories.len { dir = span_text(data, t.directories[d - 1].name) }
     }
-    line_file_shown(t.version, d, name, dir, u.comp_dir)
+    (line_file_shown(t.version, d, name, dir, u.comp_dir), line_file_path(t.version, d, name, dir, u.comp_dir))
 }
 
-/// Where the session reads a line table's file from (its arguments as line_file_shown's). Not built yet: the
-/// shown name.
+/// Where the session reads a line table's file from (its arguments as line_file_shown's): a relative name or
+/// directory under the compilation's directory.
 pub fn line_file_path(version: int, d: int, name: str, dir: str, comp_dir: str) -> str {
-    line_file_shown(version, d, name, dir, comp_dir)
-}
-
-/// A line table's file as the session names it: NAME of the table's VERSION with directory entry D (whose text
-/// is DIR), in a unit compiled in COMP_DIR.
-pub fn line_file_shown(version: int, d: int, name: str, dir: str, comp_dir: str) -> str {
     if d == 0 { return join_path(comp_dir, name) }
     var where = dir
     if !where.starts_with("/") { where = join_path(comp_dir, where) }
     join_path(where, name)
 }
 
-fn intern_file(mut files: List[str], name: str) -> int {
+/// A line table's file as the session names it: NAME of the table's VERSION with directory entry D (whose text
+/// is DIR), in a unit compiled in COMP_DIR. In DWARF 4, entry 0 is the compilation's own directory and the name
+/// is shown as recorded, relative or not, as the pinned gdb shows it (measured: PAX's kernel, whose units record
+/// `./kmain_console.lu` in /pax/kernel); DWARF 5's entry 0 names that directory and is joined as the others are.
+pub fn line_file_shown(version: int, d: int, name: str, dir: str, comp_dir: str) -> str {
+    if d == 0 && version < 5 { return name }
+    if d == 0 { return join_path(comp_dir, name) }
+    var where = dir
+    if !where.starts_with("/") { where = join_path(comp_dir, where) }
+    join_path(where, name)
+}
+
+/// The index of a file by its shown name and the path it is read from, added once.
+fn intern_file(mut p: Prog, name: str, path: str) -> int {
     var i: int = 0
-    while i < files.len {
-        if files[i] == name { return i }
+    while i < p.files.len {
+        if p.files[i] == name && p.file_paths[i] == path { return i }
         i += 1
     }
-    (mut files).push(name)
-    files.len - 1
+    (mut p.files).push(name)
+    (mut p.file_paths).push(path)
+    p.files.len - 1
 }
 
 fn unit_bases(data: List[byte], p: Prog, ui: int, root: int) -> Unit {
@@ -462,8 +473,8 @@ fn load_dwarf(mut p: Prog, data: List[byte]) {
                         // each file of the table is named and interned once
                         while fmap.len <= row.file as int { (mut fmap).push(0 - 1) }
                         if fmap[row.file as int] < 0 {
-                            let fname = line_file_name(p.data, table, p.units[ui], row.file as int)
-                            fmap[row.file as int] = intern_file(mut p.files, fname)
+                            let (fname, fpath) = line_file_name(p.data, table, p.units[ui], row.file as int)
+                            fmap[row.file as int] = intern_file(mut p, fname, fpath)
                         }
                         let fi = fmap[row.file as int]
                         // gdb records a row of the same line and file as the one before it

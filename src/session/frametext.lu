@@ -15,7 +15,7 @@ fn source_line(mut s: Session, file: int, line: int) -> Val {
     if k < 0 {
         var lines: List[str] = []
         var ok = false
-        let path = s.prog.files[file]
+        let path = s.prog.file_paths[file]
         var text = ""
         var readable = false
         let got = fs_read_bytes(path) else |_| { readable = false; return val_fail("") }

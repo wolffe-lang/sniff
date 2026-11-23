@@ -78,7 +78,8 @@ fn files_matching(p: Prog, name: str) -> List[int] {
     var i = 0
     while i < p.files.len {
         let f = p.files[i]
-        if f == name || f.ends_with("/{name}") { (mut out).push(i) }
+        let path = p.file_paths[i]
+        if f == name || f.ends_with("/{name}") || path == name { (mut out).push(i) }
         i += 1
     }
     out
