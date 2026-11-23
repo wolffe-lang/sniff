@@ -2,11 +2,12 @@
 # The S4 legs: sniff on PAX's console under KVM, held to the Linux goldens. Needs a PAX tree at px102's kernel
 # (read-only), its kernel ELF, pelt and boreutils built as the PAX harness builds them, the static sniff and the
 # static fixtures (tools/gate linux builds the last two). Every END is a real child exit.
-#   [PAX_SMP=N] tools/gate-pax PAXTREE KERNEL.elf INPUTS SNIFF-STATIC FIXTURES OUTDIR
+#   [PAX_SMP=N] tools/gate-pax PAXTREE KERNEL.elf INPUTS SNIFF-STATIC FIXTURES OUTDIR SNIFF-SERVER-STATIC
+# It also builds the image of sniff-server's PAX rows (OUTDIR/server-image), which tools/gate-remote boots.
 set -uo pipefail
-[ $# -eq 6 ] || { echo 'usage: gate-pax PAXTREE KERNEL INPUTS SNIFF FIXTURES OUTDIR'; exit 2; }
+[ $# -eq 7 ] || { echo 'usage: gate-pax PAXTREE KERNEL INPUTS SNIFF FIXTURES OUTDIR SNIFF-SERVER'; exit 2; }
 root=$(cd "$(dirname "$0")/.." && pwd)
-pax=$1 kernel=$2 inputs=$3 sniff=$4 fixtures=$5 out=$6
+pax=$1 kernel=$2 inputs=$3 sniff=$4 fixtures=$5 out=$6 server=$7
 smp=${PAX_SMP:-1}   # QEMU's processor count for every boot (one by default)
 mkdir -p "$out"
 rc=0
@@ -23,4 +24,5 @@ step() { # name cmd...
 step pax-identity bash -c 'echo "PASS pax-identity head=$(git -c safe.directory=* -C "$0" rev-parse HEAD) kernel_sha256=$(sha256sum "$1" | cut -c1-64)"' "$pax" "$kernel"
 step pax-session-rows python3 -I "$root/tools/session-pax.py" run --pax "$pax" --kernel "$kernel" --inputs "$inputs" --sniff "$sniff" --fixtures "$fixtures" --out "$out/rows" --smp "$smp"
 step pax-session-tty python3 -I "$root/tools/session-pax.py" tty --pax "$pax" --kernel "$kernel" --sniff "$sniff" --fixtures "$fixtures" --out "$out/tty" --smp "$smp"
+step pax-server-image python3 -I "$root/tools/session-remote.py" server-pax-image --pax "$pax" --kernel "$kernel" --inputs "$inputs" --server "$server" --fixtures "$fixtures" --out "$out/server-image"
 exit "$rc"
