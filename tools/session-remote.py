@@ -52,6 +52,18 @@ def load_session():
     return mod
 
 
+def qemu_pin(system):
+    """QEMU's pin for this host from sniff-oracle.toml: its --version line and its binary's sha256 (the Mac's own)."""
+    import tomllib
+    q = tomllib.loads((ROOT / 'sniff-oracle.toml').read_text())['qemu']
+    return q['version_line'], q['macos_sha256'] if system == 'Darwin' else q['sha256']
+
+
+def qemu_problems(line, sha, want_line, want_sha):
+    """What is wrong between a QEMU binary (its first --version line and sha256) and its pin; none until built."""
+    return []
+
+
 def free_port():
     s = socket.socket()
     s.bind(('127.0.0.1', 0))
@@ -392,6 +404,13 @@ def cmd_selftest(_a):
     assert first_diff(gold_w, no_hit), 'a missing watchpoint line was hidden'
     no_new = normalise('Hardware watchpoint 2: *(unsigned long *) 0xffffffff80652068\r\n\r\nOld value = 0\r\n', 0, Path('/k'), sess, ['watch-values'])
     assert first_diff(gold_w, no_new), 'a missing new value was hidden'
+    # a QEMU that is not the pin for this host is refused by name: its version line, then its binary's digest
+    pin_line, pin_sha = 'QEMU emulator version 11.1.2', 'b5cb670e0eda020fba60bb3249226d7ae424695fe2d190ad3ff76de1abcef447'
+    assert qemu_problems(pin_line, pin_sha, pin_line, pin_sha) == []
+    assert qemu_problems('QEMU emulator version 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1)', pin_sha, pin_line, pin_sha) == \
+        ["qemu-version 'QEMU emulator version 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1)' is not the pin's 'QEMU emulator version 11.1.2'"], 'a QEMU of another version was taken'
+    assert qemu_problems(pin_line, '0' * 64, pin_line, pin_sha) == ['qemu-sha256 %s is not the pin\'s %s' % ('0' * 64, pin_sha)], 'a QEMU of another build was taken'
+    assert qemu_pin('Linux')[1] != qemu_pin('Darwin')[1] and qemu_pin('Linux')[0] == pin_line
     rows = json.loads(ROWS.read_text())['rows']
     names = [r['name'] for r in rows]
     assert len(names) == len(set(names)), 'duplicate row names'
