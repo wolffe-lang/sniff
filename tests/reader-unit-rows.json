@@ -184,5 +184,9 @@
     "remote-client-ends",
     "remote-client-peek",
     "remote-client-extra"
+  ],
+  "shown_test.lu": [
+    "session-file-shown",
+    "session-file-path"
   ]
 }

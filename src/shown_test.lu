@@ -1,0 +1,30 @@
+//! member: false
+// How the session names what gdb names: a line table's file as shown and as read.
+use session
+
+fn file_shown_row() {
+    // DWARF 4, directory entry 0 (the compilation's own directory): the name as recorded, relative or not, as the
+    // pinned gdb prints it (PAX's kernel: `./kmain_console.lu`, compiled in /pax/kernel)
+    assert(session.line_file_shown(4, 0, "./kmain_console.lu", "", "/pax/kernel") == "./kmain_console.lu")
+    assert(session.line_file_shown(4, 0, "/work/fixtures/wolf/nested/main.lu", "", "/work") == "/work/fixtures/wolf/nested/main.lu")
+    // DWARF 5's directory 0 is an entry of its own, the compilation directory, joined as the others are
+    assert(session.line_file_shown(5, 0, "main.c", "", "/work/fixtures/session/c/calls") == "/work/fixtures/session/c/calls/main.c")
+    // a directory entry that is a path of its own
+    assert(session.line_file_shown(4, 1, "stdio.h", "/usr/include", "/work") == "/usr/include/stdio.h")
+    assert(session.line_file_shown(5, 2, "stdio.h", "/usr/include", "/work") == "/usr/include/stdio.h")
+    print("PASS session-file-shown")
+}
+
+fn file_path_row() {
+    // the source is read where the compilation's directory puts it
+    assert(session.line_file_path(4, 0, "./kmain_console.lu", "", "/pax/kernel") == "/pax/kernel/./kmain_console.lu")
+    assert(session.line_file_path(4, 0, "/work/fixtures/wolf/nested/main.lu", "", "/work") == "/work/fixtures/wolf/nested/main.lu")
+    assert(session.line_file_path(5, 0, "main.c", "", "/work/c") == "/work/c/main.c")
+    assert(session.line_file_path(4, 1, "stdio.h", "/usr/include", "/work") == "/usr/include/stdio.h")
+    print("PASS session-file-path")
+}
+
+fn main() {
+    file_shown_row()
+    file_path_row()
+}
