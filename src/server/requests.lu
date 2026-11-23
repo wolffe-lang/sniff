@@ -54,6 +54,8 @@ pub const req_kill: int = 19
 pub const req_features: int = 20
 /// `qXfer:threads:read::offset,length` (its annex is empty).
 pub const req_threads_xfer: int = 22
+/// `T thread-id`: is that thread alive.
+pub const req_alive: int = 23
 /// `qAttached`: the stub created the process, so the reply is `0`.
 pub const req_attached: int = 21
 
@@ -241,6 +243,11 @@ pub fn request(d: List[byte]) -> Request ! ServerError {
         var r = req(req_resume)
         r.sig = s as int
         r.step = c == 83
+        return r
+    }
+    if c == 84 && d.len >= 2 {
+        var r = req(req_alive)
+        r.num = hex_field(d, 1, d.len)? as int
         return r
     }
     if c == 72 && d.len >= 3 && (d[1] as int == 103 || d[1] as int == 99) {
