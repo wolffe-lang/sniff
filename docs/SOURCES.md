@@ -261,3 +261,52 @@ LC_THREAD, LC_NOTE and `struct note_command`), `mach/thread_status.h` with the a
 gdb ran only as the pinned binary in the oracle container, and lldb only as the system binary (its own
 `help process save-core` and `help target create`, and its output over each core, which is the oracle in
 `tests/evidence/macos-s3`). No debugger's, kernel's or core writer's source was read.
+
+## Consulted for S8 (2026-11-23)
+
+The remote protocol came from the GDB manual alone: the nineteen nodes below, each fetched twice with curl, the two
+copies byte-identical, the copies kept outside the repository. All nineteen were read in full before any code. The
+three index pages that list them (Remote Debugging, Remote Protocol and Target Descriptions) were read for their lists.
+Not read, by that list: tracepoints, agent expressions, Host I/O, File-I/O, non-stop mode and notifications, branch
+trace, and the library-list and memory-map formats.
+
+| Page | SHA-256 of the fetched HTML | Used for |
+|---|---|---|
+| GDB manual: [Overview](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Overview.html) | `003bf05dfd54733042bd8646e282094671057a1ec89bbff37d95d3a174ccc490` | the packet syntax: `$data#cs`, the checksum, the `}` escape and `*` run-length encoding |
+| GDB manual: [Packet Acknowledgment](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Packet-Acknowledgment.html) | `d5e096207878b6a5f55d116f1ffd2ba84118e6c49eb796e4ef5140385f9a0aef` | `+` and `-`, resends, and QStartNoAckMode |
+| GDB manual: [Standard Replies](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Standard-Replies.html) | `2fc5f5ccb709ae6b99d84516c9068093e5b3d647ed03006adfeaf749775a0e3b` | the empty reply, `OK` and `E NN` (and the textual error form) |
+| GDB manual: [Packets](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Packets.html) | `44dfada09e55839aecff010e443469a592a4eb8eb653dfa28ca7b3836b887800` | `?`, `c`, `s`, `D`, `g`, `G`, `k`, `m`, `M`, `p`, `P`, `vCont`, `Z0`-`Z4` and `z0`-`z4` |
+| GDB manual: [Stop Reply Packets](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Stop-Reply-Packets.html) | `041824625f6f4bf73159da0461b3e2c7bbe569890cc81ffeccea549543401831` | `S`, `T` with `thread:`, `core:` and the stop reasons, `W`, `X` and `O`; trap is `05` |
+| GDB manual: [General Query Packets](https://sourceware.org/gdb/current/onlinedocs/gdb.html/General-Query-Packets.html) | `40aff051f25a9093935653ab2f187af8e3fd07b568b12174927172237ada122f` | qSupported and its features (PacketSize, qXfer:features:read, vContSupported, multiprocess), qfThreadInfo, qC and qThreadExtraInfo |
+| GDB manual: [Interrupts](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Interrupts.html) | `c379e8030a0062227d4725d185e198cbb663d7ba28626052978647286a275ce3` | the interrupt byte 0x03 |
+| GDB manual: [Examples](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Examples.html) | `ffe579bc55ccba223b1e4c1b939da426df6f4c0c82420613f43bc3a90e592b16` | one exchange, read for its order |
+| GDB manual: [Thread List Format](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Thread-List-Format.html) | `24583ba195dcc22c2d9135a8a8b99809fb7ae5dbed8be98a612bc656d480c773` | the thread-id forms |
+| GDB manual: [Architecture-Specific Protocol Details](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Architecture_002dSpecific-Protocol-Details.html) | `6230db97aaaa7ba9cad527452fd383c3cd05b50593543aa52660edc5de0de411` | only ARM and MIPS, not read past the node |
+| GDB manual: [Retrieving Descriptions](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Retrieving-Descriptions.html) | `b39ea1f169e56e649161d11b5f4d482888f2a1cc3f55f77c36c0ec2d8363acd6` | `qXfer:features:read:target.xml` and the annexes it names |
+| GDB manual: [Target Description Format](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Target-Description-Format.html) | `87199c9dae5d363351a15a6ff184426c921d6a969a69f83746758aab8f2ad0d8` | the XML subset: `<architecture>`, `<feature>`, `<reg>` and its defaults, `<xi:include>`, the type elements |
+| GDB manual: [Predefined Target Types](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Predefined-Target-Types.html) | `fafecc554d65e7b6fdb8c71f7471b2ce2ad523cc5f6f3a1966ed01aa0aa18deb` | the type names a `<reg>` may give |
+| GDB manual: [Standard Target Features](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Standard-Target-Features.html) | `9230c68cb95cab3a0ddab1a542fb6c3fbfb23e50729ec8c71b34cc7586af12c5` | that a feature is named and what a debugger may require of it |
+| GDB manual: [i386 Features](https://sourceware.org/gdb/current/onlinedocs/gdb.html/i386-Features.html) | `41dbd9b9059490e7cbdc840740f3cae6b13a3e91365a84ef5a7943e5b685695d` | `org.gnu.gdb.i386.core` and `org.gnu.gdb.i386.sse`: the registers each must hold, from which the stand-in stub's description was written |
+| GDB manual: [Connecting](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Connecting.html) | `72289aedd1322546b59ab5e91aba10f21b950981b1a26c0459908e513b444434` | `target remote HOST:PORT`, `:PORT`, `tcp:`, and the forms sniff refuses (a serial device, a pipe to a command, udp) |
+| GDB manual: [Remote Configuration](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Remote-Configuration.html) | `05cf33981e244a622300d6110127b23ba7c0562839fa422e69ec35d77df8a8c2` | `set tcp auto-retry`, turned off for the pinned gdb in the rows |
+| GDB manual: [Server](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Server.html) | `2fb2714a31ec3b18c2a236a90e3f8c5506f604a6cbb804d532f7f8644743f10b` | gdbserver, run only as a binary |
+| GDB manual: [Remote Stub](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Remote-Stub.html) | `5b77acc3302941b270a03c9266cc45c67c3185069fdc7ca7e699a376225a2cd2` | what a stub is; the stub sources it names are not read |
+
+Where the manual points into gdb's source (the stub sources the Remote Stub node names, `remote.c`, the sample XML in
+`gdb/features` and `gdb-target.dtd`, and `include/gdb/signals.h` for the signal numbers), nothing was followed. QEMU's
+own target description is a third party's file: sniff parses it off the wire and no copy of it, in whole or in part, is
+in this repository; the unit rows' descriptions were written from the Target Description Format and i386 Features nodes.
+
+To build QEMU 11.1.2 from its release tarball, its configure output, two version checks in its build scripts
+(`configure`'s Python minimum and `python/scripts/mkvenv.py`), and the `find_program` and `dependency` lines of its
+`meson.build` files outside `gdbstub/` and `target/` were read (taken from the tarball after listing its member names,
+none from those directories), and nothing else of its source.
+
+### Binary observations, not sources
+
+- Every signal number sniff names over a remote target was observed in a run, paired with the name the pinned gdb printed in the same run (`tests/s8-prediction.json`, `decided_before_code.signal_numbers`); an unobserved number prints as unknown, by name.
+- What QEMU's gdbstub sends (its qSupported reply, its description's shape, its stop replies, the `E14` and `E22` refusals, and that `k` ends QEMU) was read from the pinned gdb's remote logs and from the client's own exchanges, as binary observations.
+- The words of each refusal, and of each transcript the kernel rows hold, are the pinned gdb's, from its transcripts over QEMU on PAX's console kernel.
+
+gdb and gdbserver ran only as the pinned binaries in the oracle container, and QEMU only as the binary built there.
+No debugger's, stub's, emulator's or kernel's source was read.
