@@ -182,6 +182,7 @@
     "remote-client-points",
     "remote-client-resume",
     "remote-client-ends",
-    "remote-client-peek"
+    "remote-client-peek",
+    "remote-client-extra"
   ]
 }

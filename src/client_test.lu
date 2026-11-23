@@ -306,6 +306,20 @@ fn peek_row() {
     print("PASS remote-client-peek")
 }
 
+fn extra_row() {
+    let cpu = remote.hex_encode("CPU#0 [running]".bytes())
+    var r = rig(rep(cpu) + rep("")) else |e| { print("FAIL remote-client-extra {e}"); return }
+    let skip = heard(mut r.stub)
+    let x = remote.thread_extra(r.t, "01") else |e| { print("FAIL remote-client-extra {e}"); return }
+    assert(x == "CPU#0 [running]")
+    let none = remote.thread_extra(r.t, "02") else { return }
+    assert(none == "")
+    assert(heard(mut r.stub) == sent("qThreadExtraInfo,01") + "+" + sent("qThreadExtraInfo,02") + "+")
+    assert(skip != "")
+    done(take r)
+    print("PASS remote-client-extra")
+}
+
 fn main() {
     start_row()
     no_ack_row()
@@ -316,4 +330,5 @@ fn main() {
     resume_row()
     ends_row()
     peek_row()
+    extra_row()
 }
