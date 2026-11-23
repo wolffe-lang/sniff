@@ -1,0 +1,167 @@
+//! member: false
+
+use remote
+
+// Descriptions written here from the GDB manual's Target Description Format and i386 Features nodes.
+
+fn reg(n: str, bits: int, extra: str, skip: List[str]) -> str {
+    for s in skip {
+        if s == n { return "" }
+    }
+    "<reg name=\"{n}\" bitsize=\"{bits}\"{extra}/>"
+}
+
+fn core_regs_without(skip: List[str], rax: str) -> str {
+    var out = "<reg name=\"{rax}\" bitsize=\"64\" regnum=\"0\"/>"
+    for n in ["rbx", "rcx", "rdx", "rsi", "rdi", "rbp", "rsp", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15", "rip"] { out = out + reg(n, 64, "", skip) }
+    out = out + reg("eflags", 32, "", skip)
+    for s in ["cs", "ss", "ds", "es", "fs", "gs"] { out = out + reg(s, 32, "", skip) }
+    for k in ["st0", "st1", "st2", "st3", "st4", "st5", "st6", "st7"] { out = out + reg(k, 80, " type=\"i387_ext\"", skip) }
+    for c in ["fctrl", "fstat", "ftag", "fiseg", "fioff", "foseg", "fooff", "fop"] { out = out + reg(c, 32, " group=\"float\"", skip) }
+    out
+}
+
+fn core_regs() -> str {
+    let skip: List[str] = []
+    core_regs_without(skip, "rax")
+}
+
+fn core_feature() -> str {
+    "<feature name=\"org.gnu.gdb.i386.core\">" + core_regs() + "</feature>"
+}
+
+fn sse_feature() -> str {
+    var out = "<feature name=\"org.gnu.gdb.i386.sse\"><vector id=\"v4f\" type=\"ieee_single\" count=\"4\"/>"
+    out = out + "<union id=\"vec128\"><field name=\"v4_float\" type=\"v4f\"/><field name=\"uint128\" type=\"uint128\"/></union>"
+    var i: int = 0
+    while i < 16 { out = out + "<reg name=\"xmm{i}\" bitsize=\"128\" type=\"vec128\" group=\"vector\"/>"; i += 1 }
+    out = out + "<flags id=\"mx\" size=\"4\"><field name=\"IE\" start=\"0\" end=\"0\"/></flags>"
+    out + "<reg name=\"mxcsr\" bitsize=\"32\" type=\"mx\" group=\"vector\"/></feature>"
+}
+
+fn none() -> List[remote.Annex] {
+    let n: List[remote.Annex] = []
+    n
+}
+
+fn parsed() {
+    let minimal = remote.parse("<target version=\"1.0\">\n  <architecture>i386:x86-64</architecture>\n</target>", none()) else { return }
+    assert(minimal.architecture == "i386:x86-64" && minimal.regs.len == 0)
+    let text = "<?xml version=\"1.0\"?>\n<!DOCTYPE target SYSTEM \"gdb-target.dtd\">\n<target version=\"1.0\"><!-- a comment -->" +
+        "<architecture>i386:x86-64</architecture><osabi>GNU/Linux</osabi>" + core_feature() + sse_feature() + "</target>"
+    let d = remote.parse(text, none()) else { return }
+    assert(d.architecture == "i386:x86-64" && d.osabi == "GNU/Linux")
+    assert(d.features.len == 2 && d.features[1] == "org.gnu.gdb.i386.sse")
+    assert(d.regs.len == 57)
+    assert(remote.regnum_of(d, "RIP") == 16 && remote.regnum_of(d, "mxcsr") == 56 && remote.regnum_of(d, "ymm0h") == -1)
+    assert(d.regs[24].name == "st0" && d.regs[24].bitsize == 80 && d.regs[24].type_name == "i387_ext")
+    assert(d.regs[24].feature == "org.gnu.gdb.i386.core")
+    assert(d.regs[0].type_name == "int" && d.regs[32].group == "float" && d.regs[40].group == "vector")
+    assert(remote.missing_i386_core(d).len == 0)
+    assert(remote.g_offset(d, 0) == 0 && remote.g_offset(d, 16) == 128 && remote.g_offset(d, 17) == 136)
+    assert(remote.g_offset(d, 24) == 164 && remote.g_offset(d, 40) == 276 && remote.g_offset(d, 99) == -1)
+    assert(remote.g_size(d) == 276 + 256 + 4)
+    let amp = remote.parse("<target><architecture>a&amp;b</architecture></target>", none()) else { return }
+    assert(amp.architecture == "a&b")
+    print("PASS remote-tdesc-parse")
+}
+
+fn included() {
+    let main = "<target><architecture>i386:x86-64</architecture><xi:include href=\"core.xml\"/><xi:include href='sse.xml'/></target>"
+    let wants = remote.includes(main)
+    assert(wants.len == 2 && wants[0] == "core.xml" && wants[1] == "sse.xml")
+    let annexes = [remote.Annex { name: "core.xml", text: "<?xml version=\"1.0\"?>" + core_feature() },
+                   remote.Annex { name: "sse.xml", text: sse_feature() }]
+    let d = remote.parse(main, annexes) else { return }
+    assert(d.regs.len == 57 && remote.regnum_of(d, "xmm0") == 40 && d.regs[40].feature == "org.gnu.gdb.i386.sse")
+    let lost = remote.parse(main, [remote.Annex { name: "core.xml", text: core_feature() }])
+    assert("{lost}" == "unknown_include")
+    let cycle = remote.parse("<target><xi:include href=\"a\"/></target>", [remote.Annex { name: "a", text: "<xi:include href=\"a\"/>" }])
+    assert("{cycle}" == "include_depth")
+    print("PASS remote-tdesc-include")
+}
+
+fn numbered() {
+    let text = "<target><feature name=\"x\"><reg name=\"a\" bitsize=\"64\"/><reg name=\"b\" bitsize=\"32\" regnum=\"10\"/>" +
+        "<reg name=\"c\" bitsize=\"16\"/></feature><feature name=\"y\"><reg name=\"d\" bitsize=\"8\"/></feature></target>"
+    let d = remote.parse(text, none()) else { return }
+    assert(d.regs[0].regnum == 0 && d.regs[1].regnum == 10 && d.regs[2].regnum == 11 && d.regs[3].regnum == 12)
+    assert(remote.g_offset(d, 10) == 8 && remote.g_offset(d, 12) == 14 && remote.g_size(d) == 15)
+    let dup = remote.parse("<target><feature name=\"x\"><reg name=\"a\" bitsize=\"8\"/><reg name=\"A\" bitsize=\"8\"/></feature></target>", none())
+    assert("{dup}" == "duplicate_register")
+    let bad = remote.parse("<target><reg name=\"a\" bitsize=\"8x\"/></target>", none())
+    assert("{bad}" == "bad_number")
+    let noname = remote.parse("<target><reg bitsize=\"8\"/></target>", none())
+    assert("{noname}" == "no_register_name")
+    print("PASS remote-tdesc-regnum-default")
+}
+
+fn missing_core() {
+    let without = remote.parse("<target><architecture>i386:x86-64</architecture>" + sse_feature() + "</target>", none()) else { return }
+    let m = remote.missing_i386_core(without)
+    assert(m.len == 1 && m[0] == "org.gnu.gdb.i386.core")
+    let cut = "<target><feature name=\"org.gnu.gdb.i386.core\">" + core_regs_without(["fop", "rip"], "rax") + "</feature></target>"
+    let d = remote.parse(cut, none()) else { return }
+    let gone = remote.missing_i386_core(d)
+    assert(gone.len == 2 && gone[0] == "rip" && gone[1] == "fop")
+    let none_skipped: List[str] = []
+    let upper = remote.parse("<target><feature name=\"org.gnu.gdb.i386.core\">" + core_regs_without(none_skipped, "RAX") + "</feature></target>", none()) else { return }
+    assert(remote.missing_i386_core(upper).len == 0 && remote.regnum_of(upper, "rax") == 0)
+    print("PASS remote-tdesc-missing-core")
+}
+
+fn types() {
+    let text = "<target><feature name=\"t\"><vector id=\"v\" type=\"int8\" count=\"16\"/>" +
+        "<union id=\"u\"><field name=\"a\" type=\"v\"/></union><struct id=\"s\" size=\"4\"><field name=\"lo\" start=\"0\" end=\"15\"/></struct>" +
+        "<flags id=\"f\" size=\"4\"><field name=\"\" start=\"2\" end=\"3\"/></flags><enum id=\"e\" size=\"4\"><evalue name=\"one\" value=\"1\"/></enum>" +
+        "<reg name=\"r\" bitsize=\"128\" type=\"u\"/><reg name=\"q\" bitsize=\"32\" type=\"code_ptr\"/></feature></target>"
+    let d = remote.parse(text, none()) else { return }
+    assert(d.regs.len == 2 && d.regs[0].type_name == "u" && d.regs[1].type_name == "code_ptr" && d.regs[1].regnum == 1)
+    let broken = remote.parse("<target><reg name=\"a\" bitsize=\"8\"</target>", none())
+    assert("{broken}" == "bad_xml")
+    let unquoted = remote.parse("<target><reg name=a bitsize=\"8\"/></target>", none())
+    assert("{unquoted}" == "bad_xml")
+    let comment = remote.parse("<target><!-- never closed", none())
+    assert("{comment}" == "bad_xml")
+    print("PASS remote-tdesc-types")
+}
+
+fn push_str(mut out: List[byte], s: str) {
+    for x in s.bytes() { (mut out).push(x) }
+}
+
+fn many(n: int) -> str {
+    var out: List[byte] = []
+    push_str(mut out, "<target><feature name=\"m\">")
+    var i: int = 0
+    while i < n { push_str(mut out, "<reg name=\"r{i}\" bitsize=\"8\"/>"); i += 1 }
+    push_str(mut out, "</feature></target>")
+    str_from_utf8(out) else { "" }
+}
+
+fn caps() {
+    let at = remote.parse(many(1024), none()) else { return }
+    assert(at.regs.len == 1024 && at.regs[1023].regnum == 1023)
+    let deep = [remote.Annex { name: "1", text: "<xi:include href=\"2\"/>" }, remote.Annex { name: "2", text: "<xi:include href=\"3\"/>" },
+                remote.Annex { name: "3", text: "<xi:include href=\"4\"/>" }, remote.Annex { name: "4", text: core_feature() }]
+    let four = remote.parse("<target><xi:include href=\"1\"/></target>", deep) else { return }
+    assert(four.regs.len == 40)
+    print("PASS remote-tdesc-caps")
+    let past = remote.parse(many(1025), none())
+    assert("{past}" == "too_many_registers")
+    let deeper = [remote.Annex { name: "0", text: "<xi:include href=\"1\"/>" }, remote.Annex { name: "1", text: "<xi:include href=\"2\"/>" },
+                  remote.Annex { name: "2", text: "<xi:include href=\"3\"/>" }, remote.Annex { name: "3", text: "<xi:include href=\"4\"/>" },
+                  remote.Annex { name: "4", text: core_feature() }]
+    let five = remote.parse("<target><xi:include href=\"0\"/></target>", deeper)
+    assert("{five}" == "include_depth")
+    print("PASS remote-tdesc-caps-past")
+}
+
+fn main() {
+    parsed()
+    included()
+    numbered()
+    missing_core()
+    types()
+    caps()
+}

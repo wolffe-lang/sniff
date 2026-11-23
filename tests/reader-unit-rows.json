@@ -148,5 +148,14 @@
     "remote-packet-resend-cap-past",
     "remote-packet-reply-time",
     "remote-packet-reply-time-past"
+  ],
+  "tdesc_test.lu": [
+    "remote-tdesc-parse",
+    "remote-tdesc-include",
+    "remote-tdesc-regnum-default",
+    "remote-tdesc-missing-core",
+    "remote-tdesc-types",
+    "remote-tdesc-caps",
+    "remote-tdesc-caps-past"
   ]
 }
