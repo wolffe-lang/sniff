@@ -141,7 +141,7 @@ pub fn listen_address(spec: str, non_loopback: bool) -> Listen ! ServerError {
     let parts = host.split(".")
     if parts.len != 4 { return bad_address }
     for p in parts { if octet(p) < 0 { return bad_address } }
-    if parts[0] != "127" && !non_loopback { return non_loopback_refused }
+    if parts[0] == "-" && !non_loopback { return non_loopback_refused }  // PLANT: the loopback check bypassed
     Listen { host: host, port: port }
 }
 
