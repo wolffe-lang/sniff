@@ -100,6 +100,27 @@ def elf_core(prstatus, xstate):
     return head + ph + notes
 
 
+class BaseCensus(unittest.TestCase):
+    """No session code subtracts a load base by hand: a runtime address below a moved program made that subtraction
+    trap (x/2xg 0, a call through a null function pointer). Every such address goes through file_address."""
+
+    def test_no_base_subtraction_outside_file_address(self):
+        import re
+        minus_base = re.compile(r'-\s*[\w.\[\]]*\bbase\b')
+        found = []
+        for source in sorted((ROOT / 'src/session').glob('*.lu')):
+            inside = False
+            for n, line in enumerate(source.read_text().splitlines(), 1):
+                if line.startswith('pub fn file_address('):
+                    inside = True
+                elif inside and line.startswith('}'):
+                    inside = False
+                code = line.split('//')[0]
+                if not inside and minus_base.search(code):
+                    found.append('%s:%d' % (source.name, n))
+        self.assertEqual(found, [], 'a load base subtracted outside file_address')
+
+
 class XstateSize(unittest.TestCase):
     """gdb's warnings that a core's XSAVE section is not the size its layouts give for the host's processor: larger
     (`Unexpected size of section`, a runner whose XSAVE area carries AMX tile state) or smaller (`... too small`, an
