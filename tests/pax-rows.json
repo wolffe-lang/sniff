@@ -41,6 +41,14 @@
     "^warning: Error reading shared library list entry at 0x"
    ],
    "why": "a static program over another program's core: gdb keeps the program's symbols and reads the C library's list of loaded objects at the program's _r_debug in that core's memory, where the other program keeps something else; sniff reads no such list for a static program, so gdb's warning about the list and the blank line before it are dropped"
+  },
+  "hbreak-gcc-process": {
+   "expect": [
+    "Breakpoint 1 at 0x4018d9: file /work/fixtures/session/c/calls/main.c, line 20.",
+    "",
+    "Breakpoint 1, main () at /work/fixtures/session/c/calls/main.c:20",
+    "20\t    int a = plain_twice(4);"
+   ]
   }
  },
  "probes": {

@@ -377,6 +377,28 @@
    ]
   },
   {
+   "name": "hbreak-gcc-process",
+   "prog": "c/calls/gcc-O0/prog",
+   "script": [
+    "break main",
+    "run",
+    "hbreak plain_twice"
+   ],
+   "compare": "own",
+   "why": "sniff sets a hardware breakpoint only in a remote target; on a live process the pinned gdb sets one, and sniff refuses by name",
+   "expect": [
+    "Breakpoint 1 at 0x119d: file /work/fixtures/session/c/calls/main.c, line 20.",
+    "",
+    "Breakpoint 1, main () at /work/fixtures/session/c/calls/main.c:20",
+    "20\t    int a = plain_twice(4);"
+   ],
+   "expect_err": [
+    "/work/target/s2/hbreak-gcc-process.cmd:3: Error in sourced command file:",
+    "sniff's hbreak needs a remote target (`target remote HOST:PORT`)."
+   ],
+   "expect_rc": 1
+  },
+  {
    "name": "step-gcc-finish-types",
    "prog": "c/values/gcc-O0/prog",
    "script": [
