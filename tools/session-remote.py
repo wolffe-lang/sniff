@@ -35,6 +35,7 @@ from pathlib import Path
 import pty
 import re
 import select
+import shutil
 import signal
 import socket
 import subprocess
@@ -389,7 +390,9 @@ def cmd_skip(a):
 
 # sniff-server's rows (kind server): the stub on loopback in this host, its client this harness or the pinned gdb. Each
 # row's check names what it holds; the stub is started by its recorded pid and ended by it.
-SERVER_CHECKS = ('refuse-second', 'refuse-non-loopback', 'loopback-default', 'idle-cost', 'interrupt-latency')
+SERVER_CHECKS = ('refuse-second', 'refuse-non-loopback', 'loopback-default', 'idle-cost', 'interrupt-latency',
+                 'z1-hbreak', 'fp-write', 'threads')
+ANY_LISTENING = re.compile(r'Listening on (?:\S+:)?(?:port )?(\d+)')  # sniff-server's line, or gdbserver's
 RUN_POLL_MS = 100  # sniff-server's run_poll_ms: the longest wait on the sockets while the program runs
 LISTENING = re.compile(r'^Listening on (\S+):(\d+)$', re.M)
 
@@ -644,13 +647,119 @@ def check_interrupt_latency(a, row, out):
     return '; '.join(latency_problems(reply, took)), held
 
 
+def symbol(prog, name):
+    """A symbol's address in a static fixture, from nm."""
+    for line in subprocess.run(['nm', str(prog)], capture_output=True, text=True).stdout.splitlines():
+        f = line.split()
+        if len(f) == 3 and f[2] == name:
+            return int(f[0], 16)
+    return None
+
+
+def both_stubs(a, row, out, steps):
+    """steps(socket, prog) run against sniff-server and then against the pinned gdbserver, each on its own free port
+    with the row's fixture and arguments: (sniff-server's answers, gdbserver's), or a reason one never listened."""
+    prog = Path(a.fixtures) / row['prog']
+    got = {}
+    for who in ('sniff-server', 'gdbserver'):
+        port = free_port()
+        argv = ([a.server, '127.0.0.1:%d' % port] if who == 'sniff-server' else ['gdbserver', '--once', '127.0.0.1:%d' % port])
+        log = out / ('%s.%s' % (row['name'], who))
+        p = subprocess.Popen(argv + [str(prog)] + row.get('args', []), stdout=open(log, 'w'), stderr=subprocess.STDOUT)
+        end = time.time() + 20
+        while time.time() < end and p.poll() is None and not ANY_LISTENING.search(log.read_text(errors='replace')):
+            time.sleep(0.05)
+        if not ANY_LISTENING.search(log.read_text(errors='replace')):
+            end_server(p, row['name'])
+            return None, None, '%s never said it was listening' % who
+        c = socket.create_connection(('127.0.0.1', port), timeout=5)
+        ask(c, 'qSupported:swbreak+;vContSupported+')
+        try:
+            got[who] = steps(c, prog)
+        finally:
+            c.sendall(frame('k'))
+            c.close()
+            end_server(p, row['name'])
+    return got['sniff-server'], got['gdbserver'], ''
+
+
+def resumed(c):
+    """vCont;c, then the stop reply."""
+    c.sendall(frame('vCont;c'))
+    got = read_packet(c, 20)
+    if got is not None:
+        c.sendall(b'+')
+    return got
+
+
+def check_same(a, row, out, steps, what):
+    mine, theirs, why = both_stubs(a, row, out, steps)
+    if why:
+        return why, ''
+    if mine != theirs:
+        return '%s: sniff-server %r, gdbserver %r' % (what, mine, theirs), ''
+    return '', '%s equal to gdbserver\'s: %r' % (what, mine)
+
+
+def check_z1_hbreak(a, row, out):
+    """Z1, a hardware breakpoint in a debug register (the platform's execute kind): accepted, and the stop is at it."""
+    def steps(c, prog):
+        addr = symbol(prog, row['symbol'])
+        z = ask(c, 'Z1,%x,1' % addr)
+        stop = resumed(c) if z == 'OK' else None
+        rip = ask(c, 'p10') if stop else None
+        at = int.from_bytes(bytes.fromhex(rip), 'little') == addr if rip and len(rip) == 16 else None
+        return {'Z1': z, 'stop': (stop or '')[:3], 'rip at the breakpoint': at}
+    return check_same(a, row, out, steps, 'Z1, the stop and the pc')
+
+
+def check_fp_write(a, row, out):
+    """An SSE register written with P and read back with p (register 40 is xmm0 in both stubs' descriptions)."""
+    value = '0102030405060708090a0b0c0d0e0f10'
+    def steps(c, prog):
+        w = ask(c, 'P28=' + value)
+        r = ask(c, 'p28')
+        return {'P xmm0': w, 'p xmm0 is the value': r == value}
+    return check_same(a, row, out, steps, 'the write and the read back')
+
+
+def check_threads(a, row, out):
+    """A program's new threads are traced and listed: at a breakpoint a worker thread hits, qfThreadInfo lists more
+    than one thread, and the stop is a trap."""
+    def steps(c, prog):
+        addr = symbol(prog, row['symbol'])
+        z = ask(c, 'Z0,%x,1' % addr)
+        stop = resumed(c) if z == 'OK' else None
+        first = ask(c, 'qfThreadInfo') if stop else ''
+        ids = [x for x in (first or '')[1:].split(',') if x] if (first or '').startswith('m') else []
+        return {'Z0': z, 'stop': (stop or '')[:3], 'threads listed': len(ids) >= 2}
+    return check_same(a, row, out, steps, 'the stop and the thread list')
+
+
+def oracle_line():
+    """The pinned gdbserver and gdb this host runs, by version and digest (each server run names them)."""
+    import hashlib
+    parts = []
+    for name in ('gdbserver', 'gdb'):
+        path = shutil.which(name)
+        if path is None:
+            parts.append('%s absent' % name)
+            continue
+        real = os.path.realpath(path)
+        v = subprocess.run([real, '--version'], capture_output=True, text=True).stdout.splitlines()
+        parts.append('%s %r sha256 %s' % (name, v[0] if v else '?', hashlib.sha256(Path(real).read_bytes()).hexdigest()))
+    return 'ORACLES ' + '; '.join(parts)
+
+
 def cmd_server(a):
     out = Path(a.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
     counts = {'pass': 0, 'fail': 0, 'skip': 0}
     checks = {'refuse-second': check_refuse_second, 'refuse-non-loopback': check_refuse_non_loopback,
               'loopback-default': check_loopback_default, 'idle-cost': check_idle_cost,
-              'interrupt-latency': check_interrupt_latency}
+              'interrupt-latency': check_interrupt_latency, 'z1-hbreak': check_z1_hbreak, 'fp-write': check_fp_write,
+              'threads': check_threads}
+    print(oracle_line())
     for row in load_rows(a.only, 'server'):
         if row.get('skip'):
             print('SKIP remote %s reason=%s' % (row['name'], row['skip']))
