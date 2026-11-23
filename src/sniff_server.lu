@@ -1,0 +1,42 @@
+//! member: false
+// sniff-server [--non-loopback] [HOST]:PORT PROG [ARGS...] (the GDB manual's Server node): start PROG under ptrace
+// and serve it to one client at a time over the GDB remote protocol, on Linux and on PAX.
+// The protocol has no authentication: whoever connects controls PROG. So sniff-server listens on loopback
+// (127.0.0.1) unless --non-loopback names another HOST.
+use server
+
+fn usage() {
+    eprint("usage: sniff-server [--non-loopback] [HOST]:PORT PROG [ARGS...]")
+    eprint("The GDB remote protocol has no authentication: whoever connects to the port controls PROG.")
+    eprint("sniff-server listens on 127.0.0.1 (an empty HOST or localhost) unless --non-loopback is given with another HOST.")
+}
+
+fn main() {
+    let args = env_args()
+    var i: int = 1
+    var non_loopback = false
+    if args.len > 1 && args[1] == "--non-loopback" {
+        non_loopback = true
+        i = 2
+    }
+    if args.len < i + 2 {
+        usage()
+        os_exit(2)
+    }
+    let spec = args[i]
+    let at = server.listen_address(spec, non_loopback) else |e| {
+        if "{e}" == "non_loopback_refused" {
+            let parts = spec.split(":")
+            let host = parts[0]
+            eprint("sniff-server: {host} is not a loopback address: the protocol has no authentication and gives whoever connects control of the program; give --non-loopback to listen there")
+        } else {
+            eprint("sniff-server: cannot listen on {spec}: {e}")
+        }
+        os_exit(2)
+        return
+    }
+    var rest: List[str] = []
+    var j = i + 2
+    while j < args.len { (mut rest).push(args[j]); j += 1 }
+    os_exit(server.serve(at, args[i + 1], rest))
+}
