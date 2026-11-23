@@ -258,6 +258,17 @@ pub fn read_threads(mut t: Target) -> () ! ClientError {
     t.threads = ids
 }
 
+/// The registers of the current thread by `g` (Packets, g), from a borrowed target: the bytes in
+/// target order, and for each byte whether the stub sent `xx` for it. Not built yet: refused.
+pub fn peek_regs(t: Target) -> (List[byte], List[bool]) ! ClientError {
+    unsupported
+}
+
+/// A register's value by name from bytes a `g` gave. Not built yet: refused.
+pub fn reg_in(t: Target, regs: List[byte], unread: List[bool], name: str) -> u64 ! ClientError {
+    no_register
+}
+
 /// The registers of the current thread by `g` (Packets, g): two hex digits a byte in target order, and
 /// `x`s for bytes the stub cannot read.
 pub fn read_registers(mut t: Target) -> () ! ClientError {
@@ -426,8 +437,8 @@ pub fn wait_stop(mut t: Target, ms: int) -> () ! ClientError {
 }
 
 /// The interrupt byte, while the target runs (Interrupts); its stop reply comes to wait_stop.
-pub fn interrupt_target(mut t: Target) -> () ! ClientError {
-    interrupt(mut t.link)?
+pub fn interrupt_target(t: Target) -> () ! ClientError {
+    interrupt(t.link)?
 }
 
 /// Select the thread `g`, `m` and the rest act on (Packets, `Hg`).
@@ -489,7 +500,7 @@ pub fn connect(addr: str) -> Target ! ClientError {
 pub fn detach(take t: Target) -> () ! ClientError {
     var x = t
     let r = request(mut x.link, "D")?
-    shut(take x.link)?
+    shut(x.link)?
     check(r)?
 }
 
@@ -498,10 +509,10 @@ pub fn detach(take t: Target) -> () ! ClientError {
 pub fn kill(take t: Target) -> () ! ClientError {
     var x = t
     send(mut x.link, "k") else { }
-    shut(take x.link) else { }
+    shut(x.link) else { }
 }
 
 /// `disconnect`: close the connection and send nothing; the target stays stopped (Connecting).
 pub fn disconnect(take t: Target) -> () ! ClientError {
-    shut(take t.link)?
+    shut(t.link)?
 }

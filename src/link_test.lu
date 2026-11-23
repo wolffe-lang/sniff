@@ -36,7 +36,7 @@ fn pair(ms: int) -> Pair ! {refused, timeout, closed, io, invalid, packet_too_lo
 }
 
 fn done(take p: Pair) {
-    remote.shut(take p.link) else { return }
+    remote.shut(p.link) else { return }
     net.close(take p.stub) else { return }
     net.close_listener(take p.srv) else { return }
 }
@@ -155,7 +155,7 @@ fn binary_row() {
 
 fn interrupt_row() {
     var p = pair(remote.reply_ms) else { return }
-    remote.interrupt(mut p.link) else { return }
+    remote.interrupt(p.link) else { return }
     let h = heard(mut p.stub).bytes()
     assert(h.len == 1 && h[0] as int == 3)
     done(take p)
@@ -167,7 +167,7 @@ fn closed_row() {
     net.close(take p.stub) else { return }
     let r = remote.request(mut p.link, "g")
     assert("{r}" == "closed")
-    remote.shut(take p.link) else { return }
+    remote.shut(p.link) else { return }
     net.close_listener(take p.srv) else { return }
     print("PASS remote-link-closed")
 }

@@ -265,7 +265,7 @@ fn resume_row() {
     remote.resume(mut r.t, false) else { return }
     let quiet = remote.wait_stop(mut r.t, 50)
     assert("{quiet}" == "reply_timeout")
-    remote.interrupt_target(mut r.t) else { return }
+    remote.interrupt_target(r.t) else { return }
     let tail = heard(mut r.stub).bytes()
     assert(tail.len == 6 && tail[0] as int == 36 && tail[1] as int == 99 && tail[5] as int == 3)
     assert(skip != "")

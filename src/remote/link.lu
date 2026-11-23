@@ -1,9 +1,9 @@
 // The transport: one TCP connection to a stub (Connecting: `target remote HOST:PORT`), carrying the
 // packet layer's frames with its acknowledgments, resends and reply time (Overview, Packet
 // Acknowledgment), and the interrupt byte (Interrupts). Bytes read but not yet scanned stay in the
-// link between calls, so a reply that arrives with its acknowledgment is never lost.
-
-use std.net
+// link between calls, so a reply that arrives with its acknowledgment is never lost. The socket is held as
+// its descriptor (the `[os.net]` builtins std.net wraps), so a link is a plain value: `ask` serves a
+// stopped target's reads from a borrowed link, with no exclusive access to the session.
 
 /// Refusals of the transport: the socket's own, and the packet layer's, each by name.
 pub error LinkError = {
@@ -23,11 +23,11 @@ pub error LinkError = {
     reply_timeout,
 }
 
-/// One connection: its socket, its acknowledgment state, the bytes read and not yet scanned, the
-/// milliseconds it waits for an acknowledgment or a reply (reply_ms; a unit row sets less), and the
-/// most data it sends in one packet.
+/// One connection: its socket's descriptor, its acknowledgment state, the bytes read and not yet
+/// scanned, the milliseconds it waits for an acknowledgment or a reply (reply_ms; a unit row sets
+/// less), and the most data it sends in one packet.
 pub struct Link {
-    pub sock: net.Socket,
+    pub fd: int,
     pub ack: Ack,
     pub pending: List[byte],
     pub wait_ms: int,
@@ -36,14 +36,14 @@ pub struct Link {
 
 /// Connect to ADDR (`HOST:PORT`): a connection nobody answers is `refused`.
 pub fn open(addr: str) -> Link ! LinkError {
-    let s = net.connect(addr)?
+    let fd = net_connect(addr)?
     let none: List[byte] = []
-    Link { sock: s, ack: ack_state(), pending: none, wait_ms: reply_ms, cap: send_cap_floor }
+    Link { fd: fd, ack: ack_state(), pending: none, wait_ms: reply_ms, cap: send_cap_floor }
 }
 
 /// Close the connection, sending nothing (Connecting: `disconnect`).
-pub fn shut(take l: Link) -> () ! LinkError {
-    net.close(take l.sock)?
+pub fn shut(l: Link) -> () ! LinkError {
+    net_close(l.fd)?
 }
 
 fn drop_front(mut l: Link, n: int) {
@@ -53,11 +53,12 @@ fn drop_front(mut l: Link, n: int) {
     l.pending = rest
 }
 
-/// Read what the socket has within ms (no limit when ms <= 0) onto the pending bytes. Returns false
-/// when the time passed with nothing read.
+/// Read one byte within ms (no limit when ms <= 0) onto the pending bytes. Returns false when the time
+/// passed with nothing read. One byte at a time, so a link never holds bytes past the packet it is
+/// reading: once a reply is read nothing is pending, and a borrowed link (`ask`) starts where it is.
 fn fill(mut l: Link, ms: int) -> bool ! LinkError {
-    net.set_deadline(mut l.sock, ms)?
-    let got = net.read_bytes(mut l.sock, 65536) else |e| match e {
+    net_deadline(l.fd, ms)?
+    let got = net_read_bytes(l.fd, 1) else |e| match e {
         timeout => {
             return false
         },
@@ -72,13 +73,22 @@ fn fill(mut l: Link, ms: int) -> bool ! LinkError {
     true
 }
 
+/// Whether the pending bytes can be scanned: a byte outside a packet, or a packet's `#` and its two
+/// checksum digits (`#` never appears in a packet's data: Overview). A packet is scanned once, when
+/// whole, not once a byte.
+fn ready(l: Link) -> bool {
+    if l.pending.len == 0 { return false }
+    if l.pending[0] as int != 36 { return true }
+    l.pending.len >= 4 && l.pending[l.pending.len - 3] as int == 35
+}
+
 /// The next acknowledgment: 1 for `+`, 2 for `-`, 0 when wait_ms passed without one. A packet that
 /// comes first is left pending and counts as `+`. Bytes outside any packet are skipped.
 fn next_ack(mut l: Link) -> int ! LinkError {
     var more = true
     while more {
         var looking = true
-        while looking && l.pending.len > 0 {
+        while looking && ready(l) {
             let sc = scan(l.pending, 0)?
             if sc.kind == scan_need {
                 looking = false
@@ -99,7 +109,7 @@ fn next_ack(mut l: Link) -> int ! LinkError {
 /// it again, at most resend_cap times; then the command fails with resend_limit.
 pub fn send(mut l: Link, data: str) -> () ! LinkError {
     let f = frame(data, l.cap)?
-    net.write_bytes(mut l.sock, f)?
+    net_write_bytes(l.fd, f)?
     if !wants_ack(l.ack) { return }
     var waiting = true
     while waiting {
@@ -109,7 +119,7 @@ pub fn send(mut l: Link, data: str) -> () ! LinkError {
             waiting = false
         } else {
             resend(mut l.ack)?
-            net.write_bytes(mut l.sock, f)?
+            net_write_bytes(l.fd, f)?
         }
     }
 }
@@ -122,7 +132,7 @@ pub fn receive(mut l: Link, ms: int) -> List[byte] ! LinkError {
     var more = true
     while more {
         var looking = true
-        while looking && l.pending.len > 0 {
+        while looking && ready(l) {
             let sc = scan(l.pending, 0)?
             if sc.kind == scan_need {
                 looking = false
@@ -130,12 +140,12 @@ pub fn receive(mut l: Link, ms: int) -> List[byte] ! LinkError {
                 drop_front(mut l, sc.used)
                 if sc.kind == scan_packet {
                     if sc.sum_ok || !wants_ack(l.ack) {
-                        if wants_ack(l.ack) { net.write_bytes(mut l.sock, [43 as byte])? }
+                        if wants_ack(l.ack) { net_write_bytes(l.fd, [43 as byte])? }
                         return sc.data
                     }
                     if bad >= resend_cap { return resend_limit }
                     bad += 1
-                    net.write_bytes(mut l.sock, [45 as byte])?
+                    net_write_bytes(l.fd, [45 as byte])?
                 }
             }
         }
@@ -160,6 +170,13 @@ pub fn request_binary(mut l: Link, data: str) -> List[byte] ! LinkError {
 }
 
 /// Write the interrupt byte 0x03, outside any packet (Interrupts).
-pub fn interrupt(mut l: Link) -> () ! LinkError {
-    net.write_bytes(mut l.sock, interrupt_byte())?
+pub fn interrupt(l: Link) -> () ! LinkError {
+    net_write_bytes(l.fd, interrupt_byte())?
+}
+
+/// A request from a borrowed link: send DATA and return its reply, as `request` (or `request_binary`)
+/// does, with acknowledgment counts of its own. For a stopped target, where nothing else is in flight
+/// and nothing is pending (fill reads one byte at a time).
+pub fn ask(l: Link, data: str, binary: bool) -> List[byte] ! LinkError {
+    io
 }
