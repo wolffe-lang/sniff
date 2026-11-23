@@ -2,7 +2,6 @@
 // encoding, hex numbers), Standard Replies, Packet Acknowledgment, and Interrupts (the byte 0x03).
 // Pure: no I/O. The transport feeds the bytes it reads to `scan` and writes what `frame` builds.
 // Every cap below has a unit row at its value and one past it (src/remote_test.lu).
-// Until the layer is built, every packet is refused and every helper answers nothing.
 
 /// Refusals of the packet layer, each by name.
 pub error PacketError = {
@@ -64,70 +63,195 @@ pub const reply_data: int = 4
 
 /// The sum of the data's bytes modulo 256 (Overview).
 pub fn checksum(data: List[byte]) -> int {
-    0
+    var s: int = 0
+    for b in data { s = (s + (b as int)) % 256 }
+    s
+}
+
+fn hex_digit(n: int) -> byte {
+    if n < 10 { (48 + n) as byte } else { (87 + n) as byte }
+}
+
+/// A hex digit's value, either case; -1 for any other byte.
+fn hex_value(b: byte) -> int {
+    let c = b as int
+    if c >= 48 && c <= 57 { return c - 48 }
+    if c >= 97 && c <= 102 { return c - 87 }
+    if c >= 65 && c <= 70 { return c - 55 }
+    -1
 }
 
 /// `$` DATA `#` and the checksum's two lower-case hex digits (Overview). sniff's packets are text it
 /// builds from names and hex, so a `$`, `#`, `}` or `*` in DATA is refused by name, never escaped.
 pub fn frame(data: str, cap: int) -> List[byte] ! PacketError {
-    packet_too_long
+    let d = data.bytes()
+    if d.len > cap { return packet_too_long }
+    var out: List[byte] = []
+    (mut out).push(36 as byte)
+    for b in d {
+        let c = b as int
+        if c == 36 || c == 35 || c == 125 || c == 42 { return unescaped_byte }
+        (mut out).push(b)
+    }
+    let s = checksum(d)
+    (mut out).push(35 as byte)
+    (mut out).push(hex_digit(s / 16))
+    (mut out).push(hex_digit(s % 16))
+    out
 }
 
 /// The interrupt: the single byte 0x03, sent outside any packet (Interrupts).
 pub fn interrupt_byte() -> List[byte] {
-    []
+    [3 as byte]
+}
+
+fn scan_of(kind: int, used: int) -> Scan {
+    let none: List[byte] = []
+    Scan { kind: kind, used: used, data: none, sum_ok: kind != scan_junk }
 }
 
 /// What starts at buf[start]. A packet's data is everything to its `#`; its checksum is the next two
 /// hex digits, either case. A frame whose data passes reply_cap is refused, and so is a notification
 /// (`%`): notifications belong to non-stop mode, outside what sniff speaks.
 pub fn scan(buf: List[byte], start: int) -> Scan ! PacketError {
-    reply_too_long
+    if start < 0 || start >= buf.len { return scan_of(scan_need, 0) }
+    let c = buf[start] as int
+    if c == 43 { return scan_of(scan_ack, 1) }
+    if c == 45 { return scan_of(scan_nack, 1) }
+    if c == 3 { return scan_of(scan_interrupt, 1) }
+    if c == 37 { return notification_refused }
+    if c != 36 { return scan_of(scan_junk, 1) }
+    var i = start + 1
+    var data: List[byte] = []
+    while i < buf.len && buf[i] as int != 35 {
+        if data.len >= reply_cap { return reply_too_long }
+        (mut data).push(buf[i])
+        i += 1
+    }
+    if i + 3 > buf.len { return scan_of(scan_need, 0) }
+    let h = hex_value(buf[i + 1])
+    let l = hex_value(buf[i + 2])
+    let ok = h >= 0 && l >= 0 && h * 16 + l == checksum(data)
+    Scan { kind: scan_packet, used: i + 3 - start, data: data, sum_ok: ok }
 }
 
 /// A reply's data with its runs expanded (Overview: `C*N` is C and N-29 more of it, N printable and
 /// never `#` or `$`) and, for binary data, its escapes undone (`}` then the byte XOR 0x20). A run
 /// repeats the byte before it as decoded. The result is held to reply_cap.
 pub fn decode(raw: List[byte], binary: bool) -> List[byte] ! PacketError {
-    bad_run_length
+    var out: List[byte] = []
+    var i: int = 0
+    while i < raw.len {
+        let c = raw[i] as int
+        if c == 42 {
+            if out.len == 0 || i + 1 >= raw.len { return bad_run_length }
+            let n = raw[i + 1] as int
+            if n < 32 || n > 126 || n == 35 || n == 36 { return bad_run_length }
+            let more = n - 29
+            if out.len + more > reply_cap { return reply_too_long }
+            let last = out[out.len - 1]
+            var k: int = 0
+            while k < more { (mut out).push(last); k += 1 }
+            i += 2
+        } else if binary && c == 125 {
+            if i + 1 >= raw.len { return bad_escape }
+            if out.len >= reply_cap { return reply_too_long }
+            let e = raw[i + 1] as int
+            (mut out).push((if (e & 32) != 0 { e - 32 } else { e + 32 }) as byte)
+            i += 2
+        } else {
+            if out.len >= reply_cap { return reply_too_long }
+            (mut out).push(raw[i])
+            i += 1
+        }
+    }
+    out
 }
 
 /// Two lower-case hex digits a byte, in order (Overview: binary data in most packets).
 pub fn hex_encode(b: List[byte]) -> str {
-    ""
+    var out: List[byte] = []
+    for x in b {
+        let v = x as int
+        (mut out).push(hex_digit(v / 16))
+        (mut out).push(hex_digit(v % 16))
+    }
+    str_from_utf8(out) else { "" }
 }
 
 /// Bytes from pairs of hex digits, either case; an odd count or any other byte is bad_hex.
 pub fn hex_decode(s: List[byte]) -> List[byte] ! PacketError {
-    bad_hex
+    if s.len % 2 != 0 { return bad_hex }
+    var out: List[byte] = []
+    var i: int = 0
+    while i < s.len {
+        let h = hex_value(s[i])
+        let l = hex_value(s[i + 1])
+        if h < 0 || l < 0 { return bad_hex }
+        (mut out).push((h * 16 + l) as byte)
+        i += 2
+    }
+    out
 }
 
 /// A number in hex with leading zeros suppressed (Overview); zero is `0`.
 pub fn hex_u64(v: u64) -> str {
-    ""
+    if v == 0 { return "0" }
+    var digits: List[byte] = []
+    var x = v
+    while x != 0 {
+        (mut digits).push(hex_digit((x & 15) as int))
+        x = x >> 4
+    }
+    var out: List[byte] = []
+    var i = digits.len - 1
+    while i >= 0 { (mut out).push(digits[i]); i -= 1 }
+    str_from_utf8(out) else { "" }
 }
 
 /// A hex number, either case, leading zeros allowed; at most 16 digits after them. An empty field,
 /// any other byte, or a value past 64 bits is bad_hex.
 pub fn parse_hex(s: List[byte]) -> u64 ! PacketError {
-    bad_hex
+    if s.len == 0 { return bad_hex }
+    var i: int = 0
+    while i < s.len && s[i] as int == 48 { i += 1 }
+    if s.len - i > 16 { return bad_hex }
+    var v: u64 = 0
+    var j: int = 0
+    while j < s.len {
+        let d = hex_value(s[j])
+        if d < 0 { return bad_hex }
+        if j >= i { v = (v << 4) | (d as u64) }
+        j += 1
+    }
+    v
 }
 
 /// The kind of a reply's data (Standard Replies).
 pub fn reply_kind(d: List[byte]) -> int {
+    if d.len == 0 { return reply_empty }
+    if d.len == 2 && d[0] as int == 79 && d[1] as int == 75 { return reply_ok }
+    if d[0] as int == 69 {
+        if d.len >= 2 && d[1] as int == 46 { return reply_error_text }
+        if d.len == 3 && hex_value(d[1]) >= 0 && hex_value(d[2]) >= 0 { return reply_error }
+    }
     reply_data
 }
 
 /// The number of an `E NN` reply; -1 for any other reply.
 pub fn error_number(d: List[byte]) -> int {
-    -1
+    if reply_kind(d) != reply_error { return -1 }
+    hex_value(d[1]) * 16 + hex_value(d[2])
 }
 
 /// The data cap for what sniff sends: the stub's PacketSize (General Query Packets, qSupported) when it
 /// gave one, else the length of its `g` reply's data as the manual says gdb guesses it, else the
 /// floor; never past send_cap_max.
 pub fn send_cap(packet_size: int, g_len: int) -> int {
-    0
+    var cap = send_cap_floor
+    if packet_size > 0 { cap = packet_size } else if g_len > 0 { cap = g_len }
+    if cap > send_cap_max { cap = send_cap_max }
+    cap
 }
 
 /// The acknowledgment state of one connection (Packet Acknowledgment): whether `+` and `-` are still
@@ -145,23 +269,28 @@ pub fn ack_state() -> Ack {
 /// The packet in flight must go again (a `-`, or reply_ms passing): refused once resend_cap is spent.
 /// Returns how many resends are now spent.
 pub fn resend(mut a: Ack) -> int ! PacketError {
-    resend_limit
+    if a.resends >= resend_cap { return resend_limit }
+    a.resends += 1
+    a.resends
 }
 
 /// The packet in flight was acknowledged: the next one starts with no resends spent.
 pub fn acked(mut a: Ack) {
+    a.resends = 0
 }
 
 /// After the stub's `OK` to QStartNoAckMode and sniff's `+` for it, neither side acknowledges again.
 pub fn start_no_ack(mut a: Ack) {
+    a.no_ack = true
 }
 
 /// Whether a packet sent or received on this connection is acknowledged.
 pub fn wants_ack(a: Ack) -> bool {
-    false
+    !a.no_ack
 }
 
 /// A wait of ms milliseconds for an acknowledgment or a reply: past reply_ms it is reply_timeout.
 pub fn waited(ms: int) -> int ! PacketError {
-    reply_timeout
+    if ms > reply_ms { return reply_timeout }
+    ms
 }
