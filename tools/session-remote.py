@@ -404,7 +404,7 @@ def cmd_skip(a):
 # sniff-server's rows (kind server): the stub on loopback in this host, its client this harness or the pinned gdb. Each
 # row's check names what it holds; the stub is started by its recorded pid and ended by it.
 SERVER_CHECKS = ('refuse-second', 'refuse-non-loopback', 'loopback-default', 'idle-cost', 'interrupt-latency',
-                 'z1-hbreak', 'fp-write', 'fp-tag', 'threads', 'detach', 'detach-own', 'gdb-session', 'oracle-stable',
+                 'z1-hbreak', 'fp-write', 'fp-tag', 'fp-tag-own', 'threads', 'detach', 'detach-own', 'gdb-session', 'oracle-stable',
                  'native-golden')
 SESSION_ROWS = ROOT / 'tests/session-rows.json'
 # what gdb prints differently through the two stubs, by design, each by name: only through gdbserver, which offers Host
@@ -770,6 +770,31 @@ def thread_ids(ask_fn):
 G_RIP, G_FCTRL, G_FTAG, G_XMM0 = 16 * 8, 17 * 8 + 7 * 4 + 8 * 10, 17 * 8 + 7 * 4 + 8 * 10 + 2 * 4, 17 * 8 + 7 * 4 + 8 * 10 + 8 * 4
 
 
+G_ST0 = 17 * 8 + 7 * 4  # st0, then st1 to st7 at 10 bytes each
+
+
+def manual_full_tag(abridged, top, sts):
+    """The x87 tag word by the Intel SDM's table for recreating it from FXSAVE (Volume 2A, FXSAVE), in this harness's
+    own words: sts are ST0 to ST7's ten bytes in hex; register Rj is ST((j - TOP) mod 8); an empty one is 11, an
+    in-use one 10 (special) unless its exponent is neither all ones nor all zeros and its J bit is set (00, valid),
+    or its exponent, fraction and J bit are all zero (01, zero)."""
+    full = 0
+    for j in range(8):
+        tag = 3
+        if abridged >> j & 1:
+            b = bytes.fromhex(sts[(j - top) % 8])
+            exp, jbit = int.from_bytes(b[8:10], 'little') & 0x7fff, b[7] >> 7
+            frac_zero = not any(b[0:7]) and not b[7] & 0x7f
+            if exp == 0x7fff:
+                tag = 2
+            elif exp == 0:
+                tag = 1 if frac_zero and not jbit else 2
+            else:
+                tag = 0 if jbit else 2
+        full |= tag << 2 * j
+    return full
+
+
 def g_field(g, off, n):
     """The little-endian number of n bytes at byte off of a g reply."""
     return int.from_bytes(bytes.fromhex(g[2 * off:2 * off + 2 * n]), 'little')
@@ -892,11 +917,12 @@ def check_fp_write(a, row, out):
 def check_fp_tag(a, row, out):
     """The x87 tag word (register 34, ftag). FXSAVE keeps an abridged byte, one bit a register, where gdb's register is
     the full tag word, two bits a register. Held to gdbserver's answers by g and G: the eight x87 control registers
-    read, ftag written as 0x3fff (R7 in use, the rest empty), and read back."""
+    read, ftag written as 0x3fff (R7 in use, the rest empty) with st7 holding 1.0 (valid by the manual's table and by
+    gdbserver alike; TOP is 0, so R7 is st7), and read back."""
     def steps(c, prog):
         g = ask(c, 'g')
         before = [g[2 * (G_FCTRL + 4 * i):2 * (G_FCTRL + 4 * i) + 8] for i in range(8)] if g else g
-        w = ask(c, 'G' + g_with(g, G_FTAG, 'ff3f0000')) if g else ('-' if g == '' else None)
+        w = ask(c, 'G' + g_with(g_with(g, G_FTAG, 'ff3f0000'), G_ST0 + 70, '0000000000000080ff3f')) if g else ('-' if g == '' else None)
         r = ask(c, 'g') if w not in (None, '-') else w
         return {'fctrl to fop': before, 'G with ftag': w, 'ftag read back': r if r in (None, '-') else r[2 * G_FTAG:2 * G_FTAG + 8]}
     return check_same(a, row, out, steps, 'the x87 control registers, and the tag word written and read back')
@@ -952,6 +978,38 @@ def check_detach_own(a, row, out):
         return 'D with its breakpoints set: %r, and the program %s' % (
             got, 'ran to its end' if want in log.read_text(errors='replace') else 'did not run to its end'), ''
     return '', 'D with a breakpoint and a watchpoint set: %r, and the program ran to its end' % (got,)
+
+
+def check_fp_tag_own(a, row, out):
+    """The stub's own row, a named difference with the manual cited: ftag written as 0x3fff with st7 holding +0.0
+    reads back as the manual's table makes it (register 7 zero, 01: 0x7fff), computed here by manual_full_tag from
+    the registers read back. The pinned gdbserver reads back 0x3fff (every register in use valid, measured)."""
+    prog = Path(a.fixtures) / row['prog']
+    port = free_port()
+    p, up = start_server(a, ['127.0.0.1:%d' % port, str(prog)], out, row['name'])
+    try:
+        if not up:
+            return FAULT + 'sniff-server never said it was listening', ''
+        c = LoggedSocket(socket.create_connection(('127.0.0.1', port), timeout=5), out / (row['name'] + '.packets'))
+        ask(c, 'qSupported:swbreak+;vContSupported+')
+        h = hg_for(ask(c, '?'))
+        if h:
+            ask(c, h)
+        g = ask(c, 'g')
+        w = ask(c, 'G' + g_with(g_with(g, G_FTAG, 'ff3f0000'), G_ST0 + 70, '00' * 10)) if g else None
+        r = ask(c, 'g') if w is not None else None
+        c.sendall(frame('k'))
+        c.close()
+    finally:
+        end_server(p, row['name'])
+    if g is None or w is None or r is None:
+        return FAULT + 'the stub gave no reply (g %r, G %r, g %r)' % (g and 'read', w, r and 'read'), ''
+    got = g_field(r, G_FTAG, 4)
+    top = g_field(r, G_FCTRL + 4, 4) >> 11 & 7
+    want = manual_full_tag(0x80, top, [r[2 * (G_ST0 + 10 * i):2 * (G_ST0 + 10 * i + 10)] for i in range(8)])
+    if w != 'OK' or got != want:
+        return 'ftag 0x3fff written with st7 at +0.0: G %r, read back %#x, the manual\'s table gives %#x' % (w, got, want), ''
+    return '', 'ftag 0x3fff written with st7 at +0.0 reads back %#x, as the manual\'s table gives (register 7 zero)' % got
 
 
 def check_threads(a, row, out):
@@ -1406,7 +1464,7 @@ def cmd_server(a):
     checks = {'refuse-second': check_refuse_second, 'refuse-non-loopback': check_refuse_non_loopback,
               'loopback-default': check_loopback_default, 'idle-cost': check_idle_cost,
               'interrupt-latency': check_interrupt_latency, 'z1-hbreak': check_z1_hbreak, 'fp-write': check_fp_write,
-              'fp-tag': check_fp_tag, 'detach': check_detach, 'detach-own': check_detach_own,
+              'fp-tag': check_fp_tag, 'fp-tag-own': check_fp_tag_own, 'detach': check_detach, 'detach-own': check_detach_own,
               'native-golden': check_native_golden,
               'threads': check_threads, 'gdb-session': check_gdb_session, 'oracle-stable': check_oracle_stable}
     print(oracle_line())
