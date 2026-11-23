@@ -335,17 +335,26 @@ full tag word and back, and `serve.lu` is the loop: one wait on the client and t
 the program is stopped, a 100 ms one while it runs, so an interrupt is answered within that), breakpoints by `int3`
 with `swbreak`, hardware breakpoints and watchpoints in the debug registers, the registers read by `g` and `p` and written by
 `P` (the x87 and SSE ones through the FXSAVE area) and by `G` (the general ones), threads in all-stop (each new one traced from its clone, every other
-running thread halted before a stop is reported), `D` (every breakpoint and watchpoint out, every thread let go) and
-`k`. PAX answers PTRACE_SETFPREGS with EIO, so there the stub answers an x87 or SSE write with an error reply.
+running thread halted before a stop is reported; the thread list with each thread's name; `T thread-id` answered
+while the thread lives), `D` (every breakpoint and watchpoint out, every thread let go) and `k`. PAX answers PTRACE_SETFPREGS with EIO, so there the stub answers an x87 or SSE write with an error reply.
 
 The server rows (`tests/remote-rows.json`, kind `server`) hold the stub to the pinned gdbserver run beside it in the
 same container, on the same static fixture: packet by packet for the address rules, the one-client rule, the idle
 cost and the interrupt's latency (each row states its number), the debug-register breakpoint, the SSE write, the tag
 word, the threads and the detach, and through the pinned gdb for seventeen session rows, gdb's transcript through the
-stub equal to its transcript through gdbserver after four named normalisations: `host-io` (only through gdbserver,
+stub equal to its transcript through gdbserver after six named normalisations: `host-io` (only through gdbserver,
 which offers Host I/O, does gdb read a separate debug file over the connection and warn that file transfers can be
 slow), `inferior-name` (gdbserver's multiprocess names the inferior by its pid), `port` and `thread-id` (each run's
-own). gdbserver's transcript taken twice is held equal too, and every run names gdbserver and gdb by version and
+own), `spin` (the session set's own rule for the workers fixture's spinning threads) and `thread-table` (the padding
+`info threads` gives gdbserver's longer thread ids). The packet rows speak to both stubs as gdb does (`?`, then `Hg`)
+and read and write registers by `g` and `G`, the replies decoded as the manual says (run length, the escape):
+gdbserver answers `p` and `P` with the empty reply, so those two are checked only by the stub's own rows. Three
+rows are the stub's own, with no oracle, each a measured difference named: `server-detach-leftover` (`D` with
+breakpoints still set: the stub takes them out; gdbserver leaves them, and its program never ends on its own),
+`server-fp-tag-zero` (a register in use holding zero is tagged zero, 01, by the processor manual's table for the
+full tag word; gdbserver tags every register in use valid) and the `p`/`P` reads and writes. A row's FAIL is its own
+comparison or a fault named as one (`fault:`: a driver exception, a stub that never listened, a side's silence), and
+a red is never a fault. gdbserver's transcript taken twice is held equal too, and every run names gdbserver and gdb by version and
 SHA-256. One fixture, `step-gcc-calls`, is also held through the stub to the pinned gdb's native golden for the same
 static build, with two lines dropped by name from the stub's side alone, both gdb's own on a remote target:
 `connect-stop` (the stop at the first instruction a remote target reports on connecting) and `remote-kill` (gdb's
