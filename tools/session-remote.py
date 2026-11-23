@@ -467,12 +467,12 @@ def check_refuse_second(a, row, out):
     """While one client is attached a second is refused by name: it gets the stub's E.text reply to its first packet and
     its connection is closed, sniff-server says so, and the first client's session goes on."""
     want = 'E.sniff-server serves one client at a time'
-    p, up = start_server(a, ['127.0.0.1:0', str(Path(a.fixtures) / row['prog'])], out, row['name'])
+    port = free_port()
+    p, up = start_server(a, ['127.0.0.1:%d' % port, str(Path(a.fixtures) / row['prog'])], out, row['name'])
     problems = []
     try:
         if not up:
             return 'sniff-server never said it was listening', ''
-        port = int(up.group(2))
         first = socket.create_connection(('127.0.0.1', port), timeout=5)
         r1 = ask(first, 'qSupported:swbreak+;vContSupported+')
         if not r1 or 'PacketSize=' not in r1:
