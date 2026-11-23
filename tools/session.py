@@ -139,6 +139,30 @@ def load_probes():
     return json.loads(PAX_ROWS.read_text()).get('probes', {})
 
 
+def load_probe_differences():
+    """The PAX set's documented differences, tests/pax-rows.json "probe_differences": probe name -> [{call, linux, pax,
+    why}], a line of the probe's where PAX answers otherwise than Linux, both answers, and why."""
+    if not PAX_MODE:
+        return {}
+    return json.loads(PAX_ROWS.read_text()).get('probe_differences', {})
+
+
+def difference_problems(probes, differences):
+    """What the inventory refuses in the probes' named differences: one for a probe that is not registered, an entry
+    without its call, both answers and a reason, and an entry whose two answers are the same; [] when nothing is."""
+    bad = []
+    for name, entries in sorted(differences.items()):
+        if name not in probes:
+            bad.append('probe_differences %s: no such probe' % name)
+            continue
+        for d in entries:
+            if not all(isinstance(d.get(k), str) and d[k].strip() for k in ('call', 'linux', 'pax', 'why')):
+                bad.append('probe_differences %s: an entry needs its call, linux, pax and why' % name)
+            elif d['linux'] == d['pax']:
+                bad.append('probe_differences %s: %r answers the same on both' % (name, d['call']))
+    return bad
+
+
 CORE_FORMS = ('positional', 'dash-c', 'dash-c-only', 'script')
 CORE_FILES = ('missing', 'truncated')
 
@@ -990,6 +1014,7 @@ def cmd_verify(a):
     bad += core_problems(rows, load_cores())
     if PAX_MODE:
         bad += skip_problems(rows, probes)
+        bad += difference_problems(probes, load_probe_differences())
         bad += ['probe %s: no source %s' % (n, src) for n, src in sorted(probes.items()) if not (ROOT / src).is_file()]
     if bad:
         print('FAIL session-rows-form: ' + '; '.join(bad))
