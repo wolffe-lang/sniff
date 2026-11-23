@@ -220,12 +220,12 @@ fn memory_row() {
     var r = rig(rep("0001020304050607") + rep("08090a0b0c0d0e0f") + rep("1011") + rep("E14") + rep("48") + rep("OK") + rep("cc") + rep("OK")) else |e| { print("FAIL remote-client-memory {e}"); return }
     let before = heard(mut r.stub)
     r.t.link.cap = 16
-    let m = remote.read_mem(mut r.t, 4096, 18) else { return }
+    let m = remote.read_mem(r.t, 4096, 18) else { return }
     assert(m.len == 18 && m[0] as int == 0 && m[17] as int == 17)
-    let bad = remote.read_mem(mut r.t, 0, 4)
+    let bad = remote.read_mem(r.t, 0, 4)
     assert("{bad}" == "stub_error")
     remote.insert_break(mut r.t, 4100) else { return }
-    let shadow = remote.read_mem(mut r.t, 4100, 1) else { return }
+    let shadow = remote.read_mem(r.t, 4100, 1) else { return }
     assert(shadow.len == 1 && shadow[0] as int == 72)
     remote.write_mem(mut r.t, 8192, [1 as byte, 255 as byte]) else { return }
     let after = heard(mut r.stub)
@@ -293,12 +293,14 @@ fn ends_row() {
 }
 
 fn peek_row() {
-    var r = rig(rep(g_reply())) else |e| { print("FAIL remote-client-peek {e}"); return }
+    var r = rig(rep(g_reply()) + rep("0102")) else |e| { print("FAIL remote-client-peek {e}"); return }
     let skip = heard(mut r.stub)
     let (regs, unread) = remote.peek_regs(r.t) else |e| { print("FAIL remote-client-peek {e}"); return }
     let rip = remote.reg_in(r.t, regs, unread, "rip") else { return }
     assert(remote.hex_u64(rip) == "ffffffff80117633" && regs.len == 536)
-    assert(heard(mut r.stub) == sent("g") + "+")
+    let m = remote.read_mem(r.t, 64, 2) else { return }
+    assert(m.len == 2 && m[1] as int == 2)
+    assert(heard(mut r.stub) == sent("g") + "+" + sent("m40,2") + "+")
     assert(skip != "")
     done(take r)
     print("PASS remote-client-peek")

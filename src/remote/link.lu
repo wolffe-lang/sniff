@@ -178,5 +178,8 @@ pub fn interrupt(l: Link) -> () ! LinkError {
 /// does, with acknowledgment counts of its own. For a stopped target, where nothing else is in flight
 /// and nothing is pending (fill reads one byte at a time).
 pub fn ask(l: Link, data: str, binary: bool) -> List[byte] ! LinkError {
-    io
+    let none: List[byte] = []
+    var x = Link { fd: l.fd, ack: Ack { no_ack: l.ack.no_ack, resends: 0 }, pending: none, wait_ms: l.wait_ms, cap: l.cap }
+    if binary { return request_binary(mut x, data)? }
+    request(mut x, data)?
 }

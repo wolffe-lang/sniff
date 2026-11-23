@@ -259,20 +259,9 @@ pub fn read_threads(mut t: Target) -> () ! ClientError {
 }
 
 /// The registers of the current thread by `g` (Packets, g), from a borrowed target: the bytes in
-/// target order, and for each byte whether the stub sent `xx` for it. Not built yet: refused.
+/// target order, and for each byte whether the stub sent `xx` for it (it could not read it).
 pub fn peek_regs(t: Target) -> (List[byte], List[bool]) ! ClientError {
-    unsupported
-}
-
-/// A register's value by name from bytes a `g` gave. Not built yet: refused.
-pub fn reg_in(t: Target, regs: List[byte], unread: List[bool], name: str) -> u64 ! ClientError {
-    no_register
-}
-
-/// The registers of the current thread by `g` (Packets, g): two hex digits a byte in target order, and
-/// `x`s for bytes the stub cannot read.
-pub fn read_registers(mut t: Target) -> () ! ClientError {
-    let r = request(mut t.link, "g")?
+    let r = ask(t.link, "g", false)?
     check(r)?
     if r.len % 2 != 0 { return bad_hex }
     var regs: List[byte] = []
@@ -289,15 +278,20 @@ pub fn read_registers(mut t: Target) -> () ! ClientError {
         }
         i += 2
     }
+    (regs, unread)
+}
+
+/// The registers by `g`, kept in the target until the next resumption.
+pub fn read_registers(mut t: Target) -> () ! ClientError {
+    let (regs, unread) = peek_regs(t)?
     t.regs = regs
     t.unread = unread
     t.regs_fresh = true
 }
 
-/// A register's value by name, little-endian, from the last `g` read (read again when stale); a
-/// register past 64 bits, or one the stub could not read, is refused by name.
-pub fn reg_u64(mut t: Target, name: str) -> u64 ! ClientError {
-    if !t.regs_fresh { read_registers(mut t)? }
+/// A register's value by name, little-endian, from bytes a `g` gave; a register past 64 bits, or one
+/// the stub could not read, is refused by name.
+pub fn reg_in(t: Target, regs: List[byte], unread: List[bool], name: str) -> u64 ! ClientError {
     let n = regnum_of(t.desc, name)
     if n < 0 { return no_register }
     let off = g_offset(t.desc, n)
@@ -306,21 +300,27 @@ pub fn reg_u64(mut t: Target, name: str) -> u64 ! ClientError {
         if r.regnum == n { bits = r.bitsize }
     }
     let size = bits / 8
-    if size > 8 || off < 0 || off + size > t.regs.len { return no_register }
+    if size > 8 || off < 0 || off + size > regs.len { return no_register }
     var v: u64 = 0
     var i = size - 1
     while i >= 0 {
-        if t.unread[off + i] { return no_register }
-        v = (v << 8) | (t.regs[off + i] as int as u64)
+        if unread[off + i] { return no_register }
+        v = (v << 8) | (regs[off + i] as int as u64)
         i -= 1
     }
     v
 }
 
+/// A register's value by name from the last `g` read (read again when stale).
+pub fn reg_u64(mut t: Target, name: str) -> u64 ! ClientError {
+    if !t.regs_fresh { read_registers(mut t)? }
+    reg_in(t, t.regs, t.unread, name)?
+}
+
 /// LEN bytes at ADDR by `m` (Packets, m), split so each reply fits the packet size; a short reply ends
-/// the read early. An error reply is gdb's `Cannot access memory`. A byte under an inserted software
+/// the read early. An error reply is gdb's `Cannot access memory`. A borrowed target serves it, by `ask`. A byte under an inserted software
 /// breakpoint reads as the byte the breakpoint covers, whatever the stub keeps in memory.
-pub fn read_mem(mut t: Target, addr: u64, len: int) -> List[byte] ! ClientError {
+pub fn read_mem(t: Target, addr: u64, len: int) -> List[byte] ! ClientError {
     var out: List[byte] = []
     var step = t.link.cap / 2
     if step < 1 { step = 1 }
@@ -330,7 +330,7 @@ pub fn read_mem(mut t: Target, addr: u64, len: int) -> List[byte] ! ClientError 
         var n = len - done
         if n > step { n = step }
         let a = addr + (done as u64)
-        let r = request(mut t.link, "m{hex_u64(a)},{hex_u64(n as u64)}")?
+        let r = ask(t.link, "m{hex_u64(a)},{hex_u64(n as u64)}", false)?
         if r.len == 0 { return stub_error }
         if reply_kind(r) == reply_error || reply_kind(r) == reply_error_text { return stub_error }
         let got = hex_decode(r)?
@@ -367,7 +367,7 @@ fn z(mut t: Target, packet: str) -> () ! ClientError {
 /// A software breakpoint by `Z0,ADDR,1` (KIND 1, the length of int3, as the pinned gdb sends it), after
 /// reading the byte it covers, which later reads show in its place.
 pub fn insert_break(mut t: Target, addr: u64) -> () ! ClientError {
-    let orig = read_mem(mut t, addr, 1) else { return insert_refused }
+    let orig = read_mem(t, addr, 1) else { return insert_refused }
     if orig.len != 1 { return insert_refused }
     z(mut t, "Z0,{hex_u64(addr)},1")?
     (mut t.bp_addrs).push(addr)
