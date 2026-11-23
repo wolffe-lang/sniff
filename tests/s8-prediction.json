@@ -202,8 +202,9 @@
    "a C cast is read in a wolf frame, since wolf's units say they are C11; a pointer may point to one of C's builtin types",
    "a quoted name finds a data symbol with no debug information, which has no value until a cast says what is there",
    "a software breakpoint goes in when the stub takes its Z0, whether or not the byte it covers can be read (at reset under TCG it cannot)",
-   "at a terminal, a breakpoint that cannot be inserted ends with `Command aborted.` (PENDING for a process: tty-gcc-unmapped)",
-   "gdb's 80-column wrap of a breakpoint row's location is a terminal's, joined as its wrap of a frame line is"
+   "at a terminal, a breakpoint that cannot be inserted over a remote target ends with `Command aborted.`. Predicted for any terminal and scored wrong: a process at a terminal does not print it (tty-gcc-unmapped), nor does one in a command file. The kernel rows show it over a remote target at a terminal only; a remote target in a command file is not measured, and sniff gives it the process's form",
+   "gdb's 80-column wrap of a breakpoint row's location is a terminal's, joined as its wrap of a frame line is",
+   "x at an address below a position-independent program (`x/2xg 0`) trapped sniff on an overflow, subtracting the load base to find a symbol; the address now has no symbol, and the address line ends with the error as gdb's does (x-gcc-unreadable)"
   ]
  },
  "kernel_symbols": {
