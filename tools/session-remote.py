@@ -833,7 +833,7 @@ def run_check(fn, a, row, out):
 
 def compare(mine, theirs, what):
     """sniff-server's answers against gdbserver's: a fault when either side gave no reply ('-' is a request not made,
-    because an earlier answer ruled it out), else the comparison."""
+    because an earlier answer made it moot), else the comparison."""
     if oracle_silent(mine):
         return FAULT + 'the stub gave no reply (sniff-server %r): nothing compared' % (mine,), ''
     if oracle_silent(theirs):
