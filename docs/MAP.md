@@ -292,3 +292,35 @@ memory row reads is compared as it is: lldb starts the program without address r
 the Linux set's `core-gcc-refuse-*` rows, run over a Mach-O core of the clang build of the same program; anything
 macOS-specific in how a refusal is reached is held by the macOS `expect` rows. Hosted macOS skips these rows by name
 (they need the pinned lldb to write their cores): the Mac's record is their only evidence.
+
+### Remote targets (S8, PR 1)
+
+`src/remote/` is the client side of the GDB remote protocol, from the GDB manual's nodes alone (docs/SOURCES.md).
+`packet.lu` frames and decodes packets (the checksum, acknowledgments and no-ack mode, the `}` escape, `*`
+run-length decoding, hex, the standard replies), each cap the caller's: a packet's size, a reply's, resends and a
+reply's time, each held by a unit row at its value and one past it. `tdesc.lu` reads a target description: the XML
+subset a register file needs, inclusions resolved in place, register numbering and the `g` layout, and refuses one that
+lacks `org.gnu.gdb.i386.core`'s registers. `link.lu` is one TCP connection (std.net) holding the socket's descriptor,
+so a session can read a stopped target through a borrowed value; it reads a byte at a time and scans a packet once it
+is whole. `client.lu` is the connect sequence (qSupported, the description, the threads), registers by `g`, memory by
+`m`, software breakpoints by `Z0` (decided by the stub's reply alone), hardware breakpoints and watchpoints by `Z1` to
+`Z4`, resumption by vCont (or `c` and `s`), stop replies with console output, the interrupt byte, a thread's extra
+information, and `D`, `k` and closing the connection. A stand-in stub over the loopback drives the unit rows.
+
+`src/session/remote_target.lu` makes a remote target the session's third source of a stopped program's memory and
+registers (`src/session/source.lu`), beside a process and a core: `target remote HOST:PORT` (`:PORT`, `tcp:`), with
+the pinned gdb's refusals, `disconnect`, `detach`, `kill`, `info threads`, breakpoints, `hbreak` (a remote target's
+`Z1`; on a process or a core sniff refuses it by name), stepping, `finish`, the interrupt (a terminal's SIGINT sent on
+as 0x03) and watchpoints. The register slots are Linux's x86-64 `user_regs_struct`, filled by name from the
+description. The kernel rows (`tests/remote-rows.json`, `tools/session-remote.py`) boot PAX's console image under
+QEMU's gdbstub at one processor, the processor frozen at reset, and hold sniff's terminal transcript to the pinned
+gdb's: a golden is written only when a second capture on its own boot holds it, and each normalisation is declared
+per row and replaces a value in a line that must be there. The rows run under KVM and TCG on the record host
+(`tools/gate-remote`); a host with no kernel image skips them by name with the count held (`tools/gate`), as does the
+Mac, whose build has no x86-64 register, CFI or call tables for the kernel. Boundaries that remain: no assignment
+(`set var`) to memory or registers, no `<flags>` types in `info registers` (three rows wait for these as named
+skips), and no Mac build for the kernel rows.
+
+Every load base comes off an address through `file_address` (a census in `tests/test_session.py` holds that no other
+code subtracts one): an address or pc below a moved program (`x/2xg 0`, a call through a null function pointer) finds
+nothing instead of trapping, and a frame at a pc in no known code takes its caller from the top of the stack.
