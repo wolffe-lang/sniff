@@ -1224,7 +1224,8 @@ def cmd_selftest(_a):
         else:
             assert r.get('prog', '').startswith('c/') and r.get('why'), 'a server row names its fixture and says what it holds: ' + r['name']
     n = session_normalise('Reading /usr/lib/debug/.build-id/a0/ab.debug from remote target...\n[Inferior 1 (process 19) killed]\n'
-                          'Remote debugging using 127.0.0.1:41234\n* 1    Thread 77.78 "prog" main ()\n')
+                          'Remote debugging using 127.0.0.1:41234\n* 1    Thread 77.78 "prog" main ()\n'
+                          'warning: File transfers from remote targets can be slow. Use "set sysroot" to access files locally instead.\n')
     assert n == '[Inferior 1 (INFERIOR) killed]\nRemote debugging using 127.0.0.1:PORT\n* 1    Thread TID "prog" main ()\n', repr(n)
     assert session_normalise('[Inferior 1 (Remote target) killed]\n') == '[Inferior 1 (INFERIOR) killed]\n'
     for r in [r for r in rows if r.get('kind') == 'server-pax']:
