@@ -561,7 +561,7 @@ def frame_relative(fact, frame):
     """A memory fact read at a frame: the address is the frame's register, each word the frame names is its distance
     from that address ('$fp+32'), and each other word stays as read."""
     at, addr = frame['at'], fact[1]
-    return ['mem', at, ['%s%+d' % (at, w - addr) if i in frame['offsets'] else w for i, w in enumerate(fact[2])]]
+    return ['mem', at, ['%s%+d' % (at, w - addr) if i in frame['offsets'] else None for i, w in enumerate(fact[2])]]
 
 
 def frame_note(row, stored, read):
