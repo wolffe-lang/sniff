@@ -24,7 +24,27 @@ fn file_path_row() {
     print("PASS session-file-path")
 }
 
+fn code_symbols_row() {
+    // st_info is the binding << 4 | the type: FUNC 2, OBJECT 1, NOTYPE 0; GLOBAL 1, LOCAL 0
+    let func_global: u64 = 18
+    let notype_global: u64 = 16
+    let notype_local: u64 = 0
+    let object_global: u64 = 17
+    let at: u64 = 18446744071562067968
+    assert(session.elf_code_symbol(func_global, at, 1, true))
+    assert(!session.elf_code_symbol(func_global, 0, 1, true))
+    assert(!session.elf_code_symbol(func_global, at, 0, true))
+    assert(!session.elf_code_symbol(object_global, at, 3, false))
+    // a global symbol with no type in a section of code (PAX's kernel's `_start`): the pinned gdb names
+    // frames and addresses past it by it (`in _start ()`, `<_start>`)
+    assert(session.elf_code_symbol(notype_global, at, 1, true))
+    assert(!session.elf_code_symbol(notype_global, at, 3, false))
+    assert(!session.elf_code_symbol(notype_local, at, 1, true))
+    print("PASS session-code-symbols")
+}
+
 fn main() {
     file_shown_row()
     file_path_row()
+    code_symbols_row()
 }
