@@ -218,13 +218,19 @@ fn line_file_name(data: List[byte], t: readers.DwarfLineTable, u: Unit, index: i
     let d = entry.directory_index as int
     if t.version >= 5 {
         if d > 0 && d < t.directories.len { dir = span_text(data, t.directories[d].name) }
-        if d == 0 { return join_path(u.comp_dir, name) }
     } else {
-        if d == 0 { return join_path(u.comp_dir, name) }
-        if d - 1 < t.directories.len { dir = span_text(data, t.directories[d - 1].name) }
+        if d > 0 && d - 1 < t.directories.len { dir = span_text(data, t.directories[d - 1].name) }
     }
-    if !dir.starts_with("/") { dir = join_path(u.comp_dir, dir) }
-    join_path(dir, name)
+    line_file_shown(t.version, d, name, dir, u.comp_dir)
+}
+
+/// A line table's file as the session names it: NAME of the table's VERSION with directory entry D (whose text
+/// is DIR), in a unit compiled in COMP_DIR.
+pub fn line_file_shown(version: int, d: int, name: str, dir: str, comp_dir: str) -> str {
+    if d == 0 { return join_path(comp_dir, name) }
+    var where = dir
+    if !where.starts_with("/") { where = join_path(comp_dir, where) }
+    join_path(where, name)
 }
 
 fn intern_file(mut files: List[str], name: str) -> int {
