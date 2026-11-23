@@ -171,6 +171,10 @@
    "kind": "linux"
   },
   {
+   "name": "nullcall-clang-bt",
+   "kind": "linux"
+  },
+  {
    "name": "step-clang-finish-types",
    "kind": "linux"
   },
