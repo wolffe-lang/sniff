@@ -152,9 +152,14 @@ fn find_var(s: Session, name: str) -> Val {
     val_fail("")
 }
 
+/// A runtime address as a file address of the program loaded at base: whether it is one, and which.
+pub fn file_address(addr: u64, base: u64) -> (bool, u64) {
+    (true, addr - base)
+}
+
 /// "<sym+off>" for a runtime address inside a function or symbol, else "".
 fn symbolize(s: Session, addr: u64) -> str {
-    let file = addr - s.base
+    let (_, file) = file_address(addr, s.base)
     let f = func_at(s.prog, file)
     if f >= 0 {
         let off = file - s.prog.funcs[f].low
