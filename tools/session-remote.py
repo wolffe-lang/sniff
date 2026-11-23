@@ -148,7 +148,9 @@ def run_tty(argv, lines, prompt, env, timeout):
 def normalise(text, port, kernel, sess, names=()):
     """The port, the kernel's path and the terminal, always; a row's own normalisations by name: `watch-values` (a
     watchpoint's old and new values, which the time decides) and `stop-location` (where a machine left running was when
-    a connect stopped it: the line after `Program received signal`)."""
+    a connect stopped it: a frame line `0x... in ...` right after `Program received signal`). Each replaces a value in a
+    line that must be there and leaves the line: the hit's own line, the signal's line and the frame line stay asserted,
+    so a transcript that lacks one still differs from its golden."""
     fired = set()
     t = sess.normalize_tty(text, fired)
     if port:
@@ -157,7 +159,7 @@ def normalise(text, port, kernel, sess, names=()):
     if 'watch-values' in names:
         t = re.sub(r'^(Old|New) value = .*$', r'\1 value = <VALUE>', t, flags=re.M)
     if 'stop-location' in names:
-        t = re.sub(r'^(Program received signal [^\n]*\n)[^\n]*$', r'\1<LOCATION>', t, flags=re.M)
+        t = re.sub(r'^(Program received signal [^\n]*\n)0x[0-9a-f]+ in [^\n]+$', r'\1<LOCATION>', t, flags=re.M)
     return t
 
 
@@ -285,6 +287,17 @@ def cmd_selftest(_a):
     assert w == 'Old value = <VALUE>\nNew value = <VALUE>\n', repr(w)
     s = normalise('\r\nProgram received signal SIGTRAP, Trace/breakpoint trap.\r\n0xffffffff800001e3 in pax_inb ()\r\n', 0, Path('/k'), sess, ['stop-location'])
     assert s == '\nProgram received signal SIGTRAP, Trace/breakpoint trap.\n<LOCATION>\n', repr(s)
+    # a normalisation cannot hide a missing line: each transcript lacking one still differs from the golden
+    gold_s = s
+    no_frame = normalise('\r\nProgram received signal SIGTRAP, Trace/breakpoint trap.\r\n[Inferior 1 (process 1) killed]\r\n', 0, Path('/k'), sess, ['stop-location'])
+    assert first_diff(gold_s, no_frame), 'a missing frame line was hidden'
+    no_signal = normalise('\r\n0xffffffff800001e3 in pax_inb ()\r\n', 0, Path('/k'), sess, ['stop-location'])
+    assert first_diff(gold_s, no_signal), 'a missing signal line was hidden'
+    gold_w = normalise('Hardware watchpoint 2: *(unsigned long *) 0xffffffff80652068\r\n\r\nOld value = 0\r\nNew value = 1\r\n', 0, Path('/k'), sess, ['watch-values'])
+    no_hit = normalise('Old value = 0\r\nNew value = 1\r\n', 0, Path('/k'), sess, ['watch-values'])
+    assert first_diff(gold_w, no_hit), 'a missing watchpoint line was hidden'
+    no_new = normalise('Hardware watchpoint 2: *(unsigned long *) 0xffffffff80652068\r\n\r\nOld value = 0\r\n', 0, Path('/k'), sess, ['watch-values'])
+    assert first_diff(gold_w, no_new), 'a missing new value was hidden'
     rows = json.loads(ROWS.read_text())['rows']
     names = [r['name'] for r in rows]
     assert len(names) == len(set(names)), 'duplicate row names'
