@@ -1,0 +1,89 @@
+// The GDB manual's Target Descriptions: Retrieving Descriptions (the `target.xml` annex, read by
+// qXfer), Target Description Format (the XML grammar, inclusion, and register numbering), Standard
+// Target Features and i386 Features (the registers an x86-64 description must name). Only the subset
+// a register file needs is read: the architecture, the OS ABI, features, registers and inclusions.
+// Type definitions (vector, union, flags, struct, enum) are skipped by name: a register's bitsize
+// already gives its width. Pure: the client fetches each annex this module names and hands the texts
+// back. Every cap has a unit row at its value and one past it (src/tdesc_test.lu).
+// Until the reader is built, every description is refused.
+
+/// Refusals of a description, each by name.
+pub error TdescError = {
+    bad_xml,
+    bad_number,
+    no_register_name,
+    duplicate_register,
+    unknown_include,
+    include_depth,
+    too_many_registers,
+    description_too_long,
+}
+
+/// The most registers one description may name.
+pub const register_cap: int = 1024
+/// How deep inclusions may nest (an annex that includes an annex that ...).
+pub const include_cap: int = 4
+/// The most bytes of description text, every annex counted.
+pub const text_cap: int = 1048576
+
+/// One register as the description names it: its number (explicit, or one more than the previous
+/// register's, the first being 0), its width in bits, its type's name (`int` when none is given), its
+/// group (empty when none), and the feature it sits in.
+pub struct Reg {
+    pub name: str,
+    pub bitsize: int,
+    pub regnum: int,
+    pub type_name: str,
+    pub group: str,
+    pub feature: str,
+}
+
+/// One fetched annex: the name a `target.xml` or an `xi:include` gave, and its text.
+pub struct Annex {
+    pub name: str,
+    pub text: str,
+}
+
+/// A whole description, inclusions resolved in document order.
+pub struct Desc {
+    pub architecture: str,
+    pub osabi: str,
+    pub features: List[str],
+    pub regs: List[Reg],
+}
+
+/// The annex names a text includes (`xi:include href=...`), in order: the client fetches each with
+/// qXfer before `parse`, and again for the names those texts include.
+pub fn includes(text: str) -> List[str] {
+    []
+}
+
+/// The description from `target.xml`'s text, each inclusion replaced by its annex's text in place, so
+/// registers are numbered in document order across annexes (Target Description Format).
+pub fn parse(main: str, annexes: List[Annex]) -> Desc ! TdescError {
+    bad_xml
+}
+
+/// What an x86-64 description lacks of the i386 Features node's required set: the feature
+/// `org.gnu.gdb.i386.core` itself, or the registers it must hold (rax-r15, rip, eflags, the six
+/// segment registers, st0-st7 and the eight x87 control registers), compared without case. Empty
+/// when nothing is missing.
+pub fn missing_i386_core(d: Desc) -> List[str] {
+    ["org.gnu.gdb.i386.core"]
+}
+
+/// The register a name gives, without case; -1 when the description has none of that name.
+pub fn regnum_of(d: Desc, name: str) -> int {
+    -1
+}
+
+/// Where register `regnum`'s bytes start in a `g` reply: registers appear in increasing number,
+/// each bitsize / 8 bytes (Target Description Format, regnum). -1 when no register has that number.
+pub fn g_offset(d: Desc, regnum: int) -> int {
+    -1
+}
+
+/// The bytes of a whole `g` reply the description lays out.
+pub fn g_size(d: Desc) -> int {
+    0
+}
