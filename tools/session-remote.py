@@ -21,6 +21,9 @@ prompt. `@PORT@` in a line is the port. A line `!interrupt N CMD` sends CMD and,
 byte 0x03 to the pty, which the terminal turns into SIGINT. qemu-run's pid is recorded; if it is still running 10 s after the
 tool ends, SIGTERM goes to that pid, whose trap ends its QEMU.
 
+Each run that boots a row first prints a `QEMU` line (its version line, its binary's sha256, the accelerator) and refuses
+by name (FAIL remote-qemu-pin) a QEMU whose version line or binary digest is not this host's pin in sniff-oracle.toml.
+
 Normalised by name: the port, the kernel's path, the terminal's line ends and the prompts (tools/session.py's
 normalize_tty). QEMU's target description never appears in a golden as text: no row prints it.
 """
@@ -60,8 +63,26 @@ def qemu_pin(system):
 
 
 def qemu_problems(line, sha, want_line, want_sha):
-    """What is wrong between a QEMU binary (its first --version line and sha256) and its pin; none until built."""
+    """What is wrong between a QEMU binary (its first --version line and sha256) and its pin, each by name."""
+    if line != want_line:
+        return ['qemu-version %r is not the pin\'s %r' % (line, want_line)]
+    if sha != want_sha:
+        return ['qemu-sha256 %s is not the pin\'s %s' % (sha, want_sha)]
     return []
+
+
+def qemu_line(a):
+    """The take's QEMU line (its version, its binary's sha256, the accelerator) and what is wrong with it."""
+    import hashlib
+    import platform as host
+    q = Path(a.qemu).resolve()
+    try:
+        line = subprocess.run([str(q), '--version'], capture_output=True, text=True, timeout=30).stdout.splitlines()[0]
+    except (OSError, IndexError, subprocess.TimeoutExpired) as e:
+        return 'QEMU %s unreadable (%s)' % (q, e), ['qemu-version unreadable']
+    sha = hashlib.sha256(q.read_bytes()).hexdigest()
+    want_line, want_sha = qemu_pin(host.system())
+    return 'QEMU version=%r sha256=%s accel=%s binary=%s' % (line, sha, a.accel, q), qemu_problems(line, sha, want_line, want_sha)
 
 
 def free_port():
@@ -288,6 +309,13 @@ def cmd_run(a):
     out = Path(a.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
     counts = {'pass': 0, 'fail': 0, 'skip': 0}
+    if any(r.get('qemu', True) and not r.get('skip') for r in load_rows(a.only)):
+        text, problems = qemu_line(a)
+        print(text)
+        if problems:
+            print('FAIL remote-qemu-pin ' + '; '.join(problems))
+            print('remote rows (%s, %s): 0 pass, 1 fail, 0 skip' % (a.mode, a.accel))
+            return 1
     for row in load_rows(a.only):
         if row.get('skip'):
             print('SKIP remote %s reason=%s' % (row['name'], row['skip']))
