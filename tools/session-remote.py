@@ -999,14 +999,16 @@ def pax_wait_listening(serial, count, q, limit):
 
 def pax_retry(attempt, ended):
     """attempt() -> (result, failed to connect), again every 0.5 s while it fails to connect, for up to 60 s, and never
-    once ended() (the row's stub has ended): (result, attempts, seconds)."""
+    once ended() (the row's stub has ended): (result, attempts, seconds from the first attempt to the start of the
+    one that connected; on no answer, to the end of the last)."""
     start, n = time.time(), 0
     while True:
         n += 1
+        began = time.time() - start
         got, failed = attempt()
         took = time.time() - start
         if not failed:
-            return got, n, took
+            return got, n, began
         if took >= PAX_RETRY_FOR_S or ended():
             return None, n, took
         time.sleep(PAX_RETRY_EVERY_S)
@@ -1140,7 +1142,7 @@ def cmd_server_pax(a):
             why = 'answers %r, not %r' % (mine[name], PAX_FP_WANT)
         if why:
             if name in reached:
-                why += ' (gdb at attempt %d after %.1f s)' % reached[name]
+                why += ' (gdb connected at attempt %d, %.1f s after the first)' % reached[name]
             print('FAIL remote %s %s' % (name, why))
             for line in (served.get(name, ([], ''))[0] or ['(no console lines between its markers)'])[-12:]:
                 print('CONSOLE %s | %s' % (name, line))
@@ -1150,7 +1152,7 @@ def cmd_server_pax(a):
         held = ('gdb through sniff-server on PAX equals gdb through gdbserver on Linux (%d lines; normalised: %s, stack)' %
                 (len(mine[name].splitlines()), ', '.join(x for x, _rx, _to in SESSION_NORMALISE))
                 if r['check'] == 'pax-session' else 'PAX refuses the SSE write by name: %r' % mine[name])
-        print('PASS remote %s [%s; connected at attempt %d after %.1f s, %s]' % (name, held, n, took, bound))
+        print('PASS remote %s [%s; connected at attempt %d, %.1f s after the first, %s]' % (name, held, n, took, bound))
         counts['pass'] += 1
     if rc != 0:
         print('FAIL remote-server-pax-boot qemu-halt exit=%s (its verdict: qemu-halt.out)' % rc)
