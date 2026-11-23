@@ -14,6 +14,18 @@ RUN taskset -c "$BUILD_CPUS" sh -ec ' \
   sh /pins/snapshot-update.sh "$(cat /pins/apt-snapshot)"; \
   sed "/^#/d; /^$/d" /pins/packages.txt | xargs sh /pins/snapshot-install.sh "$(cat /pins/apt-snapshot)"; \
   dpkg-query -W | tr "\t" "=" | sort > /opt/oracle-packages.txt; \
-  for tool in gdb llvm-dwarfdump-18 readelf gcc clang; do command -v "$tool"; "$tool" --version | head -n 1; sha256sum "$(readlink -f "$(command -v "$tool")")"; done > /opt/oracle-binaries.txt; \
+  for tool in gdb llvm-dwarfdump-18 readelf gcc clang gdbserver; do command -v "$tool"; "$tool" --version | head -n 1; sha256sum "$(readlink -f "$(command -v "$tool")")"; done > /opt/oracle-binaries.txt; \
   rm -rf /var/lib/apt/lists/*'
+# QEMU for the remote rows: the release tarball fetched after apt (its trust is the snapshot's), held to the digest
+# sniff-oracle.toml names, read twice, and built with the configure line it names; only --prefix and --python are the
+# image's own.
+RUN taskset -c "$BUILD_CPUS" sh -ec ' \
+  curl -fsSL --proto =https -o /tmp/qemu.tar.xz https://download.qemu.org/qemu-11.1.2.tar.xz; \
+  for read in 1 2; do printf "%s  %s\n" 731b5681e4bb18be313231579b8efd0296c5b015fa36dc533874b639ba838016 /tmp/qemu.tar.xz | sha256sum -c -; done; \
+  mkdir -p /tmp/qemu; tar -xJf /tmp/qemu.tar.xz -C /tmp/qemu --strip-components=1; \
+  cd /tmp/qemu; ./configure --prefix=/opt/qemu-11.1.2 --python=/usr/bin/python3 --target-list=x86_64-softmmu --enable-slirp --disable-docs --disable-werror --disable-download; \
+  ninja -C build -j"$(nproc)"; ninja -C build install; \
+  cd /; rm -rf /tmp/qemu /tmp/qemu.tar.xz; \
+  ln -s /opt/qemu-11.1.2/bin/qemu-system-x86_64 /usr/local/bin/qemu-system-x86_64; \
+  for tool in qemu-system-x86_64; do command -v "$tool"; "$tool" --version | head -n 1; sha256sum "$(readlink -f "$(command -v "$tool")")"; done >> /opt/oracle-binaries.txt'
 WORKDIR /work
