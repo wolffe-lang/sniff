@@ -271,6 +271,29 @@
    ]
   },
   {
+   "name": "remote-kernel-detach-signalled",
+   "script": [
+    "target remote 127.0.0.1:@PORT@",
+    "!interrupt 5 continue",
+    "detach",
+    "target remote 127.0.0.1:@PORT@",
+    "kill"
+   ],
+   "normalise": [
+    "stop-location"
+   ]
+  },
+  {
+   "name": "remote-kernel-disconnect-signalled",
+   "script": [
+    "target remote 127.0.0.1:@PORT@",
+    "!interrupt 5 continue",
+    "disconnect",
+    "target remote 127.0.0.1:@PORT@",
+    "kill"
+   ]
+  },
+  {
    "name": "remote-kernel-kill",
    "script": [
     "target remote 127.0.0.1:@PORT@",

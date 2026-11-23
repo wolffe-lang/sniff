@@ -34,7 +34,7 @@ step remote-harness-unit python3 -I tools/session-remote.py selftest
 # picks arm64 at compile time and has no x86-64 tables for the kernel: its rows come with the arch made a run-time choice.
 remote_why="no kernel image on this host"
 [ "$mode" = macos ] && remote_why="sniff built for macOS has no x86-64 register, CFI or call tables for the kernel (a later change)"
-step remote-kernel-skip python3 -I tools/session-remote.py skip --reason "$remote_why" --expect 34
+step remote-kernel-skip python3 -I tools/session-remote.py skip --reason "$remote_why" --expect 36
 step abi-constants python3 -I tools/check-abi.py check
 for platform in macos linux; do
   if [ -f "tests/evidence/$platform-session/record.json" ]; then
