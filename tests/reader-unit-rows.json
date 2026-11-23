@@ -191,5 +191,9 @@
     "session-file-path",
     "session-code-symbols",
     "session-file-address"
+  ],
+  "fallback_test.lu": [
+    "session-fallback-rules",
+    "session-fallback-nowhere"
   ]
 }

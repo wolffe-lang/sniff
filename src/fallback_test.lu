@@ -1,0 +1,27 @@
+//! member: false
+// The frame-pointer fallback (x86-64): which rule a frame with no call frame information takes.
+use session
+
+fn rules_row() {
+    // in code the session knows: a ret and a function's first instruction take the return address at the stack
+    // pointer, the instruction after `push %rbp` finds it one slot up, and anywhere else the frame pointer's chain
+    assert(session.fallback_rule(true, true, false, false) == session.unwind_at_entry)
+    assert(session.fallback_rule(true, false, true, false) == session.unwind_at_entry)
+    assert(session.fallback_rule(true, false, false, true) == session.unwind_after_push)
+    assert(session.fallback_rule(true, false, false, false) == session.unwind_frame_pointer)
+    print("PASS session-fallback-rules")
+}
+
+fn nowhere_row() {
+    // a pc in no code (a call through a null pointer stops at 0): the call has just pushed the return address and
+    // the frame pointer is still the caller's, so the caller is read from the top of the stack (measured: the
+    // pinned gdb names apply, the function that made the call, as frame 1)
+    assert(session.fallback_rule(false, false, false, false) == session.unwind_at_entry)
+    assert(session.fallback_rule(false, false, false, true) == session.unwind_at_entry)
+    print("PASS session-fallback-nowhere")
+}
+
+fn main() {
+    rules_row()
+    nowhere_row()
+}
