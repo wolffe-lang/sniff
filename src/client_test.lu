@@ -292,6 +292,18 @@ fn ends_row() {
     print("PASS remote-client-ends")
 }
 
+fn peek_row() {
+    var r = rig(rep(g_reply())) else |e| { print("FAIL remote-client-peek {e}"); return }
+    let skip = heard(mut r.stub)
+    let (regs, unread) = remote.peek_regs(r.t) else |e| { print("FAIL remote-client-peek {e}"); return }
+    let rip = remote.reg_in(r.t, regs, unread, "rip") else { return }
+    assert(remote.hex_u64(rip) == "ffffffff80117633" && regs.len == 536)
+    assert(heard(mut r.stub) == sent("g") + "+")
+    assert(skip != "")
+    done(take r)
+    print("PASS remote-client-peek")
+}
+
 fn main() {
     start_row()
     no_ack_row()
@@ -301,4 +313,5 @@ fn main() {
     points_row()
     resume_row()
     ends_row()
+    peek_row()
 }

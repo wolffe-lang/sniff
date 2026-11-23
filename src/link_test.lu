@@ -181,6 +181,16 @@ fn refused_row() {
     print("PASS remote-link-refused")
 }
 
+fn ask_row() {
+    var p = pair(remote.reply_ms) else { return }
+    says(mut p.stub, "+$OK#9a")
+    let r = remote.ask(p.link, "g", false) else |e| { print("FAIL remote-link-ask {e}"); return }
+    assert(text(r) == "OK")
+    assert(heard(mut p.stub) == "$g#67+")
+    done(take p)
+    print("PASS remote-link-ask")
+}
+
 fn main() {
     loopback_row()
     request_row()
@@ -194,4 +204,5 @@ fn main() {
     interrupt_row()
     closed_row()
     refused_row()
+    ask_row()
 }
