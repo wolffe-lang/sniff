@@ -1209,6 +1209,15 @@ def pax_wait_listening(serial, count, q, limit):
     return serial.exists() and serial.read_text(errors='replace').count(PAX_LISTENING) >= count
 
 
+def pax_safely(attempt):
+    """attempt() with a driver exception made a fault: (('FAULT', what), False), so the retry stops and the row's
+    verdict names it."""
+    try:
+        return attempt()
+    except (OSError, subprocess.SubprocessError) as e:
+        return ('FAULT', '%s: %s (the driver lost its connection or its process; nothing compared)' % (type(e).__name__, e)), False
+
+
 def pax_retry(attempt, ended):
     """attempt() -> (result, failed to connect), again every 0.5 s while it fails to connect, for up to 60 s, and never
     once ended() (the row's stub has ended): (result, attempts, seconds from the first attempt to the start of the
@@ -1217,7 +1226,7 @@ def pax_retry(attempt, ended):
     while True:
         n += 1
         began = time.time() - start
-        got, failed = attempt()
+        got, failed = pax_safely(attempt)
         took = time.time() - start
         if not failed:
             return got, n, began
@@ -1322,7 +1331,7 @@ def cmd_server_pax(a):
             attempt = lambda: pax_fp_refused(port)
         got, n, took = pax_retry(attempt, ended)
         mine[name], reached[name] = got, (n, took)
-        if r['check'] == 'pax-session' and got is not None:
+        if r['check'] == 'pax-session' and isinstance(got, str):
             (out / (name + '.sniff-server.txt')).write_text(got)
     try:
         rc = q.wait(timeout=a.timeout + 60)
@@ -1341,6 +1350,8 @@ def cmd_server_pax(a):
             why = FAULT + 'never reached: its stub never said it was listening on the console'
         elif mine[name] is None:
             why = FAULT + 'no answer: %d attempts in %.1f s (%s)' % (reached[name][0], reached[name][1], bound)
+        elif isinstance(mine[name], tuple) and mine[name][0] == 'FAULT':
+            why = FAULT + mine[name][1]
         elif name not in served:
             why = FAULT + 'its stub did not end on the console'
         elif served[name][1] != '0':
