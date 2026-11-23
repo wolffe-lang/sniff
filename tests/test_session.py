@@ -65,6 +65,22 @@ class Normalise(unittest.TestCase):
         self.assertEqual(out, 'Run till exit from #0  f (n=3) at /work/a.c:6\n')
         self.assertEqual(fired, {'tty', 'wrap80'})
 
+    def test_tty_breakpoint_table_wrap(self):
+        # gdb's 80-column wrap of a breakpoint row's What column: `in FUNC ` then the location on a line of its
+        # own, under the column (measured over a remote target); joined, and named
+        fired = set()
+        raw = ('1       breakpoint     keep y   0xffffffff80117633 in kmain \r\n' + ' ' * 51 + 'at ./kmain_console.lu:553\r\n')
+        out = session.normalize_tty(raw, fired)
+        self.assertEqual(out, '1       breakpoint     keep y   0xffffffff80117633 in kmain at ./kmain_console.lu:553\n')
+        self.assertEqual(fired, {'tty', 'wrap80'})
+        # a line in the What column's place that is not the row's location, and a row with no wrap, stay
+        for text in ('1       breakpoint     keep y   0x0000000000401126 in f \n' + ' ' * 51 + 'breakpoint already hit 1 time\n',
+                     '1       breakpoint     keep y   0x0000000000401126 in f at /w/a.c:3\n',
+                     '        stop only if x \n' + ' ' * 51 + 'at ./a.lu:3\n'):
+            fired = set()
+            self.assertEqual(session.normalize_tty(text, fired), text)
+            self.assertEqual(fired, set())
+
 
 def elf_core(prstatus, xstate):
     """A minimal ELF64 core: one PT_NOTE laid at 4 with prstatus NT_PRSTATUS notes (owner CORE, 336 bytes, pr_pid
