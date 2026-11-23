@@ -442,9 +442,14 @@ pub fn interrupt_target(t: Target) -> () ! ClientError {
 }
 
 /// A thread's extra information (General Query Packets, qThreadExtraInfo): the printable text the stub gives,
-/// which gdb shows in `info threads`, read from a borrowed target. Not built yet: refused.
+/// which gdb shows in `info threads`, read from a borrowed target; empty when the stub has none.
 pub fn thread_extra(t: Target, id: str) -> str ! ClientError {
-    unsupported
+    let r = ask(t.link, "qThreadExtraInfo,{id}", false)?
+    let kind = reply_kind(r)
+    if kind == reply_empty { return "" }
+    if kind == reply_error || kind == reply_error_text { return stub_error }
+    let b = hex_decode(r)?
+    text_of(b)
 }
 
 /// Select the thread `g`, `m` and the rest act on (Packets, `Hg`).
