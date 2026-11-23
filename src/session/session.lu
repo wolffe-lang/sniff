@@ -157,6 +157,10 @@ struct Session {
     pub rt_regs: List[u64],
     pub rt_regs_ok: bool,
     pub rt_signalled: bool,
+    /// The watchpoints inserted in the stub for the current resumption: each one's Z type, address and length.
+    pub rt_points: List[int],
+    pub rt_point_addrs: List[u64],
+    pub rt_point_lens: List[int],
 }
 
 /// Printed text goes to standard output through one buffer, flushed before
@@ -191,5 +195,6 @@ fn session_new(take p: Prog) -> Session {
         repeat: "", x_ok: false, x_next: 0, x_count: 1, x_fmt: "x", x_size: 4,
         core_on: false, core_macho: false, core_path: "", core_data: [], core: core_none(), core_thr: [], core_maps: [], core_map_file: [],
         core_files: [], remote_on: false, rt: [], rt_regs: [], rt_regs_ok: false, rt_signalled: false,
+        rt_points: [], rt_point_addrs: [], rt_point_lens: [],
     }
 }

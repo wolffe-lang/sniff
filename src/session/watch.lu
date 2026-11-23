@@ -79,7 +79,9 @@ fn cmd_watch(mut s: Session, rest: str, kind: int) -> str {
     var used = 0
     var i = 0
     while i < s.watches.len { if s.watches[i].enabled { used += 1 }; i += 1 }
-    if used >= platform.target_watch_slots(s.target) {
+    // a remote stub's watchpoints are x86's four debug registers under KVM (the same count serves under TCG)
+    let slots = if s.remote_on { 4 } else { platform.target_watch_slots(s.target) }
+    if used >= slots {
         return "Hardware watchpoints used exceeds limit."
     }
     var cfa: u64 = 0
@@ -116,6 +118,7 @@ fn arm_watches(mut s: Session) -> str {
     }
     if addrs.len == 0 && !s.watch_armed { return "" }
     s.watch_armed = addrs.len > 0
+    if s.remote_on { return remote_arm_watches(mut s) }
     platform.target_set_watches(s.target, addrs, lens, kinds)
 }
 
@@ -123,7 +126,7 @@ fn arm_watches(mut s: Session) -> str {
 /// (an unchanged write watch, a changed read watch) answers -2, so the caller resumes silently.
 fn watch_hit(mut s: Session) -> int {
     if !s.watch_armed { return 0 - 1 }
-    let slot = platform.target_watch_hit(s.target)
+    let slot = if s.remote_on { remote_watch_slot(s) } else { platform.target_watch_hit(s.target) }
     if slot < 0 { return 0 - 1 }
     var k = 0
     var i = 0

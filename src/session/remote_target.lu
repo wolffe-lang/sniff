@@ -243,8 +243,68 @@ fn remote_wait(mut s: Session) -> int {
     }
     let kind = s.rt[0].stop.kind
     let code = s.rt[0].stop.code
+    remote_disarm_watches(mut s)
     remote_refresh(mut s)
     if kind == remote.stop_exited { return code * 256 }
     if kind == remote.stop_killed { return code }
     code * 256 + 127
+}
+
+/// The enabled watches as the stub's points (Packets: Z2 write, Z3 read, Z4 access, KIND the length), inserted
+/// before a resumption and taken out at the stop (remote_wait). "" or sniff's words for a refused one.
+fn remote_arm_watches(mut s: Session) -> str {
+    if s.rt.len == 0 { return "" }
+    var i = 0
+    while i < s.watches.len {
+        if s.watches[i].enabled {
+            let kind = if s.watches[i].kind == wk_write { 2 } else if s.watches[i].kind == wk_read { 3 } else { 4 }
+            let a = s.watches[i].addr
+            let n = s.watches[i].len
+            var ok = true
+            remote.insert_point(mut s.rt[0], kind, a, n) else { ok = false }
+            if !ok {
+                remote_disarm_watches(mut s)
+                return "Could not insert hardware watchpoint {s.watches[i].num}."
+            }
+            (mut s.rt_points).push(kind)
+            (mut s.rt_point_addrs).push(a)
+            (mut s.rt_point_lens).push(n)
+        }
+        i += 1
+    }
+    ""
+}
+
+/// Take the watches' points out of the stub.
+fn remote_disarm_watches(mut s: Session) {
+    var i = 0
+    while i < s.rt_points.len {
+        let kind = s.rt_points[i]
+        let a = s.rt_point_addrs[i]
+        let n = s.rt_point_lens[i]
+        if s.rt.len > 0 { remote.remove_point(mut s.rt[0], kind, a, n) else { } }
+        i += 1
+    }
+    s.rt_points = []
+    s.rt_point_addrs = []
+    s.rt_point_lens = []
+}
+
+/// Which enabled watch the stop reply names (its `watch`, `rwatch` or `awatch` reason and data address), counted
+/// among the enabled ones as a platform's slot is; -1 when the stop was not a watchpoint's.
+fn remote_watch_slot(s: Session) -> int {
+    if s.rt.len == 0 { return 0 - 1 }
+    let why = s.rt[0].stop.reason
+    if why != "watch" && why != "rwatch" && why != "awatch" { return 0 - 1 }
+    let at = s.rt[0].stop.addr
+    var k = 0
+    var i = 0
+    while i < s.watches.len {
+        if s.watches[i].enabled {
+            if at >= s.watches[i].addr && at < s.watches[i].addr + (s.watches[i].len as u64) { return k }
+            k += 1
+        }
+        i += 1
+    }
+    0 - 1
 }
