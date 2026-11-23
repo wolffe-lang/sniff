@@ -43,8 +43,25 @@ fn code_symbols_row() {
     print("PASS session-code-symbols")
 }
 
+fn file_address_row() {
+    // a position-independent program loaded at 0x555555554000 (the pinned gdb's, with randomisation off)
+    let base: u64 = 93824992231424
+    let (ok, file) = session.file_address(base + 4509, base)
+    assert(ok && file == 4509)
+    // an address below the program, as `x/2xg 0` names: no file address, and no trap (sniff's own crash, measured)
+    let (low, _) = session.file_address(0, base)
+    assert(!low)
+    let (at_base, zero) = session.file_address(base, base)
+    assert(at_base && zero == 0)
+    // a program not moved (a static one, PAX's kernel): every address is its own
+    let (k, same) = session.file_address(18446744071562067968, 0)
+    assert(k && same == 18446744071562067968)
+    print("PASS session-file-address")
+}
+
 fn main() {
     file_shown_row()
     file_path_row()
     code_symbols_row()
+    file_address_row()
 }

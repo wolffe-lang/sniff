@@ -189,6 +189,7 @@
   "shown_test.lu": [
     "session-file-shown",
     "session-file-path",
-    "session-code-symbols"
+    "session-code-symbols",
+    "session-file-address"
   ]
 }
