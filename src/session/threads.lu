@@ -57,6 +57,7 @@ fn thr_tls(mut s: Session, i: int) -> u64 {
 /// gdb's target id of thread i: `Thread 0x7ffff7da16c0 (LWP 215)`, `LWP 215` or `process 212`.
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 fn thr_target_id(mut s: Session, i: int) -> str {
+    if s.remote_on { return remote_thread_id(s, i) }
     if thread_db_form(s) {
         let tls = thr_tls(mut s, i)
         return "Thread 0x{tls:x} (LWP {s.thr[i].tid})"

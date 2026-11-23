@@ -1,0 +1,179 @@
+// `target remote`: the session over a stub (the GDB manual's Connecting node) as the third source of what a
+// stopped program answers (source.lu), beside a process and a core. sniff connects over TCP only, and to one
+// target: QEMU's gdbstub on a kernel at one processor in S8a, whose single thread is the processor. The words
+// of each refusal are the pinned gdb's, as its transcripts showed them, where the manual gives none.
+
+use platform
+use remote
+
+/// The x86-64 register slots in the platform's order (Linux's user_regs_struct), by the names a target
+/// description gives them: a slot the description has no register for (orig_rax) reads 0.
+fn remote_slot_names() -> List[str] {
+    ["r15", "r14", "r13", "r12", "rbp", "rbx", "r11", "r10", "r9", "r8", "rax", "rcx", "rdx", "rsi", "rdi", "orig_rax",
+     "rip", "cs", "eflags", "rsp", "ss", "fs_base", "gs_base", "ds", "es", "fs", "gs"]
+}
+
+/// The stopped target's registers in the platform's slots, by one `g`.
+fn remote_read_regs(s: Session) -> List[u64] {
+    if s.rt.len == 0 { return [] }
+    let (regs, unread) = remote.peek_regs(s.rt[0]) else { return [] }
+    var out: List[u64] = []
+    for n in remote_slot_names() {
+        let v = remote.reg_in(s.rt[0], regs, unread, n) else { 0 }
+        (mut out).push(v)
+    }
+    out
+}
+
+/// The registers, read once a stop and kept until the target runs again.
+fn remote_regs(s: Session) -> List[u64] {
+    if s.rt_regs_ok { return copy s.rt_regs }
+    remote_read_regs(s)
+}
+
+/// Read the registers into the session's copy (after a connect or a stop).
+fn remote_refresh(mut s: Session) {
+    s.rt_regs = remote_read_regs(s)
+    s.rt_regs_ok = s.rt_regs.len > 0
+}
+
+/// n bytes at addr from the stopped target; a short read is a failed one, as a process's is.
+fn remote_mem(s: Session, addr: u64, n: int) -> platform.Bytes {
+    let none: List[byte] = []
+    if s.rt.len == 0 { return platform.Bytes { ok: false, data: none } }
+    let d = remote.read_mem(s.rt[0], addr, n) else { return platform.Bytes { ok: false, data: none } }
+    platform.Bytes { ok: d.len == n, data: d }
+}
+
+/// gdb's target id of the remote thread: `Thread 1.N (EXTRA)`, EXTRA what qThreadExtraInfo names.
+fn remote_thread_id(s: Session, i: int) -> str {
+    if s.rt.len == 0 { return "Thread 1.{s.thr[i].tid}" }
+    let id = remote.hex_u64(s.thr[i].tid as u64)
+    let extra = remote.thread_extra(s.rt[0], id) else { return "Thread 1.{s.thr[i].tid}" }
+    if extra.len() == 0 { return "Thread 1.{s.thr[i].tid}" }
+    "Thread 1.{s.thr[i].tid} ({extra})"
+}
+
+/// The first n bytes of t.
+fn remote_prefix(t: str, n: int) -> str {
+    let b = t.bytes()
+    var out: List[byte] = []
+    var i = 0
+    while i < n && i < b.len { (mut out).push(b[i]); i += 1 }
+    str_from_utf8(out) else { "" }
+}
+
+/// gdb's paragraph for `target remote` with no address.
+fn remote_no_address() -> str {
+    "To open a remote debug connection, you need to specify what\nserial device is attached to the remote system\n(e.g. /dev/ttyS0, /dev/ttya, COM1, etc.)."
+}
+
+/// `target remote ADDRESS` (Connecting): HOST:PORT, :PORT (this machine) or tcp:HOST:PORT. sniff's own words
+/// refuse the forms it does not take (a serial device, a pipe to a command, udp).
+fn cmd_target(mut s: Session, rest: str) -> str {
+    let t = rest.trim()
+    if t.len() == 0 { return "Argument required (target name)." }
+    let words = t.split(" ")
+    if words[0] != "remote" { return "sniff connects with `target remote HOST:PORT` only." }
+    let addr = str_from(t, 6).trim()
+    if addr.len() == 0 { return remote_no_address() }
+    var a = addr
+    if a.starts_with("tcp:") { a = str_from(a, 4) }
+    if a.starts_with("|") || a.starts_with("udp:") || a.starts_with("/") {
+        return "sniff connects over TCP only: `{addr}` is not HOST:PORT."
+    }
+    let b = a.bytes()
+    var colon = -1
+    var i = 0
+    while i < b.len {
+        if b[i] as int == 58 { colon = i }
+        i += 1
+    }
+    if colon < 0 { return "sniff connects over TCP only: `{addr}` is not HOST:PORT." }
+    var host = remote_prefix(a, colon)
+    let port = str_from(a, colon + 1)
+    if port.len() == 0 { return "Missing port on hostname '{addr}'" }
+    if !all_digits(port) { return "sniff connects over TCP only: `{port}` is not a port number." }
+    if host.len() == 0 { host = "127.0.0.1" }
+    // as the pinned gdb does (measured): a port past 65535 reaches the port it wraps to
+    let p = parse_number(port) % 65536
+    // sniff's own: gdb asks whether to kill the program it has, which a command file cannot answer
+    if s.alive { return "A program is being debugged already." }
+    if s.core_on { core_drop(mut s) }
+    let target = remote.connect("{host}:{p}") else |e| match e {
+        refused => { return "could not connect: Connection refused." },
+        timeout => { return "could not connect: Connection timed out." },
+        _ => { return "could not connect: {e}." },
+    }
+    s.rt = [target]
+    s.remote_on = true
+    s.alive = true
+    s.attached = true
+    s.base = 0
+    s.libs = []
+    s.watch_armed = false
+    s.pending_signal = 0
+    s.signal_given = false
+    s.frames = []
+    s.frames_ok = false
+    let tid = if s.rt[0].current == "" { 1 } else { remote.parse_hex(s.rt[0].current.bytes()) else { 1 } }
+    s.thr = [Thr { num: 1, tid: tid as int, tls: 0, running: false, pending: 0 - 1, expect_stop: false }]
+    s.thr_cur = 0
+    s.thr_next = 2
+    s.thr_multi = false
+    s.thr_prev = tid as int
+    s.early = []
+    remote_refresh(mut s)
+    emit_line(mut s, "Remote debugging using {addr}")
+    // the pinned gdb reports the stop a connect finds as a signal when the last stop it reported was one (measured)
+    if s.rt_signalled {
+        emit_line(mut s, "")
+        emit_line(mut s, "Program received signal SIGTRAP, Trace/breakpoint trap.")
+    }
+    print_stop_frame(mut s, true, "")
+    ""
+}
+
+/// Drop the remote target from the session (its connection is closed or let go already).
+fn remote_forget(mut s: Session) {
+    s.rt = []
+    s.remote_on = false
+    s.alive = false
+    s.attached = false
+    s.rt_regs = []
+    s.rt_regs_ok = false
+    s.thr = []
+    s.frames = []
+    s.frames_ok = false
+}
+
+/// `disconnect` (Connecting): close the connection and send nothing; the target stays stopped.
+fn cmd_disconnect(mut s: Session, rest: str) -> str {
+    if !s.remote_on {
+        if s.alive { return "You can't do that when your target is `native'" }
+        return "You can't do that when your target is `exec'"
+    }
+    let t = (mut s.rt).pop() else { return "" }
+    remote.disconnect(take t) else { }
+    remote_forget(mut s)
+    emit_line(mut s, "Ending remote debugging.")
+    ""
+}
+
+/// `detach` over a remote target: `D`, and gdb's three lines.
+fn remote_detach(mut s: Session) {
+    if s.tty { emit_line(mut s, "Detaching from program: {s.prog.path}, process 1") }
+    let t = (mut s.rt).pop() else { return }
+    remote.detach(take t) else { }
+    remote_forget(mut s)
+    emit_line(mut s, "Ending remote debugging.")
+    emit_line(mut s, "[Inferior 1 (process 1) detached]")
+}
+
+/// `kill` over a remote target: `k`, after which the stub need not answer.
+fn remote_kill(mut s: Session) {
+    let t = (mut s.rt).pop() else { return }
+    remote.kill(take t) else { }
+    remote_forget(mut s)
+    emit_line(mut s, "[Inferior 1 (process 1) killed]")
+}

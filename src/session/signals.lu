@@ -265,6 +265,7 @@ fn cmd_signal(mut s: Session, rest: str) -> str {
 /// A blank line and `Program received signal SIG, Description.`, or in a multi-threaded program
 /// `Thread N "name" received signal ...`.
 fn report_signal_line(mut s: Session, n: int) {
+    if s.remote_on { s.rt_signalled = true }
     emit_line(mut s, "")
     if s.thr_multi {
         let who = stop_thread_prefix(s)

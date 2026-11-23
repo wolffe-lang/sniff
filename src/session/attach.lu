@@ -77,6 +77,10 @@ fn cmd_detach(mut s: Session, rest: str) -> str {
         return ""
     }
     if !s.alive { return "The program is not being run." }
+    if s.remote_on {
+        remote_detach(mut s)
+        return ""
+    }
     detach_process(mut s)
     ""
 }

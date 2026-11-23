@@ -4,6 +4,7 @@
 
 use platform
 use readers
+use remote
 
 const st_none: int = 0
 const st_stopped: int = 1
@@ -144,6 +145,16 @@ struct Session {
     pub core_maps: List[readers.CoreMapped],
     pub core_map_file: List[int],
     pub core_files: List[CoreMapFile],
+    /// A remote target (remote.lu): `target remote` connected it. rt holds it (one at most); rt_regs is its
+    /// registers in the platform's slots, read once a stop (rt_regs_ok); rt_signalled says the last stop reported
+    /// since a remote target was last resumed was reported as a signal, after which a connect reports the stop it
+    /// finds as a signal too, as the pinned gdb does (measured: a connect after a stop by SIGINT prints SIGTRAP, one
+    /// after a breakpoint's stop or another connect's prints the frame alone).
+    pub remote_on: bool,
+    pub rt: List[remote.Target],
+    pub rt_regs: List[u64],
+    pub rt_regs_ok: bool,
+    pub rt_signalled: bool,
 }
 
 /// Printed text goes to standard output through one buffer, flushed before
@@ -177,6 +188,6 @@ fn session_new(take p: Prog) -> Session {
         lst_file: -1, lst_first: 0, lst_last: 0, lst_at_end: false, lst_solitary: 0, src_warned: [],
         repeat: "", x_ok: false, x_next: 0, x_count: 1, x_fmt: "x", x_size: 4,
         core_on: false, core_macho: false, core_path: "", core_data: [], core: core_none(), core_thr: [], core_maps: [], core_map_file: [],
-        core_files: [],
+        core_files: [], remote_on: false, rt: [], rt_regs: [], rt_regs_ok: false, rt_signalled: false,
     }
 }
