@@ -713,6 +713,70 @@ class PaxGaps(unittest.TestCase):
         self.assertTrue(all(p.parent == session.PAX_GOLD for p in session.probe_golden_paths('dr')))
 
 
+class PaxProbeDifferences(unittest.TestCase):
+    """A difference between PAX's answer to a probe and Linux's that is documented is named: the call, Linux's answer,
+    PAX's answer and why. Held to it, the probe passes and says which differences it expected; an unnamed difference,
+    a named one PAX no longer shows, a named one whose PAX answer moved, or one Linux no longer answers, is red."""
+    LINUX = {'s8': ('a: x -> 0\nd: set -> 0\ndone -> ok\n', '0')}
+    NAMED = {'s8': [{'call': 'd: set', 'linux': '0', 'pax': 'EIO', 'why': 'PAX refuses it by name'}]}
+
+    def spax(self):
+        spec = importlib.util.spec_from_file_location('session_pax_tool', ROOT / 'tools/session-pax.py')
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def verdict(self, out, linux=None):
+        return self.spax().probe_verdicts([], {'s8': ('0', out, '')}, linux or self.LINUX, self.NAMED)[0]
+
+    def test_a_named_difference_passes_and_says_so(self):
+        v = self.verdict('a: x -> 0\nd: set -> EIO\ndone -> ok\n')
+        self.assertEqual(v[:2], ('PASS', 'probe-s8'))
+        self.assertIn('expected differences: d: set -> EIO (PAX refuses it by name)', v[2])
+
+    def test_an_unnamed_difference_is_red(self):
+        v = self.verdict('a: x -> 1\nd: set -> EIO\ndone -> ok\n')
+        self.assertEqual(v[:2], ('FAIL', 'probe-s8'))
+        self.assertIn("line 1: want 'a: x -> 0' got 'a: x -> 1'", v[2])
+
+    def test_a_named_difference_no_longer_seen_is_red(self):
+        v = self.verdict('a: x -> 0\nd: set -> 0\ndone -> ok\n')
+        self.assertEqual(v[:2], ('FAIL', 'probe-s8'))
+        self.assertIn('difference-stale', v[2])
+
+    def test_a_named_difference_whose_answer_moved_is_red(self):
+        v = self.verdict('a: x -> 0\nd: set -> EPERM\ndone -> ok\n')
+        self.assertEqual(v[:2], ('FAIL', 'probe-s8'))
+        self.assertIn('difference-moved', v[2])
+
+    def test_a_named_difference_linux_no_longer_gives_is_red(self):
+        v = self.verdict('a: x -> 0\nd: set -> EIO\ndone -> ok\n', {'s8': ('a: x -> 0\nd: set -> EINVAL\ndone -> ok\n', '0')})
+        self.assertEqual(v[:2], ('FAIL', 'probe-s8'))
+        self.assertIn('difference-golden', v[2])
+
+    def test_a_probe_without_differences_is_unchanged(self):
+        out = self.LINUX['s8'][0]
+        self.assertEqual(self.spax().probe_verdicts([], {'s8': ('0', out, '')}, self.LINUX), [('PASS', 'probe-s8', '')])
+        self.assertEqual(self.spax().probe_verdicts([], {'s8': ('0', out, '')}, self.LINUX, {}), [('PASS', 'probe-s8', '')])
+
+    def test_the_inventory_refuses_a_bad_difference(self):
+        probes = {'s8': 'tests/pax-probe/s8.c'}
+        self.assertEqual(session.difference_problems(probes, self.NAMED), [])
+        self.assertTrue(session.difference_problems({}, self.NAMED))  # it names no probe
+        bad = lambda **kw: session.difference_problems(probes, {'s8': [dict(self.NAMED['s8'][0], **kw)]})
+        self.assertTrue(bad(why=''))     # no reason given
+        self.assertTrue(bad(pax='0'))    # the same answer is no difference
+        self.assertTrue(bad(call=''))
+
+    def test_the_pax_set_differences_are_well_formed(self):
+        old = (session.GOLD, session.PAX_MODE)
+        try:
+            session.use_pax()
+            self.assertEqual(session.difference_problems(session.load_probes(), session.load_probe_differences()), [])
+        finally:
+            session.GOLD, session.PAX_MODE = old
+
+
 # a stand-in gdb for make_cores: it writes the file its `gcore PATH` names, or nothing when told to fail
 FAKE_GCORE = '''#!/usr/bin/env python3
 import sys
