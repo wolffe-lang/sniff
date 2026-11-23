@@ -449,6 +449,13 @@
    "why": "an SSE register written with P reads back with p, as through the pinned gdbserver (on Linux; PAX answers PTRACE_SETFPREGS with EIO, which its own row names)"
   },
   {
+   "name": "server-fp-tag",
+   "kind": "server",
+   "check": "fp-tag",
+   "prog": "c/calls/gcc-O0/prog",
+   "why": "gdb's ftag is the x87 tag word, two bits a register, where the FXSAVE area holds an abridged byte, one bit a register: the stub turns one into the other both ways, held to gdbserver's reads and its write of 0x3fff read back"
+  },
+  {
    "name": "server-threads",
    "kind": "server",
    "check": "threads",

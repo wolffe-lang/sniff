@@ -404,7 +404,7 @@ def cmd_skip(a):
 # sniff-server's rows (kind server): the stub on loopback in this host, its client this harness or the pinned gdb. Each
 # row's check names what it holds; the stub is started by its recorded pid and ended by it.
 SERVER_CHECKS = ('refuse-second', 'refuse-non-loopback', 'loopback-default', 'idle-cost', 'interrupt-latency',
-                 'z1-hbreak', 'fp-write', 'threads', 'gdb-session', 'oracle-stable')
+                 'z1-hbreak', 'fp-write', 'fp-tag', 'threads', 'gdb-session', 'oracle-stable')
 SESSION_ROWS = ROOT / 'tests/session-rows.json'
 # what gdb prints differently through the two stubs, by design, each by name: only through gdbserver, which offers Host
 # I/O, does gdb read files over the connection, so only there does it print the two lines of that feature (a separate
@@ -747,6 +747,17 @@ def check_fp_write(a, row, out):
         r = ask(c, 'p28')
         return {'P xmm0': w, 'p xmm0 is the value': r == value}
     return check_same(a, row, out, steps, 'the write and the read back')
+
+
+def check_fp_tag(a, row, out):
+    """The x87 tag word (register 34, ftag). FXSAVE keeps an abridged byte, one bit a register, where gdb's register is
+    the full tag word, two bits a register. Held to gdbserver's answers: the eight x87 control registers read, ftag
+    written as 0x3fff (R7 in use, the rest empty), and read back."""
+    def steps(c, prog):
+        before = [ask(c, 'p%x' % n) for n in range(32, 40)]
+        w = ask(c, 'P22=ff3f0000')
+        return {'fctrl to fop': before, 'P ftag': w, 'ftag read back': ask(c, 'p22')}
+    return check_same(a, row, out, steps, 'the x87 control registers, and the tag word written and read back')
 
 
 def check_threads(a, row, out):
@@ -1137,6 +1148,7 @@ def cmd_server(a):
     checks = {'refuse-second': check_refuse_second, 'refuse-non-loopback': check_refuse_non_loopback,
               'loopback-default': check_loopback_default, 'idle-cost': check_idle_cost,
               'interrupt-latency': check_interrupt_latency, 'z1-hbreak': check_z1_hbreak, 'fp-write': check_fp_write,
+              'fp-tag': check_fp_tag,
               'threads': check_threads, 'gdb-session': check_gdb_session, 'oracle-stable': check_oracle_stable}
     print(oracle_line())
     for row in load_rows(a.only, 'server'):
