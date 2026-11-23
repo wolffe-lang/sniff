@@ -190,8 +190,20 @@
    },
    {
     "predicted": "a connect after a detach prints `Program received signal SIGTRAP, Trace/breakpoint trap.` before the frame (session A: after a stop by SIGINT, both a detach and a disconnect were followed by it)",
-    "score": "wrong as stated: after a breakpoint's stop the rows show the frame alone. Predicted now, before its rows are captured: a connect prints the SIGTRAP line when the last stop reported since the target was last resumed was reported as a signal. PENDING: remote-kernel-detach-signalled and remote-kernel-disconnect-signalled"
+    "score": "wrong as stated: after a breakpoint's stop the rows show the frame alone. Predicted now, before its rows are captured: a connect prints the SIGTRAP line when the last stop reported since the target was last resumed was reported as a signal. Right: gdb printed the SIGTRAP line at the connect after both, and sniff held to both goldens under KVM and TCG"
    }
+  ],
+  "first_contact": [
+   "sniff's first run against the kernel rows differed from gdb in nine ways, each fixed with its own commit",
+   "a file is named as its DWARF 4 line table records it in the compilation's own directory (`./kmain_console.lu`), where sniff had joined that directory to it; the source is still read from there",
+   "a global symbol with no type in a section of code (`_start`) names the code past it",
+   "info threads names no thread of a remote target",
+   "x prints the address and its label before an item it cannot read, and the error ends that line",
+   "a C cast is read in a wolf frame, since wolf's units say they are C11; a pointer may point to one of C's builtin types",
+   "a quoted name finds a data symbol with no debug information, which has no value until a cast says what is there",
+   "a software breakpoint goes in when the stub takes its Z0, whether or not the byte it covers can be read (at reset under TCG it cannot)",
+   "at a terminal, a breakpoint that cannot be inserted ends with `Command aborted.` (PENDING for a process: tty-gcc-unmapped)",
+   "gdb's 80-column wrap of a breakpoint row's location is a terminal's, joined as its wrap of a frame line is"
   ]
  },
  "kernel_symbols": {
