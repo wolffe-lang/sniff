@@ -404,7 +404,8 @@ def cmd_skip(a):
 # sniff-server's rows (kind server): the stub on loopback in this host, its client this harness or the pinned gdb. Each
 # row's check names what it holds; the stub is started by its recorded pid and ended by it.
 SERVER_CHECKS = ('refuse-second', 'refuse-non-loopback', 'loopback-default', 'idle-cost', 'interrupt-latency',
-                 'z1-hbreak', 'fp-write', 'fp-tag', 'threads', 'detach', 'gdb-session', 'oracle-stable', 'native-golden')
+                 'z1-hbreak', 'fp-write', 'fp-tag', 'threads', 'detach', 'detach-own', 'gdb-session', 'oracle-stable',
+                 'native-golden')
 SESSION_ROWS = ROOT / 'tests/session-rows.json'
 # what gdb prints differently through the two stubs, by design, each by name: only through gdbserver, which offers Host
 # I/O, does gdb read files over the connection, so only there does it print the two lines of that feature (a separate
@@ -434,6 +435,49 @@ def frame(data):
     return b'$' + b + b'#' + ('%02x' % (sum(b) % 256)).encode()
 
 
+def decode_reply(data):
+    """A reply's data as the manual's Overview gives it: `}` escapes the next byte (XOR 0x20), and `*` repeats the
+    character before it (the next character's code less 29) more times."""
+    out, i = [], 0
+    while i < len(data):
+        ch = data[i]
+        if ch == '}' and i + 1 < len(data):
+            out.append(chr(ord(data[i + 1]) ^ 0x20))
+            i += 2
+        elif ch == '*' and out and i + 1 < len(data):
+            out.extend(out[-1] * (ord(data[i + 1]) - 29))
+            i += 2
+        else:
+            out.append(ch)
+            i += 1
+    return ''.join(out)
+
+
+class LoggedSocket:
+    """A client socket that writes every byte it sends and receives to a log (`>` sent, `<` received)."""
+
+    def __init__(self, s, log):
+        self.s, self.log = s, open(log, 'a')
+
+    def sendall(self, b):
+        self.log.write('> %s\n' % b.decode(errors='backslashreplace'))
+        self.log.flush()
+        return self.s.sendall(b)
+
+    def recv(self, n):
+        b = self.s.recv(n)
+        self.log.write('< %s\n' % b.decode(errors='backslashreplace'))
+        self.log.flush()
+        return b
+
+    def settimeout(self, v):
+        return self.s.settimeout(v)
+
+    def close(self):
+        self.log.close()
+        return self.s.close()
+
+
 def read_packet(s, limit=5.0):
     """The first packet's data off the socket within limit seconds, acknowledgments skipped; None if it closed or
     timed out first."""
@@ -450,7 +494,7 @@ def read_packet(s, limit=5.0):
         i = buf.find(b'$')
         j = buf.find(b'#', i + 1) if i >= 0 else -1
         if i >= 0 and j >= 0 and len(buf) >= j + 3:
-            return buf[i + 1:j].decode(errors='backslashreplace')
+            return decode_reply(buf[i + 1:j].decode(errors='backslashreplace'))
     return None
 
 
@@ -533,17 +577,32 @@ def check_refuse_second(a, row, out):
     return '; '.join(problems), 'the second client got %r and was closed; the first went on' % want
 
 
+def refusal_run(argv, wait):
+    """A command that should refuse and end: (its exit status, its standard error, False), or, when it is still
+    running after `wait` seconds (it did not refuse), (None, what it wrote, True) with its recorded pid ended."""
+    p = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        _o, err = p.communicate(timeout=wait)
+        return p.returncode, err, False
+    except subprocess.TimeoutExpired:
+        p.terminate()
+        _o, err = p.communicate(timeout=10)
+        return None, err, True
+
+
 def check_refuse_non_loopback(a, row, out):
     """A HOST that is not loopback is refused by name, binding nothing, unless --non-loopback asks for it by name."""
     prog = str(Path(a.fixtures) / row['prog'])
     port = free_port()
     problems = []
-    r = subprocess.run([a.server, '0.0.0.0:%d' % port, prog], capture_output=True, text=True, timeout=20)
-    (out / (row['name'] + '.refused')).write_text(r.stdout + r.stderr)
+    rc, err, running = refusal_run([a.server, '0.0.0.0:%d' % port, prog], 10.0)
+    (out / (row['name'] + '.refused')).write_text(err)
     words = 'sniff-server: 0.0.0.0 is not a loopback address'
-    if r.returncode == 0 or words not in r.stderr or '--non-loopback' not in r.stderr:
-        problems.append('without --non-loopback: exit %d, %r' % (r.returncode, r.stderr.strip()[:160]))
-    if tcp_sockets(port):
+    if running:
+        problems.append('without --non-loopback it was still running after 10 s: not refused')
+    elif rc == 0 or words not in err or '--non-loopback' not in err:
+        problems.append('without --non-loopback: exit %s, %r' % (rc, err.strip()[:160]))
+    if not running and tcp_sockets(port):
         problems.append('a socket was bound on port %d without --non-loopback' % port)
     p, up = start_server(a, ['--non-loopback', '0.0.0.0:%d' % port, prog], out, row['name'])
     try:
@@ -775,7 +834,7 @@ def both_stubs(a, row, out, steps):
         if not ANY_LISTENING.search(log.read_text(errors='replace')):
             end_server(p, row['name'])
             return None, None, FAULT + '%s never said it was listening' % who
-        c = socket.create_connection(('127.0.0.1', port), timeout=5)
+        c = LoggedSocket(socket.create_connection(('127.0.0.1', port), timeout=5), out / ('%s.%s.packets' % (row['name'], who)))
         # the pinned gdb's own opening, in its order (its remote log): qSupported, `?`, then Hg for the thread named
         ask(c, 'qSupported:swbreak+;vContSupported+')
         h = hg_for(ask(c, '?'))
@@ -844,12 +903,12 @@ def check_fp_tag(a, row, out):
 
 
 def check_detach(a, row, out):
-    """D with a breakpoint and a watchpoint set: the stub takes both out and lets the program go, and it runs to its
-    end on its own (the sleeper's last line, `done N`, comes into the stub's log). Held to gdbserver."""
+    """D as gdb sends it: a breakpoint and a watchpoint set, each removed, then D; the program runs to its end on its own
+    (the sleeper's last line, `done N`, comes into the stub's log). Held to gdbserver."""
     def steps(c, prog):
-        z0 = ask(c, 'Z0,%x,1' % symbol(prog, 'nap'))
-        z2 = ask(c, 'Z2,%x,4' % symbol(prog, 'ticks'))
-        return {'Z0': z0, 'Z2': z2, 'D': ask(c, 'D')}
+        bp, w = symbol(prog, 'nap'), symbol(prog, 'ticks')
+        z = [ask(c, 'Z0,%x,1' % bp), ask(c, 'Z2,%x,4' % w), ask(c, 'z0,%x,1' % bp), ask(c, 'z2,%x,4' % w)]
+        return {'Z0 Z2 z0 z2': z, 'D': ask(c, 'D')}
     mine, theirs, why = both_stubs(a, row, out, steps)
     if why:
         return why, ''
@@ -863,6 +922,36 @@ def check_detach(a, row, out):
             time.sleep(0.1)
         got['ran to its end'] = want in log.read_text(errors='replace')
     return compare(mine, theirs, 'the detach')
+
+
+def check_detach_own(a, row, out):
+    """The stub's own row, with no oracle: D with a breakpoint and a watchpoint still set. The stub takes both out
+    itself, so the program runs to its end (`done N` in its log); the pinned gdbserver leaves them in."""
+    prog = Path(a.fixtures) / row['prog']
+    port = free_port()
+    p, up = start_server(a, ['127.0.0.1:%d' % port, str(prog)] + row.get('args', []), out, row['name'])
+    try:
+        if not up:
+            return FAULT + 'sniff-server never said it was listening', ''
+        c = LoggedSocket(socket.create_connection(('127.0.0.1', port), timeout=5), out / (row['name'] + '.packets'))
+        ask(c, 'qSupported:swbreak+;vContSupported+')
+        h = hg_for(ask(c, '?'))
+        if h:
+            ask(c, h)
+        got = {'Z0': ask(c, 'Z0,%x,1' % symbol(prog, 'nap')), 'Z2': ask(c, 'Z2,%x,4' % symbol(prog, 'ticks')), 'D': ask(c, 'D')}
+        c.close()
+    finally:
+        end_server(p, row['name'])
+    if oracle_silent(got):
+        return FAULT + 'the stub gave no reply (%r)' % (got,), ''
+    want, log = 'done %s' % row['args'][0], out / (row['name'] + '.server')
+    end = time.time() + 10
+    while time.time() < end and want not in log.read_text(errors='replace'):
+        time.sleep(0.1)
+    if got != {'Z0': 'OK', 'Z2': 'OK', 'D': 'OK'} or want not in log.read_text(errors='replace'):
+        return 'D with its breakpoints set: %r, and the program %s' % (
+            got, 'ran to its end' if want in log.read_text(errors='replace') else 'did not run to its end'), ''
+    return '', 'D with a breakpoint and a watchpoint set: %r, and the program ran to its end' % (got,)
 
 
 def check_threads(a, row, out):
@@ -1306,7 +1395,8 @@ def cmd_server(a):
     checks = {'refuse-second': check_refuse_second, 'refuse-non-loopback': check_refuse_non_loopback,
               'loopback-default': check_loopback_default, 'idle-cost': check_idle_cost,
               'interrupt-latency': check_interrupt_latency, 'z1-hbreak': check_z1_hbreak, 'fp-write': check_fp_write,
-              'fp-tag': check_fp_tag, 'detach': check_detach, 'native-golden': check_native_golden,
+              'fp-tag': check_fp_tag, 'detach': check_detach, 'detach-own': check_detach_own,
+              'native-golden': check_native_golden,
               'threads': check_threads, 'gdb-session': check_gdb_session, 'oracle-stable': check_oracle_stable}
     print(oracle_line())
     for row in load_rows(a.only, 'server'):
@@ -1413,7 +1503,7 @@ def cmd_selftest(_a):
     assert decode_reply('0* ') == '0000' and decode_reply('0*"00') == '00000000' and decode_reply('a}]b') == 'a}b'
     left, right = socket.socketpair()
     try:
-        enc = b'1*!ff* '
+        enc = b'1* f* '  # 1 and 3 more, f and 3 more
         left.sendall(b'+$' + enc + b'#' + ('%02x' % (sum(enc) % 256)).encode())
         assert read_packet(right, 2.0) == '1111ffff', 'read_packet decodes the reply'
     finally:
