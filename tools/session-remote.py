@@ -72,7 +72,7 @@ def qemu_problems(line, sha, want_line, want_sha):
 
 
 def qemu_line(a):
-    """The take's QEMU line (its version, its binary's sha256, the accelerator) and what is wrong with it."""
+    """The run's QEMU line (its version, its binary's sha256, the accelerator) and what is wrong with it."""
     import hashlib
     import platform as host
     q = Path(a.qemu).resolve()
