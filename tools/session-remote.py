@@ -1,11 +1,19 @@
 #!/usr/bin/env python3
-"""S8's kernel rows: the pinned gdb and sniff over QEMU's gdbstub on PAX's console kernel, at one processor.
+"""S8's remote rows: the pinned gdb and sniff over QEMU's gdbstub on PAX's console kernel, at one processor (the kernel
+rows), and sniff-server, the stub, on Linux (kind server) and on PAX (kind server-pax).
 
   session-remote.py capture --kernel ELF --image ISO --pax PAXTREE --qemu QEMU --gdb GDB --accel kvm|tcg [--only RE] [--out DIR]
   session-remote.py check   --kernel ELF --image ISO --pax PAXTREE --qemu QEMU --sniff SNIFF --accel kvm|tcg [--only RE] [--out DIR]
   session-remote.py gdb-check (as check, with --gdb: the goldens hold for this accelerator and this run)
-  session-remote.py skip --reason TEXT [--expect N]   one SKIP line a row and the count (held at N), where no
-                                            kernel image is
+  session-remote.py server --server SNIFF-SERVER --fixtures DIR [--only RE] [--out DIR]
+                                            the server rows on this Linux host, against the pinned gdbserver live
+  session-remote.py server-pax-image --pax PAXTREE --kernel ELF --inputs DIR --server SNIFF-SERVER-STATIC --fixtures DIR
+                                            the server-pax rows' image (in PAX's image, which has its image tools)
+  session-remote.py server-pax --image DIR --pax PAXTREE --kernel ELF --qemu QEMU --fixtures DIR [--accel kvm]
+                                            the server-pax rows: one boot of that image under KVM, gdb from this host
+  session-remote.py skip [--kind kernel|server|server-pax] --reason TEXT [--expect N]
+                                            one SKIP line a row of that kind and the count (held at N), where the
+                                            rows cannot run
   session-remote.py selftest                the normalisation and the script forms, no machine
 
 Rows: tests/remote-rows.json. Goldens: tests/evidence/remote/NAME.out, gdb's transcript under KVM on the record host,
@@ -26,6 +34,11 @@ by name (FAIL remote-qemu-pin) a QEMU whose version line or binary digest is not
 
 Normalised by name: the port, the kernel's path, the terminal's line ends and the prompts (tools/session.py's
 normalize_tty). QEMU's target description never appears in a golden as text: no row prints it.
+
+The server rows hold sniff-server to the pinned gdbserver, run live beside it: the same requests and the same gdb
+session commands on the same static fixture, and gdb's two transcripts equal after SESSION_NORMALISE's named
+differences. Every server run names gdbserver and gdb by version and sha256 (its ORACLES line). On PAX the stub runs in
+the console image, reached through a port QEMU forwards from this host's loopback.
 """
 import argparse
 import importlib.util
@@ -299,7 +312,7 @@ def first_diff(want, got):
 
 
 def load_rows(only, kind='kernel'):
-    # a row's kind: the kernel rows (sniff or gdb over QEMU's gdbstub) unless it says server (sniff-server's rows)
+    # a row's kind: the kernel rows (sniff or gdb over QEMU's gdbstub) unless it says server or server-pax (sniff-server's)
     rows = [r for r in json.loads(ROWS.read_text())['rows'] if r.get('kind', 'kernel') == kind]
     if only:
         rows = [r for r in rows if re.search(only, r['name'])]
@@ -758,6 +771,20 @@ def session_script(name):
     return row['prog'], script[runs[0]].split()[1:], cmds
 
 
+def gdb_at(port, prog, cmds, timeout=120):
+    """gdb's batch transcript of cmds against the stub at 127.0.0.1:PORT, the program file given to gdb as a user gives
+    it; None if gdb did not end within timeout seconds."""
+    g = ['gdb', '-nx', '-q', '-batch', '-iex', 'set confirm off', '-iex', 'set pagination off', '-iex', 'set width 0',
+         '-ex', 'target remote 127.0.0.1:%d' % port]
+    for c in cmds:
+        g += ['-ex', c]
+    try:
+        r = subprocess.run(g + [str(prog)], capture_output=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return None
+    return (r.stdout + r.stderr).decode('utf-8', 'backslashreplace')
+
+
 def gdb_through(a, who, prog, args, cmds, out, label):
     """gdb's transcript through one stub (batch mode, the program file given to gdb as a user gives it)."""
     port = free_port()
@@ -770,15 +797,7 @@ def gdb_through(a, who, prog, args, cmds, out, label):
     if not ANY_LISTENING.search(log.read_text(errors='replace')):
         end_server(s, label)
         return None
-    g = ['gdb', '-nx', '-q', '-batch', '-iex', 'set confirm off', '-iex', 'set pagination off', '-iex', 'set width 0',
-         '-ex', 'target remote 127.0.0.1:%d' % port]
-    for c in cmds:
-        g += ['-ex', c]
-    try:
-        r = subprocess.run(g + [str(prog)], capture_output=True, timeout=120)
-        text = (r.stdout + r.stderr).decode('utf-8', 'backslashreplace')
-    except subprocess.TimeoutExpired:
-        text = None
+    text = gdb_at(port, prog, cmds)
     end_server(s, label)
     if text is not None:
         (out / (label + '.txt')).write_text(text)
@@ -830,6 +849,263 @@ def check_oracle_stable(a, row, out):
     if d:
         return 'gdbserver\'s transcript changed between two runs: ' + d, ''
     return '', 'gdbserver\'s transcript held by a second run (%d lines; only the port and the pid named)' % len(one.splitlines())
+
+
+# sniff-server's rows on PAX (kind server-pax). The stub runs in PAX's console image under KVM as a static program, one
+# row after another. Each listens on the guest's 0.0.0.0:1234, asked for by name (--non-loopback), which only QEMU's
+# user network reaches, through a port it forwards from this host's loopback. The pinned gdb connects from here and
+# runs the session row's commands. Its oracle is gdb through the pinned gdbserver on Linux, live, on the same static
+# fixture with the same commands, and the two transcripts are held equal under SESSION_NORMALISE.
+PAX_GUEST_IP, PAX_GUEST_PORT, PAX_MAC = '10.0.2.15', 1234, '52:54:00:12:34:56'
+# QEMU accepts a connection to the forwarded port at once, and resets it while nothing in the guest listens. The first
+# round trip on PAX held after 3.0 s and three resets; a row connects with a retry every 0.5 s for up to twenty times that.
+PAX_MEASURED_S, PAX_RETRY_EVERY_S, PAX_RETRY_FOR_S = 3.0, 0.5, 60.0
+PAX_BOOT_S = 240.0  # the first row's listener: the boot, the shell and the stub's start
+PAX_SERVE, PAX_SERVED = '@@SERVE ', '@@SERVED '
+PAX_LISTENING = 'Listening on 0.0.0.0:%d' % PAX_GUEST_PORT
+PAX_CONNECT_FAILED = re.compile(r'Connection (?:reset by peer|refused|timed out)|Remote connection closed')
+PAX_CHECKS = ('pax-session', 'pax-fp-refused')
+PAX_FP_WANT = {'stop': 'T05', 'P xmm0': 'E01', 'xmm0 unchanged': True}
+
+
+def load_session_pax():
+    spec = importlib.util.spec_from_file_location('session_pax', ROOT / 'tools/session-pax.py')
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def file_sha(path):
+    import hashlib
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def pax_target(row):
+    """A PAX server row's static fixture and the stub's arguments for it."""
+    if row['check'] == 'pax-session':
+        prog, args, _cmds = session_script(row['row'])
+        return prog, args
+    return row['prog'], row.get('args', [])
+
+
+def pax_guest_script(rows, fx_guest):
+    """/etc/rows.sh: for each row in order its marker, the stub on the guest's port, and the stub's exit status. The
+    stub's own lines go to the console, where the host waits for each row's `Listening on` before it connects."""
+    lines = []
+    for row in rows:
+        prog, args = pax_target(row)
+        lines.append("printf '%s\\n' '" + PAX_SERVE + row['name'] + "'")
+        lines.append(' '.join(['/bin/sniff-server', '--non-loopback', '0.0.0.0:%d' % PAX_GUEST_PORT, fx_guest + '/' + prog] + args))
+        lines.append("printf '%s\\n' \"" + PAX_SERVED + "$?\"")
+    return '\n'.join(lines) + '\n'
+
+
+def pax_served(text, sp):
+    """name -> (the stub's console lines, its exit status) for every row whose two markers came off the console."""
+    got, cur, lines = {}, None, []
+    for line in sp.serial_norm(text).split('\n'):
+        if line.startswith(PAX_SERVE):
+            cur, lines = line[len(PAX_SERVE):].strip(), []
+        elif cur is not None and line.startswith(PAX_SERVED):
+            got[cur] = (lines, line[len(PAX_SERVED):].strip())
+            cur = None
+        elif cur is not None:
+            lines.append(line)
+    return got
+
+
+def pax_gdb_failed_to_connect(text):
+    """gdb never reached the guest's stub: QEMU took the connection and reset it (the first lines say so)."""
+    return text is not None and bool(PAX_CONNECT_FAILED.search('\n'.join(text.splitlines()[:3])))
+
+
+def pax_fp_refused(port):
+    """On PAX, P of xmm0 (register 40): PAX's PTRACE_SETFPREGS answers EIO, so the stub answers E01, and xmm0 reads
+    back as it was. (answers, failed to connect)."""
+    try:
+        c = socket.create_connection(('127.0.0.1', port), timeout=5)
+    except OSError:
+        return None, True
+    try:
+        first = ask(c, '?')
+        if first is None:
+            return None, True
+        before = ask(c, 'p28')
+        value = '1112131415161718191a1b1c1d1e1f20' if before == '0102030405060708090a0b0c0d0e0f10' else '0102030405060708090a0b0c0d0e0f10'
+        w = ask(c, 'P28=' + value)
+        after = ask(c, 'p28')
+        c.sendall(frame('k'))
+        return {'stop': first[:3], 'P xmm0': w, 'xmm0 unchanged': before is not None and len(before) == 32 and after == before}, False
+    finally:
+        c.close()
+
+
+def pax_wait_listening(serial, count, q, limit):
+    """Until the console shows the count-th row's `Listening on`, the boot ends, or limit seconds pass."""
+    end = time.time() + limit
+    while time.time() < end and q.poll() is None:
+        if serial.exists() and serial.read_text(errors='replace').count(PAX_LISTENING) >= count:
+            return True
+        time.sleep(0.1)
+    return serial.exists() and serial.read_text(errors='replace').count(PAX_LISTENING) >= count
+
+
+def pax_retry(attempt, ended):
+    """attempt() -> (result, failed to connect), again every 0.5 s while it fails to connect, for up to 60 s, and never
+    once ended() (the row's stub has ended): (result, attempts, seconds)."""
+    start, n = time.time(), 0
+    while True:
+        n += 1
+        got, failed = attempt()
+        took = time.time() - start
+        if not failed:
+            return got, n, took
+        if took >= PAX_RETRY_FOR_S or ended():
+            return None, n, took
+        time.sleep(PAX_RETRY_EVERY_S)
+
+
+def cmd_server_pax_image(a):
+    """The server rows' PAX image, built in PAX's image (its image tools): pelt as the shell, cat and env, sniff-server
+    built static, the rows' static fixtures where the Linux goldens name them, /etc/pax-net giving the guest
+    10.0.2.15, and one typed line that runs the rows; manifest.json names the rows in order and the digests."""
+    sp = load_session_pax()
+    rows = load_rows(a.only, 'server-pax')
+    out = Path(a.out).resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    pax, inputs = Path(a.pax), Path(a.inputs)
+    files = [('/bin/sh', inputs / 'pelt/pelt', 755), ('/bin/cat', inputs / 'bore/cat', 755), ('/bin/env', inputs / 'bore/env', 755),
+             ('/bin/sniff-server', Path(a.server), 755)]
+    for prog in sorted({pax_target(r)[0] for r in rows}):
+        files.append((sp.GUEST_FX + '/' + prog, Path(a.fixtures) / prog, 755))
+    rows_sh, run_line, net = out / 'rows.sh', out / 'pax-run', out / 'pax-net'
+    rows_sh.write_text(pax_guest_script(rows, sp.GUEST_FX))
+    run_line.write_text('/bin/env HOME=/ /bin/sh -i\n')
+    net.write_text('static %s/24 gateway 10.0.2.2 dns 10.0.2.3\n' % PAX_GUEST_IP)
+    files += [('/etc/rows.sh', rows_sh, 644), ('/etc/pax-run', run_line, 644), ('/etc/pax-net', net, 644)]
+    missing = [str(s) for _d, s, _m in files if not Path(s).is_file()]
+    if missing:
+        print('FAIL remote-server-pax-image missing %s' % ', '.join(missing))
+        return 1
+    cpio, iso = out / 'server.cpio', out / 'server.iso'
+    for what, cmd in (('mkinitramfs', [str(pax / 'tools/mkinitramfs'), str(cpio), '/tmp/:1777'] + ['%s=%s:%s' % f for f in files]),
+                      ('mkimage', [str(pax / 'tools/mkimage'), '--conf', str(pax / 'boot/limine-initramfs-quiet.conf'), '--add',
+                                   str(cpio), 'initramfs.cpio', str(a.kernel), str(iso)])):
+        r = subprocess.run(cmd, capture_output=True, text=True)
+        if r.returncode != 0:
+            print(r.stdout[-1500:], r.stderr[-1500:])
+            print('FAIL remote-server-pax-image %s exit=%d' % (what, r.returncode))
+            return 1
+    (out / 'server.keys').write_text('/bin/sh /etc/rows.sh; exit\n')
+    m = {'rows': [r['name'] for r in rows], 'iso_sha256': file_sha(iso), 'sniff_server_sha256': file_sha(a.server),
+         'kernel_sha256': file_sha(a.kernel)}
+    (out / 'manifest.json').write_text(json.dumps(m, indent=1) + '\n')
+    print('PASS remote-server-pax-image rows=%d iso_sha256=%s sniff_server_sha256=%s kernel_sha256=%s' %
+          (len(rows), m['iso_sha256'], m['sniff_server_sha256'], m['kernel_sha256']))
+    return 0
+
+
+def cmd_server_pax(a):
+    """The server rows on PAX: gdbserver's transcripts on Linux first, then one boot of the image, each row reached in
+    the image's order, then every row's verdict by name."""
+    sp = load_session_pax()
+    out = Path(a.out).resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    rows = load_rows(a.only, 'server-pax')
+    image = Path(a.image)
+    m = json.loads((image / 'manifest.json').read_text())
+    summary = 'remote rows (server-pax, %s): %d pass, %d fail, %d skip'
+    if m['rows'] != [r['name'] for r in rows] or file_sha(image / 'server.iso') != m['iso_sha256']:
+        print('FAIL remote-server-pax-image the image holds rows %s (iso %s), not these %s' % (m['rows'], m['iso_sha256'], [r['name'] for r in rows]))
+        print(summary % (a.accel, 0, 1, 0))
+        return 1
+    line, problems = qemu_line(a)
+    print(line)
+    if problems:
+        print('FAIL remote-qemu-pin ' + '; '.join(problems))
+        print(summary % (a.accel, 0, 1, 0))
+        return 1
+    print(oracle_line())
+    print('IMAGE server.iso sha256 %s, sniff-server sha256 %s, kernel sha256 %s' % (m['iso_sha256'], m['sniff_server_sha256'], m['kernel_sha256']))
+    theirs = {}
+    for r in rows:
+        if r['check'] == 'pax-session':
+            prog, args, cmds = session_script(r['row'])
+            theirs[r['name']] = gdb_through(a, 'gdbserver', Path(a.fixtures) / prog, args, cmds, out, r['name'] + '.gdbserver')
+    port = free_port()
+    serial = out / 'boot.serial'
+    for d in ('qemu', 'tmp'):
+        (out / d).mkdir(parents=True, exist_ok=True)
+    qenv = dict(os.environ)
+    qenv.update({'PAX_QEMU': a.qemu, 'PAX_BUILD': str(out / 'qemu'), 'TMPDIR': str(out / 'tmp'), 'SHELL': '/bin/sh'})
+    netdev = 'user,id=n0,ipv6=off,hostfwd=tcp:127.0.0.1:%d-%s:%d' % (port, PAX_GUEST_IP, PAX_GUEST_PORT)
+    cmd = [str(Path(a.pax) / 'tools/qemu-halt'), '--firmware', 'bios', '--serial', str(serial), '--timeout', str(a.timeout),
+           '--accel', a.accel, '--qemu', '-m', '--qemu', '4096M', '--qemu', '-netdev', '--qemu', netdev,
+           '--qemu', '-device', '--qemu', 'virtio-net-pci,netdev=n0,mac=%s,id=nic0' % PAX_MAC,
+           '--elf', str(a.kernel), '--marker', 'halt|PANIC .*', '--type', str(image / 'server.keys'), '--prompt', '$ ',
+           str(image / 'server.iso')]
+    print('RUN ' + ' '.join(cmd), flush=True)
+    q = subprocess.Popen(cmd, stdout=open(out / 'qemu-halt.out', 'w'), stderr=subprocess.STDOUT, env=qenv)
+    mine, reached = {}, {}
+    for k, r in enumerate(rows):
+        if not pax_wait_listening(serial, k + 1, q, PAX_BOOT_S if k == 0 else PAX_RETRY_FOR_S):
+            break
+        name = r['name']
+        ended = lambda name=name: name in pax_served(serial.read_text(errors='replace'), sp)
+        if r['check'] == 'pax-session':
+            prog, _args, cmds = session_script(r['row'])
+            def attempt(prog=prog, cmds=cmds):
+                t = gdb_at(port, Path(a.fixtures) / prog, cmds)
+                return t, pax_gdb_failed_to_connect(t)
+        else:
+            attempt = lambda: pax_fp_refused(port)
+        got, n, took = pax_retry(attempt, ended)
+        mine[name], reached[name] = got, (n, took)
+        if r['check'] == 'pax-session' and got is not None:
+            (out / (name + '.sniff-server.txt')).write_text(got)
+    try:
+        rc = q.wait(timeout=a.timeout + 60)
+    except subprocess.TimeoutExpired:
+        print('qemu-halt %d still running 60 s after its own timeout: TERM to its recorded pid' % q.pid)
+        q.terminate()
+        rc = q.wait(timeout=30)
+    print('qemu-halt exit=%s' % rc)
+    served = pax_served(serial.read_text(errors='replace') if serial.exists() else '', sp)
+    counts = {'pass': 0, 'fail': 0, 'skip': 0}
+    bound = 'retry every %.1f s for up to %.0f s, twenty times the %.1f s measured' % (PAX_RETRY_EVERY_S, PAX_RETRY_FOR_S, PAX_MEASURED_S)
+    for r in rows:
+        name = r['name']
+        why = ''
+        if name not in reached:
+            why = 'never reached: its stub never said it was listening on the console'
+        elif mine[name] is None:
+            why = 'no answer: %d attempts in %.1f s (%s)' % (reached[name][0], reached[name][1], bound)
+        elif name not in served:
+            why = 'its stub did not end on the console'
+        elif served[name][1] != '0':
+            why = 'sniff-server on PAX exited %s: %s' % (served[name][1], ' | '.join(served[name][0][-3:]))
+        elif r['check'] == 'pax-session':
+            if theirs.get(name) is None:
+                why = 'no oracle: gdbserver never listened, or gdb did not end'
+            else:
+                why = first_diff(session_normalise(theirs[name]), session_normalise(mine[name]))
+        elif mine[name] != PAX_FP_WANT:
+            why = 'answers %r, not %r' % (mine[name], PAX_FP_WANT)
+        if why:
+            print('FAIL remote %s %s' % (name, why))
+            counts['fail'] += 1
+            continue
+        n, took = reached[name]
+        held = ('gdb through sniff-server on PAX equals gdb through gdbserver on Linux (%d lines; normalised: %s)' %
+                (len(mine[name].splitlines()), ', '.join(x for x, _rx, _to in SESSION_NORMALISE))
+                if r['check'] == 'pax-session' else 'PAX refuses the SSE write by name: %r' % mine[name])
+        print('PASS remote %s [%s; connected at attempt %d after %.1f s, %s]' % (name, held, n, took, bound))
+        counts['pass'] += 1
+    if rc != 0:
+        print('FAIL remote-server-pax-boot qemu-halt exit=%s (its verdict: qemu-halt.out)' % rc)
+        counts['fail'] += 1
+    print(summary % (a.accel, counts['pass'], counts['fail'], counts['skip']))
+    return 1 if counts['fail'] else 0
 
 
 def oracle_line():
@@ -951,6 +1227,22 @@ def cmd_selftest(_a):
                           'Remote debugging using 127.0.0.1:41234\n* 1    Thread 77.78 "prog" main ()\n')
     assert n == '[Inferior 1 (INFERIOR) killed]\nRemote debugging using 127.0.0.1:PORT\n* 1    Thread TID "prog" main ()\n', repr(n)
     assert session_normalise('[Inferior 1 (Remote target) killed]\n') == '[Inferior 1 (INFERIOR) killed]\n'
+    for r in [r for r in rows if r.get('kind') == 'server-pax']:
+        assert r['name'].startswith('server-pax-') and r.get('check') in PAX_CHECKS and r.get('why'), r['name']
+        if r['check'] == 'pax-session':
+            assert session_script(r['row']) is not None, 'a PAX session row names one plain session row: ' + r['name']
+        else:
+            assert r.get('prog', '').startswith('c/'), 'a PAX row names its fixture: ' + r['name']
+    g = pax_guest_script([{'name': 'server-pax-x', 'check': 'pax-fp-refused', 'prog': 'c/calls/gcc-O0/prog', 'args': ['3']}], '/fx')
+    assert g == ("printf '%s\\n' '@@SERVE server-pax-x'\n/bin/sniff-server --non-loopback 0.0.0.0:1234 /fx/c/calls/gcc-O0/prog 3\n"
+                 "printf '%s\\n' \"@@SERVED $?\"\n"), repr(g)
+    sp = load_session_pax()
+    got = pax_served('$ /bin/sh /etc/rows.sh; exit\r\n@@SERVE a\r\nProcess p created; pid = 9\r\n\x1b[0mListening on 0.0.0.0:1234\r\n'
+                     '@@SERVED 0\r\n@@SERVE b\r\nListening on 0.0.0.0:1234\r\n', sp)
+    assert got == {'a': (['Process p created; pid = 9', 'Listening on 0.0.0.0:1234'], '0')}, repr(got)
+    assert pax_gdb_failed_to_connect('Remote debugging using 127.0.0.1:5\nRemote connection closed\n')
+    assert not pax_gdb_failed_to_connect('Remote debugging using 127.0.0.1:5\n0x0000000000401650 in _start ()\n')
+    assert not pax_gdb_failed_to_connect(None)
     for r in [r for r in rows if r.get('kind', 'kernel') == 'kernel']:
         assert r['name'].startswith(('remote-kernel-', 'remote-refuse-')), r['name']
         assert r.get('accel') in (None, 'kvm', 'tcg'), r['name']
@@ -962,7 +1254,8 @@ def cmd_selftest(_a):
             assert isinstance(r['own'], list) and r.get('why'), 'an own row says why gdb is not its oracle: ' + r['name']
         assert isinstance(r['script'], list) and r['script'], r['name']
         assert not any('xml-tdesc' in line for line in r['script']), 'a row may not print QEMU\'s description: ' + r['name']
-    print('PASS session-remote-selftest rows=%d (kernel %d, server %d)' % (len(rows), len(load_rows(None)), len(load_rows(None, 'server'))))
+    print('PASS session-remote-selftest rows=%d (kernel %d, server %d, server-pax %d)' % (
+        len(rows), len(load_rows(None)), len(load_rows(None, 'server')), len(load_rows(None, 'server-pax'))))
     return 0
 
 
@@ -983,8 +1276,23 @@ def main():
     sv.add_argument('--fixtures', required=True, help='the static session fixtures')
     sv.add_argument('--only')
     sv.add_argument('--out', default=str(ROOT / 'target/server-out'))
+    pi = sub.add_parser('server-pax-image')
+    for name, what in (('--pax', 'the PAX tree (its image tools)'), ('--kernel', "PAX's console kernel"),
+                       ('--inputs', 'pelt and boreutils, built as the PAX harness builds them'),
+                       ('--server', 'sniff-server built static'), ('--fixtures', 'the static session fixtures')):
+        pi.add_argument(name, required=True, help=what)
+    pi.add_argument('--only')
+    pi.add_argument('--out', default=str(ROOT / 'target/server-pax-image'))
+    ps = sub.add_parser('server-pax')
+    for name, what in (('--image', "server-pax-image's output"), ('--pax', 'the PAX tree (tools/qemu-halt)'),
+                       ('--kernel', "PAX's console kernel"), ('--qemu', 'the pinned QEMU'), ('--fixtures', 'the static session fixtures')):
+        ps.add_argument(name, required=True, help=what)
+    ps.add_argument('--accel', choices=('kvm',), default='kvm')
+    ps.add_argument('--timeout', type=int, default=900, help="qemu-halt's own bound on the boot, in seconds")
+    ps.add_argument('--only')
+    ps.add_argument('--out', default=str(ROOT / 'target/server-pax-out'))
     sk = sub.add_parser('skip')
-    sk.add_argument('--kind', choices=('kernel', 'server'), default='kernel')
+    sk.add_argument('--kind', choices=('kernel', 'server', 'server-pax'), default='kernel')
     sk.add_argument('--reason', required=True)
     sk.add_argument('--expect', type=int, help='the held number of rows, refused by name when the row file differs')
     sub.add_parser('selftest')
@@ -995,6 +1303,10 @@ def main():
         return cmd_selftest(a)
     if a.mode == 'server':
         return cmd_server(a)
+    if a.mode == 'server-pax-image':
+        return cmd_server_pax_image(a)
+    if a.mode == 'server-pax':
+        return cmd_server_pax(a)
     return cmd_run(a)
 
 
