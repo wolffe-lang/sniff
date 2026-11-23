@@ -595,6 +595,62 @@
    "check": "oracle-stable",
    "row": "threads-gcc-info",
    "why": "the oracle's own stability: gdb through the pinned gdbserver, taken twice, is byte-equal once each run's port and pid are named"
+  },
+  {
+   "name": "server-pax-bp-gcc-func-line-addr",
+   "kind": "server-pax",
+   "check": "pax-session",
+   "row": "bp-gcc-func-line-addr",
+   "why": "break on PAX: sniff-server in PAX's console image under KVM, the pinned gdb on this host running the session row's commands, held to gdb through the pinned gdbserver on Linux with the named normalisations; it connects through QEMU's forwarded port with a retry every 0.5 s for up to 60 s: the first round trip on PAX held after 3.0 s, measured, and the bound is twenty times that"
+  },
+  {
+   "name": "server-pax-frame-gcc-bt-up-down",
+   "kind": "server-pax",
+   "check": "pax-session",
+   "row": "frame-gcc-bt-up-down",
+   "why": "bt on PAX: sniff-server in PAX's console image under KVM, the pinned gdb on this host running the session row's commands, held to gdb through the pinned gdbserver on Linux with the named normalisations; it connects through QEMU's forwarded port with a retry every 0.5 s for up to 60 s: the first round trip on PAX held after 3.0 s, measured, and the bound is twenty times that"
+  },
+  {
+   "name": "server-pax-step-gcc-calls",
+   "kind": "server-pax",
+   "check": "pax-session",
+   "row": "step-gcc-calls",
+   "why": "step on PAX: sniff-server in PAX's console image under KVM, the pinned gdb on this host running the session row's commands, held to gdb through the pinned gdbserver on Linux with the named normalisations; it connects through QEMU's forwarded port with a retry every 0.5 s for up to 60 s: the first round trip on PAX held after 3.0 s, measured, and the bound is twenty times that"
+  },
+  {
+   "name": "server-pax-step-gcc-finish-main",
+   "kind": "server-pax",
+   "check": "pax-session",
+   "row": "step-gcc-finish-main",
+   "why": "finish on PAX: sniff-server in PAX's console image under KVM, the pinned gdb on this host running the session row's commands, held to gdb through the pinned gdbserver on Linux with the named normalisations; it connects through QEMU's forwarded port with a retry every 0.5 s for up to 60 s: the first round trip on PAX held after 3.0 s, measured, and the bound is twenty times that"
+  },
+  {
+   "name": "server-pax-value-gcc-x",
+   "kind": "server-pax",
+   "check": "pax-session",
+   "row": "value-gcc-x",
+   "why": "x on PAX: sniff-server in PAX's console image under KVM, the pinned gdb on this host running the session row's commands, held to gdb through the pinned gdbserver on Linux with the named normalisations; it connects through QEMU's forwarded port with a retry every 0.5 s for up to 60 s: the first round trip on PAX held after 3.0 s, measured, and the bound is twenty times that"
+  },
+  {
+   "name": "server-pax-signals-gcc-run",
+   "kind": "server-pax",
+   "check": "pax-session",
+   "row": "signals-gcc-run",
+   "why": "a signal on PAX: sniff-server in PAX's console image under KVM, the pinned gdb on this host running the session row's commands, held to gdb through the pinned gdbserver on Linux with the named normalisations; it connects through QEMU's forwarded port with a retry every 0.5 s for up to 60 s: the first round trip on PAX held after 3.0 s, measured, and the bound is twenty times that"
+  },
+  {
+   "name": "server-pax-inferior-c-gcc-exit3",
+   "kind": "server-pax",
+   "check": "pax-session",
+   "row": "inferior-c-gcc-exit3",
+   "why": "exit on PAX: sniff-server in PAX's console image under KVM, the pinned gdb on this host running the session row's commands, held to gdb through the pinned gdbserver on Linux with the named normalisations; it connects through QEMU's forwarded port with a retry every 0.5 s for up to 60 s: the first round trip on PAX held after 3.0 s, measured, and the bound is twenty times that"
+  },
+  {
+   "name": "server-pax-fp-write-refused",
+   "kind": "server-pax",
+   "check": "pax-fp-refused",
+   "prog": "c/calls/gcc-O0/prog",
+   "why": "a refusal by name: PAX's PTRACE_SETFPREGS answers EIO, so on PAX the stub answers P of an SSE register with E01 and the register reads back as it was; it connects through QEMU's forwarded port with a retry every 0.5 s for up to 60 s: the first round trip on PAX held after 3.0 s, measured, and the bound is twenty times that"
   }
  ]
 }
