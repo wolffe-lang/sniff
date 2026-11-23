@@ -441,6 +441,12 @@ pub fn interrupt_target(t: Target) -> () ! ClientError {
     interrupt(t.link)?
 }
 
+/// A thread's extra information (General Query Packets, qThreadExtraInfo): the printable text the stub gives,
+/// which gdb shows in `info threads`, read from a borrowed target. Not built yet: refused.
+pub fn thread_extra(t: Target, id: str) -> str ! ClientError {
+    unsupported
+}
+
 /// Select the thread `g`, `m` and the rest act on (Packets, `Hg`).
 pub fn select_thread(mut t: Target, id: str) -> () ! ClientError {
     let r = request(mut t.link, "Hg{id}")?
