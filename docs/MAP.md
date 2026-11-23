@@ -323,4 +323,6 @@ skips), and no Mac build for the kernel rows.
 
 Every load base comes off an address through `file_address` (a census in `tests/test_session.py` holds that no other
 code subtracts one): an address or pc below a moved program (`x/2xg 0`, a call through a null function pointer) finds
-nothing instead of trapping, and a frame at a pc in no known code takes its caller from the top of the stack.
+nothing instead of trapping. A frame at a pc in no known code takes its caller from the top of the stack on x86-64,
+and on arm64, at a pc whose instruction cannot be read, from the link register with the frame unchanged, as the pinned
+gdb and Apple's lldb name the calling function there.
