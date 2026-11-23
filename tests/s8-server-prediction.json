@@ -75,6 +75,14 @@
   "predicted: P2 named from the measurement; measured: signals-gcc-run (SIGUSR1, 10 against 30)",
   "predicted: the stub offers QStartNoAckMode; measured: gdbserver does too, and gdb sends it before QProgramSignals",
   "not predicted: gdb asks a static program's stub for qXfer:libraries-svr4; the stub answers it with the empty reply, and a row holds what gdb does then",
-  "predicted: the stub's rows held to gdb's native goldens, normalised by name; measured by the first dev run: gdb through the stub and through gdbserver differ by two lines a session (the Host I/O debug-file line, the inferior's name), while the native goldens differ in structure (Starting program against Remote debugging using, the first stop at _start, the thread names). So the oracle is gdb through the pinned gdbserver, live, with one fixture still held natively (wrong, scored)"
+  "predicted: the stub's rows held to gdb's native goldens, normalised by name; measured by the first dev run: gdb through the stub and through gdbserver differ by two lines a session (the Host I/O debug-file line, the inferior's name), while the native goldens differ in structure (Starting program against Remote debugging using, the first stop at _start, the thread names). So the oracle is gdb through the pinned gdbserver, live, with one fixture still held natively (wrong, scored)",
+  "predicted: Linux writes the x87 and SSE registers; measured: so it does, by P and, once fixed, by G; PAX answers PTRACE_SETFPREGS with EIO and the stub answers by name (right)",
+  "not predicted: gdb's ftag is the full tag word while FXSAVE keeps an abridged byte; the stub converts both ways by the manual's table, and gdbserver tags every register in use valid, so the zero case is the stub's own row with the manual cited",
+  "not predicted: gdbserver answers p and P with the empty reply and run-length encodes its replies; the packet rows hold the stub to it by g and G, decoded, and p and P are checked only by the stub's own rows",
+  "not predicted: gdb asks T thread-id before it switches threads; the stub answered it only after a row showed gdb calling the threads gone",
+  "not predicted: gdbserver names threads (qXfer:threads:read) and gdb prints the names; the stub serves the same list with each thread's name",
+  "not predicted: gdbserver leaves breakpoints and watchpoints in on a D sent with them set (gdb removes them first); the row holds D as gdb sends it, and the stub's own cleanup is its own row",
+  "predicted: the PAX rows need a retry bound on the forwarded port; measured: every row connected at its first attempt (the bound stands, twenty times the 3.0 s first measured)",
+  "not predicted: two session normalisations beyond the four first named: spin (the session set's own rule for the spinning threads) and thread-table (the padding from gdbserver's longer thread ids); and on PAX the PAX set's stack rule"
  ]
 }
