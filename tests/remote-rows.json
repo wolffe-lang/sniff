@@ -453,7 +453,14 @@
    "kind": "server",
    "check": "fp-tag",
    "prog": "c/calls/gcc-O0/prog",
-   "why": "gdb's ftag is the x87 tag word, two bits a register, where the FXSAVE area holds an abridged byte, one bit a register: the stub turns one into the other both ways, held to gdbserver's reads and its write of 0x3fff read back"
+   "why": "gdb's ftag is the x87 tag word, two bits a register, where the FXSAVE area holds an abridged byte, one bit a register: the stub turns one into the other both ways, held to gdbserver's reads and its write of 0x3fff with st7 holding 1.0 (valid, 00, by the manual's table and by gdbserver alike)"
+  },
+  {
+   "name": "server-fp-tag-zero",
+   "kind": "server",
+   "check": "fp-tag-own",
+   "prog": "c/calls/gcc-O0/prog",
+   "why": "the stub's own row, a named difference with the manual cited: ftag 0x3fff written with st7 holding +0.0 reads back 0x7fff, register 7 tagged zero (01) by the Intel SDM's table for recreating the full tag word from FXSAVE (Volume 2A, FXSAVE), as the processor tags it on FXRSTOR; the pinned gdbserver reads back 0x3fff (every register in use tagged valid, measured), so it is not the oracle here"
   },
   {
    "name": "server-threads",

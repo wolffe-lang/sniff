@@ -1525,6 +1525,12 @@ def cmd_selftest(_a):
     assert running and rc is None, (rc, running)
     rc, err, running = refusal_run([sys.executable, '-c', 'import sys; sys.stderr.write("no"); sys.exit(2)'], 5.0)
     assert not running and rc == 2 and err == 'no', (rc, err, running)
+    # the x87 tag word by the manual's table (Volume 2A, FXSAVE: recreating the full word), in this harness's own words:
+    # an in-use register holding +0.0 is zero (01), one holding 1.0 valid (00), an empty one 11
+    zero, one = '00' * 10, '0000000000000080ff3f'
+    assert manual_full_tag(0x80, 0, [zero] * 8) == 0x7fff and manual_full_tag(0x80, 0, [zero] * 7 + [one]) == 0x3fff
+    assert manual_full_tag(0, 0, [zero] * 8) == 0xffff and manual_full_tag(0x80, 7, [one] + [zero] * 7) == 0x3fff
+    assert G_ST0 == 164
     # on PAX too a driver exception is a fault by name, and never a retry
     def lost():
         raise ConnectionResetError(104, 'Connection reset by peer')
