@@ -1133,6 +1133,19 @@ pub fn target_wait_any(t: Target) -> Waited {
     }
 }
 
+/// A wait that never blocks is for sniff-server, a Linux and PAX program: on macOS none is waiting (tid -1).
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_wait_any_now(t: Target) -> Waited {
+    Waited { tid: 0 - 1, status: 0 - 1 }
+}
+
+/// arm64 has no x86 FXSAVE area: none.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_fpregs(t: Target) -> List[byte] {
+    let none: List[byte] = []
+    none
+}
+
 /// No tgkill on macOS: the task is suspended instead.
 #[cfg(target = "aarch64-apple-darwin")]
 pub fn target_tgkill(t: Target, pid: int, tid: int, sig: int) -> int { 0 - 1 }

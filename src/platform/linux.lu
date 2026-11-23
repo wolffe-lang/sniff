@@ -478,6 +478,39 @@ pub fn target_write(t: Target, addr: u64, data: List[byte]) -> bool {
 }
 
 
+/// The next event of any traced thread or child if one is waiting: waitpid(-1, __WALL | WNOHANG), so a loop that
+/// also watches a socket never blocks here. tid is 0 when none is waiting and -1 when the wait failed.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_wait_any_now(t: Target) -> Waited {
+    unsafe {
+        // # Safety: the status buffer is calloc'd; the waits are for the tracer's own tracees.
+        let status = t.status as *i32
+        let w = waitpid(0 - 1, status, (wait_all + 1) as i32)
+        if w < 0 { return Waited { tid: 0 - 1, status: 0 - 1 } }
+        if w == 0 { return Waited { tid: 0, status: 0 } }
+        Waited { tid: w as int, status: status[0] as int }
+    }
+}
+
+/// The 512 bytes of user_fpregs_struct (PTRACE_GETFPREGS: the FXSAVE area: the x87 control words, st0-st7 at byte
+/// 32, xmm0-xmm15 at byte 160, mxcsr at byte 24), or none.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_fpregs(t: Target) -> List[byte] {
+    unsafe {
+        // # Safety: buf is a calloc'd 512 bytes, the size PTRACE_GETFPREGS writes; pid is the traced child.
+        var out: List[byte] = []
+        let buf = c.calloc(1, 512) as *u8
+        let r = ptrace(req_getfpregs as i32, t.pid as i32, 0 as u64, buf as u64)
+        if r < 0 { return out }
+        var i = 0
+        while i < 512 {
+            (mut out).push(buf[i] as int as byte)
+            i += 1
+        }
+        out
+    }
+}
+
 /// The 16 bytes of xmm0 (user_fpregs_struct holds xmm0 at byte 160), or none.
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 pub fn target_xmm0(t: Target) -> List[byte] {
