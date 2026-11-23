@@ -284,7 +284,11 @@ given whose UUID differs is not placed, and with none placed the file the core n
 stopped is the one whose exception class is a stop (a breakpoint is SIGTRAP, a data abort SIGSEGV). The system
 libraries' text is in the dyld shared cache, neither in the core nor in a file, so their frames have no name, as live.
 The rows take every core afresh with the pinned lldb, under the take's own directory, capped at 64 MiB and deleted at
-the end of the take; they hold sniff to lldb's facts over the same core. The refusals of run control are held by
+the end of the take; they hold sniff, over the take's own core, to the facts lldb gave over the capture's core of the
+same stop. A stack word is compared as its distance from its frame, because a core's stack sits where the lldb that
+wrote it put it: the gate's lldb is `/usr/bin/lldb` on every Mac (the harness's own PATH), a shim whose four added
+variables move the stack 352 bytes from where the evidence's `xcrun --find lldb` put it. The return address the
+memory row reads is compared as it is: lldb starts the program without address randomisation. The refusals of run control are held by
 the Linux set's `core-gcc-refuse-*` rows, run over a Mach-O core of the clang build of the same program; anything
 macOS-specific in how a refusal is reached is held by the macOS `expect` rows. Hosted macOS skips these rows by name
 (they need the pinned lldb to write their cores): the Mac's record is their only evidence.
