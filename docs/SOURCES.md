@@ -227,3 +227,37 @@ on Linux and PAX; on macOS `PT_ATTACHEXC`, `PT_THUPDATE` and `PT_DETACH`, whose 
 `task_set_exception_ports`. The orders the man pages leave open (when `PT_DETACH` succeeds under
 `PT_ATTACHEXC`, how a SIGKILL ends a process attached to) come from compiled probes, run against sleepers started for
 them; gdb ran only as the pinned binary and lldb only as the system binary.
+
+## Consulted for S7 (2026-11-21)
+
+Fetched with curl and read as text, each digest-checked; the copies are kept outside the repository. Only these
+were read, for core files on Linux, at PAX's console and on macOS.
+
+| Page | SHA-256 of the fetched HTML | Used for |
+|---|---|---|
+| man7.org: [core(5)](https://man7.org/linux/man-pages/man5/core.5.html) | `2ac9c97e327dbfc157af8376b4d79224c8f57ea6b4fa7506ecc0e31a8bcb82ac` | what a core file holds and when a kernel writes one, `core_pattern`, RLIMIT_CORE, and why the rows take their Linux cores from gcore rather than from the host's kernel |
+| GDB manual: [Commands to Specify Files](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Files.html) | `5a70d676155100c6dda40753f81e402536652c91fcdf66a96f25304f5353fbd4` | `core-file` with and without a file, and the program a core is read with |
+| GDB manual: [Choosing Files](https://sourceware.org/gdb/current/onlinedocs/gdb.html/File-Options.html) | `a402189017a3bebb8aad128ad1a2dd66494de697ea29f53f8f92493b22ec52da` | the start forms `PROG CORE`, `-c CORE PROG` and `-c CORE` alone |
+| GDB manual: [How to Produce a Core File](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Core-File-Generation.html) | `a4fd7c73e1be748e9fa88e5d4302241e75dcd945e14eade9e26cbf16f1157b48` | `gcore` and `generate-core-file`, with which the pinned gdb writes the rows' Linux cores |
+| GDB manual: [Invoking GDB](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Invoking-GDB.html) | `02b06b8bc5fe8d5da982b8814e12904b6fcc2a6345e0bd2dbd750686ee841a0d` | a core given as the second argument |
+
+The ELF gABI's program headers and notes, and the x86-64 psABI, are the copies listed under S1. The layouts of
+the Linux core notes (`elf_prstatus` with its register block, `elf_prpsinfo` and `siginfo_t`) come from
+`tools/abi-probe.c`'s `offsetof` lines, compiled in the oracle container, and not from header text.
+
+Also read, as interface declarations only, from the macOS SDK: `mach-o/loader.h` (MH_CORE, LC_SEGMENT_64,
+LC_THREAD, LC_NOTE and `struct note_command`), `mach/thread_status.h` with the arm declarations it includes
+(ARM_THREAD_STATE64 and ARM_EXCEPTION_STATE64, their flavours and counts) and `mach/machine.h` (CPU_TYPE_ARM64).
+`tools/abi-probe-macos.c` compiles against them and prints the 35 values `src/readers/macho_core.lu` holds, and
+`tools/check-abi.py` keeps the two equal.
+
+### Binary observations, not sources
+
+- NT_FILE's layout was read from gcore's bytes. It is held by the pinned gdb's own `info proc mappings` over the same core.
+- No header declares the `all image infos` and `addrable bits` notes of lldb's cores. Their layouts were derived from lldb's cores against lldb's own `image list`; a core that lldb writes differently is a new measurement.
+- The exception class that names a Mach-O core's stop was read from each measured core's `esr` word against the stop reason lldb prints for the same core (`ESR_EC_BRK_AARCH64`, `ESR_EC_DABORT_EL0`, and none for a thread in a system call).
+- Where a core's stack sits depends on what lldb gives the program it starts: `/usr/bin/lldb` adds four variables to its environment. This was measured by a probe program started by each lldb, and `notes/s7-macho-cores.md` records it.
+
+gdb ran only as the pinned binary in the oracle container, and lldb only as the system binary (its own
+`help process save-core` and `help target create`, and its output over each core, which is the oracle in
+`tests/evidence/macos-s3`). No debugger's, kernel's or core writer's source was read.
