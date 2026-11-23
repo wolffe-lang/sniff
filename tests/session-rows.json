@@ -418,6 +418,29 @@
    "tty": true
   },
   {
+   "name": "nullcall-gcc-run",
+   "prog": "c/nullcall/gcc-O0/prog",
+   "script": [
+    "run"
+   ]
+  },
+  {
+   "name": "nullcall-gcc-bt",
+   "prog": "c/nullcall/gcc-O0/prog",
+   "script": [
+    "run",
+    "bt"
+   ]
+  },
+  {
+   "name": "nullcall-clang-bt",
+   "prog": "c/nullcall/clang-O0/prog",
+   "script": [
+    "run",
+    "bt"
+   ]
+  },
+  {
    "name": "step-gcc-finish-types",
    "prog": "c/values/gcc-O0/prog",
    "script": [
