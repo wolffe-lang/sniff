@@ -1,0 +1,282 @@
+//! member: false
+
+use remote
+
+fn b(s: str) -> List[byte] {
+    s.bytes()
+}
+
+fn text(d: List[byte]) -> str {
+    str_from_utf8(d) else { "" }
+}
+
+fn repeat(c: int, n: int) -> List[byte] {
+    var out: List[byte] = []
+    var i: int = 0
+    while i < n { (mut out).push(c as byte); i += 1 }
+    out
+}
+
+fn repeat_str(c: int, n: int) -> str {
+    text(repeat(c, n))
+}
+
+fn framed(d: str) -> str {
+    let f = remote.frame(d, remote.send_cap_max) else { return "refused" }
+    text(f)
+}
+
+// Overview: `$` data `#` and the two-digit sum modulo 256; the sums of these four are what the pinned gdb sent.
+fn frames() {
+    assert(framed("g") == "$g#67")
+    assert(framed("?") == "$?#3f")
+    assert(framed("vCont?") == "$vCont?#49")
+    assert(framed("qC") == "$qC#b4")
+    assert(framed("") == "$#00")
+    let bad = remote.frame("m1#2", remote.send_cap_max)
+    assert("{bad}" == "unescaped_byte")
+    let star = remote.frame("a*b", remote.send_cap_max)
+    assert("{star}" == "unescaped_byte")
+    assert(remote.checksum(b("OK")) == 154)
+    print("PASS remote-packet-frame")
+}
+
+fn checksums() {
+    let good = remote.scan(b("$OK#9a"), 0) else { return }
+    assert(good.kind == remote.scan_packet && good.sum_ok && good.used == 6 && text(good.data) == "OK")
+    let upper = remote.scan(b("$OK#9A"), 0) else { return }
+    assert(upper.kind == remote.scan_packet && upper.sum_ok)
+    let wrong = remote.scan(b("$OK#9b"), 0) else { return }
+    assert(wrong.kind == remote.scan_packet && !wrong.sum_ok)
+    let junk = remote.scan(b("$OK#zz"), 0) else { return }
+    assert(junk.kind == remote.scan_packet && !junk.sum_ok)
+    print("PASS remote-packet-checksum-bad")
+}
+
+fn acks() {
+    let plus = remote.scan(b("+$OK#9a"), 0) else { return }
+    assert(plus.kind == remote.scan_ack && plus.used == 1)
+    let then = remote.scan(b("+$OK#9a"), 1) else { return }
+    assert(then.kind == remote.scan_packet && then.used == 6)
+    let minus = remote.scan(b("-"), 0) else { return }
+    assert(minus.kind == remote.scan_nack)
+    let stray = remote.scan(b("x"), 0) else { return }
+    assert(stray.kind == remote.scan_junk && stray.used == 1)
+    let half = remote.scan(b("$OK#9"), 0) else { return }
+    assert(half.kind == remote.scan_need && half.used == 0)
+    let open = remote.scan(b("$OK"), 0) else { return }
+    assert(open.kind == remote.scan_need)
+    let empty = remote.scan(b(""), 0) else { return }
+    assert(empty.kind == remote.scan_need)
+    print("PASS remote-packet-ack")
+}
+
+fn resends() {
+    var a = remote.ack_state()
+    let first = remote.resend(mut a)
+    assert("{first}" == "1")
+    assert(a.resends == 1)
+    remote.acked(mut a)
+    assert(a.resends == 0)
+    print("PASS remote-packet-nack-resend")
+}
+
+fn no_ack() {
+    var a = remote.ack_state()
+    assert(remote.wants_ack(a))
+    remote.start_no_ack(mut a)
+    assert(!remote.wants_ack(a))
+    print("PASS remote-packet-noack")
+}
+
+// Overview: `}` then the byte XOR 0x20; 0x7d travels as 0x7d 0x5d.
+fn escapes() {
+    let raw: List[byte] = [125 as byte, 93 as byte, 65 as byte, 125 as byte, 3 as byte, 125 as byte, 4 as byte, 125 as byte, 10 as byte]
+    let d = remote.decode(raw, true) else { return }
+    assert(d.len == 5)
+    assert(d[0] as int == 125 && d[1] as int == 65 && d[2] as int == 35 && d[3] as int == 36 && d[4] as int == 42)
+    let kept = remote.decode(b("a}}b"), false) else { return }
+    assert(text(kept) == "a}}b")
+    let tail: List[byte] = [65 as byte, 125 as byte]
+    let cut = remote.decode(tail, true)
+    assert("{cut}" == "bad_escape")
+    print("PASS remote-packet-escape")
+}
+
+// Overview's own examples: `0* ` is "0000", and `0*"00` is eight zeros.
+fn runs() {
+    let four = remote.decode(b("0* "), false) else { return }
+    assert(text(four) == "0000")
+    let eight = remote.decode(b("0*\"00"), false) else { return }
+    assert(text(eight) == "00000000")
+    let mixed = remote.decode(b("ab*!c"), false) else { return }
+    assert(text(mixed) == "abbbbbc")
+    print("PASS remote-packet-rle")
+}
+
+fn forbidden_runs() {
+    let six = remote.decode(b("0*#"), false)
+    assert("{six}" == "bad_run_length")
+    let seven = remote.decode(b("0*$"), false)
+    assert("{seven}" == "bad_run_length")
+    let first = remote.decode(b("*!"), false)
+    assert("{first}" == "bad_run_length")
+    let last = remote.decode(b("0*"), false)
+    assert("{last}" == "bad_run_length")
+    let low: List[byte] = [48 as byte, 42 as byte, 31 as byte]
+    let unprintable = remote.decode(low, false)
+    assert("{unprintable}" == "bad_run_length")
+    print("PASS remote-packet-rle-forbidden")
+}
+
+fn hexes() {
+    let some: List[byte] = [0 as byte, 1 as byte, 171 as byte, 255 as byte]
+    assert(remote.hex_encode(some) == "0001abff")
+    let back = remote.hex_decode(b("0001ABff")) else { return }
+    assert(back.len == 4 && back[2] as int == 171 && back[3] as int == 255)
+    let odd = remote.hex_decode(b("abc"))
+    assert("{odd}" == "bad_hex")
+    let notx = remote.hex_decode(b("0g"))
+    assert("{notx}" == "bad_hex")
+    assert(remote.hex_u64(0) == "0")
+    let n = remote.parse_hex(b("00ff")) else { return }
+    assert(n == 255)
+    let big = remote.parse_hex(b("0000ffffffff80117633")) else { return }
+    let hi: u64 = 4294967295
+    let lo: u64 = 2148628019
+    assert(big == (hi << 32 | lo))
+    assert(remote.hex_u64(big) == "ffffffff80117633")
+    assert(remote.hex_u64(n) == "ff")
+    let wide = remote.parse_hex(b("10000000000000000"))
+    assert("{wide}" == "bad_hex")
+    let none = remote.parse_hex(b(""))
+    assert("{none}" == "bad_hex")
+    let word = remote.parse_hex(b("p1"))
+    assert("{word}" == "bad_hex")
+    print("PASS remote-packet-hex")
+}
+
+// Interrupts: 0x03 outside a packet is the interrupt; inside one it is data.
+fn interrupt() {
+    let i = remote.interrupt_byte()
+    assert(i.len == 1 && i[0] as int == 3)
+    let outside = remote.scan(i, 0) else { return }
+    assert(outside.kind == remote.scan_interrupt)
+    let inside: List[byte] = [36 as byte, 97 as byte, 3 as byte, 35 as byte, 54 as byte, 52 as byte]
+    let p = remote.scan(inside, 0) else { return }
+    assert(p.kind == remote.scan_packet && p.sum_ok && p.data.len == 2 && p.data[1] as int == 3)
+    print("PASS remote-packet-interrupt-byte")
+}
+
+fn notification() {
+    let n = remote.scan(b("%Stop:T05#00"), 0)
+    assert("{n}" == "notification_refused")
+    print("PASS remote-packet-notification-refused")
+}
+
+// Standard Replies.
+fn replies() {
+    let none: List[byte] = []
+    assert(remote.reply_kind(none) == remote.reply_empty)
+    assert(remote.reply_kind(b("OK")) == remote.reply_ok)
+    assert(remote.reply_kind(b("0123")) == remote.reply_data)
+    print("PASS remote-packet-empty")
+    assert(remote.reply_kind(b("E14")) == remote.reply_error)
+    assert(remote.error_number(b("E14")) == 20)
+    assert(remote.error_number(b("E22")) == 34)
+    assert(remote.reply_kind(b("E1")) == remote.reply_data)
+    assert(remote.error_number(b("OK")) == -1)
+    print("PASS remote-packet-error")
+    assert(remote.reply_kind(b("E.no such thing")) == remote.reply_error_text)
+    assert(remote.error_number(b("E.no")) == -1)
+    print("PASS remote-packet-error-text")
+}
+
+fn size_caps() {
+    assert(remote.send_cap(131104, 0) == 16384)
+    assert(remote.send_cap(1000, 0) == 1000)
+    assert(remote.send_cap(0, 1216) == 1216)
+    assert(remote.send_cap(0, 0) == 256)
+    let at = remote.frame(repeat_str(48, 16384), remote.send_cap_max) else { return }
+    assert(at.len == 16388)
+    print("PASS remote-packet-size-cap")
+    let past = remote.frame(repeat_str(48, 16385), remote.send_cap_max)
+    assert("{past}" == "packet_too_long")
+    let small = remote.frame("12345", 4)
+    assert("{small}" == "packet_too_long")
+    print("PASS remote-packet-size-cap-past")
+}
+
+fn framed_bytes(d: List[byte]) -> List[byte] {
+    var out: List[byte] = [36 as byte]
+    for x in d { (mut out).push(x) }
+    (mut out).push(35 as byte)
+    (mut out).push(48 as byte)
+    (mut out).push(48 as byte)
+    out
+}
+
+fn reply_caps() {
+    let at = remote.scan(framed_bytes(repeat(48, 65536)), 0) else { return }
+    assert(at.kind == remote.scan_packet && at.data.len == 65536)
+    let runs = remote.decode(b("0*~"), false) else { return }
+    assert(runs.len == 98)
+    var near = repeat(48, 65533)
+    (mut near).push(42 as byte)
+    (mut near).push(32 as byte)
+    let full = remote.decode(near, false) else { return }
+    assert(full.len == 65536)
+    print("PASS remote-packet-reply-cap")
+    let past = remote.scan(framed_bytes(repeat(48, 65537)), 0)
+    assert("{past}" == "reply_too_long")
+    var over = repeat(48, 65534)
+    (mut over).push(42 as byte)
+    (mut over).push(32 as byte)
+    let long = remote.decode(over, false)
+    assert("{long}" == "reply_too_long")
+    print("PASS remote-packet-reply-cap-past")
+}
+
+fn resend_caps() {
+    var a = remote.ack_state()
+    let one = remote.resend(mut a)
+    let two = remote.resend(mut a)
+    let three = remote.resend(mut a)
+    assert("{one}" == "1" && "{two}" == "2" && "{three}" == "3")
+    assert(a.resends == 3)
+    print("PASS remote-packet-resend-cap")
+    let four = remote.resend(mut a)
+    assert("{four}" == "resend_limit")
+    assert(a.resends == 3)
+    print("PASS remote-packet-resend-cap-past")
+}
+
+fn reply_times() {
+    let at = remote.waited(2000)
+    assert("{at}" == "2000")
+    let none = remote.waited(0)
+    assert("{none}" == "0")
+    print("PASS remote-packet-reply-time")
+    let past = remote.waited(2001)
+    assert("{past}" == "reply_timeout")
+    print("PASS remote-packet-reply-time-past")
+}
+
+fn main() {
+    frames()
+    checksums()
+    acks()
+    resends()
+    no_ack()
+    escapes()
+    runs()
+    forbidden_runs()
+    hexes()
+    interrupt()
+    notification()
+    replies()
+    size_caps()
+    reply_caps()
+    resend_caps()
+    reply_times()
+}

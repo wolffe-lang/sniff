@@ -124,5 +124,29 @@
     "macho-core-hostile-bounds",
     "macho-core-caps",
     "macho-core-default-caps"
+  ],
+  "remote_test.lu": [
+    "remote-packet-frame",
+    "remote-packet-checksum-bad",
+    "remote-packet-ack",
+    "remote-packet-nack-resend",
+    "remote-packet-noack",
+    "remote-packet-escape",
+    "remote-packet-rle",
+    "remote-packet-rle-forbidden",
+    "remote-packet-hex",
+    "remote-packet-interrupt-byte",
+    "remote-packet-notification-refused",
+    "remote-packet-empty",
+    "remote-packet-error",
+    "remote-packet-error-text",
+    "remote-packet-size-cap",
+    "remote-packet-size-cap-past",
+    "remote-packet-reply-cap",
+    "remote-packet-reply-cap-past",
+    "remote-packet-resend-cap",
+    "remote-packet-resend-cap-past",
+    "remote-packet-reply-time",
+    "remote-packet-reply-time-past"
   ]
 }
