@@ -7,7 +7,8 @@
   session-remote.py skip --reason TEXT      one SKIP line a row, and the count, where no kernel image is
   session-remote.py selftest                the normalisation and the script forms, no machine
 
-Rows: tests/remote-rows.json. Goldens: tests/evidence/remote/NAME.out, gdb's transcript under KVM on the record host. A
+Rows: tests/remote-rows.json. Goldens: tests/evidence/remote/NAME.out, gdb's transcript under KVM on the record host,
+written only when a second capture (its own boot) gives the same normalised transcript. A
 row with "accel" runs only under that accelerator. A row with "qemu": false runs with no QEMU (the refusals).
 
 Each row is one boot of the console image through PAX's tools/qemu-run with `--gdb PORT` (the processor frozen at reset).
@@ -237,10 +238,17 @@ def cmd_run(a):
         (out / (row['name'] + '.txt')).write_text(got)
         gold = GOLD / (row['name'] + '.out')
         if a.mode == 'capture':
+            # a golden is written only when a second capture, its own boot, holds the first
+            again, why2 = run_row(a, row, sess, out / 'second')
+            if why or why2 or again is None or again != got:
+                d = why or why2 or ('second capture: ' + first_diff(got, again or ''))
+                print('FAIL remote %s capture not held by a second capture: %s' % (row['name'], d))
+                counts['fail'] += 1
+                continue
             GOLD.mkdir(parents=True, exist_ok=True)
             gold.write_text(got)
-            print('CAPTURED remote %s%s' % (row['name'], (' ' + why) if why else ''))
-            counts['pass' if not why else 'fail'] += 1
+            print('CAPTURED remote %s (held by a second capture)' % row['name'])
+            counts['pass'] += 1
             continue
         if not gold.exists():
             print('FAIL remote %s no golden' % row['name'])
