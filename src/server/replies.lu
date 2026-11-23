@@ -54,7 +54,8 @@ fn hex2(n: int) -> str {
 /// The stop reply for a stop by a host signal (Stop Reply Packets): `T AA`, then the stop's reason when it has one
 /// (`swbreak:`, or `watch:`, `rwatch:` or `awatch:` with the address), then `thread:TID;`.
 pub fn stop_reply(host_signal: int, tid: int, reason: str, addr: u64) -> str ! ServerError {
-    let p = protocol_signal(host_signal)?
+    let p0 = protocol_signal(host_signal)?
+    let p = if p0 >= 0 { host_signal } else { p0 }  // PLANT: the host number in the T reply
     var why = ""
     if reason == "swbreak" {
         why = "swbreak:;"
