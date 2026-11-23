@@ -1291,6 +1291,16 @@ def cmd_selftest(_a):
     # on PAX the initial stack is the kernel's, not Linux's: the PAX set's own stack rule, by name
     assert pax_normalise('0x7fffffffeb50:\t0x00000001\t0x00000002\n') == pax_normalise('0x7fffffffece0:\t0x00000001\t0x00000002\n')
     assert pax_normalise('0x404028 <cell>:\t0x01\n') == '0x404028 <cell>:\t0x01\n'
+    # the retry's report is when the attempt that connected began (two failures, two 0.5 s waits), not its session's end
+    tries = []
+    def attempt():
+        tries.append(1)
+        if len(tries) < 3:
+            return None, True
+        time.sleep(0.3)
+        return 'ok', False
+    got, n, took = pax_retry(attempt, lambda: False)
+    assert got == 'ok' and n == 3 and 0.95 <= took < 1.2, (got, n, took)
     for r in [r for r in rows if r.get('kind') == 'server-pax']:
         assert r['name'].startswith('server-pax-') and r.get('check') in PAX_CHECKS and r.get('why'), r['name']
         if r['check'] == 'pax-session':
