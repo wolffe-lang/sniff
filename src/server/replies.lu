@@ -9,6 +9,9 @@ pub error ServerError = {
     unmeasured_signal,
     bad_status,
     bad_reason,
+    bad_request,
+    bad_address,
+    non_loopback_refused,
     not_built,
 }
 

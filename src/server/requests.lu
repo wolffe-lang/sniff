@@ -1,0 +1,81 @@
+// What a client asks of sniff-server: the address the stub listens on (the Server node: `sniff-server HOST:PORT PROG`)
+// and each request packet's kind and fields (Packets, General Query Packets). Pure: no I/O.
+// Every function below has a unit row (src/server_test.lu).
+
+/// The address the stub listens on.
+pub struct Listen {
+    pub host: str,
+    pub port: int,
+}
+
+/// A request sniff-server does not serve: it answers with the empty reply (Standard Replies).
+pub const req_unsupported: int = 0
+/// `qSupported`.
+pub const req_supported: int = 1
+/// `QStartNoAckMode`.
+pub const req_no_ack: int = 2
+/// `?`: why the target stopped.
+pub const req_why: int = 3
+/// `g`: every register.
+pub const req_regs: int = 4
+/// `p n`: one register, `num`.
+pub const req_reg: int = 5
+/// `P n=r`: write register `num` with `data`.
+pub const req_set_reg: int = 6
+/// `G XX...`: write every register from `data`.
+pub const req_set_regs: int = 7
+/// `m addr,length`.
+pub const req_read: int = 8
+/// `M addr,length:XX...`: write `data` at `addr`.
+pub const req_write: int = 9
+/// `Z type,addr,kind`: insert a point of type `num` at `addr`, `len` its kind.
+pub const req_insert: int = 10
+/// `z type,addr,kind`: remove one.
+pub const req_remove: int = 11
+/// `vCont?`.
+pub const req_vcont_query: int = 12
+/// `vCont;...`, `c`, `s`, `C sig` or `S sig`: resume, stepping when `step`, with signal `sig` (0 for none); `num`
+/// is the thread the step or the signal is for (-1 for every thread).
+pub const req_resume: int = 13
+/// `qfThreadInfo`.
+pub const req_threads_first: int = 14
+/// `qsThreadInfo`.
+pub const req_threads_next: int = 15
+/// `qC`.
+pub const req_current: int = 16
+/// `Hg thread-id` or `Hc thread-id`: `annex` is `g` or `c`, `num` the thread (0 any, -1 all).
+pub const req_thread: int = 17
+/// `D`.
+pub const req_detach: int = 18
+/// `k` or `vKill;pid`.
+pub const req_kill: int = 19
+/// `qXfer:features:read:annex:offset,length`.
+pub const req_features: int = 20
+/// `qAttached`: the stub created the process, so the reply is `0`.
+pub const req_attached: int = 21
+
+/// One request, its fields as its kind uses them.
+pub struct Request {
+    pub kind: int,
+    pub addr: u64,
+    pub len: int,
+    pub num: int,
+    pub step: bool,
+    pub sig: int,
+    pub annex: str,
+    pub offset: int,
+    pub data: List[byte],
+}
+
+/// `[HOST]:PORT`. An empty HOST and `localhost` listen on 127.0.0.1, and any 127.x.y.z address is loopback too; any
+/// other HOST is non_loopback_refused unless non_loopback is given, because the protocol has no authentication and
+/// gives whoever connects control of the program. No colon, or a PORT outside 1 to 65535, is bad_address.
+pub fn listen_address(spec: str, non_loopback: bool) -> Listen ! ServerError {
+    return not_built
+}
+
+/// The request a packet's data asks for; a malformed one of a kind the stub serves is bad_request, and any other
+/// packet is req_unsupported.
+pub fn request(d: List[byte]) -> Request ! ServerError {
+    return not_built
+}
