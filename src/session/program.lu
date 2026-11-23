@@ -224,6 +224,12 @@ fn line_file_name(data: List[byte], t: readers.DwarfLineTable, u: Unit, index: i
     line_file_shown(t.version, d, name, dir, u.comp_dir)
 }
 
+/// Where the session reads a line table's file from (its arguments as line_file_shown's). Not built yet: the
+/// shown name.
+pub fn line_file_path(version: int, d: int, name: str, dir: str, comp_dir: str) -> str {
+    line_file_shown(version, d, name, dir, comp_dir)
+}
+
 /// A line table's file as the session names it: NAME of the table's VERSION with directory entry D (whose text
 /// is DIR), in a unit compiled in COMP_DIR.
 pub fn line_file_shown(version: int, d: int, name: str, dir: str, comp_dir: str) -> str {
