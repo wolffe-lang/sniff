@@ -203,4 +203,3 @@ libpixman-1-dev
 libslirp-dev
 zlib1g-dev
 xz-utils
-make
