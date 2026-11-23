@@ -1095,7 +1095,11 @@ def cmd_server_pax(a):
         elif mine[name] != PAX_FP_WANT:
             why = 'answers %r, not %r' % (mine[name], PAX_FP_WANT)
         if why:
+            if name in reached:
+                why += ' (gdb at attempt %d after %.1f s)' % reached[name]
             print('FAIL remote %s %s' % (name, why))
+            for line in (served.get(name, ([], ''))[0] or ['(no console lines between its markers)'])[-12:]:
+                print('CONSOLE %s | %s' % (name, line))
             counts['fail'] += 1
             continue
         n, took = reached[name]
