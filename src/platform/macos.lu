@@ -1139,6 +1139,12 @@ pub fn target_wait_any_now(t: Target) -> Waited {
     Waited { tid: 0 - 1, status: 0 - 1 }
 }
 
+/// arm64 has no x86 FXSAVE area: nothing is written.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_set_fpregs(t: Target, b: List[byte]) -> bool {
+    false
+}
+
 /// arm64 has no x86 FXSAVE area: none.
 #[cfg(target = "aarch64-apple-darwin")]
 pub fn target_fpregs(t: Target) -> List[byte] {

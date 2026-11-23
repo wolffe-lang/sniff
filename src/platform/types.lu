@@ -24,6 +24,8 @@ pub const req_getregs: int = 12
 pub const req_setregs: int = 13
 /// PTRACE_GETFPREGS.
 pub const req_getfpregs: int = 14
+/// PTRACE_SETFPREGS (PAX refuses it by name: EIO).
+pub const req_setfpregs: int = 15
 /// PTRACE_DETACH.
 pub const req_detach: int = 17
 /// PTRACE_SETOPTIONS.
@@ -86,6 +88,8 @@ pub const user_debugreg_size: int = 8
 pub const watch_write: int = 1
 /// Data reads or writes (x86 has no read-only data breakpoint; an rwatch is one of these).
 pub const watch_access: int = 3
+/// An instruction's execution (DR7 R/W 00, one byte): a hardware breakpoint, sniff-server's Z1.
+pub const watch_exec: int = 0
 
 /// Count of user_regs_struct slots.
 pub const reg_count: int = 27
