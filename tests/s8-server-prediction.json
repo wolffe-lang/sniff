@@ -30,7 +30,7 @@
  },
  "rows": {
   "harness": "the remote rows' harness, with a row kind for the stub's rows; one inventory and one held skip count",
-  "server_linux_gdb": "the pinned gdb through sniff-server over the static fixtures: break by function, by line and by address, bt, finish, step, next, stepi, info registers, x, print, info locals, a watchpoint, threads, a signal, exit and kill. Held to gdb's native goldens of the same fixtures, normalised by name (the connect lines, `Remote debugging using`, and the inferior lines gdb prints over a remote target)",
+  "server_linux_gdb": "the pinned gdb through sniff-server over the static fixtures, held to the pinned gdb through the pinned gdbserver, live in the same image on the same fixture and commands (both named by version and digest in each run). Two differences are named in the rows: gdb reads a separate debug file over Host I/O only through gdbserver, which offers it, and names the inferior by its pid only through gdbserver, which offers multiprocess. A row holds that gdbserver's own transcript, taken twice, is byte-equal. One fixture stays held to gdb's native golden through the stub, its normalisations written out, so a drift in gdbserver alone cannot move every row",
   "server_linux_replies": "the stub's reply to each request of the session above, compared packet by packet with gdbserver's reply to the same request, read off gdb's logs through each stub. Each by-design difference (PacketSize, features the stub does not offer, thread ids) is named in its row",
   "server_linux_sniff": "sniff through sniff-server, the same fixtures and commands, held to the same native goldens",
   "server_refuse": "a second client while one is attached; an unknown packet; an FP register write on PAX; a connect to no listener; a non-loopback HOST without --non-loopback; and `:PORT` bound to 127.0.0.1 (read from the kernel's socket table)",
@@ -65,7 +65,7 @@
  },
  "decided_before_code": {
   "replies": "compared packet by packet with gdbserver's, as observed behaviour of the binary",
-  "goldens": "sniff's transcripts through the stub are held to gdb's native goldens of the same fixtures: one oracle for a fixture, whatever the path",
+  "goldens": "changed after the first dev run (scored): gdb's and sniff's transcripts through the stub are held to gdb through the pinned gdbserver on the same fixture, live, rather than to gdb's native goldens; one fixture keeps the native golden",
   "pax_accelerator": "the PAX rows run under KVM only",
   "rows_file": "the stub's rows live in the remote harness under a row kind"
  },
@@ -74,6 +74,7 @@
   "predicted: some signal numbers differ; measured: 12 of 30",
   "predicted: P2 named from the measurement; measured: signals-gcc-run (SIGUSR1, 10 against 30)",
   "predicted: the stub offers QStartNoAckMode; measured: gdbserver does too, and gdb sends it before QProgramSignals",
-  "not predicted: gdb asks a static program's stub for qXfer:libraries-svr4; the stub answers it with the empty reply, and a row holds what gdb does then"
+  "not predicted: gdb asks a static program's stub for qXfer:libraries-svr4; the stub answers it with the empty reply, and a row holds what gdb does then",
+  "predicted: the stub's rows held to gdb's native goldens, normalised by name; measured by the first dev run: gdb through the stub and through gdbserver differ by two lines a session (the Host I/O debug-file line, the inferior's name), while the native goldens differ in structure (Starting program against Remote debugging using, the first stop at _start, the thread names). So the oracle is gdb through the pinned gdbserver, live, with one fixture still held natively (wrong, scored)"
  ]
 }
