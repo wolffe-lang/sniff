@@ -148,13 +148,15 @@ pub fn fallback_rule(in_code: bool, at_ret: bool, before_push: bool, after_push:
 /// The address of the arm64 instruction before pc, when there is one (a pc below 4, as a call through a null
 /// pointer leaves it, has none).
 pub fn arm64_insn_before(pc: u64) -> (bool, u64) {
+    if pc < 4 { return (false, 0) }
     (true, pc - 4)
 }
 
 /// Whether an arm64 frame takes its caller from the link register with its frame unchanged: innermost, at a pc whose
-/// instruction cannot be read. Not built yet.
+/// instruction cannot be read (a call through a null pointer: the call has set lr and built no frame; measured, Apple's
+/// lldb names the calling function as frame 1, at lr).
 pub fn arm64_lr_rule(level: int, readable: bool) -> bool {
-    false
+    level == 0 && !readable
 }
 
 /// A frame whose CFA and caller registers come from the frame pointer, with
