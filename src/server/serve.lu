@@ -481,12 +481,40 @@ fn answer(mut st: Stub, d: List[byte]) -> str {
     }
     if k == req_set_reg { if write_register(st, r.num, r.data) { return "OK" }; return "E01" }
     if k == req_set_regs {
+        // G: every register in the description's order. The general ones and fs_base, gs_base through the user
+        // registers; the x87 and SSE ones through the FXSAVE area, written only when their bytes changed (so a G that
+        // leaves them be still succeeds where the kernel refuses PTRACE_SETFPREGS, as PAX does)
         if r.data.len != reg_offset(59) { return "E01" }
+        let sizes = reg_sizes()
         var n: int = 0
         while n < 24 {
-            if !write_register(st, n, slice(r.data, reg_offset(n), reg_sizes()[n])) { return "E01" }
+            if !write_register(st, n, slice(r.data, reg_offset(n), sizes[n])) { return "E01" }
             n += 1
         }
+        if !write_register(st, 57, slice(r.data, reg_offset(57), 8)) { return "E01" }
+        if !write_register(st, 58, slice(r.data, reg_offset(58), 8)) { return "E01" }
+        let tt = thread_of(st)
+        let was = platform.target_fpregs(tt)
+        if was.len != platform.fpregs_size { return "OK" }
+        var fp: List[byte] = []
+        for b in was { (mut fp).push(b) }
+        n = 24
+        while n < 57 {
+            let at = reg_offset(n)
+            if n == 34 {
+                let full = (r.data[at] as int) | ((r.data[at + 1] as int) << 8)
+                fp[platform.fpregs_ftw] = x87_abridged_tag(full) as byte
+            } else {
+                let (off, count) = fp_place(n)
+                var i: int = 0
+                while i < count { fp[off + i] = r.data[at + i]; i += 1 }
+            }
+            n += 1
+        }
+        var same = true
+        var j: int = 0
+        while j < fp.len { if fp[j] != was[j] { same = false }; j += 1 }
+        if !same && !platform.target_set_fpregs(tt, fp) { return "E01" }
         return "OK"
     }
     if k == req_read { return memory(st, r.addr, r.len) }
