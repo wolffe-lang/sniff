@@ -391,7 +391,17 @@ def cmd_skip(a):
 # sniff-server's rows (kind server): the stub on loopback in this host, its client this harness or the pinned gdb. Each
 # row's check names what it holds; the stub is started by its recorded pid and ended by it.
 SERVER_CHECKS = ('refuse-second', 'refuse-non-loopback', 'loopback-default', 'idle-cost', 'interrupt-latency',
-                 'z1-hbreak', 'fp-write', 'threads')
+                 'z1-hbreak', 'fp-write', 'threads', 'gdb-session', 'oracle-stable')
+SESSION_ROWS = ROOT / 'tests/session-rows.json'
+# what gdb prints differently through the two stubs, by design, each by name: only through gdbserver (which offers Host
+# I/O) does gdb read a separate debug file over it; only through gdbserver (which offers multiprocess) does gdb name the
+# inferior by its pid and a thread as PID.TID; and each run's port is its own
+SESSION_NORMALISE = (
+    ('host-io-debug-file', re.compile(r'^Reading \S+ from remote target\.\.\.\n', re.M), ''),
+    ('inferior-name', re.compile(r'\[Inferior 1 \((?:process \d+|Remote target)\)'), '[Inferior 1 (INFERIOR)'),
+    ('port', re.compile(r'127\.0\.0\.1:\d+'), '127.0.0.1:PORT'),
+    ('thread-id', re.compile(r'\bThread (?:\d+\.)?\d+\b'), 'Thread TID'),
+)
 ANY_LISTENING = re.compile(r'Listening on (?:\S+:)?(?:port )?(\d+)')  # sniff-server's line, or gdbserver's
 RUN_POLL_MS = 100  # sniff-server's run_poll_ms: the longest wait on the sockets while the program runs
 LISTENING = re.compile(r'^Listening on (\S+):(\d+)$', re.M)
@@ -736,6 +746,92 @@ def check_threads(a, row, out):
     return check_same(a, row, out, steps, 'the stop and the thread list')
 
 
+def session_script(name):
+    """A session row's fixture, the stub's arguments and gdb's commands: its one `run ARGS` becomes ARGS for the stub
+    and a `continue` (the stub started the program, stopped at its first instruction)."""
+    row = {r['name']: r for r in json.loads(SESSION_ROWS.read_text())['rows']}[name]
+    script = list(row['script'])
+    runs = [k for k, c in enumerate(script) if c == 'run' or c.startswith('run ')]
+    if len(runs) != 1 or set(row) - {'name', 'prog', 'script'}:
+        return None
+    cmds = script[:runs[0]] + ['continue'] + script[runs[0] + 1:]
+    return row['prog'], script[runs[0]].split()[1:], cmds
+
+
+def gdb_through(a, who, prog, args, cmds, out, label):
+    """gdb's transcript through one stub (batch mode, the program file given to gdb as a user gives it)."""
+    port = free_port()
+    argv = [a.server, '127.0.0.1:%d' % port] if who == 'sniff-server' else ['gdbserver', '--once', '127.0.0.1:%d' % port]
+    log = out / (label + '.stub')
+    s = subprocess.Popen(argv + [str(prog)] + args, stdout=open(log, 'w'), stderr=subprocess.STDOUT)
+    end = time.time() + 20
+    while time.time() < end and s.poll() is None and not ANY_LISTENING.search(log.read_text(errors='replace')):
+        time.sleep(0.05)
+    if not ANY_LISTENING.search(log.read_text(errors='replace')):
+        end_server(s, label)
+        return None
+    g = ['gdb', '-nx', '-q', '-batch', '-iex', 'set confirm off', '-iex', 'set pagination off', '-iex', 'set width 0',
+         '-ex', 'target remote 127.0.0.1:%d' % port]
+    for c in cmds:
+        g += ['-ex', c]
+    try:
+        r = subprocess.run(g + [str(prog)], capture_output=True, timeout=120)
+        text = (r.stdout + r.stderr).decode('utf-8', 'backslashreplace')
+    except subprocess.TimeoutExpired:
+        text = None
+    end_server(s, label)
+    if text is not None:
+        (out / (label + '.txt')).write_text(text)
+    return text
+
+
+def session_normalise(text):
+    for _name, rx, to in SESSION_NORMALISE:
+        text = rx.sub(to, text)
+    return text
+
+
+def check_gdb_session(a, row, out):
+    """gdb through sniff-server against gdb through the pinned gdbserver: one session row's commands on its static
+    fixture, both transcripts with the named normalisations, held equal."""
+    got = session_script(row['row'])
+    if got is None:
+        return 'session row %s is not one plain run' % row['row'], ''
+    prog, args, cmds = got
+    prog = Path(a.fixtures) / prog
+    mine = gdb_through(a, 'sniff-server', prog, args, cmds, out, row['name'] + '.sniff-server')
+    theirs = gdb_through(a, 'gdbserver', prog, args, cmds, out, row['name'] + '.gdbserver')
+    if mine is None or theirs is None:
+        return 'a stub never listened, or gdb did not end in 120 s', ''
+    d = first_diff(session_normalise(theirs), session_normalise(mine))
+    if d:
+        return d, ''
+    return '', 'gdb through sniff-server equals gdb through gdbserver (%d lines; normalised: %s)' % (
+        len(mine.splitlines()), ', '.join(n for n, _rx, _to in SESSION_NORMALISE))
+
+
+def check_oracle_stable(a, row, out):
+    """The oracle's own stability: gdb through the pinned gdbserver, taken twice on the session row's fixture, is
+    byte-equal once each run's port is named."""
+    got = session_script(row['row'])
+    if got is None:
+        return 'session row %s is not one plain run' % row['row'], ''
+    prog, args, cmds = got
+    prog = Path(a.fixtures) / prog
+    one = gdb_through(a, 'gdbserver', prog, args, cmds, out, row['name'] + '.first')
+    two = gdb_through(a, 'gdbserver', prog, args, cmds, out, row['name'] + '.second')
+    if one is None or two is None:
+        return 'gdbserver never listened, or gdb did not end in 120 s', ''
+    port = SESSION_NORMALISE[2]
+    a1, a2 = port[1].sub(port[2], one), port[1].sub(port[2], two)
+    a1 = SESSION_NORMALISE[1][1].sub(SESSION_NORMALISE[1][2], a1)
+    a2 = SESSION_NORMALISE[1][1].sub(SESSION_NORMALISE[1][2], a2)
+    d = first_diff(a1, a2)
+    if d:
+        return 'gdbserver\'s transcript changed between two runs: ' + d, ''
+    return '', 'gdbserver\'s transcript held by a second run (%d lines; only the port and the pid named)' % len(one.splitlines())
+
+
 def oracle_line():
     """The pinned gdbserver and gdb this host runs, by version and digest (each server run names them)."""
     import hashlib
@@ -758,7 +854,7 @@ def cmd_server(a):
     checks = {'refuse-second': check_refuse_second, 'refuse-non-loopback': check_refuse_non_loopback,
               'loopback-default': check_loopback_default, 'idle-cost': check_idle_cost,
               'interrupt-latency': check_interrupt_latency, 'z1-hbreak': check_z1_hbreak, 'fp-write': check_fp_write,
-              'threads': check_threads}
+              'threads': check_threads, 'gdb-session': check_gdb_session, 'oracle-stable': check_oracle_stable}
     print(oracle_line())
     for row in load_rows(a.only, 'server'):
         if row.get('skip'):
@@ -847,7 +943,14 @@ def cmd_selftest(_a):
     assert latency_problems('T02thread:4d2;', 0.51) and latency_problems('T05thread:4d2;', 0.1) and latency_problems(None, 0.1)
     for r in [r for r in rows if r.get('kind') == 'server']:
         assert r['name'].startswith('server-') and r.get('check') in SERVER_CHECKS, r['name']
-        assert r.get('prog', '').startswith('c/') and r.get('why'), 'a server row names its fixture and says what it holds: ' + r['name']
+        if r['check'] in ('gdb-session', 'oracle-stable'):
+            assert session_script(r['row']) is not None and r.get('why'), 'a session row names one plain session row: ' + r['name']
+        else:
+            assert r.get('prog', '').startswith('c/') and r.get('why'), 'a server row names its fixture and says what it holds: ' + r['name']
+    n = session_normalise('Reading /usr/lib/debug/.build-id/a0/ab.debug from remote target...\n[Inferior 1 (process 19) killed]\n'
+                          'Remote debugging using 127.0.0.1:41234\n* 1    Thread 77.78 "prog" main ()\n')
+    assert n == '[Inferior 1 (INFERIOR) killed]\nRemote debugging using 127.0.0.1:PORT\n* 1    Thread TID "prog" main ()\n', repr(n)
+    assert session_normalise('[Inferior 1 (Remote target) killed]\n') == '[Inferior 1 (INFERIOR) killed]\n'
     for r in [r for r in rows if r.get('kind', 'kernel') == 'kernel']:
         assert r['name'].startswith(('remote-kernel-', 'remote-refuse-')), r['name']
         assert r.get('accel') in (None, 'kvm', 'tcg'), r['name']
