@@ -9,6 +9,5 @@ Cannot access memory at address 0xffffffff80117633
 
 Command aborted.
 Num     Type           Disp Enb Address            What
-1       breakpoint     keep y   0xffffffff80117633 in kmain 
-                                                   at ./kmain_console.lu:553
+1       breakpoint     keep y   0xffffffff80117633 in kmain at ./kmain_console.lu:553
 [Inferior 1 (process 1) killed]

@@ -7,7 +7,6 @@ Continuing.
 Breakpoint 1, kmain () at ./kmain_console.lu:553
 553	    identity.mark_entry() // px87 (pax#253): the TSC at the entry, for the boot line
 Num     Type           Disp Enb Address            What
-1       breakpoint     keep y   0xffffffff80117633 in kmain 
-                                                   at ./kmain_console.lu:553
+1       breakpoint     keep y   0xffffffff80117633 in kmain at ./kmain_console.lu:553
 	breakpoint already hit 1 time
 [Inferior 1 (process 1) killed]
