@@ -280,6 +280,18 @@ class MacFrameFacts(unittest.TestCase):
         self.assertNotEqual(smac.comparable(row, self.CAPTURED), smac.comparable(row, self.MOVED))
         self.assertEqual(smac.comparable(row, self.CAPTURED), self.CAPTURED)
 
+    def test_the_memory_row_holds_under_either_lldb(self):
+        row = next(r for r in smac.load()['rows'] if r['name'] == 'lldb-core-calls-memory')
+        self.assertEqual(smac.frame_problems(row), [])
+        stored = json.loads((smac.EVID / (row['name'] + '.facts.json')).read_text())
+        mem = [f for f in stored if f[0] == 'mem']
+        self.assertEqual([len(f[2]) for f in mem], [2])  # the stored evidence read what the row reads
+        a, (w0, w1) = mem[0][1], mem[0][2]
+        moved = [['mem', a - 352, [w0 - 352, w1]] if f[0] == 'mem' else f for f in stored]
+        self.assertEqual(smac.comparable(row, stored), smac.comparable(row, moved))
+        # the word compared as it is lies in the program's text, below the shared cache (0x180000000 on arm64 macOS)
+        self.assertTrue(0x100000000 <= w1 < 0x180000000, hex(w1))
+
     def test_a_frame_row_says_where_each_side_read(self):
         self.assertEqual(smac.frame_note(self.ROW, self.CAPTURED, self.MOVED),
                          ' [$fp read at: lldb 0x16fdff4b0, sniff 0x16fdff350, sniff-lldb -352]')
