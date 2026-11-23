@@ -21,7 +21,30 @@ fn nowhere_row() {
     print("PASS session-fallback-nowhere")
 }
 
+fn arm64_before_row() {
+    // the instruction before pc: none below 4, where a call through a null pointer stops (sniff trapped there)
+    let (low, _) = session.arm64_insn_before(0)
+    assert(!low)
+    let (three, _) = session.arm64_insn_before(3)
+    assert(!three)
+    let at: u64 = 4295000904
+    let (ok, before) = session.arm64_insn_before(at)
+    assert(ok && before == at - 4)
+    print("PASS session-arm64-insn-before")
+}
+
+fn arm64_lr_row() {
+    // innermost at a pc whose instruction cannot be read: the call has just set the link register and built no
+    // frame, so the caller is lr and the frame is unchanged (measured: Apple's lldb names apply as frame 1, at lr)
+    assert(session.arm64_lr_rule(0, false))
+    assert(!session.arm64_lr_rule(0, true))
+    assert(!session.arm64_lr_rule(1, false))
+    print("PASS session-arm64-lr-rule")
+}
+
 fn main() {
     rules_row()
     nowhere_row()
+    arm64_before_row()
+    arm64_lr_row()
 }

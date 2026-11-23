@@ -194,6 +194,8 @@
   ],
   "fallback_test.lu": [
     "session-fallback-rules",
-    "session-fallback-nowhere"
+    "session-fallback-nowhere",
+    "session-arm64-insn-before",
+    "session-arm64-lr-rule"
   ]
 }
