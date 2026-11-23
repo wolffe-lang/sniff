@@ -417,6 +417,12 @@ SESSION_NORMALISE = (
     ('inferior-name', re.compile(r'\[Inferior 1 \((?:process \d+|Remote target)\)'), '[Inferior 1 (INFERIOR)'),
     ('port', re.compile(r'127\.0\.0\.1:\d+'), '127.0.0.1:PORT'),
     ('thread-id', re.compile(r'\bThread (?:\d+\.)?\d+\b'), 'Thread TID'),
+    # the session set's own rule (tools/session.py's spin): the workers fixture's spinning threads stop anywhere in a
+    # one-line loop, so their pc is the run's own
+    ('spin', re.compile(r'\b0x[0-9a-f]+ in spin \('), 'spin ('),
+    # `info threads` pads its Target Id column to the longest id: gdbserver's ids are longer by the pid
+    # (multiprocess, as `inferior-name`), so the padding before the Frame column is each stub's own
+    ('thread-table', re.compile(r'^(  Id +Target Id|[* ] +\d+ +Thread TID(?: "[^"]*")?) +', re.M), r'\1 '),
 )
 ANY_LISTENING = re.compile(r'Listening on (?:\S+:)?(?:port )?(\d+)')  # sniff-server's line, or gdbserver's
 RUN_POLL_MS = 100  # sniff-server's run_poll_ms: the longest wait on the sockets while the program runs
@@ -682,6 +688,37 @@ def symbol(prog, name):
     return None
 
 
+def thread_ids(ask_fn):
+    """Every thread id by qfThreadInfo and then qsThreadInfo until `l` (General Query Packets: a reply may hold one id
+    or several), or None when the first reply is no list."""
+    first = ask_fn('qfThreadInfo')
+    if not first or not first.startswith('m'):
+        return None
+    ids, got = [], first
+    for _ in range(4096):
+        if not got or not got.startswith('m'):
+            break
+        ids += [x for x in got[1:].split(',') if x]
+        got = ask_fn('qsThreadInfo')
+    return ids
+
+
+# Byte offsets in the g packet, in the order of both stubs' descriptions (core, then sse): rax to r15 at 8 bytes
+# each, then rip; eflags and the six segment registers at 4; st0 to st7 at 10; fctrl, fstat, ftag, fiseg, fioff,
+# foseg, fooff and fop at 4; then xmm0. gdbserver answers p and P with the empty reply, so the driver uses g and G.
+G_RIP, G_FCTRL, G_FTAG, G_XMM0 = 16 * 8, 17 * 8 + 7 * 4 + 8 * 10, 17 * 8 + 7 * 4 + 8 * 10 + 2 * 4, 17 * 8 + 7 * 4 + 8 * 10 + 8 * 4
+
+
+def g_field(g, off, n):
+    """The little-endian number of n bytes at byte off of a g reply."""
+    return int.from_bytes(bytes.fromhex(g[2 * off:2 * off + 2 * n]), 'little')
+
+
+def g_with(g, off, hexbytes):
+    """A g reply with the bytes at byte off replaced: the body of the G that writes them."""
+    return g[:2 * off] + hexbytes + g[2 * off + len(hexbytes):]
+
+
 def hg_for(stop):
     """The Hg the pinned gdb sends after `?` (its remote log): the thread the stop reply names, or None."""
     m = re.search(r'thread:([^;]+);', stop or '')
@@ -751,30 +788,33 @@ def check_z1_hbreak(a, row, out):
         addr = symbol(prog, row['symbol'])
         z = ask(c, 'Z1,%x,1' % addr)
         stop = resumed(c) if z == 'OK' else None
-        rip = ask(c, 'p10') if stop else None
-        at = int.from_bytes(bytes.fromhex(rip), 'little') == addr if rip and len(rip) == 16 else None
+        g = ask(c, 'g') if stop else None
+        at = (g_field(g, G_RIP, 8) == addr) if g and len(g) >= 2 * (G_RIP + 8) else None
         return {'Z1': z, 'stop': stop[:3] if stop else None, 'rip at the breakpoint': at}
     return check_same(a, row, out, steps, 'Z1, the stop and the pc')
 
 
 def check_fp_write(a, row, out):
-    """An SSE register written with P and read back with p (register 40 is xmm0 in both stubs' descriptions)."""
+    """An SSE register written with G and read back with g (xmm0, at the same byte offset in both stubs' g)."""
     value = '0102030405060708090a0b0c0d0e0f10'
     def steps(c, prog):
-        w = ask(c, 'P28=' + value)
-        r = ask(c, 'p28')
-        return {'P xmm0': w, 'p xmm0 is the value': (r == value) if r is not None else None}
+        g = ask(c, 'g')
+        w = ask(c, 'G' + g_with(g, G_XMM0, value)) if g else None
+        r = ask(c, 'g') if w is not None else None
+        return {'G with xmm0': w, 'xmm0 read back is the value': (r[2 * G_XMM0:2 * G_XMM0 + 32] == value) if r else None}
     return check_same(a, row, out, steps, 'the write and the read back')
 
 
 def check_fp_tag(a, row, out):
     """The x87 tag word (register 34, ftag). FXSAVE keeps an abridged byte, one bit a register, where gdb's register is
-    the full tag word, two bits a register. Held to gdbserver's answers: the eight x87 control registers read, ftag
-    written as 0x3fff (R7 in use, the rest empty), and read back."""
+    the full tag word, two bits a register. Held to gdbserver's answers by g and G: the eight x87 control registers
+    read, ftag written as 0x3fff (R7 in use, the rest empty), and read back."""
     def steps(c, prog):
-        before = [ask(c, 'p%x' % n) for n in range(32, 40)]
-        w = ask(c, 'P22=ff3f0000')
-        return {'fctrl to fop': before, 'P ftag': w, 'ftag read back': ask(c, 'p22')}
+        g = ask(c, 'g')
+        before = [g[2 * (G_FCTRL + 4 * i):2 * (G_FCTRL + 4 * i) + 8] for i in range(8)] if g else None
+        w = ask(c, 'G' + g_with(g, G_FTAG, 'ff3f0000')) if g else None
+        r = ask(c, 'g') if w is not None else None
+        return {'fctrl to fop': before, 'G with ftag': w, 'ftag read back': r[2 * G_FTAG:2 * G_FTAG + 8] if r else None}
     return check_same(a, row, out, steps, 'the x87 control registers, and the tag word written and read back')
 
 
@@ -809,9 +849,8 @@ def check_threads(a, row, out):
         addr = symbol(prog, row['symbol'])
         z = ask(c, 'Z0,%x,1' % addr)
         stop = resumed(c) if z == 'OK' else None
-        first = ask(c, 'qfThreadInfo') if stop else ''
-        ids = [x for x in (first or '')[1:].split(',') if x] if (first or '').startswith('m') else []
-        return {'Z0': z, 'stop': stop[:3] if stop else None, 'threads listed': (len(ids) >= 2) if first is not None else None}
+        ids = thread_ids(lambda q: ask(c, q)) if stop else None
+        return {'Z0': z, 'stop': stop[:3] if stop else None, 'threads listed': (len(ids) >= 2) if ids is not None else None}
     return check_same(a, row, out, steps, 'the stop and the thread list')
 
 
@@ -870,7 +909,7 @@ def stable_normalise(text):
     """gdbserver's transcript with what is each run's own named (the port, the inferior's pid, the thread ids), as the
     session rows name them: its own stability is held over the rest."""
     for name, rx, to in SESSION_NORMALISE:
-        if name in ('port', 'inferior-name', 'thread-id'):
+        if name in ('port', 'inferior-name', 'thread-id', 'spin'):
             text = rx.sub(to, text)
     return text
 
@@ -955,7 +994,7 @@ def check_oracle_stable(a, row, out):
     d = first_diff(stable_normalise(one), stable_normalise(two))
     if d:
         return 'gdbserver\'s transcript changed between two runs: ' + d, ''
-    return '', 'gdbserver\'s transcript held by a second run (%d lines; named: port, inferior-name, thread-id)' % len(one.splitlines())
+    return '', 'gdbserver\'s transcript held by a second run (%d lines; named: port, inferior-name, thread-id, spin)' % len(one.splitlines())
 
 
 # sniff-server's rows on PAX (kind server-pax). The stub runs in PAX's console image under KVM as a static program, one
