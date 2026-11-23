@@ -5,13 +5,20 @@
 #   tools/gate-remote PAXTREE KERNEL.elf IMAGE.iso QEMU SNIFF OUTDIR
 # Sourced (the harness units), it defines its step functions over the caller's $out and $rc and runs nothing.
 set -uo pipefail
-step() { # name cmd...
+step() { # name cmd...: what it passes on to the record is also kept in $out/NAME.passed
   local name=$1 start=$SECONDS r=0; shift
   printf 'START %s\n' "$name"
   "$@" > "$out/$name.log" 2>&1 || r=$?
-  grep -E '^(PASS|FAIL|SKIP|OWN|remote rows)' "$out/$name.log" | sed -E 's/^(PASS|SKIP|OWN|remote rows)/  \1/'
+  grep -E '^(PASS|FAIL|SKIP|OWN|QEMU version=|remote rows)' "$out/$name.log" |
+    sed -E 's/^(PASS|SKIP|OWN|QEMU version=|remote rows)/  \1/' | tee "$out/$name.passed"
   printf 'END %s exit=%s secs=%s\n' "$name" "$r" "$((SECONDS-start))"
   [ "$r" = 0 ] || rc=1
+}
+kernel_step() { # accel name cmd...: a step of kernel rows, which must pass on its QEMU line for that accelerator
+  local accel=$1; shift
+  step "$@"
+  grep -q -E "^  QEMU version=.* accel=$accel( |\$)" "$out/$1.passed" ||
+    { echo "FAIL remote-qemu-line accel=$accel (step $1 passed on no QEMU line for its accelerator)"; rc=1; }
 }
 [ "${BASH_SOURCE[0]}" = "$0" ] || return 0
 [ $# -eq 6 ] || { echo 'usage: gate-remote PAXTREE KERNEL IMAGE QEMU SNIFF OUTDIR'; exit 2; }
@@ -21,6 +28,6 @@ mkdir -p "$out"
 rc=0
 step remote-identity bash -c 'echo "PASS remote-identity kernel_sha256=$(sha256sum "$0" | cut -c1-64) image_sha256=$(sha256sum "$1" | cut -c1-64) qemu=$("$2" --version | head -1)"' "$kernel" "$image" "$qemu"
 step remote-harness-unit python3 -I "$root/tools/session-remote.py" selftest
-step remote-kernel-kvm python3 -I "$root/tools/session-remote.py" check --kernel "$kernel" --image "$image" --pax "$pax" --qemu "$qemu" --sniff "$sniff" --accel kvm --out "$out/kvm"
-step remote-kernel-tcg python3 -I "$root/tools/session-remote.py" check --kernel "$kernel" --image "$image" --pax "$pax" --qemu "$qemu" --sniff "$sniff" --accel tcg --out "$out/tcg"
+kernel_step kvm remote-kernel-kvm python3 -I "$root/tools/session-remote.py" check --kernel "$kernel" --image "$image" --pax "$pax" --qemu "$qemu" --sniff "$sniff" --accel kvm --out "$out/kvm"
+kernel_step tcg remote-kernel-tcg python3 -I "$root/tools/session-remote.py" check --kernel "$kernel" --image "$image" --pax "$pax" --qemu "$qemu" --sniff "$sniff" --accel tcg --out "$out/tcg"
 exit "$rc"
