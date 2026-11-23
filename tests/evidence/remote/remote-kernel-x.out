@@ -1,0 +1,17 @@
+Reading symbols from KERNEL...
+Remote debugging using 127.0.0.1:PORT
+0x000000000000fff0 in ?? ()
+Hardware assisted breakpoint 1 at 0xffffffff80117633: file ./kmain_console.lu, line 553.
+Continuing.
+
+Breakpoint 1, kmain () at ./kmain_console.lu:553
+553	    identity.mark_entry() // px87 (pax#253): the TSC at the entry, for the boot line
+Breakpoint 2 at 0xffffffff800bc623: file ./identity/identity.lu, line 322.
+Continuing.
+
+Breakpoint 2, 0xffffffff800bc623 in identity.mark_entry () at ./identity/identity.lu:322
+322	    unsafe { entry_tsc = t }
+0xffff80000c856ce8:	0xffffffff8011763c	0x0000000000000000
+0xffff80000c856cf8:	0x0000000000000000	0x0000000000000000
+0xffffffff80117600 <kmain>:	0x55	0x48	0x89	0xe5	0x48	0x81	0xec	0xf0
+[Inferior 1 (process 1) killed]

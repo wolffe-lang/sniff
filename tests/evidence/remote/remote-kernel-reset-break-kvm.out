@@ -1,0 +1,14 @@
+Reading symbols from KERNEL...
+Remote debugging using 127.0.0.1:PORT
+0x000000000000fff0 in ?? ()
+Breakpoint 1 at 0xffffffff80117633: file ./kmain_console.lu, line 553.
+Continuing.
+Warning:
+Cannot insert breakpoint 1.
+Cannot access memory at address 0xffffffff80117633
+
+Command aborted.
+Num     Type           Disp Enb Address            What
+1       breakpoint     keep y   0xffffffff80117633 in kmain 
+                                                   at ./kmain_console.lu:553
+[Inferior 1 (process 1) killed]

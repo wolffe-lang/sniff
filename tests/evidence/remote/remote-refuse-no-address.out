@@ -1,0 +1,4 @@
+Reading symbols from KERNEL...
+To open a remote debug connection, you need to specify what
+serial device is attached to the remote system
+(e.g. /dev/ttyS0, /dev/ttya, COM1, etc.).

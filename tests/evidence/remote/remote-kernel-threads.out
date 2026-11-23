@@ -1,0 +1,11 @@
+Reading symbols from KERNEL...
+Remote debugging using 127.0.0.1:PORT
+0x000000000000fff0 in ?? ()
+Hardware assisted breakpoint 1 at 0xffffffff80117633: file ./kmain_console.lu, line 553.
+Continuing.
+
+Breakpoint 1, kmain () at ./kmain_console.lu:553
+553	    identity.mark_entry() // px87 (pax#253): the TSC at the entry, for the boot line
+  Id   Target Id                    Frame 
+* 1    Thread 1.1 (CPU#0 [running]) kmain () at ./kmain_console.lu:553
+[Inferior 1 (process 1) killed]

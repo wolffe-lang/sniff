@@ -1,0 +1,18 @@
+Reading symbols from KERNEL...
+Remote debugging using 127.0.0.1:PORT
+0x000000000000fff0 in ?? ()
+Hardware assisted breakpoint 1 at 0xffffffff80117633: file ./kmain_console.lu, line 553.
+Continuing.
+
+Breakpoint 1, kmain () at ./kmain_console.lu:553
+553	    identity.mark_entry() // px87 (pax#253): the TSC at the entry, for the boot line
+Hardware watchpoint 2: *(unsigned long *) 0xffffffff80652068
+Continuing.
+
+Hardware watchpoint 2: *(unsigned long *) 0xffffffff80652068
+
+Old value = <VALUE>
+New value = <VALUE>
+clock.now_ns () at ./clock/clock.lu:499
+499	        fraction = part % denominator
+[Inferior 1 (process 1) killed]

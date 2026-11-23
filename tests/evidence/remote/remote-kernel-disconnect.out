@@ -1,0 +1,7 @@
+Reading symbols from KERNEL...
+Remote debugging using 127.0.0.1:PORT
+0x000000000000fff0 in ?? ()
+Ending remote debugging.
+Remote debugging using 127.0.0.1:PORT
+0x000000000000fff0 in ?? ()
+[Inferior 1 (process 1) killed]

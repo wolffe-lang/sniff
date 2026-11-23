@@ -1,0 +1,19 @@
+Reading symbols from KERNEL...
+Remote debugging using 127.0.0.1:PORT
+0x000000000000fff0 in ?? ()
+Hardware assisted breakpoint 1 at 0xffffffff80117633: file ./kmain_console.lu, line 553.
+Continuing.
+
+Breakpoint 1, kmain () at ./kmain_console.lu:553
+553	    identity.mark_entry() // px87 (pax#253): the TSC at the entry, for the boot line
+Breakpoint 2 at 0xffffffff8011764f: file ./kmain_console.lu, line 560.
+Continuing.
+
+Breakpoint 2, kmain () at ./kmain_console.lu:560
+560	    bootmark.start(bootlog.start())
+bootlog.start () at ./bootlog/bootlog.lu:139
+139	    let hhdm = boot_info.hhdm()
+Run till exit from #0  bootlog.start () at ./bootlog/bootlog.lu:139
+0xffffffff80117658 in kmain () at ./kmain_console.lu:560
+560	    bootmark.start(bootlog.start())
+[Inferior 1 (process 1) killed]

@@ -1,0 +1,13 @@
+Reading symbols from KERNEL...
+Remote debugging using 127.0.0.1:PORT
+0x000000000000fff0 in ?? ()
+Breakpoint 1 at 0xffffffff80117633: file ./kmain_console.lu, line 553.
+Continuing.
+
+Breakpoint 1, kmain () at ./kmain_console.lu:553
+553	    identity.mark_entry() // px87 (pax#253): the TSC at the entry, for the boot line
+Num     Type           Disp Enb Address            What
+1       breakpoint     keep y   0xffffffff80117633 in kmain 
+                                                   at ./kmain_console.lu:553
+	breakpoint already hit 1 time
+[Inferior 1 (process 1) killed]
