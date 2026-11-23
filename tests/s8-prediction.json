@@ -72,16 +72,17 @@
    "the description: `qXfer:features:read:target.xml:OFFSET,LENGTH`, then each `xi:include` annex the same way, reading `m` chunks until `l` (General Query Packets, qXfer read; Target Description Format, Inclusion)",
    "MEASURED, what the pinned gdb sent to QEMU at connect, in order (measured): qSupported, vCont?, vMustReplyEmpty, Hgp0.0, qXfer:features:read of target.xml and of i386-64bit.xml in three 0x1000-byte chunks, qTStatus, ?, qfThreadInfo/qsThreadInfo, qAttached:1, Hc-1, qC, qOffsets, g, the thread list again, m of one byte at the pc, qSymbol::. sniff's own order is the one above it; qTStatus, qAttached, qOffsets, qSymbol and vMustReplyEmpty belong to features sniff does not have and are not sent"
   ],
-  "description": "parsed as the Target Description Format's subset sniff needs: `<architecture>`, `<feature name=...>`, `<reg name= bitsize= regnum= type= group=>` with regnum's default one more than the previous register's and 0 first, and `<xi:include href=...>`. Types: the predefined ones by name (Predefined Target Types) and `<vector>`, `<union>`, `<flags>` and `<struct>` read for their sizes and names. sniff requires `org.gnu.gdb.i386.core` with rax-r15, rip, eflags, cs, ss, ds, es, fs, gs, st0-st7 and fctrl-fop, takes `org.gnu.gdb.i386.sse` when present (i386 Features), and shows other features' registers as the description names them (Standard Target Features). A description that lacks a required register is refused by name. MEASURED (measured): QEMU's target.xml is `<architecture>i386:x86-64</architecture>` and one `xi:include` of i386-64bit.xml, which holds one feature, org.gnu.gdb.i386.core, with all 66 registers: rax-r15 and rip (64), eflags and cs-gs (32), fs_base, gs_base, k_gs_base, cr0, cr2, cr3, cr4, cr8 and efer (64), st0-st7 (80), fctrl-fop (32), xmm0-xmm15 (128) and mxcsr (32), numbered 0 to 65 in that order. There is no org.gnu.gdb.i386.sse feature, so the SSE registers are taken from the core feature by name, and the prediction that QEMU sends a separate sse feature was wrong. The g reply is 608 bytes. The annex carries a Free Software Foundation copyright comment: it is QEMU's copy of a file from gdb's features directory, read here only as QEMU's reply on the wire (as the clean room allows for QEMU's behaviour); sniff-server's own description (PR 2) is written from the i386 Features node's words and is never copied from it",
+  "description": "parsed as the Target Description Format's subset sniff needs: `<architecture>`, `<feature name=...>`, `<reg name= bitsize= regnum= type= group=>` with regnum's default one more than the previous register's and 0 first, and `<xi:include href=...>`. Types: the predefined ones by name (Predefined Target Types) and `<vector>`, `<union>`, `<flags>` and `<struct>` read for their sizes and names. sniff requires `org.gnu.gdb.i386.core` with rax-r15, rip, eflags, cs, ss, ds, es, fs, gs, st0-st7 and fctrl-fop, takes `org.gnu.gdb.i386.sse` when present (i386 Features), and shows other features' registers as the description names them (Standard Target Features). A description that lacks a required register is refused by name. MEASURED: QEMU's target.xml names the architecture i386:x86-64 and includes one further annex, which holds a single feature, org.gnu.gdb.i386.core, with 66 registers: the general registers and rip, eflags and the segment selectors, QEMU's own segment bases, control registers and efer, the x87 registers, xmm0-xmm15 and mxcsr. There is no org.gnu.gdb.i386.sse feature, so sniff takes the SSE registers from whichever feature names them. The g reply is 608 bytes.",
   "registers": "`g` gives every register in regnum order, two hex digits a byte in target order (little-endian), `x`s for a register the stub cannot read (Packets, g); `p N` reads one register (regnum in hex). `P N=R` writes one (Packets). sniff reads with `g` and falls back to `p` when `g`'s reply is short of a register",
   "memory": "`m ADDR,LEN` reads LEN bytes as hex pairs, possibly fewer (Packets, m); `M ADDR,LEN:XX` writes, `OK` or an error (Packets, M). A read past the packet size is split. A short or error reply is gdb's `Cannot access memory at address 0x...`",
-  "breakpoints": "`Z0,ADDR,KIND` and `z0,...` for a software breakpoint, `Z1` for a hardware one, `Z2`, `Z3` and `Z4` for write, read and access watchpoints (Packets, z and Z). KIND for x86: the manual leaves it to the architecture (Packets, Z0) and its x86 node is not in the list (Architecture-Specific Protocol Details names only ARM and MIPS); MEASURED: the pinned gdb sends KIND 1 for Z0 and Z1 on x86-64 (measured), the length of int3, and sniff sends 1; Z2 carries the watched length (8 for an 8-byte word). An empty reply means the type is not supported; an error means the stub could not insert it. MEASURED (measured): under KVM QEMU puts a software breakpoint into guest memory, so an m of its address reads 0xcc; under TCG the same read gives the original byte. gdb's transcripts were equal because gdb shows its own breakpoints' original bytes; sniff does the same, from the byte it read before the Z0, so x, the disassembly and the CFI reads never depend on the accelerator",
+  "breakpoints": "`Z0,ADDR,KIND` and `z0,...` for a software breakpoint, `Z1` for a hardware one, `Z2`, `Z3` and `Z4` for write, read and access watchpoints (Packets, z and Z). KIND for x86: the manual leaves it to the architecture (Packets, Z0) and its x86 node is not in the list (Architecture-Specific Protocol Details names only ARM and MIPS); MEASURED: the pinned gdb sends KIND 1 for Z0 and Z1 on x86-64 (measured), the length of int3, and sniff sends 1; Z2 carries the watched length (8 for an 8-byte word). An empty reply means the type is not supported; an error means the stub could not insert it. MEASURED (measured): under KVM QEMU puts a software breakpoint into guest memory, so an m of its address reads 0xcc; under TCG the same read gives the original byte. gdb's transcripts were equal because gdb shows its own breakpoints' original bytes; sniff does the same, from the byte it read before the Z0, so x, the disassembly and the CFI reads never depend on the accelerator. Its own row, remote-kernel-break-shadow, reads a breakpoint's address with x under KVM and under TCG and holds both to the original byte",
   "resume": "`vCont?` once; then `vCont;c` and `vCont;s:TID` when listed, else `c` and `s` (Packets, vCont and vCont?). The stop reply is waited for with no time limit",
   "stop_replies": "`T AA n:r;...` with register values, `thread:TID`, `core:N`, and one stop reason of `watch:ADDR`, `rwatch:ADDR`, `awatch:ADDR`, `swbreak:` or `hwbreak:`; unknown n:r pairs ignored; `S AA`; `W AA` exit; `X AA` killed by a signal; `O XX` console output printed as it comes (Stop Reply Packets). Register values in a T reply are taken in place of the `g` read for those registers",
   "signals": "the manual defines only `05`, the trap signal (Stop Reply Packets); it gives every other number's meaning to gdb's source, which stays closed, include/gdb/signals.h included. So every number sniff names is a binary observation paired with the name printed in the same run: for the client, QEMU's stop reply in the pinned gdb's packet log beside the signal name gdb printed (observed in the Linux measurement's session A, under KVM and TCG: `T02thread:p01.01;` after the 0x03, printed `Program received signal SIGINT, Interrupt.`; `T05core:01;` at a reconnect, printed `Program received signal SIGTRAP, Trace/breakpoint trap.`; 05 at every breakpoint and step. So PR 1's table holds 02 SIGINT and 05 SIGTRAP, each with that measurement as its source). sniff's table of protocol numbers holds only observed numbers and records the measurement that observed each; a number never observed prints as an unknown signal, by name. The stub's numbers (PR 2) come from gdbserver's T reply for a fixture raising each of signals 1 to 31",
   "threads": "`qfThreadInfo` then `qsThreadInfo` until `l` (General Query Packets); `qC` for the current thread; `Hg TID` before `g`, `p`, `m` of another thread (Packets, H). At one processor QEMU names one thread; the mechanism is built here for U4",
   "end": "`detach` sends `D` and closes after `OK` (Packets, D; Connecting, detach); `disconnect` closes the socket and sends nothing, leaving the target stopped (Connecting, disconnect); `kill` sends `k` and expects no reply, a closed connection counting as success (Packets, k). MEASURED (measured): gdb, having offered multiprocess, sent `D;1` and `vKill;1`, each answered OK, and QEMU ended after vKill (`QEMU: Terminated via GDBstub`); `disconnect` sent nothing. sniff offers no multiprocess and sends `D` and `k`; whether QEMU ends on `k` as on vKill is the first thing sniff's own development runs read",
-  "session": "`break` by function, `file:line` and `*ADDR`, from the kernel ELF's DWARF; `hbreak`; `watch`; `continue`; `stepi`, `step`, `next` and `finish` built on `s` and breakpoints as for a live process; `bt` by the CFI in .debug_frame with the stack read by `m`; `info registers` and `info all-registers` from the description; `x`; `print`; `info locals`; `info threads`; the interrupt"
+  "session": "`break` by function, `file:line` and `*ADDR`, from the kernel ELF's DWARF; `hbreak`; `watch`; `continue`; `stepi`, `step`, `next` and `finish` built on `s` and breakpoints as for a live process; `bt` by the CFI in .debug_frame with the stack read by `m`; `info registers` and `info all-registers` from the description; `x`; `print`; `info locals`; `info threads`; the interrupt",
+  "description_text": "the annex QEMU sends is a third party's copyrighted file (it carries the Free Software Foundation's notice: QEMU's copy of a file from gdb's features directory). sniff parses it off the wire at run time and never carries it: no copy of it, in whole or in part, is in this repository, in fixtures, goldens, recorded wire logs or test inputs. A unit row that needs a description uses one written here from the Target Description Format and i386 Features nodes; a row about QEMU's own description names it by sha256 only. sniff-server's description (PR 2) is written from the i386 Features node alone"
  },
  "qemu": {
   "predicted": [
@@ -106,15 +107,51 @@
    "accelerators": "the description, the qSupported reply and every reply in session A are equal under KVM and TCG apart from register values that hold the CPU's identity or the time stamp counter (rdx at reset, rax at identity.mark_entry) and the 0xcc of a KVM breakpoint. The transcripts are byte-identical",
    "sha256": "the target description as gdb printed it (maint print xml-tdesc): A.tdesc.xml, equal under KVM and TCG, in the evidence's SHA256SUMS"
   },
-  "predicted_outcome": [
-   "qSupported names PacketSize and qXfer:features:read+: right; QStartNoAckMode+ not offered; vContSupported+ and multiprocess+ offered",
-   "core and sse features: wrong, one core feature holds everything (see client.description)",
-   "05 for thread 1 at reset, rip 0xfff0: right about 05 and rip; the reply names a core, not a thread",
-   "one thread named by its processor: right",
-   "a software breakpoint at reset refused under KVM and accepted under TCG: right (E22 against OK); hbreak works under both",
-   "an m of the kernel's address at reset is an error: right (E14)",
-   "a reconnect after detach stops the machine: right",
-   "kill ends QEMU: right, by vKill (gdb's multiprocess form)"
+  "scored": [
+   {
+    "predicted": "qSupported names PacketSize and qXfer:features:read+",
+    "score": "right; QStartNoAckMode+ was not offered (sniff stays in acknowledgment mode with QEMU); vContSupported+ and multiprocess+ were"
+   },
+   {
+    "predicted": "the description has a core feature and a separate sse feature",
+    "score": "wrong: one core feature holds every register"
+   },
+   {
+    "predicted": "at reset `?` answers 05 for thread 1 and rip reads 0xfff0",
+    "score": "right about 05 and rip; the reply names a core, not a thread"
+   },
+   {
+    "predicted": "one thread, named by its processor",
+    "score": "right"
+   },
+   {
+    "predicted": "a software breakpoint at reset is refused under KVM and accepted under TCG; hbreak works under both",
+    "score": "right (E22 against OK)"
+   },
+   {
+    "predicted": "an m of the kernel's address at reset is an error",
+    "score": "right (E14)"
+   },
+   {
+    "predicted": "a reconnect after detach stops the machine",
+    "score": "right"
+   },
+   {
+    "predicted": "kill ends QEMU",
+    "score": "right for gdb's vKill; `k`, which sniff sends, is not yet exercised"
+   },
+   {
+    "predicted": "a register write is answered (P)",
+    "score": "not exercised: the write put back the value it read and gdb sent no packet"
+   },
+   {
+    "predicted": "a watchpoint stop reply (watch:ADDR)",
+    "score": "not exercised: the watched word never changed in 10 seconds"
+   },
+   {
+    "predicted": "a breakpoint does not show in memory reads",
+    "score": "half wrong: under KVM QEMU's breakpoint is in guest memory and an m reads 0xcc; under TCG it does not show. gdb hid both"
+   }
   ]
  },
  "transcripts": {
@@ -153,14 +190,14 @@
  },
  "rows": {
   "unit": "remote-packet-{frame,checksum-bad,ack,nack-resend,noack,escape,rle,rle-forbidden,hex,interrupt-byte,notification-refused,empty,error,error-text,size-cap,size-cap-past,reply-cap,reply-cap-past,resend-cap,resend-cap-past,reply-time,reply-time-past} and remote-tdesc-{parse,include,regnum-default,missing-core,types}: natively and on the checked machine, red first",
-  "kernel": "remote-kernel-{connect,tdesc,regs-reset,hbreak,break-addr,bt-entry,finish,break-line,step,locals,finish-value,next,stepi,x,print,write-mem,write-reg,watch,threads,interrupt,detach,disconnect,kill,reset-read,reset-break} and remote-refuse-{no-listener,bad-port,no-host,no-port,no-address,detach,disconnect,kill}. The kernel rows run as one session a boot in session A's order (measured: 16 s for the whole of A under either accelerator, so one boot per row is not needed), split where a row's own state needs a fresh boot (reset-read and reset-break boot their own). remote-kernel-watch watches a word the timer writes rather than LIVE_REGION_BYTES, which never changed; remote-kernel-write-reg writes a changed value and restores it",
+  "kernel": "remote-kernel-{connect,tdesc,regs-reset,hbreak,break-addr,break-shadow,bt-entry,finish,break-line,step,locals,finish-value,next,stepi,x,print,write-mem,write-reg,watch,threads,interrupt,detach,disconnect,kill,reset-read,reset-break} and remote-refuse-{no-listener,bad-port,no-host,no-port,no-address,detach,disconnect,kill}. The kernel rows run as one session a boot in session A's order (measured: 16 s for the whole of A under either accelerator, so one boot per row is not needed), split where a row's own state needs a fresh boot (reset-read and reset-break boot their own). remote-kernel-watch watches a word the timer writes rather than LIVE_REGION_BYTES, which never changed; remote-kernel-write-reg writes a changed value and restores it",
   "where": {
    "hosted_linux": "the image, under TCG",
    "mac": "sniff on the Mac against the Mac's pinned QEMU under TCG, held to the same goldens; the Mac's local run is these rows' only macOS evidence. The Mac boots the image to the console in about 5.5 s under TCG and its stub listens within 0.2 s (mac-boot)",
    "hosted_macos": "skipped by name: it has no pinned QEMU",
    "linux_kvm": "the image, under KVM (with the PAX legs)"
   },
-  "goldens": "tests/evidence/remote/ from gdb's side of the rows under KVM, with a unit row holding the qSupported reply and the description equal across KVM, TCG and the Mac (the measurement found them equal under KVM and TCG). QEMU's description reaches the repository by its sha256 only, never as text: the annex QEMU sends is its copy of a file from gdb's features directory, and the clean room keeps that file out of sniff"
+  "goldens": "tests/evidence/remote/ from gdb's side of the rows under KVM, with a unit row holding the qSupported reply and the description equal across KVM, TCG and the Mac (the measurement found them equal under KVM and TCG). QEMU's description reaches the repository by its sha256 only, never as text (client.description_text)"
  },
  "plants": {
   "P1": {
