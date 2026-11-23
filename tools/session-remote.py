@@ -8,7 +8,10 @@
   session-remote.py selftest                the normalisation and the script forms, no machine
 
 Rows: tests/remote-rows.json. Goldens: tests/evidence/remote/NAME.out, gdb's transcript under KVM on the record host,
-written only when a second capture (its own boot) gives the same normalised transcript. A
+written only when a second capture (its own boot) gives the same normalised transcript. A row with "skip" is a named
+SKIP with that one-line reason in every mode, counted. A row with "own" is sniff's own answer where gdb gives another
+(sniff's words for something it refuses): check holds sniff's normalised transcript to those lines, and capture and
+gdb-check pass it by (OWN), counted. A
 row with "accel" runs only under that accelerator. A row with "qemu": false runs with no QEMU (the refusals).
 
 Each row is one boot of the console image through PAX's tools/qemu-run with `--gdb PORT` (the processor frozen at reset).
@@ -228,6 +231,14 @@ def cmd_run(a):
     out.mkdir(parents=True, exist_ok=True)
     counts = {'pass': 0, 'fail': 0, 'skip': 0}
     for row in load_rows(a.only):
+        if row.get('skip'):
+            print('SKIP remote %s reason=%s' % (row['name'], row['skip']))
+            counts['skip'] += 1
+            continue
+        if row.get('own') is not None and a.mode != 'check':
+            print('OWN remote %s (sniff\'s own answer; gdb is not its oracle)' % row['name'])
+            counts['skip'] += 1
+            continue
         if row.get('accel') and row['accel'] != a.accel:
             print('SKIP remote %s reason=this row runs under %s only' % (row['name'], row['accel']))
             counts['skip'] += 1
@@ -252,6 +263,16 @@ def cmd_run(a):
             print('CAPTURED remote %s (held by a second capture)' % row['name'])
             counts['pass'] += 1
             continue
+        if row.get('own') is not None:
+            want = ''.join(line + '\n' for line in row['own'])
+            d = first_diff(want, got)
+            if d or why:
+                print('FAIL remote %s (own) %s' % (row['name'], d or why))
+                counts['fail'] += 1
+            else:
+                print('PASS remote %s (own)' % row['name'])
+                counts['pass'] += 1
+            continue
         if not gold.exists():
             print('FAIL remote %s no golden' % row['name'])
             counts['fail'] += 1
@@ -270,7 +291,7 @@ def cmd_run(a):
 def cmd_skip(a):
     rows = load_rows(None)
     for row in rows:
-        print('SKIP remote %s reason=%s' % (row['name'], a.reason))
+        print('SKIP remote %s reason=%s' % (row['name'], row.get('skip') or a.reason))
     print('remote rows (skip): 0 pass, 0 fail, %d skip' % len(rows))
     return 0
 
@@ -305,6 +326,11 @@ def cmd_selftest(_a):
         assert r['name'].startswith(('remote-kernel-', 'remote-refuse-')), r['name']
         assert r.get('accel') in (None, 'kvm', 'tcg'), r['name']
         assert set(r.get('normalise', [])) <= {'watch-values', 'stop-location'}, r['name']
+        assert not (r.get('skip') and r.get('own') is not None), r['name']
+        if r.get('skip'):
+            assert '\n' not in r['skip'] and r['skip'].strip(), 'a skip names its reason in one line: ' + r['name']
+        if r.get('own') is not None:
+            assert isinstance(r['own'], list) and r.get('why'), 'an own row says why gdb is not its oracle: ' + r['name']
         assert isinstance(r['script'], list) and r['script'], r['name']
         assert not any('xml-tdesc' in line for line in r['script']), 'a row may not print QEMU\'s description: ' + r['name']
     print('PASS session-remote-selftest rows=%d' % len(rows))

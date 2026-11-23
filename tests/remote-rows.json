@@ -184,7 +184,8 @@
     "set var *(unsigned char *) 0xffffffff806522d8 = 0",
     "x/1xb 0xffffffff806522d8",
     "kill"
-   ]
+   ],
+   "skip": "sniff has no set command (assignment to memory is a later feature with its own contract)"
   },
   {
    "name": "remote-kernel-write-reg",
@@ -197,7 +198,8 @@
     "set var $rax = 0",
     "info registers rax",
     "kill"
-   ]
+   ],
+   "skip": "sniff has no set command (assignment to registers is a later feature with its own contract)"
   },
   {
    "name": "remote-kernel-watch",
@@ -232,7 +234,8 @@
     "continue",
     "info registers",
     "kill"
-   ]
+   ],
+   "skip": "sniff does not read a target description's flags types, which gdb's info registers prints QEMU's control and flag registers with"
   },
   {
    "name": "remote-kernel-interrupt",
@@ -353,6 +356,18 @@
     "kill"
    ],
    "qemu": false
+  },
+  {
+   "name": "remote-refuse-hbreak-no-target",
+   "script": [
+    "hbreak kmain"
+   ],
+   "qemu": false,
+   "why": "gdb sets a hardware breakpoint without a target; sniff's hbreak is a remote target's Z1 and refuses by name where there is none (a process, a core, or nothing)",
+   "own": [
+    "Reading symbols from KERNEL...",
+    "sniff's hbreak needs a remote target (`target remote HOST:PORT`)."
+   ]
   }
  ]
 }
