@@ -33,7 +33,13 @@ pub fn protocol_signal(host: int) -> int ! ServerError {
 /// The host's number for a protocol signal, the client's `C sig` or vCont's `C`/`S`, through the measured table
 /// only; a number the table does not hold is unmeasured_signal.
 pub fn host_signal(protocol: int) -> int ! ServerError {
-    return not_built
+    let t = measured()
+    var h: int = 1
+    while h < t.len {
+        if t[h] == protocol { return h }
+        h += 1
+    }
+    return unmeasured_signal
 }
 
 // Two hex digits for a number from 0 to 255 (Overview: a stop reply's AA).
