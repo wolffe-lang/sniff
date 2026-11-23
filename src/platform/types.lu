@@ -26,6 +26,26 @@ pub const req_setregs: int = 13
 pub const req_getfpregs: int = 14
 /// PTRACE_SETFPREGS (PAX refuses it by name: EIO).
 pub const req_setfpregs: int = 15
+/// sizeof(user_fpregs_struct): the FXSAVE area PTRACE_GETFPREGS and PTRACE_SETFPREGS move, in bytes.
+pub const fpregs_size: int = 512
+/// user_fpregs_struct's cwd: the x87 control word (gdb's fctrl), at this byte offset.
+pub const fpregs_cwd: int = 0
+/// user_fpregs_struct's swd: the x87 status word (gdb's fstat).
+pub const fpregs_swd: int = 2
+/// user_fpregs_struct's ftw: the abridged tag byte, one bit a register (gdb's ftag is the full word).
+pub const fpregs_ftw: int = 4
+/// user_fpregs_struct's fop: the last x87 opcode.
+pub const fpregs_fop: int = 6
+/// user_fpregs_struct's rip: the last x87 instruction's pointer (gdb's fioff, then fiseg).
+pub const fpregs_rip: int = 8
+/// user_fpregs_struct's rdp: the last x87 operand's pointer (gdb's fooff, then foseg).
+pub const fpregs_rdp: int = 16
+/// user_fpregs_struct's mxcsr.
+pub const fpregs_mxcsr: int = 24
+/// user_fpregs_struct's st_space: st0 to st7, sixteen bytes a register, ten of them the value.
+pub const fpregs_st: int = 32
+/// user_fpregs_struct's xmm_space: xmm0 to xmm15, sixteen bytes each.
+pub const fpregs_xmm: int = 160
 /// PTRACE_DETACH.
 pub const req_detach: int = 17
 /// PTRACE_SETOPTIONS.
