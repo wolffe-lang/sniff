@@ -1493,6 +1493,90 @@ def cmd_server(a):
     return 1 if counts['fail'] else 0
 
 
+class StandInTables:
+    """The kernel's own tables for the selftest, from the measured stops (#33): DWARF functions by their ranges, ELF
+    symbols by their values, and the byte before an address (0xF4, hlt, only after pax_idle's hlt)."""
+    DWARF = [(0xffffffff8002d7a4, 0xffffffff8002d9d7, 'clock.raw', '/pax/kernel/./clock/clock.lu'),
+             (0xffffffff800c2090, 0xffffffff800c2300, 'pax_interrupt', '/pax/kernel/./interrupts/interrupts.lu'),
+             (0xffffffff801614f8, 0xffffffff80161a00, 'tcp.tick', '/pax/kernel/./tcp/tcp.lu')]
+    ELF = [(0xffffffff800001ea, 0, 'pax_inl'), (0xffffffff80000354, 0, 'pax_isr32'), (0xffffffff80000408, 0, 'pax_isr_common'),
+           (0xffffffff80000785, 0, 'pax_idle'), (0xffffffff8002d7a4, 563, '_Wclock.raw$5a4152828e9dca0e')]
+
+    def functions_at(self, addr):
+        dwarf = [n for lo, hi, n, _f in self.DWARF if lo <= addr < hi]
+        below = [(v, s, n) for v, s, n in self.ELF if v <= addr]
+        top = max(v for v, _s, _n in below) if below else None
+        elf = [n for v, s, n in below if v == top and (s == 0 or addr < v + s)]
+        return dwarf, elf
+
+    def in_file(self, name, file):
+        return any(n == name and f.endswith('/' + file.lstrip('./')) for _lo, _hi, n, f in self.DWARF)
+
+    def byte_before(self, addr):
+        return 0xF4 if addr == 0xffffffff80000786 else 0x66
+
+
+def selftest_interrupt_stop(sess):
+    """interrupt-stop: the stop the interrupt byte brings is recorded, not gated, once (a) to (f) hold; the five kinds of
+    stop the measurement saw pass in gdb's and sniff's forms, and each control is red by its own assertion."""
+    tables = StandInTables()
+    kernel = Path('/kernel.elf')
+    head = 'Reading symbols from /kernel.elf...\r\n%sRemote debugging using 127.0.0.1:41001\r\n0x000000000000fff0 in ?? ()\r\n%sContinuing.\r\n\r\nProgram received signal SIGINT, Interrupt.\r\n'
+    header = '  Id   Target Id                    Frame \r\n'
+    end = '%s[Inferior 1 (process 1) killed]\r\n%s'
+    ok_ends = [('target remote 127.0.0.1:41001', 'prompt'), ('!interrupt 5 continue', 'interrupt:prompt'), ('info threads', 'prompt'), ('kill', 'prompt')]
+
+    def transcript(p, frame, state, tframe=None, sig=True, killed=True):
+        h = head % (p, p)
+        if not sig:
+            h = h.replace('Program received signal SIGINT, Interrupt.\r\n', '')
+        t = h + frame + p + header + '* 1    Thread 1.1 (CPU#0 [%s]) %s\r\n' % (state, tframe or frame.split('\r\n')[0])
+        return t + (end % (p, p) if killed else p)
+
+    def run(text, ends=None):
+        notes = {}
+        got = normalise(text, 41001, kernel, sess, ['interrupt-stop'], ends=ok_ends if ends is None else ends, tables=tables, notes=notes)
+        return got, notes
+    want = ('Reading symbols from KERNEL...\nRemote debugging using 127.0.0.1:PORT\n0x000000000000fff0 in ?? ()\nContinuing.\n\n'
+            'Program received signal SIGINT, Interrupt.\n<STOP>\n  Id   Target Id                    Frame \n'
+            '* 1    Thread 1.1 (CPU#0 <STATE>) <STOP>\n[Inferior 1 (process 1) killed]\n')
+    measured = [
+        ('pax_idle', 'halted ', '0xffffffff80000786 in pax_idle ()\r\n', None),
+        ('pax_inl', 'running', '0xffffffff800001ed in pax_inl ()\r\n', None),
+        ('pax_isr32', 'running', '0xffffffff80000354 in pax_isr32 ()\r\n', None),
+        ('pax_interrupt', 'running', '0xffffffff800c21e0 in pax_interrupt (f=18446691297151614608) at ./interrupts/interrupts.lu:402\r\n402\t    if percpu.index() != 0 {\r\n', None),
+        ('tcp.tick', 'running', 'tcp.tick () at ./tcp/tcp.lu:2186\r\n2186\t            c += 1\r\n', None)]
+    for name, state, frame, _ in measured:
+        for p in ('(gdb) ', '(sniff) '):
+            got, notes = run(transcript(p, frame, state))
+            assert got == want, 'interrupt-stop did not record the measured stop in %s (%s): %r' % (name, p.strip(), got)
+            assert not notes.get('problems'), 'interrupt-stop refused the measured stop in %s: %r' % (name, notes)
+            assert notes.get('location', '').startswith('at %s ' % name) and notes['location'].endswith('state=' + state.strip()), \
+                'interrupt-stop recorded the stop in %s as %r' % (name, notes.get('location'))
+    # gdb's own warning between a frame that names a line and its source line, as the measurement saw it
+    warned = 'tcp.tick () at ./tcp/tcp.lu:2186\r\nwarning: Source file is more recent than executable.\r\n2186\t            c += 1\r\n'
+    got, notes = run(transcript('(gdb) ', warned, 'running', 'tcp.tick () at ./tcp/tcp.lu:2186'))
+    assert got == want and not notes.get('problems'), 'interrupt-stop refused gdb\'s source warning: %r %r' % (got, notes)
+    idle = '0xffffffff80000786 in pax_idle ()\r\n'
+    timer = '0xffffffff800001ed in pax_inl ()\r\n'
+    controls = [
+        ('(a)', 'a prompt before the interrupt (no 0x03 was written)', transcript('(sniff) ', idle, 'halted '),
+         [('target remote 127.0.0.1:41001', 'prompt'), ('!interrupt 5 continue', 'prompt'), ('info threads', 'prompt'), ('kill', 'prompt')]),
+        ('(b)', 'no SIGINT line', transcript('(sniff) ', idle, 'halted ', sig=False), None),
+        ('(b)', 'SIGTRAP for the interrupt', transcript('(sniff) ', idle, 'halted ').replace('signal SIGINT, Interrupt.', 'signal SIGTRAP, Trace/breakpoint trap.'), None),
+        ('(c)', 'the connect\'s frame (stale registers)', transcript('(sniff) ', '0x000000000000fff0 in ?? ()\r\n', 'running'), None),
+        ('(c)', 'pax_idle for an address in clock.raw', transcript('(sniff) ', '0xffffffff8002d89e in pax_idle ()\r\n', 'running'), None),
+        ('(c)', 'a frame in neither of gdb\'s forms', transcript('(sniff) ', '0xffffffff80000786 in pax_idle\r\n', 'halted '), None),
+        ('(d)', 'a thread line at another frame', transcript('(sniff) ', timer, 'running', '0xffffffff80000786 in pax_idle ()'), None),
+        ('(e)', 'halted where no hlt comes before', transcript('(sniff) ', timer, 'halted '), None),
+        ('(f)', 'no killed line', transcript('(sniff) ', idle, 'halted ', killed=False), None)]
+    for letter, what, text, ends in controls:
+        got, notes = run(text, ends)
+        problems = notes.get('problems') or []
+        assert any(pr.startswith(letter + ' ') for pr in problems), 'interrupt-stop did not refuse %s by %s: %r' % (what, letter, problems)
+        assert got != want, 'interrupt-stop hid %s: %r' % (what, got)
+
+
 def cmd_selftest(_a):
     sess = load_session()
     t = normalise('(gdb) Remote debugging using 127.0.0.1:41001\r\n0x000000000000fff0 in ?? ()\r\n(gdb) ', 41001, Path('/k/kmain_console.elf'), sess)
@@ -1534,6 +1618,7 @@ def cmd_selftest(_a):
     # a connect that no detach came before keeps its frame: the machine was at reset, frozen
     first = loc('Remote debugging using 127.0.0.1:41001\r\n0x000000000000fff0 in ?? ()\r\n')
     assert first == 'Remote debugging using 127.0.0.1:PORT\n0x000000000000fff0 in ?? ()\n', 'stop-location took a first connect: ' + repr(first)
+    selftest_interrupt_stop(sess)
     gold_w = normalise('Hardware watchpoint 2: *(unsigned long *) 0xffffffff80652068\r\n\r\nOld value = 0\r\nNew value = 1\r\n', 0, Path('/k'), sess, ['watch-values'])
     no_hit = normalise('Old value = 0\r\nNew value = 1\r\n', 0, Path('/k'), sess, ['watch-values'])
     assert first_diff(gold_w, no_hit), 'a missing watchpoint line was hidden'
