@@ -1,0 +1,190 @@
+// The Debug Adapter Protocol's base protocol (the specification's overview, "Base protocol"): a header part of
+// `Name: value` fields, each ended by \r\n, in ASCII; an empty line; then a content part of exactly Content-Length
+// bytes of UTF-8 JSON. Content-Length is the one field the protocol defines and requires; any other field is read and
+// ignored. Pure: no I/O. The server feeds the bytes it reads to `feed` and writes what `encode` builds. Every cap below
+// has a unit row at its value and one past it (src/dap_test.lu).
+
+/// Refusals of the base protocol, each by name. A refusal kills the reader: the stream has lost its framing.
+pub error FrameError = {
+    no_length,
+    bad_length,
+    bad_header,
+    header_too_long,
+    too_many_headers,
+    body_too_long,
+    truncated,
+}
+
+/// The most header fields one message may carry.
+pub const max_headers: int = 32
+/// The most bytes one header line may hold, its \r\n not counted.
+pub const max_header_line: int = 4096
+/// The most bytes one content part may hold: 64 MiB.
+pub const max_body: int = 67108864
+
+/// The reader's state between reads: the header line being read, the header fields read so far for this message,
+/// the length once read (-1 before), whether the content part is being read and its bytes so far, the whole bodies
+/// not yet taken, and whether a refusal has killed it.
+pub struct Reader {
+    pub line: List[byte],
+    pub fields: int,
+    pub want: int,
+    pub in_body: bool,
+    pub body: List[byte],
+    pub bodies: List[List[byte]],
+    pub dead: bool,
+}
+
+/// A reader at the start of a stream.
+pub fn reader() -> Reader {
+    let empty: List[List[byte]] = []
+    Reader { line: no_bytes(), fields: 0, want: -1, in_body: false, body: no_bytes(), bodies: empty, dead: false }
+}
+
+fn no_bytes() -> List[byte] {
+    let n: List[byte] = []
+    n
+}
+
+fn lower(c: int) -> int {
+    if c >= 65 && c <= 90 { c + 32 } else { c }
+}
+
+/// The header line `Content-Length: N`, its name in any case, its value decimal digits with spaces around them.
+/// Answers N; -1 when the line names another field; a bad value or a line with no colon is refused.
+fn header_length(line: List[byte]) -> int ! FrameError {
+    var colon: int = -1
+    var i: int = 0
+    while i < line.len {
+        if line[i] as int == 58 { colon = i; break }
+        i += 1
+    }
+    if colon <= 0 { return bad_header }
+    let name = "content-length".bytes()
+    var is_length = colon == name.len
+    if is_length {
+        var k: int = 0
+        while k < colon {
+            if lower(line[k] as int) != name[k] as int { is_length = false; break }
+            k += 1
+        }
+    }
+    if !is_length { return -1 }
+    var a = colon + 1
+    var z = line.len
+    while a < z && line[a] as int == 32 { a += 1 }
+    while z > a && line[z - 1] as int == 32 { z -= 1 }
+    if a == z || z - a > 9 { return bad_length }
+    var v: int = 0
+    var j = a
+    while j < z {
+        let c = line[j] as int
+        if c < 48 || c > 57 { return bad_length }
+        v = v * 10 + (c - 48)
+        j += 1
+    }
+    v
+}
+
+/// One header line ended (its \r\n read): an empty line ends the header part, which must have named the length.
+fn end_line(mut r: Reader) -> () ! FrameError {
+    if r.line.len == 0 {
+        if r.want < 0 { return no_length }
+        r.in_body = true
+        r.body = no_bytes()
+        return
+    }
+    r.fields += 1
+    if r.fields > max_headers { return too_many_headers }
+    let n = header_length(r.line)?
+    if n >= 0 {
+        if r.want >= 0 { return bad_header }
+        if n > max_body { return body_too_long }
+        r.want = n
+    }
+    r.line = no_bytes()
+}
+
+// The content part is whole: it goes onto the bodies, and the reader starts the next message.
+fn complete(mut r: Reader) {
+    (mut r.bodies).push(copy r.body)
+    r.body = no_bytes()
+    r.in_body = false
+    r.want = -1
+    r.fields = 0
+    r.line = no_bytes()
+}
+
+/// Read b[at..end) onto the reader. Each whole content part goes onto `r.bodies`, in order; answers how many this
+/// call completed. A refusal kills the reader, and a dead reader refuses everything after.
+pub fn feed(mut r: Reader, b: List[byte], at: int, end: int) -> int ! FrameError {
+    if r.dead { return bad_header }
+    var done: int = 0
+    var i = at
+    while i < end {
+        if r.in_body {
+            let left = r.want - r.body.len
+            var n = end - i
+            if n > left { n = left }
+            var k: int = 0
+            while k < n { (mut r.body).push(b[i + k]); k += 1 }
+            i += n
+            if r.body.len == r.want {
+                complete(mut r)
+                done += 1
+            }
+            continue
+        }
+        let c = b[i] as int
+        i += 1
+        if c == 10 {
+            // a line ends only at \r\n: a bare \n is a broken header
+            if r.line.len == 0 || r.line[r.line.len - 1] as int != 13 { r.dead = true; return bad_header }
+            var trimmed: List[byte] = []
+            var k: int = 0
+            while k < r.line.len - 1 { (mut trimmed).push(r.line[k]); k += 1 }
+            r.line = trimmed
+            // dead until the line is taken, so a refusal leaves the reader dead
+            r.dead = true
+            end_line(mut r)?
+            r.dead = false
+            // a content part of no bytes is whole as soon as the header part ends
+            if r.in_body && r.want == 0 {
+                complete(mut r)
+                done += 1
+            }
+            continue
+        }
+        if c == 13 && r.line.len > 0 && r.line[r.line.len - 1] as int == 13 { r.dead = true; return bad_header }
+        (mut r.line).push(c as byte)
+        // the \r that ends a line is not counted against the line's cap
+        let held = if c == 13 { r.line.len - 1 } else { r.line.len }
+        if held > max_header_line { r.dead = true; return header_too_long }
+    }
+    done
+}
+
+/// Take the oldest whole body, if there is one.
+pub fn next_body(mut r: Reader) -> (bool, List[byte]) {
+    if r.bodies.len == 0 { return (false, no_bytes()) }
+    let first = copy r.bodies[0]
+    var rest: List[List[byte]] = []
+    var i: int = 1
+    while i < r.bodies.len { (mut rest).push(copy r.bodies[i]); i += 1 }
+    r.bodies = rest
+    (true, first)
+}
+
+/// The input has ended: whatever part of a message was read is refused as truncated.
+pub fn finish(r: Reader) -> () ! FrameError {
+    if r.dead { return }
+    if r.in_body || r.line.len > 0 || r.fields > 0 { return truncated }
+}
+
+/// A message to send: `Content-Length: N\r\n\r\n` and the N bytes of BODY.
+pub fn encode(body: str) -> List[byte] {
+    let d = body.bytes()
+    var out = "Content-Length: {d.len}\r\n\r\n".bytes()
+    for x in d { (mut out).push(x) }
+    out
+}
