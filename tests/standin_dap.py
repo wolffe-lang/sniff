@@ -1,0 +1,109 @@
+#!/usr/bin/env python3
+"""A stand-in debug adapter for session-dap.py's units, never a debugger: standin_dap.py MODE
+
+It speaks the Debug Adapter Protocol's base protocol on standard input and output and debugs nothing. MODE:
+  plain    initialize answers capabilities {supportsConfigurationDoneRequest: true}; launch is answered at once and a
+           thread event reports thread 7 started; configurationDone is answered; threads is refused notStopped until a
+           pause, which stops thread 7 (reason pause); stackTrace answers three frames; disconnect ends with exit 0
+  hang     as plain, but never answers stackTrace
+  eof      closes its output after answering initialize
+  garbage  answers initialize with a body that is not JSON
+  reverse  sends a runInTerminal request before answering initialize
+  badcaps  as plain, but initialize declares supportsStepBack too
+  exit3    on disconnect, exits 3 and writes `stand-in: exit 3` on standard error"""
+import json
+import sys
+
+mode = sys.argv[1] if len(sys.argv) > 1 else 'plain'
+inp, out = sys.stdin.buffer, sys.stdout.buffer
+seq = 0
+
+
+def send_raw(body):
+    out.write(b'Content-Length: %d\r\n\r\n' % len(body) + body)
+    out.flush()
+
+
+def send(msg):
+    global seq
+    seq += 1
+    send_raw(json.dumps(dict(msg, seq=seq)).encode())
+
+
+def reply(req, body=None, ok=True, message=None):
+    m = {'type': 'response', 'request_seq': req['seq'], 'command': req['command'], 'success': ok}
+    if body is not None:
+        m['body'] = body
+    if message:
+        m['message'] = message
+    send(m)
+
+
+def event(name, body=None):
+    send({'type': 'event', 'event': name, **({'body': body} if body is not None else {})})
+
+
+def read():
+    n = None
+    while True:
+        line = inp.readline()
+        if not line:
+            return None
+        if line == b'\r\n':
+            break
+        k, _, v = line.decode().partition(':')
+        if k.lower() == 'content-length':
+            n = int(v)
+    return json.loads(inp.read(n))
+
+
+running = False
+while True:
+    r = read()
+    if r is None:
+        break
+    if r.get('type') == 'response':
+        continue
+    c = r['command']
+    if c == 'initialize':
+        if mode == 'reverse':
+            send({'type': 'request', 'command': 'runInTerminal', 'arguments': {'args': ['x']}})
+        if mode == 'garbage':
+            send_raw(b'{not json')
+            continue
+        caps = {'supportsConfigurationDoneRequest': True}
+        if mode == 'badcaps':
+            caps['supportsStepBack'] = True
+        reply(r, caps)
+        if mode == 'eof':
+            sys.exit(0)
+    elif c == 'launch':
+        reply(r)
+        event('initialized')
+        event('thread', {'reason': 'started', 'threadId': 7})
+        running = True
+    elif c == 'configurationDone':
+        reply(r)
+    elif c == 'threads':
+        if running:
+            reply(r, ok=False, message='notStopped')
+        else:
+            reply(r, {'threads': [{'id': 7, 'name': 'main'}]})
+    elif c == 'pause':
+        reply(r)
+        running = False
+        event('stopped', {'reason': 'pause', 'threadId': 7, 'allThreadsStopped': True})
+    elif c == 'stackTrace':
+        if mode == 'hang':
+            continue
+        reply(r, {'stackFrames': [{'id': 100 + i, 'name': 'f%d' % i, 'line': i + 1, 'column': 1} for i in range(3)]})
+    elif c == 'disconnect':
+        reply(r)
+        event('terminated')
+        if mode == 'exit3':
+            sys.stderr.write('stand-in: exit 3\n')
+            sys.stderr.flush()
+            sys.exit(3)
+        sys.exit(0)
+    else:
+        reply(r, ok=False, message='unknown request ' + c)
