@@ -2,8 +2,8 @@
 """S8's remote rows: the pinned gdb and sniff over QEMU's gdbstub on PAX's console kernel, at one processor (the kernel
 rows), and sniff-server, the stub, on Linux (kind server) and on PAX (kind server-pax).
 
-  session-remote.py capture --kernel ELF --image ISO --pax PAXTREE --qemu QEMU --gdb GDB --accel kvm|tcg [--only RE] [--out DIR]
-  session-remote.py check   --kernel ELF --image ISO --pax PAXTREE --qemu QEMU --sniff SNIFF --accel kvm|tcg [--only RE] [--out DIR]
+  session-remote.py capture --kernel ELF --image ISO --pax PAXTREE --qemu QEMU --gdb GDB --accel kvm|tcg [--only RE] [--rows FILE] [--out DIR]
+  session-remote.py check   --kernel ELF --image ISO --pax PAXTREE --qemu QEMU --sniff SNIFF --accel kvm|tcg [--only RE] [--rows FILE] [--out DIR]
   session-remote.py gdb-check (as check, with --gdb: the goldens hold for this accelerator and this run)
   session-remote.py server --server SNIFF-SERVER --fixtures DIR [--only RE] [--out DIR]
                                             the server rows on this Linux host, against the pinned gdbserver live
@@ -16,7 +16,8 @@ rows), and sniff-server, the stub, on Linux (kind server) and on PAX (kind serve
                                             rows cannot run
   session-remote.py selftest                the normalisation and the script forms, no machine
 
-Rows: tests/remote-rows.json. Goldens: tests/evidence/remote/NAME.out, gdb's transcript under KVM on the record host,
+Rows: tests/remote-rows.json (the kernel modes take another file with --rows, as a measurement does, which has no
+goldens). Goldens: tests/evidence/remote/NAME.out, gdb's transcript under KVM on the record host,
 written only when a second capture (its own boot) gives the same normalised transcript. A row with "skip" is a named
 SKIP with that one-line reason in every mode, counted. A row with "own" is sniff's own answer where gdb gives another
 (sniff's words for something it refuses): check holds sniff's normalised transcript to those lines, and capture and
@@ -311,9 +312,10 @@ def first_diff(want, got):
     return ''
 
 
-def load_rows(only, kind='kernel'):
-    # a row's kind: the kernel rows (sniff or gdb over QEMU's gdbstub) unless it says server or server-pax (sniff-server's)
-    rows = [r for r in json.loads(ROWS.read_text())['rows'] if r.get('kind', 'kernel') == kind]
+def load_rows(only, kind='kernel', path=None):
+    # a row's kind: the kernel rows (sniff or gdb over QEMU's gdbstub) unless it says server or server-pax (sniff-server's);
+    # PATH is another rows file (a measurement's), ROWS without it
+    rows = [r for r in json.loads((Path(path) if path else ROWS).read_text())['rows'] if r.get('kind', 'kernel') == kind]
     if only:
         rows = [r for r in rows if re.search(only, r['name'])]
     return rows
@@ -324,14 +326,14 @@ def cmd_run(a):
     out = Path(a.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
     counts = {'pass': 0, 'fail': 0, 'skip': 0}
-    if any(r.get('qemu', True) and not r.get('skip') for r in load_rows(a.only)):
+    if any(r.get('qemu', True) and not r.get('skip') for r in load_rows(a.only, path=a.rows)):
         text, problems = qemu_line(a)
         print(text)
         if problems:
             print('FAIL remote-qemu-pin ' + '; '.join(problems))
             print('remote rows (%s, %s): 0 pass, 1 fail, 0 skip' % (a.mode, a.accel))
             return 1
-    for row in load_rows(a.only):
+    for row in load_rows(a.only, path=a.rows):
         if row.get('skip'):
             print('SKIP remote %s reason=%s' % (row['name'], row['skip']))
             counts['skip'] += 1
@@ -1682,6 +1684,7 @@ def main():
         q.add_argument('--sniff', required=mode == 'check')
         q.add_argument('--accel', choices=('kvm', 'tcg'), required=True)
         q.add_argument('--only')
+        q.add_argument('--rows', help='another rows file, such as a measurement\'s (default: tests/remote-rows.json)')
         q.add_argument('--out', default=str(ROOT / 'target/remote-out'))
     sv = sub.add_parser('server')
     sv.add_argument('--server', required=True, help='the sniff-server binary')
