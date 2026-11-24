@@ -36,6 +36,16 @@ by name (FAIL remote-qemu-pin) a QEMU whose version line or binary digest is not
 Normalised by name: the port, the kernel's path, the terminal's line ends and the prompts (tools/session.py's
 normalize_tty). QEMU's target description never appears in a golden as text: no row prints it.
 
+remote-kernel-interrupt names `interrupt-stop`. Where the interrupt byte stops the kernel is the machine's choice: in
+404 measured stops, 399 were at the instruction after pax_idle's hlt, and the rest were in the timer path, the
+interrupt entry and another kernel thread. So the frame and the thread line's state and frame become <STOP> and <STATE>,
+and each run prints the location on a LOCATION line, recorded and never gated. That happens only after six assertions
+hold, each true for any stop of this kernel at one processor (interrupt_stop).
+- The frame's name is checked against the kernel binary's own tables: its DWARF and its ELF symbols, read by the
+  pinned llvm-dwarfdump-18 and readelf, and one byte of its text. Nothing is read from PAX's source.
+- A tool that is missing or is not the pin is refused by name (FAIL remote-kernel-tables-pin), never skipped.
+- What the rule gives up: a stop in an unusual but real place is never red.
+
 The server rows hold sniff-server to the pinned gdbserver, run live beside it: the same requests and the same gdb
 session commands on the same static fixture, and gdb's two transcripts equal after SESSION_NORMALISE's named
 differences. Every server run names gdbserver and gdb by version and sha256 (its ORACLES line). On PAX the stub runs in
@@ -242,13 +252,259 @@ def stop_location(t):
     return '\n'.join(out)
 
 
+# interrupt-stop (#33): where the interrupt byte stops the kernel is the machine's choice (measured: 399 of 404 stops
+# at the instruction after pax_idle's hlt, the rest in the timer path, the interrupt entry and another kernel thread),
+# so the row records it and gates only on what holds for any stop of this kernel at one processor
+SIGINT_STOP = 'Program received signal SIGINT, Interrupt.'
+SOURCE_NEWER = 'warning: Source file is more recent than executable.'
+THREAD_LINE = re.compile(r'\* 1    Thread 1\.1 \(CPU#0 \[(halted |running)\]\) (.+)')
+FRAME_PARTS = re.compile(r'(?:0x(?P<addr>[0-9a-f]+) in )?(?P<name>[^\s(]+) \(.*\)(?: at (?P<file>\S+):(?P<line>\d+))?')
+KILLED = '[Inferior 1 (process 1) killed]'
+
+
+def stop_frame(lines, j):
+    """The frame at lines[j] in one of gdb's two forms, with gdb's own source warning allowed between a frame that names
+    a line and that line's source: (how many lines, the frame's parts), or (0, None)."""
+    if j >= len(lines):
+        return 0, None
+    m = FRAME_AT_ADDRESS.fullmatch(lines[j]) or FRAME_AT_LINE.fullmatch(lines[j])
+    parts = FRAME_PARTS.fullmatch(lines[j])
+    if not m or not parts:
+        return 0, None
+    line = m.group('line')
+    if line is None:
+        return 1, parts
+    k = j + 1
+    if k < len(lines) and lines[k] == SOURCE_NEWER:
+        k += 1
+    if k < len(lines) and lines[k].startswith(line + '\t'):
+        return k - j + 1, parts
+    return 0, None
+
+
+def interrupt_stop(t, ends, tables):
+    """The stop the interrupt byte brings, held by six assertions, each true by construction for any stop of the kernel
+    at one processor: (a) the driver wrote 0x03 while the target ran and a prompt came back (its outcome for the
+    `!interrupt` line is interrupt:prompt); (b) the stop is SIGINT's, one line, literal; (c) one frame in one of gdb's
+    two forms, whose name is the function that holds its address by the kernel's own tables (the DWARF function whose
+    ranges hold it, else the ELF symbol at or below it; in the form without an address, a DWARF subprogram of that
+    file); (d) the thread line's frame is the stop's; (e) a halted processor sits just past a hlt (0xF4 the byte before);
+    (f) the session goes on to its killed line. Then the frame and the thread line's state and frame become <STOP> and
+    <STATE>, and the location is returned to be recorded: (text, problems, location). With a problem, the text stays
+    as it came, so it differs from its golden too."""
+    problems = []
+    outcomes = [how for line, how in (ends or []) if line.startswith('!interrupt ')]
+    if outcomes != ['interrupt:prompt']:
+        problems.append('(a) the interrupt line ended %s, not interrupt:prompt (0x03 written while the target ran, then a prompt)' % (
+            ', '.join(outcomes) or 'nowhere'))
+    lines = t.split('\n')
+    if lines.count(SIGINT_STOP) != 1:
+        problems.append('(b) %d lines %r, not one' % (lines.count(SIGINT_STOP), SIGINT_STOP))
+        return t, problems, None
+    j = lines.index(SIGINT_STOP) + 1
+    n, parts = stop_frame(lines, j)
+    if not n:
+        problems.append('(c) the line after the stop, %r, is no frame in either of gdb\'s two forms' % (lines[j] if j < len(lines) else '<end>'))
+        return t, problems, None
+    name, addr = parts.group('name'), parts.group('addr')
+    if tables is None:
+        problems.append('(c) no kernel tables to name the frame by')
+    elif addr is not None:
+        dwarf, elf = tables.functions_at(int(addr, 16))
+        if dwarf:
+            if not any(name == f or name.endswith('::' + f) for f in dwarf):
+                problems.append('(c) the frame names %s at 0x%s, which the kernel\'s DWARF gives to %s' % (name, addr, ', '.join(sorted(set(dwarf)))))
+        elif name not in elf:
+            problems.append('(c) the frame names %s at 0x%s, which %s' % (
+                name, addr, ('the kernel\'s ELF symbols give to ' + ', '.join(elf)) if elf else 'no kernel function holds'))
+    elif not tables.in_file(name, parts.group('file')):
+        problems.append('(c) the frame names %s at %s:%s, which is no DWARF subprogram of that file in the kernel' % (
+            name, parts.group('file'), parts.group('line')))
+    h = j + n
+    thread = THREAD_LINE.fullmatch(lines[h + 1]) if h + 1 < len(lines) else None
+    if h >= len(lines) or not lines[h].startswith('  Id   Target Id') or thread is None:
+        problems.append('(d) no thread line after the stop')
+        return t, problems, None
+    state, tframe = thread.group(1).strip(), thread.group(2)
+    if tframe != lines[j]:
+        problems.append('(d) the thread line\'s frame %r is not the stop\'s %r' % (tframe, lines[j]))
+    if state == 'halted':
+        if addr is None:
+            problems.append('(e) halted, with no address to find a hlt before')
+        elif tables is not None:
+            b = tables.byte_before(int(addr, 16))
+            if b != 0xF4:
+                problems.append('(e) halted at 0x%s, where the byte before is %s, not 0xf4 (hlt)' % (addr, 'unreadable' if b is None else '0x%02x' % b))
+    if KILLED not in lines[h + 2:]:
+        problems.append('(f) no %r after the stop' % KILLED)
+    if problems:
+        return t, problems, None
+    out = lines[:j] + ['<STOP>'] + lines[h:h + 1] + ['* 1    Thread 1.1 (CPU#0 <STATE>) <STOP>'] + lines[h + 2:]
+    return '\n'.join(out), [], 'at %s%s state=%s' % (name, ' 0x' + addr if addr else '', state)
+
+
+DIE = re.compile(r'^0x([0-9a-f]+):\s+(DW_TAG_\w+)')
+DIE_ATTR = re.compile(r'^\s+(DW_AT_\w+)\s+\((.*)\)$')
+DIE_RANGES = re.compile(r'^\s+DW_AT_ranges\s+\(')
+RANGE = re.compile(r'\[0x([0-9a-f]+), 0x([0-9a-f]+)\)')
+DIE_REF = re.compile(r'^0x([0-9a-f]+)')
+
+
+class KernelTables:
+    """The kernel ELF's own tables, read by the pinned tools (sniff-oracle.toml): every DWARF subprogram and inlined
+    subroutine with its ranges, name and file (llvm-dwarfdump-18 --debug-info), the ELF symbols (readelf --symbols
+    --wide), and the byte before an address, from the ELF's PT_LOAD segments (read here). Only the binary's tables
+    and bytes: never PAX's source."""
+
+    def __init__(self, kernel, dwarfdump, readelf):
+        data = Path(kernel).read_bytes()
+        info = subprocess.run([dwarfdump, '--debug-info', str(kernel)], capture_output=True, text=True, errors='replace', timeout=600)
+        syms = subprocess.run([readelf, '--symbols', '--wide', str(kernel)], capture_output=True, text=True, errors='replace', timeout=600)
+        if info.returncode or syms.returncode:
+            raise ValueError('llvm-dwarfdump exit %d, readelf exit %d' % (info.returncode, syms.returncode))
+        self.funcs = dwarf_functions(info.stdout)
+        self.syms = elf_functions(syms.stdout)
+        self.data, self.loads = data, elf_loads(data)
+        if not self.funcs or not self.syms:
+            raise ValueError('%d DWARF functions and %d ELF symbols read' % (len(self.funcs), len(self.syms)))
+
+    def functions_at(self, addr):
+        dwarf = [name for ranges, name, _f in self.funcs if any(lo <= addr < hi for lo, hi in ranges)]
+        below = [(v, s, n) for v, s, n in self.syms if v <= addr]
+        top = max(v for v, _s, _n in below) if below else None
+        return dwarf, [n for v, s, n in below if v == top and (s == 0 or addr < v + s)]
+
+    def in_file(self, name, file):
+        tail = '/' + file.lstrip('./')
+        return any((n == name or name.endswith('::' + n)) and f.endswith(tail) for _r, n, f in self.funcs)
+
+    def byte_before(self, addr):
+        for vaddr, offset, size in self.loads:
+            if vaddr <= addr - 1 < vaddr + size:
+                return self.data[offset + addr - 1 - vaddr]
+        return None
+
+
+def dwarf_functions(text):
+    """(ranges, name, file) of each subprogram and inlined subroutine in llvm-dwarfdump's --debug-info text, its name and
+    file followed through DW_AT_abstract_origin and DW_AT_specification."""
+    dies, cur, ranges_of = {}, None, None
+    for line in text.splitlines():
+        m = DIE.match(line)
+        if m:
+            cur = dies.setdefault(int(m.group(1), 16), {'tag': m.group(2), 'ranges': []})
+            ranges_of = None
+            continue
+        if cur is None:
+            continue
+        if DIE_RANGES.match(line):
+            ranges_of = cur
+            cur['ranges'] += [(int(a, 16), int(b, 16)) for a, b in RANGE.findall(line)]
+            continue
+        if ranges_of is not None and RANGE.search(line):
+            ranges_of['ranges'] += [(int(a, 16), int(b, 16)) for a, b in RANGE.findall(line)]
+            continue
+        ranges_of = None
+        m = DIE_ATTR.match(line)
+        if not m:
+            continue
+        attr, value = m.groups()
+        if attr in ('DW_AT_name', 'DW_AT_decl_file'):
+            cur[attr] = value.strip('"')
+        elif attr in ('DW_AT_low_pc', 'DW_AT_high_pc'):
+            cur[attr] = int(value.split()[0], 16)
+        elif attr in ('DW_AT_abstract_origin', 'DW_AT_specification'):
+            r = DIE_REF.match(value)
+            if r:
+                cur['origin'] = int(r.group(1), 16)
+
+    def follow(die, attr):
+        for _ in range(8):
+            if die is None or attr in die:
+                return die.get(attr) if die else None
+            die = dies.get(die.get('origin'))
+        return None
+    out = []
+    for die in dies.values():
+        if die['tag'] not in ('DW_TAG_subprogram', 'DW_TAG_inlined_subroutine'):
+            continue
+        ranges = list(die['ranges'])
+        lo, hi = die.get('DW_AT_low_pc'), die.get('DW_AT_high_pc')
+        if lo is not None and hi is not None:
+            ranges.append((lo, hi if hi > lo else lo + hi))
+        name = follow(die, 'DW_AT_name')
+        if ranges and name:
+            out.append((ranges, name, follow(die, 'DW_AT_decl_file') or ''))
+    return out
+
+
+def elf_functions(text):
+    """(value, size, name) of each defined FUNC or NOTYPE symbol in readelf --symbols --wide's text."""
+    out = []
+    for line in text.splitlines():
+        f = line.split()
+        if len(f) < 8 or not f[0].endswith(':') or f[3] not in ('FUNC', 'NOTYPE') or f[6] in ('UND', 'ABS'):
+            continue
+        try:
+            value, size = int(f[1], 16), int(f[2], 0)
+        except ValueError:
+            continue
+        if value:
+            out.append((value, size, f[7]))
+    return out
+
+
+def elf_loads(data):
+    """(vaddr, offset, filesz) of each PT_LOAD segment of a little-endian ELF64 file."""
+    import struct
+    if data[:4] != b'\x7fELF' or data[4] != 2 or data[5] != 1:
+        raise ValueError('not a little-endian ELF64 file')
+    phoff, = struct.unpack_from('<Q', data, 0x20)
+    phentsize, phnum = struct.unpack_from('<HH', data, 0x36)
+    out = []
+    for i in range(phnum):
+        p_type, _flags, offset, vaddr, _paddr, filesz = struct.unpack_from('<IIQQQQ', data, phoff + i * phentsize)
+        if p_type == 1:
+            out.append((vaddr, offset, filesz))
+    return out
+
+
+def kernel_tables(kernel):
+    """The kernel's tables by the pinned llvm-dwarfdump-18 and readelf, and what is wrong: a tool that is not on PATH,
+    or whose binary's sha256 is not sniff-oracle.toml's, is refused by name (never skipped)."""
+    import hashlib
+    import shutil
+    import tomllib
+    pins = tomllib.loads((ROOT / 'sniff-oracle.toml').read_text())
+    tools, problems = {}, []
+    for cmd, key in (('llvm-dwarfdump-18', 'llvm_dwarfdump'), ('readelf', 'readelf')):
+        found = shutil.which(cmd)
+        if not found:
+            problems.append('%s is not on PATH: the kernel\'s tables are read by the pinned tool only (refused, never skipped)' % cmd)
+            continue
+        real = Path(found).resolve()
+        sha = hashlib.sha256(real.read_bytes()).hexdigest()
+        if sha != pins[key]['sha256']:
+            problems.append("%s at %s sha256 %s is not the pin's %s" % (cmd, real, sha, pins[key]['sha256']))
+            continue
+        tools[cmd] = str(real)
+    if problems:
+        return None, problems
+    try:
+        return KernelTables(kernel, tools['llvm-dwarfdump-18'], tools['readelf']), []
+    except (OSError, subprocess.SubprocessError, ValueError) as e:
+        return None, ['the kernel\'s tables are unreadable: %s' % e]
+
+
 def normalise(text, port, kernel, sess, names=(), ends=None, tables=None, notes=None):
     """The port, the kernel's path and the terminal, always; a row's own normalisations by name: `watch-values` (a
-    watchpoint's old and new values, which the time decides) and `stop-location` (where a machine a detach let run was
-    when the next connect stopped it: stop_location). Each replaces a value in a line that must be there: the hit's own
-    line, the connect's line, the signal's line and a frame in one of gdb's two forms stay asserted, so a transcript
-    that lacks one, or prints a line in neither form, still differs from its golden. ENDS is the driver's outcome for
-    each script line, TABLES the kernel's own tables, and NOTES a dict a normalisation may report into."""
+    watchpoint's old and new values, which the time decides), `stop-location` (where a machine a detach let run was
+    when the next connect stopped it: stop_location) and `interrupt-stop` (where the interrupt byte stopped the kernel,
+    recorded once its six assertions hold: interrupt_stop). Each replaces a value in a line that must be there: the
+    hit's own line, the connect's line, the signal's line and a frame in one of gdb's two forms stay asserted, so a
+    transcript that lacks one, or prints a line in neither form, still differs from its golden. ENDS is the driver's
+    outcome for each script line, TABLES the kernel's own tables, and NOTES a dict a normalisation reports into
+    (interrupt-stop's problems and location)."""
     fired = set()
     t = sess.normalize_tty(text, fired)
     if port:
@@ -258,6 +514,10 @@ def normalise(text, port, kernel, sess, names=(), ends=None, tables=None, notes=
         t = re.sub(r'^(Old|New) value = .*$', r'\1 value = <VALUE>', t, flags=re.M)
     if 'stop-location' in names:
         t = stop_location(t)
+    if 'interrupt-stop' in names:
+        t, problems, location = interrupt_stop(t, ends, tables)
+        if notes is not None:
+            notes['problems'], notes['location'] = problems, location
     return t
 
 
@@ -302,7 +562,13 @@ def run_row(a, row, sess, out):
     bad = [line for line, how in ends if not how.endswith('prompt')]
     notes = {}
     got = normalise(text, port, kernel, sess, row.get('normalise', []), ends=ends, tables=getattr(a, 'tables', None), notes=notes)
-    return got, ('no prompt after: ' + bad[0]) if bad else ''
+    why = ('no prompt after: ' + bad[0]) if bad else ''
+    if notes.get('problems'):
+        why = 'interrupt-stop ' + '; '.join(notes['problems'])
+    if notes.get('location'):
+        # recorded, never gated: where the interrupt byte stopped the machine this time
+        print('LOCATION remote %s accel=%s client=%s %s' % (row['name'], a.accel, 'gdb' if a.mode in ('capture', 'gdb-check') else 'sniff', notes['location']))
+    return got, why
 
 
 def first_diff(want, got):
@@ -329,6 +595,15 @@ def cmd_run(a):
     out = Path(a.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
     counts = {'pass': 0, 'fail': 0, 'skip': 0}
+    a.tables = None
+    if any('interrupt-stop' in r.get('normalise', []) and not r.get('skip') for r in load_rows(a.only, path=a.rows)):
+        # the kernel's own tables, by the pinned tools only: a missing or unpinned tool is a refusal by name, never a skip
+        a.tables, problems = kernel_tables(a.kernel)
+        if problems:
+            for problem in problems:
+                print('FAIL remote-kernel-tables-pin ' + problem)
+            print('remote rows (%s, %s): 0 pass, 1 fail, 0 skip' % (a.mode, a.accel))
+            return 1
     if any(r.get('qemu', True) and not r.get('skip') for r in load_rows(a.only, path=a.rows)):
         text, problems = qemu_line(a)
         print(text)
@@ -385,7 +660,8 @@ def cmd_run(a):
             continue
         d = first_diff(gold.read_text(), got)
         if d or why:
-            print('FAIL remote %s %s' % (row['name'], d or why))
+            # interrupt-stop's own assertion names the red before the line its text then differs at
+            print('FAIL remote %s %s' % (row['name'], why if why.startswith('interrupt-stop ') else (d or why)))
             counts['fail'] += 1
         else:
             print('PASS remote %s' % row['name'])
@@ -1748,7 +2024,7 @@ def cmd_selftest(_a):
     for r in [r for r in rows if r.get('kind', 'kernel') == 'kernel']:
         assert r['name'].startswith(('remote-kernel-', 'remote-refuse-')), r['name']
         assert r.get('accel') in (None, 'kvm', 'tcg'), r['name']
-        assert set(r.get('normalise', [])) <= {'watch-values', 'stop-location'}, r['name']
+        assert set(r.get('normalise', [])) <= {'watch-values', 'stop-location', 'interrupt-stop'}, r['name']
         assert not (r.get('skip') and r.get('own') is not None), r['name']
         if r.get('skip'):
             assert '\n' not in r['skip'] and r['skip'].strip(), 'a skip names its reason in one line: ' + r['name']
