@@ -78,6 +78,23 @@ class Steps(unittest.TestCase):
         self.assertIn('PASS dap r6', said, said)
 
 
+class RelativeSniff(unittest.TestCase):
+    def test_a_relative_sniff_path_runs_from_any_row_directory(self):
+        # the gate passes target/sniff; each row runs the adapter from its own directory
+        wrapper = ROOT / 'target/tmp/standin-sniff'
+        wrapper.parent.mkdir(parents=True, exist_ok=True)
+        wrapper.write_text('#!/bin/sh\nexec %s -I %s plain\n' % (sys.executable, ROOT / 'tests/standin_dap.py'))
+        wrapper.chmod(0o755)
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, 'rows.json')
+            with open(path, 'w') as f:
+                json.dump({'schema': 1, 'rows': [row('r7', INIT, ['send', 'disconnect', {}], ['exit', 0])]}, f)
+            p = subprocess.run([sys.executable, '-I', str(ROOT / 'tools/session-dap.py'), 'check', '--sniff',
+                                'target/tmp/standin-sniff', '--rows', path, '--out', os.path.relpath(os.path.join(d, 'out'), ROOT)],
+                               capture_output=True, text=True, cwd=ROOT, env={'PATH': os.environ['PATH'], 'LC_ALL': 'C'})
+        self.assertIn('PASS dap r7', p.stdout.splitlines(), p.stdout + p.stderr)
+
+
 class Faults(unittest.TestCase):
     def test_a_hang_is_a_fault_by_name(self):
         rc, said, _ = run([row('f1', INIT, ['post', 'launch', {}], ['wait', 'initialized'],
