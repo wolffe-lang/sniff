@@ -242,12 +242,13 @@ def stop_location(t):
     return '\n'.join(out)
 
 
-def normalise(text, port, kernel, sess, names=()):
+def normalise(text, port, kernel, sess, names=(), ends=None, tables=None, notes=None):
     """The port, the kernel's path and the terminal, always; a row's own normalisations by name: `watch-values` (a
     watchpoint's old and new values, which the time decides) and `stop-location` (where a machine a detach let run was
     when the next connect stopped it: stop_location). Each replaces a value in a line that must be there: the hit's own
     line, the connect's line, the signal's line and a frame in one of gdb's two forms stay asserted, so a transcript
-    that lacks one, or prints a line in neither form, still differs from its golden."""
+    that lacks one, or prints a line in neither form, still differs from its golden. ENDS is the driver's outcome for
+    each script line, TABLES the kernel's own tables, and NOTES a dict a normalisation may report into."""
     fired = set()
     t = sess.normalize_tty(text, fired)
     if port:
@@ -299,7 +300,9 @@ def run_row(a, row, sess, out):
             qr.terminate()
             qr.wait()
     bad = [line for line, how in ends if not how.endswith('prompt')]
-    return normalise(text, port, kernel, sess, row.get('normalise', [])), ('no prompt after: ' + bad[0]) if bad else ''
+    notes = {}
+    got = normalise(text, port, kernel, sess, row.get('normalise', []), ends=ends, tables=getattr(a, 'tables', None), notes=notes)
+    return got, ('no prompt after: ' + bad[0]) if bad else ''
 
 
 def first_diff(want, got):
