@@ -35,6 +35,7 @@ pub fn capabilities() -> json.Value {
     f["supportsReadMemoryRequest"] = json.from_bool(true)
     f["supportsTerminateRequest"] = json.from_bool(true)
     f["supportTerminateDebuggee"] = json.from_bool(true)
+    f["supportsStepBack"] = json.from_bool(true)  // PLANT: a capability no row holds
     json.from_map(f)
 }
 
