@@ -1,0 +1,49 @@
+{
+ "schema": 1,
+ "note": "The DAP rows (S9). U1's rows are sniff's own: the specification is their oracle, and no program runs. Each starts `sniff --dap` afresh; tools/session-dap.py explains the steps.",
+ "rows": [
+  {"name": "dap-initialize", "prog": "-", "compare": "own",
+   "why": "the capabilities sniff declares: exactly the nine its rows hold, each of which the pinned gdb also declares",
+   "steps": [
+    ["send", "initialize", {"clientID": "rows", "adapterID": "sniff", "linesStartAt1": true, "columnsStartAt1": true, "pathFormat": "path"},
+     {"success": true, "body_true": ["supportsConfigurationDoneRequest", "supportsFunctionBreakpoints", "supportsConditionalBreakpoints",
+      "supportsHitConditionalBreakpoints", "supportsEvaluateForHovers", "supportsSteppingGranularity", "supportsReadMemoryRequest",
+      "supportsTerminateRequest", "supportTerminateDebuggee"]}],
+    ["send", "disconnect", {}, {"success": true}],
+    ["exit", 0]]},
+  {"name": "dap-unknown-request-live", "prog": "-", "compare": "own",
+   "why": "a request sniff does not support is refused by name, and the session goes on",
+   "steps": [
+    ["send", "initialize", {"adapterID": "sniff"}, {"success": true}],
+    ["send", "stepBack", {"threadId": 1}, {"success": false, "message": "sniff does not support the request stepBack"}],
+    ["send", "disconnect", {}, {"success": true}],
+    ["exit", 0]]},
+  {"name": "dap-not-a-message", "prog": "-", "compare": "own",
+   "why": "a body that frames but is not a message is reported on standard error and skipped; the next request is answered",
+   "steps": [
+    ["raw", "Content-Length: 3\r\n\r\n[1]"],
+    ["send", "initialize", {"adapterID": "sniff"}, {"success": true}],
+    ["send", "disconnect", {}, {"success": true}],
+    ["exit", 0],
+    ["stderr", "sniff --dap: a message was skipped (not_object)"]]},
+  {"name": "dap-framing-broken", "prog": "-", "compare": "own",
+   "why": "a header whose length is not a number breaks the stream's framing: sniff says so and ends with exit 1",
+   "steps": [
+    ["raw", "Content-Length: x\r\n\r\n{}"],
+    ["exit", 1],
+    ["stderr", "sniff --dap: the stream's framing broke (bad_length)"]]},
+  {"name": "dap-input-truncated", "prog": "-", "compare": "own",
+   "why": "the input ends inside a message: sniff says so and ends with exit 1",
+   "steps": [
+    ["raw", "Content-Length: 50\r\n\r\n{\"seq\":1"],
+    ["close"],
+    ["exit", 1],
+    ["stderr", "sniff --dap: the input ended inside a message (truncated)"]]},
+  {"name": "dap-input-ends", "prog": "-", "compare": "own",
+   "why": "the input ends between messages: sniff ends with exit 0",
+   "steps": [
+    ["send", "initialize", {"adapterID": "sniff"}, {"success": true}],
+    ["close"],
+    ["exit", 0]]}
+ ]
+}
