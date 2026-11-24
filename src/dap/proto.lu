@@ -1,0 +1,114 @@
+// The Debug Adapter Protocol's envelope (the schema's ProtocolMessage, Request, Response and Event): every message is
+// a JSON object with a `seq` and a `type`; a request adds `command` and `arguments`; a response adds `request_seq`,
+// `success`, `command`, and `message` and `body` when it has them; an event adds `event` and `body`. Pure: the server
+// decodes what the reader framed and writes what these build.
+
+use std.json
+
+/// Refusals of a body that frames but is not a message, each by name.
+pub error MessageError = {
+    not_utf8,
+    not_json,
+    not_object,
+    bad_seq,
+    bad_type,
+    no_command,
+    no_event,
+}
+
+/// A request: the client asks (or, in the protocol, an adapter asks its client; sniff never does).
+pub const kind_request: int = 0
+/// A response to a request, by its request_seq.
+pub const kind_response: int = 1
+/// An event: something happened that no request asked about.
+pub const kind_event: int = 2
+
+/// One decoded message: its seq and kind; a request's or a response's command, or an event's name; a request's
+/// arguments or a response's or an event's body (null when absent); and a response's request_seq, success and message.
+pub struct Message {
+    pub seq: int,
+    pub kind: int,
+    pub command: str,
+    pub payload: json.Value,
+    pub request_seq: int,
+    pub success: bool,
+    pub text: str,
+}
+
+/// A message that is none: what a caller holds when decoding refused.
+pub fn no_message() -> Message {
+    Message { seq: 0, kind: -1, command: "", payload: json.null(), request_seq: 0, success: false, text: "" }
+}
+
+fn member(v: json.Value, key: str) -> json.Value {
+    json.get(v, key) else { json.null() }
+}
+
+fn member_str(v: json.Value, key: str) -> str {
+    json.as_str(member(v, key)) else { "" }
+}
+
+/// A body as a message. Its seq must be a whole number and its type one of the three, with a command for a request
+/// or a response and an event name for an event.
+pub fn decode(body: List[byte]) -> Message ! MessageError {
+    let t = str_from_utf8(body) else { return not_utf8 }
+    let v = json.parse(t) else { return not_json }
+    if json.type_name(v) != "obj" { return not_object }
+    let seq = json.as_int(member(v, "seq")) else { return bad_seq }
+    let ty = member_str(v, "type")
+    var m = no_message()
+    m.seq = seq
+    if ty == "request" {
+        m.kind = kind_request
+        m.command = member_str(v, "command")
+        if m.command == "" { return no_command }
+        m.payload = member(v, "arguments")
+        return m
+    }
+    if ty == "response" {
+        m.kind = kind_response
+        m.command = member_str(v, "command")
+        if m.command == "" { return no_command }
+        m.request_seq = json.as_int(member(v, "request_seq")) else { return bad_seq }
+        m.success = json.as_bool(member(v, "success")) else { false }
+        m.text = member_str(v, "message")
+        m.payload = member(v, "body")
+        return m
+    }
+    if ty == "event" {
+        m.kind = kind_event
+        m.command = member_str(v, "event")
+        if m.command == "" { return no_event }
+        m.payload = member(v, "body")
+        return m
+    }
+    bad_type
+}
+
+/// The text of an object built from FIELDS; a value that cannot be written (deeper than std.json writes) is `{}`.
+pub fn written(fields: Map[str, json.Value]) -> str {
+    json.stringify(json.from_map(fields)) else { "{{}}" }
+}
+
+/// The response to REQ, numbered SEQ: success, and when given a message and a body.
+pub fn response_text(seq: int, req: Message, ok: bool, text: str, body: json.Value) -> str {
+    var f = Map[str, json.Value]()
+    f["seq"] = json.from_int(seq)
+    f["type"] = json.from_str("response")
+    f["request_seq"] = json.from_int(req.seq)
+    f["success"] = json.from_bool(ok)
+    f["command"] = json.from_str(req.command)
+    if text != "" { f["message"] = json.from_str(text) }
+    if !json.is_null(body) { f["body"] = body }
+    written(f)
+}
+
+/// The event NAME, numbered SEQ, with a body when given.
+pub fn event_text(seq: int, name: str, body: json.Value) -> str {
+    var f = Map[str, json.Value]()
+    f["seq"] = json.from_int(seq)
+    f["type"] = json.from_str("event")
+    f["event"] = json.from_str(name)
+    if !json.is_null(body) { f["body"] = body }
+    written(f)
+}
