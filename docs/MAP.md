@@ -315,8 +315,21 @@ as 0x03) and watchpoints. The register slots are Linux's x86-64 `user_regs_struc
 description. The kernel rows (`tests/remote-rows.json`, `tools/session-remote.py`) boot PAX's console image under
 QEMU's gdbstub at one processor, the processor frozen at reset, and hold sniff's terminal transcript to the pinned
 gdb's: a golden is written only when a second capture on its own boot holds it, and each normalisation is declared
-per row and replaces a value in a line that must be there. The rows run under KVM and TCG on the record host
-(`tools/gate-remote`); a host with no kernel image skips them by name with the count held (`tools/gate`), as does the
+per row and replaces a value in a line that must be there.
+- **The interrupt's stop** (`interrupt-stop`, in `remote-kernel-interrupt`, `remote-kernel-detach-signalled` and
+  `remote-kernel-disconnect-signalled`) is recorded on a `LOCATION` line and never gated.
+  - Where the byte stops the kernel is the machine's choice. In 404 measured stops, 399 were at the instruction after
+    `pax_idle`'s `hlt`, and the rest were in the timer path, the interrupt entry and another kernel thread.
+  - The rule's assertions must hold first: the byte was sent while the target ran; the stop is SIGINT's; the frame names
+    the function that holds its address; where threads are listed, the thread line agrees with the stop; a halted
+    processor sits just past a `hlt`; the session goes on; and after a disconnect the reconnect finds the same frame.
+  - The function is found in the kernel binary's own DWARF and ELF symbols, read by the pinned `llvm-dwarfdump-18` and
+    `readelf`. Each subprogram's own address range is used, since the kernel's compilation units carry none. A missing
+    or unpinned tool is refused by name.
+  - What the rule gives up: a stop in an unusual but real place is never red.
+
+The rows run under KVM and TCG on the record host (`tools/gate-remote`); a host with no kernel image skips them by
+name with the count held (`tools/gate`), as does the
 Mac, whose build has no x86-64 register, CFI or call tables for the kernel. Boundaries that remain: no assignment
 (`set var`) to memory or registers, no `<flags>` types in `info registers` (three rows wait for these as named
 skips), and no Mac build for the kernel rows.
