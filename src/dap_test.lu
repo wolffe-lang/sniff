@@ -1,0 +1,246 @@
+//! member: false
+// The Debug Adapter Protocol's base protocol, its envelope and the requests sniff answers before a program exists:
+// the specification's overview ("Base protocol") and its schema (ProtocolMessage, Request, Response, Event,
+// Capabilities). Pure: nothing here reads standard input; `sniff --dap` feeds what it reads to the same functions.
+
+use dap
+use std.json
+
+fn b(s: str) -> List[byte] {
+    s.bytes()
+}
+
+fn text(d: List[byte]) -> str {
+    str_from_utf8(d) else { "" }
+}
+
+fn repeat(c: int, n: int) -> str {
+    var out: List[byte] = []
+    var i: int = 0
+    while i < n { (mut out).push(c as byte); i += 1 }
+    text(out)
+}
+
+fn msg(body: str) -> str {
+    "Content-Length: {body.bytes().len}\r\n\r\n{body}"
+}
+
+// Feed TEXT whole to a fresh reader: the bodies it completed, or the refusal's name.
+fn bodies_of(t: str) -> List[str] {
+    var r = dap.reader()
+    let d = b(t)
+    var out: List[str] = []
+    let _ = dap.feed(mut r, d, 0, d.len) else |e| { (mut out).push("refused {e}"); return out }
+    while true {
+        let (ok, body) = dap.next_body(mut r)
+        if !ok { break }
+        (mut out).push(text(body))
+    }
+    out
+}
+
+fn refusal(t: str) -> str {
+    var r = dap.reader()
+    let d = b(t)
+    let _ = dap.feed(mut r, d, 0, d.len) else |e| { return "{e}" }
+    dap.finish(r) else |e| { return "{e}" }
+    "none"
+}
+
+fn frame_one_row() {
+    let got = bodies_of(msg("{{\"seq\":1}}"))
+    assert(got.len == 1 && got[0] == "{{\"seq\":1}}")
+    // an empty content part is a whole message too
+    let empty = bodies_of("Content-Length: 0\r\n\r\n")
+    assert(empty.len == 1 && empty[0] == "")
+    // the length counts bytes, not characters
+    let wide = bodies_of(msg("\"é\""))
+    assert(wide.len == 1 && wide[0] == "\"é\"")
+    print("PASS dap-frame-one")
+}
+
+fn frame_split_row() {
+    let whole = b(msg("{{\"command\":\"initialize\"}}"))
+    var at: int = 0
+    while at <= whole.len {
+        var r = dap.reader()
+        let first = dap.feed(mut r, whole, 0, at) else { assert(false); return }
+        // nothing is delivered before its last byte
+        assert(at == whole.len || first == 0)
+        let second = dap.feed(mut r, whole, at, whole.len) else { assert(false); return }
+        assert(first + second == 1)
+        let (ok, body) = dap.next_body(mut r)
+        assert(ok && text(body) == "{{\"command\":\"initialize\"}}")
+        at += 1
+    }
+    // one byte at a time
+    var r = dap.reader()
+    var n: int = 0
+    var i: int = 0
+    while i < whole.len {
+        let k = dap.feed(mut r, whole, i, i + 1) else { assert(false); return }
+        n += k
+        i += 1
+    }
+    assert(n == 1)
+    print("PASS dap-frame-split")
+}
+
+fn frame_two_row() {
+    let got = bodies_of(msg("{{\"seq\":1}}") + msg("{{\"seq\":2}}"))
+    assert(got.len == 2 && got[0] == "{{\"seq\":1}}" && got[1] == "{{\"seq\":2}}")
+    print("PASS dap-frame-two")
+}
+
+fn frame_extra_header_row() {
+    // only Content-Length is defined; another field is read and ignored, and the name's case does not matter
+    let got = bodies_of("Content-Type: application/json\r\ncontent-length: 2\r\n\r\n{{}}")
+    assert(got.len == 1 && got[0] == "{{}}")
+    let spaced = bodies_of("Content-Length:   2  \r\n\r\n{{}}")
+    assert(spaced.len == 1 && spaced[0] == "{{}}")
+    print("PASS dap-frame-extra-header")
+}
+
+fn frame_refusals_row() {
+    assert(refusal("X-Other: 1\r\n\r\n{{}}") == "no_length")
+    assert(refusal("Content-Length: two\r\n\r\n") == "bad_length")
+    assert(refusal("Content-Length: -1\r\n\r\n") == "bad_length")
+    assert(refusal("Content-Length: \r\n\r\n") == "bad_length")
+    assert(refusal("Content-Length 2\r\n\r\n{{}}") == "bad_header")
+    assert(refusal("Content-Length: 2\n\n{{}}") == "bad_header")
+    assert(refusal("Content-Length: 2\r\nContent-Length: 2\r\n\r\n{{}}") == "bad_header")
+    // a header line of 4,096 bytes is read; one more is refused
+    let pad = "X-Pad: " + repeat(97, dap.max_header_line - 7)
+    assert(refusal(pad + "\r\n" + msg("{{}}")) == "none")
+    assert(refusal(pad + "a\r\n" + msg("{{}}")) == "header_too_long")
+    // 32 header fields are read; a 33rd is refused
+    var fields: str = ""
+    var i: int = 0
+    while i < dap.max_headers - 1 { fields = fields + "X-N: 1\r\n"; i += 1 }
+    assert(refusal(fields + msg("{{}}")) == "none")
+    assert(refusal(fields + "X-N: 1\r\n" + msg("{{}}")) == "too_many_headers")
+    // a content part of 64 MiB is taken; one byte more is refused before it is read
+    var big = dap.reader()
+    let at_cap = b("Content-Length: {dap.max_body}\r\n\r\n")
+    let n = dap.feed(mut big, at_cap, 0, at_cap.len) else { assert(false); return }
+    assert(n == 0 && big.in_body)
+    assert(refusal("Content-Length: {dap.max_body + 1}\r\n\r\n") == "body_too_long")
+    // the input ends inside a message
+    assert(refusal("Content-Length: 5\r\n\r\n{{}}") == "truncated")
+    assert(refusal("Content-Len") == "truncated")
+    // a refused stream stays refused
+    var dead = dap.reader()
+    let bad = b("Content-Length: x\r\n\r\n" + msg("{{}}"))
+    let _ = dap.feed(mut dead, bad, 0, bad.len) else { 0 }
+    let more = b(msg("{{}}"))
+    let again = dap.feed(mut dead, more, 0, more.len) else |e| { assert("{e}" == "bad_header"); 0 }
+    assert(again == 0 && dead.dead)
+    // a body that is not UTF-8, or not JSON, or not a message, is refused by the envelope, by name
+    let not_utf8: List[byte] = [123 as byte, 255 as byte, 125 as byte]
+    let e1 = dap.decode(not_utf8) else |e| { assert("{e}" == "not_utf8"); dap.no_message() }
+    assert(e1.seq == 0)
+    let e2 = dap.decode(b("{{seq")) else |e| { assert("{e}" == "not_json"); dap.no_message() }
+    assert(e2.seq == 0)
+    let e3 = dap.decode(b("[1]")) else |e| { assert("{e}" == "not_object"); dap.no_message() }
+    assert(e3.seq == 0)
+    let e4 = dap.decode(b("{{\"type\":\"request\",\"command\":\"x\"}}")) else |e| { assert("{e}" == "bad_seq"); dap.no_message() }
+    assert(e4.seq == 0)
+    let e5 = dap.decode(b("{{\"seq\":1,\"type\":\"note\"}}")) else |e| { assert("{e}" == "bad_type"); dap.no_message() }
+    assert(e5.seq == 0)
+    let e6 = dap.decode(b("{{\"seq\":1,\"type\":\"request\"}}")) else |e| { assert("{e}" == "no_command"); dap.no_message() }
+    assert(e6.seq == 0)
+    print("PASS dap-frame-refusals")
+}
+
+fn frame_write_row() {
+    assert(text(dap.encode("{{}}")) == "Content-Length: 2\r\n\r\n{{}}")
+    assert(text(dap.encode("\"é\"")) == "Content-Length: 4\r\n\r\n\"é\"")
+    // what is written reads back
+    let got = bodies_of(text(dap.encode("{{\"seq\":7}}")))
+    assert(got.len == 1 && got[0] == "{{\"seq\":7}}")
+    print("PASS dap-frame-write")
+}
+
+fn field_int(v: json.Value, key: str) -> int {
+    let f = json.get(v, key) else { return -1 }
+    json.as_int(f) else { -1 }
+}
+
+fn field_str(v: json.Value, key: str) -> str {
+    let f = json.get(v, key) else { return "<absent>" }
+    json.as_str(f) else { "<not a string>" }
+}
+
+fn field_bool(v: json.Value, key: str) -> int {
+    let f = json.get(v, key) else { return -1 }
+    let x = json.as_bool(f) else { return -1 }
+    if x { 1 } else { 0 }
+}
+
+fn parsed(t: str) -> json.Value {
+    json.parse(t) else { json.null() }
+}
+
+fn envelope_row() {
+    let m = dap.decode(b("{{\"seq\":5,\"type\":\"request\",\"command\":\"threads\",\"arguments\":{{}}}}")) else { assert(false); return }
+    assert(m.seq == 5 && m.kind == dap.kind_request && m.command == "threads")
+    var s = dap.session()
+    // a response carries its own seq, the request's seq, success and the command; sniff counts from 1
+    let r = parsed(dap.response(mut s, m, true, "", json.null()))
+    assert(field_int(r, "seq") == 1 && field_str(r, "type") == "response" && field_int(r, "request_seq") == 5)
+    assert(field_bool(r, "success") == 1 && field_str(r, "command") == "threads" && field_str(r, "message") == "<absent>")
+    // an event carries its own seq, counted with the responses
+    let e = parsed(dap.event(mut s, "initialized", json.null()))
+    assert(field_int(e, "seq") == 2 && field_str(e, "type") == "event" && field_str(e, "event") == "initialized")
+    // a response from the client, or an event, decodes by its own type
+    let back = dap.decode(b("{{\"seq\":3,\"type\":\"response\",\"request_seq\":2,\"success\":false,\"command\":\"runInTerminal\",\"message\":\"no\"}}")) else { assert(false); return }
+    assert(back.kind == dap.kind_response && back.request_seq == 2 && !back.success && back.command == "runInTerminal")
+    print("PASS dap-envelope")
+}
+
+fn unknown_request_row() {
+    var s = dap.session()
+    let m = dap.decode(b("{{\"seq\":9,\"type\":\"request\",\"command\":\"stepBack\",\"arguments\":{{\"threadId\":1}}}}")) else { assert(false); return }
+    dap.on_message(mut s, m)
+    assert(s.out.len == 1 && !s.done)
+    let r = parsed(s.out[0])
+    assert(field_int(r, "request_seq") == 9 && field_bool(r, "success") == 0 && field_str(r, "command") == "stepBack")
+    assert(field_str(r, "message") == "sniff does not support the request stepBack")
+    print("PASS dap-unknown-request")
+}
+
+fn initialize_row() {
+    var s = dap.session()
+    let m = dap.decode(b("{{\"seq\":1,\"type\":\"request\",\"command\":\"initialize\",\"arguments\":{{\"adapterID\":\"sniff\",\"linesStartAt1\":true}}}}")) else { assert(false); return }
+    dap.on_message(mut s, m)
+    assert(s.out.len == 1)
+    let r = parsed(s.out[0])
+    assert(field_bool(r, "success") == 1 && field_str(r, "command") == "initialize")
+    let caps = json.get(r, "body") else { assert(false); return }
+    let names = ["supportsConfigurationDoneRequest", "supportsFunctionBreakpoints", "supportsConditionalBreakpoints",
+                 "supportsHitConditionalBreakpoints", "supportsEvaluateForHovers", "supportsSteppingGranularity",
+                 "supportsReadMemoryRequest", "supportsTerminateRequest", "supportTerminateDebuggee"]
+    for n in names { assert(field_bool(caps, n) == 1) }
+    // exactly these: nothing else is declared
+    let keys = json.keys(caps) else { assert(false); return }
+    assert(keys.len == names.len)
+    // disconnect is answered and ends the session
+    let d = dap.decode(b("{{\"seq\":2,\"type\":\"request\",\"command\":\"disconnect\"}}")) else { assert(false); return }
+    dap.on_message(mut s, d)
+    assert(s.out.len == 2 && s.done)
+    let dr = parsed(s.out[1])
+    assert(field_bool(dr, "success") == 1 && field_str(dr, "command") == "disconnect" && field_int(dr, "request_seq") == 2)
+    print("PASS dap-initialize-caps")
+}
+
+fn main() {
+    frame_one_row()
+    frame_split_row()
+    frame_two_row()
+    frame_extra_header_row()
+    frame_refusals_row()
+    frame_write_row()
+    envelope_row()
+    unknown_request_row()
+    initialize_row()
+}

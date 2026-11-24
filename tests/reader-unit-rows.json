@@ -209,5 +209,16 @@
     "server-requests",
     "server-threads-xml",
     "server-x87-tag"
+  ],
+  "dap_test.lu": [
+    "dap-frame-one",
+    "dap-frame-split",
+    "dap-frame-two",
+    "dap-frame-extra-header",
+    "dap-frame-refusals",
+    "dap-frame-write",
+    "dap-envelope",
+    "dap-unknown-request",
+    "dap-initialize-caps"
   ]
 }
