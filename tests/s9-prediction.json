@@ -1,0 +1,450 @@
+{
+ "schema": 1,
+ "milestone": "S9a: a Debug Adapter Protocol server, sniff --dap, on Linux x86-64",
+ "written_before_code": "2026-11-24",
+ "scope": "S9a's rows: the base protocol and its envelope (U1), sessions over the S2 command set on Linux (U2), and attach by process id, a core file and the remote kernel (U3). macOS and PAX are predicted in their own file when their PR starts.",
+ "measured_before_code": {
+  "gdb": "the pinned gdb 15.1 in DAP mode (gdb -i=dap), run only as a binary over thirteen rows, two takes each, over gcc's and clang's session builds: every row that ran agreed between its takes after the named normalisations. It declares 23 capabilities; it starts the program at launch and answers configurationDone with notStopped after breakpoints; it refuses threads with notStopped while the program runs; pause stops with reason pause; stopAtBeginningOfMainSubprogram stops in main; stopOnEntry is ignored; evaluate in the repl context answers the command's text",
+  "lldb-dap": "Apple's lldb-dap (LLVM 21.0.0), the same thirteen rows on macOS: twelve agreed between takes, and stopAtBeginningOfMainSubprogram is ignored there; stopOnEntry and pause stop with reason exception, signal SIGSTOP; it declares 22 capabilities, 19 in common with gdb's",
+  "normalisations": "seq and request_seq; thread, frame, variablesReference, breakpoint and memoryReference ids and systemProcessId, each by first appearance; addresses and process ids in text; module and loadedSource events not compared; responses compared in request order and other events in their own order"
+ },
+ "surface": {
+  "entry": "sniff --dap, over standard input and output only",
+  "launch": "program, args, cwd, env and stopAtBeginningOfMainSubprogram, as gdb names them; stopOnEntry refused by name",
+  "attach": "pid, target or coreFile, checked in that order",
+  "capabilities": [
+   "supportsConfigurationDoneRequest",
+   "supportsFunctionBreakpoints",
+   "supportsConditionalBreakpoints",
+   "supportsHitConditionalBreakpoints",
+   "supportsEvaluateForHovers",
+   "supportsSteppingGranularity",
+   "supportsReadMemoryRequest",
+   "supportsTerminateRequest",
+   "supportTerminateDebuggee"
+  ],
+  "repl": "evaluate in the repl context runs one line of the command language and answers its text",
+  "extensions": "none: a request sniff does not support is answered success: false, naming it"
+ },
+ "named_differences": {
+  "launch-start": "gdb 15.1 starts the program at launch and answers configurationDone notStopped after breakpoints; sniff starts it at configurationDone and answers success: true, following the specification and the CLI twin (break before run)",
+  "threads-running": "threads while the program runs is refused notStopped, as gdb (the Linux oracle) answers; the thread id comes from the thread event with reason started",
+  "capabilities": "sniff's capabilities object is held to its own declared set, not to gdb's"
+ },
+ "compilers": "each C row runs over gcc's and clang's session builds (@CC@), as the measurement did",
+ "rows": [
+  {
+   "name": "dap-frame-one",
+   "unit": "U1",
+   "prog": "-",
+   "does": "one message in one read",
+   "oracle": "the specification (overview's base protocol, the schema)",
+   "twin": "-",
+   "prediction": "decoded to one parsed body; seq and type read",
+   "named_differences": []
+  },
+  {
+   "name": "dap-frame-split",
+   "unit": "U1",
+   "prog": "-",
+   "does": "one message fed one byte at a time, then at every split point",
+   "oracle": "the specification (overview's base protocol, the schema)",
+   "twin": "-",
+   "prediction": "the same body at every split point; nothing delivered early",
+   "named_differences": []
+  },
+  {
+   "name": "dap-frame-two",
+   "unit": "U1",
+   "prog": "-",
+   "does": "two messages in one read",
+   "oracle": "the specification (overview's base protocol, the schema)",
+   "twin": "-",
+   "prediction": "two bodies, in order",
+   "named_differences": []
+  },
+  {
+   "name": "dap-frame-extra-header",
+   "unit": "U1",
+   "prog": "-",
+   "does": "a header block with a field besides Content-Length",
+   "oracle": "the specification (overview's base protocol, the schema)",
+   "twin": "-",
+   "prediction": "the other field is ignored and the body decoded (the overview: only Content-Length is supported and required)",
+   "named_differences": []
+  },
+  {
+   "name": "dap-frame-refusals",
+   "unit": "U1",
+   "prog": "-",
+   "does": "no Content-Length; a length that is not a number or is negative; a header line over 4,096 bytes; more than 32 header fields; a body over 64 MiB; a body that is not JSON; a body that is not UTF-8; the input ends inside a body",
+   "oracle": "the specification (overview's base protocol, the schema)",
+   "twin": "-",
+   "prediction": "each refused by its own name, the reader then dead; never a crash",
+   "named_differences": []
+  },
+  {
+   "name": "dap-frame-write",
+   "unit": "U1",
+   "prog": "-",
+   "does": "a message written",
+   "oracle": "the specification (overview's base protocol, the schema)",
+   "twin": "-",
+   "prediction": "exactly `Content-Length: N\\r\\n\\r\\n` and N bytes of UTF-8 JSON",
+   "named_differences": []
+  },
+  {
+   "name": "dap-envelope",
+   "unit": "U1",
+   "prog": "-",
+   "does": "a request answered; an event sent",
+   "oracle": "the specification (overview's base protocol, the schema)",
+   "twin": "-",
+   "prediction": "a response carries its own seq, request_seq, success and command; an event its seq, type and event; sniff's seq counts from 1 across both",
+   "named_differences": []
+  },
+  {
+   "name": "dap-unknown-request",
+   "unit": "U1",
+   "prog": "-",
+   "does": "a request sniff does not support (`stepBack`)",
+   "oracle": "the specification (overview's base protocol, the schema)",
+   "twin": "-",
+   "prediction": "success: false, with a message naming the request; the session goes on",
+   "named_differences": []
+  },
+  {
+   "name": "dap-initialize",
+   "unit": "U1",
+   "prog": "c/calls/@CC@-O0/prog",
+   "does": "initialize, then disconnect",
+   "oracle": "sniff's own declared set, validated against the schema",
+   "twin": "-",
+   "prediction": "exactly the nine declared capabilities, nothing else true",
+   "named_differences": [
+    "capabilities: gdb declares 23; the row holds sniff's own set"
+   ]
+  },
+  {
+   "name": "dap-harness-selftest",
+   "unit": "U1",
+   "prog": "-",
+   "does": "tools/session-dap.py selftest with stand-in adapters: a hang, an early end, a reverse request, a body that is not JSON",
+   "oracle": "the harness's own controls",
+   "twin": "-",
+   "prediction": "each a FAULT by name, never a red; the plain stand-in passes",
+   "named_differences": []
+  },
+  {
+   "name": "dap-exit3",
+   "unit": "U2",
+   "prog": "c/exits/@CC@-O0/prog",
+   "does": "launch with args [3]; configurationDone; exited; terminated",
+   "oracle": "gdb's DAP transcript (after the named normalisations)",
+   "twin": "inferior-c-gcc-exit3",
+   "prediction": "exited with exitCode 3, then terminated",
+   "named_differences": [
+    "launch-start"
+   ]
+  },
+  {
+   "name": "dap-segv",
+   "unit": "U2",
+   "prog": "c/exits/@CC@-O0/prog",
+   "does": "launch with args [fault]; stopped; stackTrace; continue; exited",
+   "oracle": "gdb's DAP transcript (after the named normalisations)",
+   "twin": "inferior-c-gcc-segv",
+   "prediction": "stopped with reason exception and a description naming SIGSEGV; the top frame main at line 19; then the program is killed by the signal",
+   "named_differences": [
+    "launch-start"
+   ]
+  },
+  {
+   "name": "dap-bp-func-hits",
+   "unit": "U2",
+   "prog": "c/hits/@CC@-O0/prog",
+   "does": "a function breakpoint on tick; three stops; threads; stackTrace",
+   "oracle": "gdb's DAP transcript (after the named normalisations)",
+   "twin": "bp-gcc-hits3",
+   "prediction": "stopped(breakpoint) in tick at main.c:4 three times, hitBreakpointIds [1]; one thread",
+   "named_differences": [
+    "launch-start"
+   ]
+  },
+  {
+   "name": "dap-bp-line-hits",
+   "unit": "U2",
+   "prog": "c/hits/@CC@-O0/prog",
+   "does": "a line breakpoint at main.c:4; two stops",
+   "oracle": "gdb's DAP transcript (after the named normalisations)",
+   "twin": "bp-gcc-same-address",
+   "prediction": "the breakpoint verified at line 4; two stops there",
+   "named_differences": [
+    "launch-start"
+   ]
+  },
+  {
+   "name": "dap-bp-condition",
+   "unit": "U2",
+   "prog": "c/watch/@CC@-O0/prog",
+   "does": "a function breakpoint on bump with condition `by == 1`",
+   "oracle": "gdb's DAP transcript (after the named normalisations)",
+   "twin": "break-gcc-condition",
+   "prediction": "one stop in bump with by == 1, as the CLI twin",
+   "named_differences": [
+    "launch-start"
+   ]
+  },
+  {
+   "name": "dap-bp-hit-condition",
+   "unit": "U2",
+   "prog": "c/hits/@CC@-O0/prog",
+   "does": "a function breakpoint on tick with hitCondition 3",
+   "oracle": "gdb's DAP transcript (after the named normalisations)",
+   "twin": "bp-gcc-ignore",
+   "prediction": "the first stop is the third hit (n == 2); gdb's hitCondition and the CLI's ignore count agree",
+   "named_differences": [
+    "launch-start"
+   ]
+  },
+  {
+   "name": "dap-bp-bad",
+   "unit": "U2",
+   "prog": "c/calls/@CC@-O0/prog",
+   "does": "a function breakpoint on nosuch; a line breakpoint at main.c:99",
+   "oracle": "gdb's DAP transcript (after the named normalisations)",
+   "twin": "bp-gcc-bad-locations, bp-gcc-bad-line",
+   "prediction": "each answered verified: false with a message; the program then runs to its end",
+   "named_differences": [
+    "launch-start"
+   ]
+  },
+  {
+   "name": "dap-step-calls",
+   "unit": "U2",
+   "prog": "c/calls/@CC@-O0/prog",
+   "does": "a function breakpoint on main; stepIn, stepIn, next, stepOut, next, with stackTrace after each",
+   "oracle": "gdb's DAP transcript (after the named normalisations)",
+   "twin": "step-gcc-calls",
+   "prediction": "main 20, 21, depth_sum 6, 7, main 21, 22 (the order both adapters gave in the measurement)",
+   "named_differences": [
+    "launch-start"
+   ]
+  },
+  {
+   "name": "dap-step-instruction",
+   "unit": "U2",
+   "prog": "c/calls/@CC@-O0/prog",
+   "does": "a function breakpoint on count; next with granularity instruction, twice",
+   "oracle": "gdb's DAP transcript (after the named normalisations)",
+   "twin": "step-gcc-stepi",
+   "prediction": "two stops one instruction apart, each with its instructionPointerReference; the frame stays count",
+   "named_differences": [
+    "launch-start"
+   ]
+  },
+  {
+   "name": "dap-frames-calls",
+   "unit": "U2",
+   "prog": "c/calls/@CC@-O0/prog",
+   "does": "a line breakpoint at main.c:6; four stops; stackTrace; scopes and variables of frame 2",
+   "oracle": "gdb's DAP transcript (after the named normalisations)",
+   "twin": "frame-gcc-bt-up-down",
+   "prediction": "five frames depth_sum x4 and main; frame 2's locals as `info locals` in frame 2",
+   "named_differences": [
+    "launch-start",
+    "scopes: gdb adds a Registers scope"
+   ]
+  },
+  {
+   "name": "dap-values",
+   "unit": "U2",
+   "prog": "c/values/@CC@-O0/prog",
+   "does": "a line breakpoint at main.c:20; scopes; variables; evaluate watch i, hover *p, repl `print l`, watch nosuch",
+   "oracle": "gdb's DAP transcript (after the named normalisations)",
+   "twin": "value-gcc-args-locals, value-gcc-print",
+   "prediction": "the args and locals with the CLI's value text; repl answers `$1 = -4000000000`; nosuch refused with gdb's message",
+   "named_differences": [
+    "launch-start"
+   ]
+  },
+  {
+   "name": "dap-main-locals",
+   "unit": "U2",
+   "prog": "c/values/@CC@-O0/prog",
+   "does": "a line breakpoint at main.c:36; variables; the children of `words`",
+   "oracle": "gdb's DAP transcript (after the named normalisations)",
+   "twin": "value-gcc-main-locals",
+   "prediction": "words has 4 indexed children 1, 2, 3, 4 named 0..3, as gdb's",
+   "named_differences": [
+    "launch-start"
+   ]
+  },
+  {
+   "name": "dap-read-memory",
+   "unit": "U2",
+   "prog": "c/values/@CC@-O0/prog",
+   "does": "a line breakpoint at main.c:36; evaluate &cell; readMemory of 4 bytes there",
+   "oracle": "gdb's DAP transcript (after the named normalisations) and the CLI twin",
+   "twin": "value-gcc-x",
+   "prediction": "the 4 bytes of -7 (f9 ff ff ff), base64 in data. Uncertain: gdb's variables in the measurement carried no memoryReference, so the row may need its address from evaluate",
+   "named_differences": [
+    "launch-start"
+   ]
+  },
+  {
+   "name": "dap-pause-sleeper",
+   "unit": "U2",
+   "prog": "c/sleeper/@CC@-O0/prog",
+   "does": "launch with args [500]; after 1 s threads (refused), pause by the started thread's id; stackTrace",
+   "oracle": "gdb's DAP transcript (after the named normalisations)",
+   "twin": "-",
+   "prediction": "threads refused notStopped while running; pause stops with reason pause, all threads stopped, at nap line 19 under main 37 (h41b)",
+   "named_differences": [
+    "launch-start",
+    "threads-running"
+   ]
+  },
+  {
+   "name": "dap-stop-main",
+   "unit": "U2",
+   "prog": "c/calls/@CC@-O0/prog",
+   "does": "launch with stopAtBeginningOfMainSubprogram",
+   "oracle": "gdb's DAP transcript (after the named normalisations)",
+   "twin": "-",
+   "prediction": "a stop in main at line 20",
+   "named_differences": [
+    "launch-start"
+   ]
+  },
+  {
+   "name": "dap-stop-entry-refused",
+   "unit": "U2",
+   "prog": "c/calls/@CC@-O0/prog",
+   "does": "launch with stopOnEntry",
+   "oracle": "sniff's own (no Linux oracle)",
+   "twin": "-",
+   "prediction": "launch answered success: false, naming stopOnEntry as not supported",
+   "named_differences": []
+  },
+  {
+   "name": "dap-threads-workers",
+   "unit": "U2",
+   "prog": "c/workers/@CC@-O0/prog",
+   "does": "a function breakpoint on work; threads; stackTrace of each thread",
+   "oracle": "gdb's DAP transcript (after the named normalisations)",
+   "twin": "threads-gcc-info",
+   "prediction": "four threads; the stopped one in work; the others in their own loops, as the CLI twin",
+   "named_differences": [
+    "launch-start",
+    "thread ids and names by first appearance"
+   ]
+  },
+  {
+   "name": "dap-signal",
+   "unit": "U2",
+   "prog": "c/sigusr/@CC@-O0/prog",
+   "does": "launch; stopped; stackTrace; continue x3",
+   "oracle": "gdb's DAP transcript (after the named normalisations)",
+   "twin": "signals-gcc-run",
+   "prediction": "stopped with reason exception and a description naming SIGUSR1, as the CLI's stop",
+   "named_differences": [
+    "launch-start"
+   ]
+  },
+  {
+   "name": "dap-terminate",
+   "unit": "U2",
+   "prog": "c/hits/@CC@-O0/prog",
+   "does": "a breakpoint stop, then terminate",
+   "oracle": "gdb's DAP transcript (after the named normalisations)",
+   "twin": "-",
+   "prediction": "terminate answered; exited and terminated follow",
+   "named_differences": [
+    "launch-start"
+   ]
+  },
+  {
+   "name": "dap-disconnect-running",
+   "unit": "U2",
+   "prog": "c/sleeper/@CC@-O0/prog",
+   "does": "launch; after 1 s disconnect with terminateDebuggee",
+   "oracle": "gdb's DAP transcript (after the named normalisations)",
+   "twin": "-",
+   "prediction": "the program killed; terminated; the adapter exits 0",
+   "named_differences": [
+    "launch-start"
+   ]
+  },
+  {
+   "name": "dap-wolf-hits",
+   "unit": "U2",
+   "prog": "wolf/hits/wolf-debug/prog",
+   "does": "a function breakpoint on tick; stackTrace; scopes; variables; continue",
+   "oracle": "gdb's DAP transcript (after the named normalisations), and lupin's values",
+   "twin": "wolf-hits-tbreak",
+   "prediction": "tick at main.lu:2 (as both adapters in the measurement); n with lupin's value",
+   "named_differences": [
+    "launch-start"
+   ]
+  },
+  {
+   "name": "dap-wolf-values",
+   "unit": "U2",
+   "prog": "wolf/scalars/wolf-debug/prog",
+   "does": "a line breakpoint; variables of each scope, children of an aggregate",
+   "oracle": "gdb's DAP transcript (after the named normalisations), and lupin's values",
+   "twin": "wolf-scalars",
+   "prediction": "the aggregates as the CLI prints them, children by reference",
+   "named_differences": [
+    "launch-start"
+   ]
+  },
+  {
+   "name": "dap-repl-command",
+   "unit": "U2",
+   "prog": "c/calls/@CC@-O0/prog",
+   "does": "a breakpoint stop; evaluate repl `info registers rip` and `x/2xw $sp`",
+   "oracle": "gdb's DAP transcript (after the named normalisations) and the CLI twin",
+   "twin": "value-gcc-registers, step-gcc-stepi",
+   "prediction": "each answered with the command language's text in result",
+   "named_differences": [
+    "launch-start"
+   ]
+  },
+  {
+   "name": "dap-attach-pid",
+   "unit": "U3",
+   "prog": "c/sleeper/@CC@-O0/prog",
+   "does": "the harness starts the sleeper; attach with its pid; stopped; stackTrace; disconnect without terminateDebuggee",
+   "oracle": "gdb's DAP transcript (after the named normalisations)",
+   "twin": "attach-gcc-detach, attach-gcc-break",
+   "prediction": "a stop in nap or tick; after disconnect the sleeper runs on and says done 500",
+   "named_differences": [
+    "thread ids by first appearance"
+   ]
+  },
+  {
+   "name": "dap-attach-core",
+   "unit": "U3",
+   "prog": "the S7 cores",
+   "does": "attach with coreFile and program; stackTrace; scopes; variables",
+   "oracle": "gdb's DAP transcript (after the named normalisations)",
+   "twin": "the S7 core rows",
+   "prediction": "the core's stop, frames and values as the CLI twin; continue refused",
+   "named_differences": []
+  },
+  {
+   "name": "dap-attach-target",
+   "unit": "U3",
+   "prog": "PAX's console kernel under QEMU",
+   "does": "attach with target 127.0.0.1:PORT and program the kernel ELF; stackTrace; continue; pause; stackTrace; disconnect",
+   "oracle": "gdb's DAP transcript (after the named normalisations); the pause by interrupt-stop's assertions",
+   "twin": "remote-kernel-connect, remote-kernel-interrupt",
+   "prediction": "the reset frame 0x…fff0 in ??; the pause's frame held by interrupt-stop, its location on a LOCATION line",
+   "named_differences": [
+    "interrupt-stop for the pause's frame"
+   ]
+  }
+ ]
+}
