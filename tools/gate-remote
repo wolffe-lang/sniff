@@ -11,9 +11,10 @@ step() { # name cmd...: what it passes on to the record is also kept in $out/NAM
   local name=$1 start=$SECONDS r=0; shift
   printf 'START %s\n' "$name"
   "$@" > "$out/$name.log" 2>&1 || r=$?
-  # ORACLES names gdbserver and gdb by version and digest; IMAGE the server rows' image, its stub and its kernel
-  grep -E '^(PASS|FAIL|SKIP|OWN|QEMU version=|ORACLES|IMAGE|remote rows)' "$out/$name.log" |
-    sed -E 's/^(PASS|SKIP|OWN|QEMU version=|ORACLES|IMAGE|remote rows)/  \1/' | tee "$out/$name.passed"
+  # ORACLES names gdbserver and gdb by version and digest; IMAGE the server rows' image, its stub and its kernel;
+  # LOCATION where an interrupt's stop landed (interrupt-stop: recorded, never gated)
+  grep -E '^(PASS|FAIL|SKIP|OWN|QEMU version=|ORACLES|IMAGE|LOCATION|remote rows)' "$out/$name.log" |
+    sed -E 's/^(PASS|SKIP|OWN|QEMU version=|ORACLES|IMAGE|LOCATION|remote rows)/  \1/' | tee "$out/$name.passed"
   printf 'END %s exit=%s secs=%s\n' "$name" "$r" "$((SECONDS-start))"
   [ "$r" = 0 ] || rc=1
 }
