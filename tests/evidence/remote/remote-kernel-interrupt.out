@@ -4,7 +4,7 @@ Remote debugging using 127.0.0.1:PORT
 Continuing.
 
 Program received signal SIGINT, Interrupt.
-0xffffffff80000786 in pax_idle ()
+<STOP>
   Id   Target Id                    Frame 
-* 1    Thread 1.1 (CPU#0 [halted ]) 0xffffffff80000786 in pax_idle ()
+* 1    Thread 1.1 (CPU#0 <STATE>) <STOP>
 [Inferior 1 (process 1) killed]

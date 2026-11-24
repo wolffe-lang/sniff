@@ -4,10 +4,10 @@ Remote debugging using 127.0.0.1:PORT
 Continuing.
 
 Program received signal SIGINT, Interrupt.
-0xffffffff80000786 in pax_idle ()
+<STOP>
 Ending remote debugging.
 Remote debugging using 127.0.0.1:PORT
 
 Program received signal SIGTRAP, Trace/breakpoint trap.
-0xffffffff80000786 in pax_idle ()
+<STOP>
 [Inferior 1 (process 1) killed]

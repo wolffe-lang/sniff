@@ -4,7 +4,7 @@ Remote debugging using 127.0.0.1:PORT
 Continuing.
 
 Program received signal SIGINT, Interrupt.
-0xffffffff80000786 in pax_idle ()
+<STOP>
 Detaching from program: KERNEL, process 1
 Ending remote debugging.
 [Inferior 1 (process 1) detached]
