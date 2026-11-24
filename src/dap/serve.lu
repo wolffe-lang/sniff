@@ -1,0 +1,125 @@
+// `sniff --dap`: a Debug Adapter Protocol server over standard input and output. The client's messages come framed
+// on standard input (frame.lu), each is decoded (proto.lu) and handled here, and every message sniff sends goes out
+// framed on standard output in the order it was made. Before a program exists sniff answers `initialize` with the
+// capabilities it holds rows for, `disconnect` by ending, and any request it does not support with success: false
+// naming it (the specification lets an adapter refuse a request; sniff adds no requests, events or fields of its
+// own). A stream whose framing breaks ends the server with exit 1; a body that frames but is not a message is
+// reported on standard error and skipped.
+
+use std.fs
+use std.json
+
+/// The server's state: the last seq it used, the messages made and not yet written, and whether the client has
+/// disconnected.
+pub struct Session {
+    pub seq: int,
+    pub out: List[str],
+    pub done: bool,
+}
+
+/// A session before the first message.
+pub fn session() -> Session {
+    let none: List[str] = []
+    Session { seq: 0, out: none, done: false }
+}
+
+/// The capabilities sniff declares: exactly those its rows hold, each one the pinned gdb also declares.
+pub fn capabilities() -> json.Value {
+    var f = Map[str, json.Value]()
+    f["supportsConfigurationDoneRequest"] = json.from_bool(true)
+    f["supportsFunctionBreakpoints"] = json.from_bool(true)
+    f["supportsConditionalBreakpoints"] = json.from_bool(true)
+    f["supportsHitConditionalBreakpoints"] = json.from_bool(true)
+    f["supportsEvaluateForHovers"] = json.from_bool(true)
+    f["supportsSteppingGranularity"] = json.from_bool(true)
+    f["supportsReadMemoryRequest"] = json.from_bool(true)
+    f["supportsTerminateRequest"] = json.from_bool(true)
+    f["supportTerminateDebuggee"] = json.from_bool(true)
+    json.from_map(f)
+}
+
+/// The response to REQ, numbered next, as text (kept by the caller; `answer` queues it).
+pub fn response(mut s: Session, req: Message, ok: bool, text: str, body: json.Value) -> str {
+    s.seq += 1
+    response_text(s.seq, req, ok, text, body)
+}
+
+/// The event NAME, numbered next, as text.
+pub fn event(mut s: Session, name: str, body: json.Value) -> str {
+    s.seq += 1
+    event_text(s.seq, name, body)
+}
+
+fn answer(mut s: Session, req: Message, ok: bool, text: str, body: json.Value) {
+    let t = response(mut s, req, ok, text, body)
+    (mut s.out).push(t)
+}
+
+/// One message from the client. Its responses and events are queued on `s.out`, in order. A response or an event
+/// from the client needs nothing back: sniff sends no requests of its own.
+pub fn on_message(mut s: Session, m: Message) {
+    if m.kind != kind_request { return }
+    if m.command == "initialize" {
+        answer(mut s, m, true, "", capabilities())
+        return
+    }
+    if m.command == "disconnect" {
+        answer(mut s, m, true, "", json.null())
+        s.done = true
+        return
+    }
+    answer(mut s, m, false, "sniff does not support the request {m.command}", json.null())
+}
+
+fn write_out(mut s: Session) -> bool {
+    var o = fs.stdout()
+    for t in s.out {
+        fs.write_chunk(mut o, encode(t)) else { return false }
+    }
+    let none: List[str] = []
+    s.out = none
+    true
+}
+
+/// The server's loop over standard input until the client disconnects or the input ends: 0 after a disconnect, 1
+/// when the framing breaks, the input ends inside a message or the output cannot be written.
+pub fn serve_main() -> int {
+    var r = reader()
+    var s = session()
+    var input = fs.stdin()
+    let none: List[byte] = []
+    while !s.done {
+        var ended = false
+        var broken = false
+        let chunk = fs.read_chunk(mut input, 65536) else |e| {
+            if "{e}" == "eof" { ended = true } else { broken = true }
+            copy none
+        }
+        if broken {
+            eprint("sniff --dap: standard input could not be read")
+            return 1
+        }
+        if ended {
+            finish(r) else |f| {
+                eprint("sniff --dap: the input ended inside a message ({f})")
+                return 1
+            }
+            return 0
+        }
+        let _ = feed(mut r, chunk, 0, chunk.len) else |e| {
+            eprint("sniff --dap: the stream's framing broke ({e})")
+            return 1
+        }
+        while !s.done {
+            let (ok, body) = next_body(mut r)
+            if !ok { break }
+            let m = decode(body) else |e| {
+                eprint("sniff --dap: a message was skipped ({e})")
+                continue
+            }
+            on_message(mut s, m)
+        }
+        if !write_out(mut s) { return 1 }
+    }
+    0
+}

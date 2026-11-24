@@ -1,6 +1,7 @@
 //! member: false
 // sniff, a debugger in wolf. S1 ships the read-only `dump` command.
 
+use dap
 use dump
 use session
 
@@ -48,6 +49,10 @@ fn main() {
     let args = env_args()
     if args.len == 1 && args[0] == "--version" {
         print("sniff {VERSION}")
+        return
+    }
+    if args.len == 1 && args[0] == "--dap" {
+        os_exit(dap.serve_main())
         return
     }
     if args.len > 0 && args[0] != "dump" {
