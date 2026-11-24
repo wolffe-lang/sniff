@@ -1851,6 +1851,46 @@ def selftest_interrupt_stop(sess):
         problems = notes.get('problems') or []
         assert any(pr.startswith(letter + ' ') for pr in problems), 'interrupt-stop did not refuse %s by %s: %r' % (what, letter, problems)
         assert got != want, 'interrupt-stop hid %s: %r' % (what, got)
+    # a row that lists threads keeps (d) whole: its thread line gone is red, the row's script says it was asked for
+    got, notes = run((head % ('(sniff) ', '(sniff) ')) + idle + '(sniff) ' + end % ('(sniff) ', '(sniff) '))
+    assert any(pr.startswith('(d) ') for pr in notes.get('problems') or []), 'interrupt-stop let a listed thread line go: %r' % notes
+    # the two rows that interrupt and then detach or disconnect: the first stop is held as the interrupt row's, (d) only
+    # where a row lists threads, and after a disconnect (g) the reconnect's frame is the interrupt's (the target stayed)
+    after_detach = ('%sDetaching from program: /kernel.elf, process 1\r\nEnding remote debugging.\r\n[Inferior 1 (process 1) detached]\r\n'
+                    '%sRemote debugging using 127.0.0.1:41001\r\n\r\nProgram received signal SIGTRAP, Trace/breakpoint trap.\r\n%s')
+    after_disconnect = ('%sEnding remote debugging.\r\n%sRemote debugging using 127.0.0.1:41001\r\n\r\n'
+                        'Program received signal SIGTRAP, Trace/breakpoint trap.\r\n%s')
+    detach_ends = [('target remote 127.0.0.1:41001', 'prompt'), ('!interrupt 5 continue', 'interrupt:prompt'), ('detach', 'prompt'),
+                   ('target remote 127.0.0.1:41001', 'prompt'), ('kill', 'prompt')]
+    disconnect_ends = [(line, how) if line != 'detach' else ('disconnect', how) for line, how in detach_ends]
+    want_detach = ('Reading symbols from KERNEL...\nRemote debugging using 127.0.0.1:PORT\n0x000000000000fff0 in ?? ()\nContinuing.\n\n'
+                   'Program received signal SIGINT, Interrupt.\n<STOP>\nDetaching from program: KERNEL, process 1\nEnding remote debugging.\n'
+                   '[Inferior 1 (process 1) detached]\nRemote debugging using 127.0.0.1:PORT\n\nProgram received signal SIGTRAP, '
+                   'Trace/breakpoint trap.\n<LOCATION>\n[Inferior 1 (process 1) killed]\n')
+    want_disconnect = ('Reading symbols from KERNEL...\nRemote debugging using 127.0.0.1:PORT\n0x000000000000fff0 in ?? ()\nContinuing.\n\n'
+                       'Program received signal SIGINT, Interrupt.\n<STOP>\nEnding remote debugging.\nRemote debugging using 127.0.0.1:PORT\n\n'
+                       'Program received signal SIGTRAP, Trace/breakpoint trap.\n<STOP>\n[Inferior 1 (process 1) killed]\n')
+
+    def signalled(p, first, after, second):
+        return (head % (p, p)) + first + (after % (p, p, second)) + end % (p, p)
+
+    def run_rows(text, names, ends):
+        notes = {}
+        return normalise(text, 41001, kernel, sess, names, ends=ends, tables=tables, notes=notes), notes
+    for name, _state, frame, _ in measured[:2] + measured[3:4]:
+        for p in ('(gdb) ', '(sniff) '):
+            got, notes = run_rows(signalled(p, frame, after_detach, '0xffffffff80000786 in pax_idle ()\r\n'), ['stop-location', 'interrupt-stop'], detach_ends)
+            assert got == want_detach and not notes.get('problems'), \
+                'interrupt-stop did not record detach-signalled\'s stop in %s (%s): %r %r' % (name, p.strip(), got, notes)
+            got, notes = run_rows(signalled(p, frame, after_disconnect, frame), ['interrupt-stop'], disconnect_ends)
+            assert got == want_disconnect and not notes.get('problems'), \
+                'interrupt-stop did not record disconnect-signalled\'s stop in %s (%s): %r %r' % (name, p.strip(), got, notes)
+    got, notes = run_rows(signalled('(sniff) ', '0x000000000000fff0 in ?? ()\r\n', after_detach, idle), ['stop-location', 'interrupt-stop'], detach_ends)
+    assert any(pr.startswith('(c) ') for pr in notes.get('problems') or []) and got != want_detach, \
+        'interrupt-stop did not refuse detach-signalled\'s stale first stop by (c): %r' % notes
+    got, notes = run_rows(signalled('(sniff) ', timer, after_disconnect, idle), ['interrupt-stop'], disconnect_ends)
+    assert any(pr.startswith('(g) ') for pr in notes.get('problems') or []) and got != want_disconnect, \
+        'interrupt-stop did not refuse a reconnect frame that is not the interrupt\'s by (g): %r' % notes
 
 
 def cmd_selftest(_a):
