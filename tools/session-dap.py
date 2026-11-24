@@ -344,8 +344,10 @@ def run_row(row, argv, fixtures, sources, cc, out):
 
 
 def check(args):
-    argv = [args.sniff, '--dap'] if args.sniff else args.adapter.split()
+    # each row runs the adapter from its own directory: a path given relative to here is made whole first
+    argv = [os.path.abspath(args.sniff), '--dap'] if args.sniff else args.adapter.split()
     rows = json.loads(Path(args.rows).read_text())['rows']
+    args.out = os.path.abspath(args.out)
     os.makedirs(args.out, exist_ok=True)
     npass = nfail = nskip = 0
     for row in rows:
