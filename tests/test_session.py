@@ -166,6 +166,12 @@ class GateRemoteQemuLine(unittest.TestCase):
         self.assertIn('  ' + oracles, said.splitlines())
         self.assertIn('  ' + image, said.splitlines())
 
+    def test_a_step_passes_the_location_lines_on(self):
+        # interrupt-stop's LOCATION line, recorded and never gated: the record carries where each interrupt's stop landed
+        loc = 'LOCATION remote remote-kernel-interrupt accel=kvm client=sniff at pax_idle 0xffffffff80000786 state=halted'
+        said = self.gate("step remote-kernel-kvm printf '%%s\\nPASS remote r\\n' \"%s\"" % loc)
+        self.assertIn('  ' + loc, said.splitlines())
+
 
 class RowsFile(unittest.TestCase):
     """The kernel modes read another rows file when given one (--rows FILE), as a measurement does, and
