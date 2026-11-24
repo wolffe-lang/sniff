@@ -283,7 +283,8 @@
     "kill"
    ],
    "normalise": [
-    "stop-location"
+    "stop-location",
+    "interrupt-stop"
    ]
   },
   {
@@ -294,6 +295,9 @@
     "disconnect",
     "target remote 127.0.0.1:@PORT@",
     "kill"
+   ],
+   "normalise": [
+    "interrupt-stop"
    ]
   },
   {
