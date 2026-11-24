@@ -29,6 +29,9 @@ step session-rows-inventory python3 -I tools/session.py verify
 step pax-rows-inventory python3 -I tools/session.py --set pax verify
 step pax-harness-unit python3 -I tools/session-pax.py selftest
 step remote-harness-unit python3 -I tools/session-remote.py selftest
+# S9: the DAP rows' scripted client, against its stand-in adapter (no debugger needed)
+step dap-harness-unit python3 -I tests/test_session_dap.py
+step dap-harness-selftest python3 -I tools/session-dap.py selftest
 # S8: the kernel rows need PAX's console image, which only the record host builds (tools/gate-remote runs them
 # there under KVM and TCG); every other host skips them by name, and the count is held. sniff built for the Mac
 # picks arm64 at compile time and has no x86-64 tables for the kernel: its rows come with the arch made a run-time choice.
@@ -58,6 +61,8 @@ lupin=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["tool
 step reader-unit python3 -I tools/test-readers.py --wolf "$wolf"
 step sniff-build "$wolf" build src/main.lu --no-cache -o "$root/target/sniff"
 step version-printed python3 -I tools/check-version --bin "$root/target/sniff"
+# S9: `sniff --dap` over standard input and output: the base protocol's rows, sniff's own (no program runs)
+step dap-rows python3 -I tools/session-dap.py check --sniff "$root/target/sniff" --rows tests/dap-rows.json --out "$root/target/dap-out"
 compilers=(clang)
 [ "$mode" != linux ] || compilers+=(gcc)
 step fixture-builds python3 -I tools/build-fixtures.py --wolf "$wolf" --out "$root/target/fixtures" --compilers "${compilers[@]}"
