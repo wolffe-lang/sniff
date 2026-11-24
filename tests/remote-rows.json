@@ -244,6 +244,9 @@
     "!interrupt 5 continue",
     "info threads",
     "kill"
+   ],
+   "normalise": [
+    "interrupt-stop"
    ]
   },
   {
