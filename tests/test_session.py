@@ -200,6 +200,41 @@ class RowsFile(unittest.TestCase):
         self.assertIn('remote rows (check, kvm): 0 pass, 0 fail, 1 skip', said)
 
 
+class KernelTablesPin(unittest.TestCase):
+    """A row that names interrupt-stop needs the kernel's own tables, read by the pinned llvm-dwarfdump-18 and readelf
+    (sniff-oracle.toml's digests): a tool that is missing, or not the pin, is refused by name before any row runs, and
+    is never a skip."""
+
+    def check(self, tools):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / 'bin').mkdir()
+            for name in tools:
+                f = d / 'bin' / name
+                f.write_text('#!/bin/sh\necho a stand-in\n')
+                f.chmod(0o755)
+            (d / 'rows.json').write_text(json.dumps({'rows': [
+                {'name': 'tables-row', 'qemu': False, 'normalise': ['interrupt-stop'], 'script': ['kill']}]}))
+            argv = [sys.executable, '-I', str(ROOT / 'tools/session-remote.py'), 'check', '--kernel', str(d / 'kernel'),
+                    '--image', str(d / 'image'), '--pax', str(d), '--qemu', str(d / 'qemu'), '--sniff', str(d / 'no-sniff'),
+                    '--accel', 'kvm', '--rows', str(d / 'rows.json'), '--out', str(d / 'out')]
+            p = subprocess.run(argv, capture_output=True, text=True, timeout=60, env={'PATH': str(d / 'bin'), 'LC_ALL': 'C'})
+        return (p.stdout + p.stderr).splitlines(), p.returncode
+
+    def test_a_missing_tool_is_refused_by_name(self):
+        said, rc = self.check([])
+        self.assertTrue(any(ln.startswith('FAIL remote-kernel-tables-pin llvm-dwarfdump-18 ') and 'is not on PATH' in ln for ln in said), said)
+        self.assertIn('remote rows (check, kvm): 0 pass, 1 fail, 0 skip', said)
+        self.assertEqual(rc, 1)
+
+    def test_a_tool_that_is_not_the_pin_is_refused_by_name(self):
+        said, rc = self.check(['llvm-dwarfdump-18', 'readelf'])
+        self.assertTrue(any(ln.startswith('FAIL remote-kernel-tables-pin llvm-dwarfdump-18 ') and "is not the pin's" in ln for ln in said), said)
+        self.assertTrue(any(ln.startswith('FAIL remote-kernel-tables-pin readelf ') and "is not the pin's" in ln for ln in said), said)
+        self.assertFalse(any(ln.startswith('SKIP') for ln in said), said)
+        self.assertEqual(rc, 1)
+
+
 class RedIsAComparison(unittest.TestCase):
     """A server row's red is its own comparison: run through the real harness against stand-in stubs (tests/
     standin_stub.py, the pinned gdbserver's place taken by one on PATH), a stub that closes the connection is a fault
