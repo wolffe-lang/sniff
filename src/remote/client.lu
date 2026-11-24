@@ -261,6 +261,7 @@ pub fn read_threads(mut t: Target) -> () ! ClientError {
 /// The registers of the current thread by `g` (Packets, g), from a borrowed target: the bytes in
 /// target order, and for each byte whether the stub sent `xx` for it (it could not read it).
 pub fn peek_regs(t: Target) -> (List[byte], List[bool]) ! ClientError {
+    if t.stop.kind == stop_signal && t.stop.code == 2 { return (copy t.regs, copy t.unread) }  // PLANT: the interrupt's stop keeps the registers from before the continue
     let r = ask(t.link, "g", false)?
     check(r)?
     if r.len % 2 != 0 { return bad_hex }
