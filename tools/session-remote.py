@@ -36,11 +36,12 @@ by name (FAIL remote-qemu-pin) a QEMU whose version line or binary digest is not
 Normalised by name: the port, the kernel's path, the terminal's line ends and the prompts (tools/session.py's
 normalize_tty). QEMU's target description never appears in a golden as text: no row prints it.
 
-remote-kernel-interrupt names `interrupt-stop`. Where the interrupt byte stops the kernel is the machine's choice: in
-404 measured stops, 399 were at the instruction after pax_idle's hlt, and the rest were in the timer path, the
-interrupt entry and another kernel thread. So the frame and the thread line's state and frame become <STOP> and <STATE>,
-and each run prints the location on a LOCATION line, recorded and never gated. That happens only after six assertions
-hold, each true for any stop of this kernel at one processor (interrupt_stop).
+remote-kernel-interrupt, remote-kernel-detach-signalled and remote-kernel-disconnect-signalled name `interrupt-stop`.
+Where the interrupt byte stops the kernel is the machine's choice: in 404 measured stops, 399 were at the instruction
+after pax_idle's hlt, and the rest were in the timer path, the interrupt entry and another kernel thread. So the stop's
+frame becomes <STOP>, as do the thread line's state and frame where a row lists threads and the reconnect's frame after
+a disconnect. Each run prints the location on a LOCATION line, recorded and never gated. That happens only after the
+rule's assertions hold, each true for any stop of this kernel at one processor (interrupt_stop).
 - The frame's name is checked against the kernel binary's own tables: its DWARF and its ELF symbols, read by the
   pinned llvm-dwarfdump-18 and readelf, and one byte of its text. Nothing is read from PAX's source.
 - A tool that is missing or is not the pin is refused by name (FAIL remote-kernel-tables-pin), never skipped.
@@ -283,15 +284,17 @@ def stop_frame(lines, j):
 
 
 def interrupt_stop(t, ends, tables):
-    """The stop the interrupt byte brings, held by six assertions, each true by construction for any stop of the kernel
-    at one processor: (a) the driver wrote 0x03 while the target ran and a prompt came back (its outcome for the
+    """The stop the interrupt byte brings, held by assertions each true by construction for any stop of the kernel at
+    one processor: (a) the driver wrote 0x03 while the target ran and a prompt came back (its outcome for the
     `!interrupt` line is interrupt:prompt); (b) the stop is SIGINT's, one line, literal; (c) one frame in one of gdb's
     two forms, whose name is the function that holds its address by the kernel's own tables (the DWARF function whose
     ranges hold it, else the ELF symbol at or below it; in the form without an address, a DWARF subprogram of that
-    file); (d) the thread line's frame is the stop's; (e) a halted processor sits just past a hlt (0xF4 the byte before);
-    (f) the session goes on to its killed line. Then the frame and the thread line's state and frame become <STOP> and
-    <STATE>, and the location is returned to be recorded: (text, problems, location). With a problem, the text stays
-    as it came, so it differs from its golden too."""
+    file); (d) where the row's script lists threads, the thread line's frame is the stop's; (e) where that line says
+    halted, the processor sits just past a hlt (0xF4 the byte before); (f) the session goes on to its killed line;
+    (g) where the script disconnects, the reconnect's frame is the interrupt's (the target stayed where it stopped).
+    Then the frame (and the reconnect's, and the thread line's state and frame) become <STOP> and <STATE>, and the
+    location is returned to be recorded: (text, problems, location). With a problem, the text stays as it came, so it
+    differs from its golden too."""
     problems = []
     outcomes = [how for line, how in (ends or []) if line.startswith('!interrupt ')]
     if outcomes != ['interrupt:prompt']:
@@ -320,14 +323,19 @@ def interrupt_stop(t, ends, tables):
     elif not tables.in_file(name, parts.group('file')):
         problems.append('(c) the frame names %s at %s:%s, which is no DWARF subprogram of that file in the kernel' % (
             name, parts.group('file'), parts.group('line')))
+    script = [line for line, _how in (ends or [])]
     h = j + n
-    thread = THREAD_LINE.fullmatch(lines[h + 1]) if h + 1 < len(lines) else None
-    if h >= len(lines) or not lines[h].startswith('  Id   Target Id') or thread is None:
-        problems.append('(d) no thread line after the stop')
-        return t, problems, None
-    state, tframe = thread.group(1).strip(), thread.group(2)
-    if tframe != lines[j]:
-        problems.append('(d) the thread line\'s frame %r is not the stop\'s %r' % (tframe, lines[j]))
+    out, rest, state = lines[:j] + ['<STOP>'], h, None
+    if 'info threads' in script:
+        thread = THREAD_LINE.fullmatch(lines[h + 1]) if h + 1 < len(lines) else None
+        if h >= len(lines) or not lines[h].startswith('  Id   Target Id') or thread is None:
+            problems.append('(d) no thread line after the stop')
+            return t, problems, None
+        state, tframe = thread.group(1).strip(), thread.group(2)
+        if tframe != lines[j]:
+            problems.append('(d) the thread line\'s frame %r is not the stop\'s %r' % (tframe, lines[j]))
+        out += [lines[h], '* 1    Thread 1.1 (CPU#0 <STATE>) <STOP>']
+        rest = h + 2
     if state == 'halted':
         if addr is None:
             problems.append('(e) halted, with no address to find a hlt before')
@@ -335,12 +343,28 @@ def interrupt_stop(t, ends, tables):
             b = tables.byte_before(int(addr, 16))
             if b != 0xF4:
                 problems.append('(e) halted at 0x%s, where the byte before is %s, not 0xf4 (hlt)' % (addr, 'unreadable' if b is None else '0x%02x' % b))
-    if KILLED not in lines[h + 2:]:
+    tail = lines[rest:]
+    if 'disconnect' in script:
+        # a disconnect leaves the target where the interrupt stopped it: the reconnect's frame is the interrupt's
+        k = next((i for i in range(len(tail) - 1) if tail[i] == 'Ending remote debugging.' and tail[i + 1].startswith('Remote debugging using ')), None)
+        if k is None:
+            problems.append('(g) no reconnect after the disconnect')
+        else:
+            m = k + 2
+            if m + 1 < len(tail) and tail[m] == '' and tail[m + 1].startswith('Program received signal '):
+                m += 2
+            n2, _p = stop_frame(tail, m)
+            if not n2:
+                problems.append('(g) the reconnect\'s line %r is no frame in either of gdb\'s two forms' % (tail[m] if m < len(tail) else '<end>'))
+            elif tail[m] != lines[j]:
+                problems.append('(g) the reconnect\'s frame %r is not the interrupt\'s %r' % (tail[m], lines[j]))
+            else:
+                tail = tail[:m] + ['<STOP>'] + tail[m + n2:]
+    if KILLED not in tail:
         problems.append('(f) no %r after the stop' % KILLED)
     if problems:
         return t, problems, None
-    out = lines[:j] + ['<STOP>'] + lines[h:h + 1] + ['* 1    Thread 1.1 (CPU#0 <STATE>) <STOP>'] + lines[h + 2:]
-    return '\n'.join(out), [], 'at %s%s state=%s' % (name, ' 0x' + addr if addr else '', state)
+    return '\n'.join(out + tail), [], 'at %s%s%s' % (name, ' 0x' + addr if addr else '', ' state=' + state if state else '')
 
 
 DIE = re.compile(r'^0x([0-9a-f]+):\s+(DW_TAG_\w+)')
