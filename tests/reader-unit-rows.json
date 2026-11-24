@@ -184,6 +184,7 @@
     "remote-client-resume",
     "remote-client-ends",
     "remote-client-peek",
+    "remote-client-interrupt-regs",
     "remote-client-extra"
   ],
   "shown_test.lu": [

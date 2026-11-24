@@ -65,6 +65,18 @@ fn g_reply() -> str {
     remote.hex_encode(b)
 }
 
+// The g reply above with only rip set, to a kernel address whose low 32 bits are LO.
+fn g_reply_rip(lo: u64) -> str {
+    var b: List[byte] = []
+    var i: int = 0
+    while i < 536 { (mut b).push(0 as byte); i += 1 }
+    let hi: u64 = 4294967295
+    let rip = le(hi << 32 | lo)
+    i = 0
+    while i < 8 { b[128 + i] = rip[i]; i += 1 }
+    remote.hex_encode(b)
+}
+
 fn start_replies(features: str, core: str) -> str {
     let c = core.bytes()
     var half: List[byte] = []
@@ -321,6 +333,24 @@ fn peek_row() {
     print("PASS remote-client-peek")
 }
 
+fn interrupt_regs_row() {
+    // the interrupt's stop (T02): the registers read after it are the stop's, by a `g` sent then, as after any stop;
+    // never those the client kept from before the continue (the connect's). The session's refresh reads them so
+    // (remote_refresh, peek_regs), and the frame it prints at the stop is theirs.
+    var r = rig("+" + rep_noack("T02thread:01;") + "+" + rep(g_reply_rip(2147485574))) else |e| { print("FAIL remote-client-interrupt-regs {e}"); return }
+    let skip = heard(mut r.stub)
+    remote.resume(mut r.t, false) else { return }
+    remote.wait_stop(mut r.t, 500) else { return }
+    assert(r.t.stop.kind == remote.stop_signal && r.t.stop.code == 2 && r.t.current == "01")
+    let (regs, unread) = remote.peek_regs(r.t) else |e| { print("FAIL remote-client-interrupt-regs {e}"); return }
+    let rip = remote.reg_in(r.t, regs, unread, "rip") else { return }
+    assert(remote.hex_u64(rip) == "ffffffff80000786")
+    assert(heard(mut r.stub) == sent("vCont;c") + "+" + sent("g") + "+")
+    assert(skip != "")
+    done(take r)
+    print("PASS remote-client-interrupt-regs")
+}
+
 fn extra_row() {
     let cpu = remote.hex_encode("CPU#0 [running]".bytes())
     var r = rig(rep(cpu) + rep("")) else |e| { print("FAIL remote-client-extra {e}"); return }
@@ -346,5 +376,6 @@ fn main() {
     resume_row()
     ends_row()
     peek_row()
+    interrupt_regs_row()
     extra_row()
 }
