@@ -167,6 +167,39 @@ class GateRemoteQemuLine(unittest.TestCase):
         self.assertIn('  ' + image, said.splitlines())
 
 
+class RowsFile(unittest.TestCase):
+    """The kernel modes read another rows file when given one (--rows FILE), as a measurement does, and
+    tests/remote-rows.json without it. Run through the real harness on rows that are all named skips, so no machine is
+    needed."""
+
+    def check(self, rows=None, only=None):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            argv = [sys.executable, '-I', str(ROOT / 'tools/session-remote.py'), 'check', '--kernel', str(d / 'kernel'),
+                    '--image', str(d / 'image'), '--pax', str(d), '--qemu', str(d / 'qemu'), '--sniff', str(d / 'sniff'),
+                    '--accel', 'kvm', '--out', str(d / 'out')]
+            if rows is not None:
+                (d / 'rows.json').write_text(json.dumps({'rows': rows}))
+                argv += ['--rows', str(d / 'rows.json')]
+            if only:
+                argv += ['--only', only]
+            p = subprocess.run(argv, capture_output=True, text=True, timeout=60, env={'PATH': os.environ['PATH'], 'LC_ALL': 'C'})
+        return (p.stdout + p.stderr).splitlines()
+
+    def test_a_rows_file_is_read(self):
+        said = self.check([{'name': 'measure-a', 'script': ['kill'], 'skip': 'one'},
+                           {'name': 'measure-b', 'script': ['kill'], 'skip': 'two'}])
+        self.assertIn('SKIP remote measure-a reason=one', said)
+        self.assertIn('SKIP remote measure-b reason=two', said)
+        self.assertIn('remote rows (check, kvm): 0 pass, 0 fail, 2 skip', said)
+
+    def test_without_a_rows_file_the_repo_rows_are_read(self):
+        said = self.check(only='^remote-kernel-write-mem$')
+        self.assertIn('SKIP remote remote-kernel-write-mem reason=sniff has no set command (assignment to memory is a '
+                      'later feature with its own contract)', said)
+        self.assertIn('remote rows (check, kvm): 0 pass, 0 fail, 1 skip', said)
+
+
 class RedIsAComparison(unittest.TestCase):
     """A server row's red is its own comparison: run through the real harness against stand-in stubs (tests/
     standin_stub.py, the pinned gdbserver's place taken by one on PATH), a stub that closes the connection is a fault
