@@ -18,6 +18,8 @@ fn octal2(n: int) -> str {
 
 /// The report line(s) for the end of a program.
 fn report_end(mut s: Session, e: Event) {
+    // the protocol reports a program a signal ended as exited with 0, as the pinned gdb does
+    if s.adapter.on { dap_note_end(mut s, if e.kind == ev_exited { e.code } else { 0 }) }
     let pid = s.inferior.pid
     if e.kind == ev_exited {
         if e.code == 0 {
