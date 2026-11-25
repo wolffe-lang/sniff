@@ -6,6 +6,7 @@ output, records every message both ways, and holds what the adapter answers to t
                        [--fixtures DIR --sources DIR --cc gcc|clang] [--golden DIR]
   session-dap.py capture --adapter 'CMD ARGS…' --rows FILE --out DIR --golden DIR [--only REGEX]
                        [--fixtures DIR --sources DIR --cc gcc|clang] [--identity TEXT]
+  session-dap.py skip --rows FILE --reason TEXT --expect N [--program yes|no]
   session-dap.py selftest
 
 The framing and the envelope are the specification's base protocol (a Content-Length header, a UTF-8 JSON body; seq,
@@ -30,6 +31,9 @@ src); "@THREAD@" (the last consumed stopped event's threadId, else the first thr
 else the first thread a thread event reported started); "@FRAMEk@", "@SCOPEk@", "@VARk@" (the k-th frame id, scope
 variablesReference or nonzero variable reference of the last stackTrace, scopes or variables response); "@MEMREF@"
 (the last successful evaluate's memoryReference, else the first 0x… address in its result).
+
+`--program no` takes only the rows that run no program, `yes` only those that do (a host with no fixtures or no
+Linux process runs the first; `skip` names the second, each `SKIP dap ROW reason=TEXT`, and fails unless there are N).
 
 A row passes when every expectation holds: `PASS dap ROW`. An expectation that does not hold is a red by comparison:
 `FAIL dap ROW WHAT: …`. A timeout, an adapter that ends while a response is awaited, a body that is not JSON, or a
@@ -480,6 +484,24 @@ def run_row(row, argv, fixtures, sources, cc, out):
     return status, reds
 
 
+def selected(row, args):
+    if args.only and not re.search(args.only, row['name']):
+        return False
+    has = row.get('prog', '-') != '-'
+    return args.program == 'any' or (args.program == 'yes') == has
+
+
+def skip(args):
+    rows = [r for r in json.loads(Path(args.rows).read_text())['rows'] if selected(r, args)]
+    for r in rows:
+        print('SKIP dap %s reason=%s' % (r['name'], args.reason))
+    print('dap rows (skip): %d skip' % len(rows))
+    if len(rows) != args.expect:
+        print('FAIL dap skip count: %d, not %d' % (len(rows), args.expect))
+        return 1
+    return 0
+
+
 def check(args):
     # each row runs the adapter from its own directory: a path given relative to here is made whole first
     argv = [os.path.abspath(args.sniff), '--dap'] if args.sniff else args.adapter.split()
@@ -488,7 +510,7 @@ def check(args):
     os.makedirs(args.out, exist_ok=True)
     npass = nfail = nskip = 0
     for row in rows:
-        if args.only and not re.search(args.only, row['name']):
+        if not selected(row, args):
             continue
         if row.get('skip'):
             print('SKIP dap %s reason=%s' % (row['name'], row['skip']))
@@ -613,6 +635,13 @@ def main():
     c.add_argument('--sources', default='')
     c.add_argument('--cc', default='gcc')
     c.add_argument('--golden', default=str(GOLDEN))
+    c.add_argument('--program', choices=('yes', 'no', 'any'), default='any')
+    s = sub.add_parser('skip')
+    s.add_argument('--rows', required=True)
+    s.add_argument('--reason', required=True)
+    s.add_argument('--expect', type=int, required=True)
+    s.add_argument('--program', choices=('yes', 'no', 'any'), default='any')
+    s.add_argument('--only', default='')
     k = sub.add_parser('capture')
     k.add_argument('--adapter', required=True)
     k.add_argument('--rows', required=True)
@@ -629,6 +658,8 @@ def main():
         return selftest()
     if args.mode == 'capture':
         return capture(args)
+    if args.mode == 'skip':
+        return skip(args)
     return check(args)
 
 
