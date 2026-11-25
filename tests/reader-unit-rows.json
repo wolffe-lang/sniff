@@ -222,6 +222,7 @@
     "dap-initialize-caps"
   ],
   "views_test.lu": [
+    "session-c-type-names",
     "session-frame-text",
     "session-var-line",
     "session-refs",

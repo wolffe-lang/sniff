@@ -86,7 +86,25 @@ fn scopes_row() {
     print("PASS session-scopes")
 }
 
+fn c_type_names_row() {
+    // gcc records C's integer types as `short int`, `long int`, `long unsigned int`; the pinned gdb prints them as C
+    // writes them (measured in its DAP transcripts over gcc's builds: short, long, unsigned long), as clang records them
+    assert(session.c_type_spelling("short int") == "short")
+    assert(session.c_type_spelling("long int") == "long")
+    assert(session.c_type_spelling("long unsigned int") == "unsigned long")
+    // the same rule for the rest of gcc's spellings of C's integer types (not measured: no fixture holds them)
+    assert(session.c_type_spelling("short unsigned int") == "unsigned short")
+    assert(session.c_type_spelling("long long int") == "long long")
+    assert(session.c_type_spelling("long long unsigned int") == "unsigned long long")
+    // every other name is as recorded: clang's spellings, and names that are already C's
+    for n in ["short", "long", "unsigned long", "int", "unsigned int", "char", "unsigned char", "signed char", "_Bool", "float", "double", "i64", "struct point"] {
+        assert(session.c_type_spelling(n) == n)
+    }
+    print("PASS session-c-type-names")
+}
+
 fn main() {
+    c_type_names_row()
     frame_text_row()
     var_line_row()
     refs_row()
