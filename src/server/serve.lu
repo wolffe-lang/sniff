@@ -601,7 +601,7 @@ fn refuse_second(lfd: int) {
     let _ = net_write_bytes(fd, f)
     // the client acknowledges the reply ('+'); a close with that byte unread would end the connection with a reset
     // rather than an orderly close, so it is read first (under the same 2 s deadline) whenever it comes
-    let _ = net_read_bytes(fd, 64)
+    time_sleep_ms(300)
     let _ = net_close(fd)
 }
 
