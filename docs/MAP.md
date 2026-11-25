@@ -384,3 +384,34 @@ code subtracts one): an address or pc below a moved program (`x/2xg 0`, a call t
 nothing instead of trapping. A frame at a pc in no known code takes its caller from the top of the stack on x86-64,
 and on arm64, at a pc whose instruction cannot be read, from the link register with the frame unchanged, as the pinned
 gdb and Apple's lldb name the calling function there.
+
+### The debug adapter's base protocol (S9, `sniff --dap`)
+
+`sniff --dap` speaks the Debug Adapter Protocol on standard input and output, and nowhere else. The protocol has no
+authentication, so there is no listener. `src/dap/` holds it:
+- **`frame.lu`** reads the base protocol: header fields ended by `\r\n`, `Content-Length` read in any case, any other
+  field ignored, then the content part. Each refusal is by name: no length, a bad length, a broken header, a header
+  line over 4,096 bytes, more than 32 fields, a content part over 64 MiB, and input that ends inside a message. A
+  refused reader stays refused.
+- **`proto.lu`** decodes the envelope over std.json and writes responses and events.
+- **`serve.lu`** is the server:
+  - `initialize` is answered with exactly the nine capabilities sniff's rows hold, each of which the pinned gdb also
+    declares;
+  - `disconnect` ends it with exit 0;
+  - any other request is answered `success: false`, naming it;
+  - a body that frames but is not a message is reported on standard error and skipped;
+  - broken framing, or input that ends inside a message, ends it with exit 1.
+
+The rows are of two kinds:
+- **Units** (`src/dap_test.lu`, nine rows, natively and on the checked machine). Every cap has a row at its value and
+  one past it.
+- **The DAP rows** (`tests/dap-rows.json`). `tools/session-dap.py` runs them: a scripted client that starts
+  `sniff --dap` afresh for each row, records every message both ways, and holds the answers to the row's
+  expectations. Six rows are sniff's own, with the specification as their oracle and no program run.
+  - The client's own units run it against a stand-in adapter: a red is the row's comparison, while a timeout, an
+    adapter that ends early, or a body that is not JSON is a fault named as one.
+
+Boundaries that remain: no program runs yet. Launch and attach, breakpoints, stepping, threads, stack traces, scopes,
+variables and `evaluate` come next. They will be held to the pinned gdb's own DAP transcripts and to each request's
+command-language twin.
+
