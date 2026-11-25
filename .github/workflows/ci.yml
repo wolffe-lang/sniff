@@ -45,7 +45,9 @@ jobs:
     needs: plan
     if: ${{ contains(fromJSON(needs.plan.outputs.jobs), 'linux') }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    # The longest healthy run (23.1 minutes, 2026-11-24) with a slow snapshot mirror's apt step (22.4 minutes,
+    # 2026-11-25) in place of its own (0.9), plus a third, rounded up to the next 5 minutes: 44.6 -> 59.5 -> 60.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - run: bash tools/in-container
