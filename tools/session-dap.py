@@ -52,6 +52,7 @@ requests differ from the row's, is a fault. Normalising:
   seq / request_seq          dropped (the client numbers its requests; the adapter its own messages)
   thread, frame, variables, breakpoint, source and memory references, systemProcessId   each renamed by first
                              appearance (T1, F1, V1, B1, S1, M1, P1; a scope's own id V)
+  the repository's root      @ROOT@ (a golden taken in one checkout holds in another)
   0x… in text                <ADDR>; a process id in text ("process N", "pid N", "ready N", "thread N", "LWP N") <PID>
   module and loadedSource events   left out (the system's libraries, loaded in an order of their own)
   the interleaving of events with responses   not compared: responses in request order, events in their own order
@@ -152,6 +153,8 @@ class Adapter:
         self.err.close()
 
 
+# the repository's root as given and as resolved: the fixtures and their sources are under it
+ROOTS = sorted({str(ROOT), os.path.realpath(str(ROOT))}, key=len, reverse=True)
 IDKEYS = {'threadId': 'T', 'frameId': 'F', 'variablesReference': 'V', 'memoryReference': 'M', 'breakpointId': 'B',
           'sourceReference': 'S', 'systemProcessId': 'P'}
 ID_IN = {'stackFrames': 'F', 'threads': 'T', 'breakpoints': 'B', 'breakpoint': 'B', 'scopes': 'V'}
@@ -189,6 +192,8 @@ def normalise(records, differences):
         if isinstance(v, list):
             return [walk(x, ctx) for x in v]
         if isinstance(v, str):
+            for r in ROOTS:
+                v = v.replace(r, '@ROOT@')
             v = re.sub(r'0x[0-9a-fA-F]+', '<ADDR>', v)
             v = re.sub(r'\b(process|pid|ready|thread) \d+', r'\1 <PID>', v, flags=re.I)
             return re.sub(r'\bLWP \d+', 'LWP <PID>', v)
