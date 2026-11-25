@@ -1,0 +1,122 @@
+// File descriptors for `sniff --dap`: its own standard input and a launched program's output, waited on together
+// (poll(2)) and read as they come (read(2)), so neither blocks the other; and the pipes and /dev/null a launched
+// program gets in place of the protocol stream. Every descriptor made here is close-on-exec: a program sniff
+// launches holds only the ones it is given (target_spawn_io).
+
+import c "stdlib.h"
+
+extern "c" fn read(fd: i32, buf: *u8, n: u64) -> i64
+extern "c" fn poll(fds: *u8, n: u64, timeout: i32) -> i32
+extern "c" fn pipe(fds: *i32) -> i32
+extern "c" fn fcntl(fd: i32, cmd: i32, ...) -> i32
+#[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn close(fd: i32) -> i32
+#[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn open(path: *u8, flags: i32, ...) -> i32
+
+/// fcntl(2)'s F_SETFD and FD_CLOEXEC (the same on Linux and macOS).
+const f_setfd: int = 2
+const fd_cloexec: int = 1
+/// poll(2)'s POLLIN; a hung-up or failed descriptor is reported whatever was asked.
+const pollin: int = 1
+/// The most descriptors one fd_poll waits on (8 bytes each in its buffer).
+pub const fd_poll_max: int = 16
+
+/// A buffer for fd_read and fd_poll, n bytes (at least fd_poll_max * 8), kept by the caller for the life of the
+/// process.
+pub fn fd_buffer(n: int) -> u64 {
+    unsafe {
+        // # Safety: calloc of n bytes, kept for the life of the process.
+        c.calloc(n as uint, 1) as u64
+    }
+}
+
+/// Read at most n bytes (n no more than the buffer's size) from fd: the count, 0 at the end of its input or -1 on an
+/// error, and the bytes read.
+pub fn fd_read(fd: int, buf: u64, n: int) -> (int, List[byte]) {
+    var out: List[byte] = []
+    unsafe {
+        // # Safety: buf is fd_buffer's, at least n bytes; read(2) writes at most n.
+        let p = buf as *u8
+        let got = read(fd as i32, p, n as u64)
+        var i = 0
+        while i < got as int {
+            (mut out).push(p[i] as int as byte)
+            i += 1
+        }
+        (got as int, out)
+    }
+}
+
+/// The descriptors of fds that can be read without blocking, or have hung up, waiting at most ms milliseconds for
+/// one (-1: as long as it takes). A negative descriptor is passed over, as poll(2) does.
+pub fn fd_poll(buf: u64, fds: List[int], ms: int) -> List[int] {
+    var ready: List[int] = []
+    let n = if fds.len > fd_poll_max { fd_poll_max } else { fds.len }
+    unsafe {
+        // # Safety: buf is fd_buffer's, at least fd_poll_max * 8 bytes: one struct pollfd (int fd, short events,
+        // short revents) each.
+        let w = buf as *i32
+        let b = buf as *u8
+        var i = 0
+        while i < n {
+            w[2 * i] = fds[i] as i32
+            // events (little-endian), then revents cleared
+            b[8 * i + 4] = pollin as u8
+            b[8 * i + 5] = 0 as u8
+            b[8 * i + 6] = 0 as u8
+            b[8 * i + 7] = 0 as u8
+            i += 1
+        }
+        let k = poll(b, n as u64, ms as i32)
+        if k <= 0 { return ready }
+        i = 0
+        while i < n {
+            if fds[i] >= 0 && (b[8 * i + 6] as int != 0 || b[8 * i + 7] as int != 0) { (mut ready).push(fds[i]) }
+            i += 1
+        }
+    }
+    ready
+}
+
+/// A pipe, close-on-exec at both ends: (read end, write end), or (-1, -1) when none could be made.
+pub fn fd_pipe() -> (int, int) {
+    unsafe {
+        // # Safety: two ints, calloc'd, for pipe(2) to fill.
+        let p = c.calloc(2, 4) as *i32
+        if pipe(p) != 0 { return (0 - 1, 0 - 1) }
+        let r = p[0] as int
+        let w = p[1] as int
+        let _ = fcntl(r as i32, f_setfd as i32, fd_cloexec as i32)
+        let _ = fcntl(w as i32, f_setfd as i32, fd_cloexec as i32)
+        (r, w)
+    }
+}
+
+/// /dev/null opened for reading, close-on-exec, or -1.
+pub fn fd_devnull() -> int { open_null() }
+
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+fn open_null() -> int {
+    unsafe {
+        // # Safety: a zero-terminated path; O_RDONLY | O_CLOEXEC (Linux's 0x80000).
+        open(cstr("/dev/null"), 524288) as int
+    }
+}
+
+#[cfg(target = "aarch64-apple-darwin")]
+fn open_null() -> int {
+    unsafe {
+        // # Safety: a zero-terminated path; O_RDONLY | O_CLOEXEC (macOS's 0x1000000).
+        open(cstr("/dev/null") as *u8, 16777216) as int
+    }
+}
+
+/// Close fd (a negative one is passed over).
+pub fn fd_close(fd: int) {
+    if fd < 0 { return }
+    unsafe {
+        // # Safety: the descriptor is the caller's own.
+        let _ = close(fd as i32)
+    }
+}
