@@ -299,7 +299,7 @@
    "does": "launch with args [500]; after 1 s threads (refused), pause by the started thread's id; stackTrace",
    "oracle": "gdb's DAP transcript (after the named normalisations)",
    "twin": "-",
-   "prediction": "threads refused notStopped while running; pause stops with reason pause, all threads stopped, at nap line 19 under main 37 (h41b)",
+   "prediction": "threads refused notStopped while running; pause stops with reason pause, all threads stopped, at nap line 19 under main 37 (as an earlier development capture showed)",
    "named_differences": [
     "launch-start",
     "threads-running"
