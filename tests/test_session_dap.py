@@ -87,6 +87,25 @@ class Steps(unittest.TestCase):
         self.assertIn('PASS dap r6', said, said)
 
 
+class MemoryReference(unittest.TestCase):
+    def test_memref_names_the_last_evaluated_address(self):
+        # the stand-in's evaluate answers `(int *) 0x1234` with no memoryReference: the address in its text is used
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, 'rows.json')
+            with open(path, 'w') as f:
+                json.dump({'schema': 1, 'rows': [row('m1', INIT, ['send', 'evaluate', {'expression': '&cell', 'context': 'watch'}],
+                                                     ['send', 'readMemory', {'memoryReference': '@MEMREF@', 'count': 4}, {'success': True}],
+                                                     ['send', 'disconnect', {}], ['exit', 0])]}, f)
+            out = os.path.join(d, 'out')
+            p = subprocess.run([sys.executable, '-I', str(ROOT / 'tools/session-dap.py'), 'check', '--adapter', STANDIN + ' plain',
+                                '--rows', path, '--out', out], capture_output=True, text=True, cwd=ROOT,
+                               env={'PATH': os.environ['PATH'], 'LC_ALL': 'C', 'SESSION_DAP_TIMEOUT': '3'})
+            self.assertIn('PASS dap m1', p.stdout.splitlines(), p.stdout)
+            sent = [json.loads(ln)['msg'] for ln in Path(out, 'm1.jsonl').read_text().splitlines()]
+            reads = [m for m in sent if m.get('command') == 'readMemory' and m.get('type') == 'request']
+            self.assertEqual(reads[0]['arguments']['memoryReference'], '0x1234')
+
+
 class RelativeSniff(unittest.TestCase):
     def test_a_relative_sniff_path_runs_from_any_row_directory(self):
         # the gate passes target/sniff; each row runs the adapter from its own directory
