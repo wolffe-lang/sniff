@@ -336,3 +336,27 @@ constants do; the manual says what each byte means, not where the kernel puts it
 - That PAX answers PTRACE_SETFPREGS with EIO, so the stub answers a write of an x87 or SSE register on PAX with an error reply; and that a connection through QEMU's forwarded port to a guest's listener first held after 3.0 s and three resets, from which the PAX rows' retry bound (twenty times that) is set.
 
 gdbserver ran only as the pinned binary in the oracle container. No stub's source was read.
+
+## Consulted for S9's base protocol, `sniff --dap` (2026-11-24)
+
+The Debug Adapter Protocol's base protocol and envelope came from the specification alone, at version 1.59.x (the
+newest entry in its changelog). Its overview gives the header part, the content part and the number widths; the
+schema gives ProtocolMessage, Request, Response, Event and the Capabilities members' names. No adapter's or client's
+source was read.
+
+| Source | SHA-256 | Used for |
+|---|---|---|
+| [the specification](https://microsoft.github.io/debug-adapter-protocol/specification), fetched twice with curl, byte-identical | `5b82de00872302c733657b18f4388de79cc3a0f1fcdb2c86f29eaf2e578e1abb` | the requests, responses and events sniff answers and refuses; that an adapter may answer a request `success: false` |
+| [the JSON schema](https://microsoft.github.io/debug-adapter-protocol/debugAdapterProtocol.json), fetched twice, byte-identical | `ff8ae4c6cfd588a050e9346c35fd104748a27ef4518d1c3268529ca6f8ff5818` | the envelope's members (`seq`, `type`, `command`, `arguments`, `request_seq`, `success`, `message`, `body`, `event`) and the capability names |
+| [the overview](https://microsoft.github.io/debug-adapter-protocol/overview), fetched twice, byte-identical | `844183db411d86bf22f354ff6ff4e664efefc2db4a1977c191c918e1bc4b72ff` | the base protocol: `Content-Length` as the one defined and required header field, `\r\n` endings, ASCII headers and a UTF-8 content part |
+| [the changelog](https://microsoft.github.io/debug-adapter-protocol/changelog), fetched twice, byte-identical | `de6768f5bd3518f68322971b3aa2d7ede2f264623571cc0ff9ce651f121a77b4` | the version the rest was read at |
+
+The caps on a message (32 header fields, 4,096 bytes a header line, a 64 MiB content part) are sniff's own; the
+specification sets none.
+
+### Binary observations, not sources
+
+- Which capabilities sniff declares: only those its rows hold, and of those only ones the pinned gdb also declares in
+  DAP mode (`gdb -i=dap`, run only as a binary in the oracle container; its `initialize` answer read off the pipe).
+  gdb's DAP support ships as Python files beside the binary; they were hashed as a tree, never opened.
+
