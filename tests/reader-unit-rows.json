@@ -226,5 +226,11 @@
     "session-var-line",
     "session-refs",
     "session-scopes"
+  ],
+  "dapsession_test.lu": [
+    "session-dap-base64",
+    "session-dap-frame",
+    "session-dap-variable",
+    "session-dap-stopped"
   ]
 }

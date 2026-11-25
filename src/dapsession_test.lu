@@ -1,0 +1,104 @@
+//! member: false
+// The session's Debug Adapter Protocol records: a frame, a variable and a stop as the protocol carries them, and the
+// bytes of memory as base64. Each follows what the pinned gdb sends in DAP mode (tests/evidence/dap/).
+use session
+use std.json
+
+fn field_int(v: json.Value, key: str) -> int {
+    let f = json.get(v, key) else { return -1 }
+    json.as_int(f) else { -1 }
+}
+
+fn field_str(v: json.Value, key: str) -> str {
+    let f = json.get(v, key) else { return "<absent>" }
+    json.as_str(f) else { "<not a string>" }
+}
+
+fn field_bool(v: json.Value, key: str) -> int {
+    let f = json.get(v, key) else { return -1 }
+    let x = json.as_bool(f) else { return -1 }
+    if x { 1 } else { 0 }
+}
+
+fn bytes_of(values: List[int]) -> List[byte] {
+    var out: List[byte] = []
+    for v in values { (mut out).push(v as byte) }
+    out
+}
+
+fn base64_row() {
+    // readMemory's data: the four bytes of -7, as gdb sends them
+    assert(session.dap_base64(bytes_of([249, 255, 255, 255])) == "+f///w==")
+    assert(session.dap_base64(bytes_of([])) == "")
+    assert(session.dap_base64(bytes_of([97])) == "YQ==")
+    assert(session.dap_base64(bytes_of([97, 98])) == "YWI=")
+    assert(session.dap_base64(bytes_of([97, 98, 99])) == "YWJj")
+    assert(session.dap_base64(bytes_of([0, 16, 131, 16, 81, 135, 32, 146, 139])) == "ABCDEFGHIJKL")
+    print("PASS session-dap-base64")
+}
+
+fn frame_row() {
+    // a frame with source: its id is its level, its column 0, its pc in hex, its module the program
+    let none: List[str] = []
+    let v = session.FrameView { level: 1, pc: 93824992235858, show_pc: true, name: "depth_sum", args: copy none, file: "main.c",
+                                path: "/w/fixtures/session/c/calls/main.c", line: 7, lib: "" }
+    let f = session.dap_frame(v, "/w/prog")
+    assert(field_int(f, "id") == 1 && field_str(f, "name") == "depth_sum" && field_int(f, "line") == 7)
+    assert(field_int(f, "column") == 0 && field_str(f, "instructionPointerReference") == "0x555555555152")
+    assert(field_str(f, "moduleId") == "/w/prog")
+    let src = json.get(f, "source") else { assert(false); return }
+    assert(field_str(src, "name") == "main.c" && field_str(src, "path") == "/w/fixtures/session/c/calls/main.c")
+    // a frame with no source has line 0 and no source; one gdb cannot name is ??? (its frame text says ??)
+    let w = session.FrameView { level: 2, pc: 140737350114704, show_pc: true, name: "??", args: none, file: "", path: "",
+                                line: 0, lib: "/lib/x86_64-linux-gnu/libc.so.6" }
+    let g = session.dap_frame(w, "/lib/x86_64-linux-gnu/libc.so.6")
+    assert(field_str(g, "name") == "???" && field_int(g, "line") == 0 && field_str(g, "source") == "<absent>")
+    assert(field_str(g, "moduleId") == "/lib/x86_64-linux-gnu/libc.so.6")
+    print("PASS session-dap-frame")
+}
+
+fn variable_row() {
+    // a scalar: its value as print shows it inside an aggregate, its type, and no children
+    let c = session.VarView { name: "c", value: "122 'z'", ty: "char", indexed: 0, named: 0 }
+    let a = session.dap_variable(c, false, 0)
+    assert(field_str(a, "name") == "c" && field_str(a, "value") == "122 'z'" && field_str(a, "type") == "char")
+    assert(field_int(a, "variablesReference") == 0 && field_int(a, "indexedVariables") == -1 && field_int(a, "namedVariables") == -1)
+    // an array: no value text, its elements as indexed children
+    let w = session.VarView { name: "words", value: "{{1, 2, 3, 4}}", ty: "int [4]", indexed: 4, named: 0 }
+    let b = session.dap_variable(w, false, 4)
+    assert(field_str(b, "value") == "" && field_int(b, "indexedVariables") == 4 && field_int(b, "variablesReference") == 4)
+    // a structure: no value text, its members as named children
+    let p = session.VarView { name: "origin", value: "{{x = 1, y = 2}}", ty: "struct point", indexed: 0, named: 3 }
+    let d = session.dap_variable(p, false, 5)
+    assert(field_str(d, "value") == "" && field_int(d, "namedVariables") == 3)
+    // a pointer: its value, and the value it points at as its one named child
+    let q = session.VarView { name: "q", value: "0x7fffffffeac4", ty: "int *", indexed: 0, named: 0 }
+    let e = session.dap_variable(q, true, 13)
+    assert(field_str(e, "value") == "0x7fffffffeac4" && field_int(e, "namedVariables") == 1 && field_int(e, "variablesReference") == 13)
+    print("PASS session-dap-variable")
+}
+
+fn stopped_row() {
+    let one: List[int] = [1]
+    let none: List[int] = []
+    let b = session.dap_stopped(session.dap_stop_bp, 1, one, false)
+    assert(field_str(b, "reason") == "breakpoint" && field_int(b, "threadId") == 1 && field_bool(b, "allThreadsStopped") == 1)
+    let ids = json.get(b, "hitBreakpointIds") else { assert(false); return }
+    let first = json.at(ids, 0) else { assert(false); return }
+    assert((json.len(ids) else { 0 }) == 1 && (json.as_int(first) else { 0 }) == 1)
+    // a signal is reason signal, with no description; the interrupt pause asked for is reason pause
+    let s = session.dap_stopped(session.dap_stop_signal, 4, none, false)
+    assert(field_str(s, "reason") == "signal" && field_str(s, "description") == "<absent>" && field_int(s, "threadId") == 4)
+    assert(field_str(s, "hitBreakpointIds") == "<absent>")
+    assert(field_str(session.dap_stopped(session.dap_stop_signal, 1, none, true), "reason") == "pause")
+    // a step that ended where it was going
+    assert(field_str(session.dap_stopped(session.dap_stop_step, 1, none, false), "reason") == "step")
+    print("PASS session-dap-stopped")
+}
+
+fn main() {
+    base64_row()
+    frame_row()
+    variable_row()
+    stopped_row()
+}
