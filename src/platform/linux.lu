@@ -14,6 +14,8 @@ extern "c" fn fork() -> i32
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 extern "c" fn execv(path: *u8, argv: *u64) -> i32
 #[cfg(target = "x86_64-unknown-linux-gnu")]
+extern "c" fn dup2(from: i32, to: i32) -> i32
+#[cfg(target = "x86_64-unknown-linux-gnu")]
 extern "c" fn ptrace(request: i32, ...) -> i64
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 extern "c" fn waitpid(pid: i32, status: *i32, options: i32) -> i32
@@ -80,6 +82,15 @@ pub fn target_none() -> Target {
 /// arriving as a stop (the child exits 127).
 #[cfg(target = "x86_64-unknown-linux-gnu")]
 pub fn target_spawn(path: str, args: List[str], env_lines: str, env_columns: str) -> Target {
+    let inherit: List[int] = []
+    target_spawn_io(path, args, env_lines, env_columns, inherit)
+}
+
+/// target_spawn with the child's standard input, output and error (io[0], io[1], io[2]; -1, or a shorter list,
+/// keeps sniff's own) made the given descriptors before it runs: `sniff --dap` gives a program /dev/null and two pipes,
+/// so that nothing it writes reaches the protocol stream.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+pub fn target_spawn_io(path: str, args: List[str], env_lines: str, env_columns: str, io: List[int]) -> Target {
     let tgt = target_none()
     unsafe {
         // # Safety: pointers are calloc'd buffers sized for the call, and pid is the traced child.
@@ -95,6 +106,11 @@ pub fn target_spawn(path: str, args: List[str], env_lines: str, env_columns: str
         argv[args.len + 1] = 0
         let pid = fork()
         if pid == 0 {
+            var k = 0
+            while k < io.len && k < 3 {
+                if io[k] >= 0 { let _ = dup2(io[k] as i32, k as i32) }
+                k += 1
+            }
             let _ = ptrace(req_traceme as i32, 0, 0 as u64, 0 as u64)
             let _ = personality(addr_no_randomize as u64)
             // gdb runs the program through a shell with LINES and COLUMNS set, and
