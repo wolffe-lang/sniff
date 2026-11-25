@@ -28,7 +28,8 @@ member is}.
 Placeholders, resolved when a step is sent: "@PROG@", "@SRC@" and "@CWD@" inside strings (from the row's prog and
 src); "@THREAD@" (the last consumed stopped event's threadId, else the first thread of the last threads response,
 else the first thread a thread event reported started); "@FRAMEk@", "@SCOPEk@", "@VARk@" (the k-th frame id, scope
-variablesReference or nonzero variable reference of the last stackTrace, scopes or variables response).
+variablesReference or nonzero variable reference of the last stackTrace, scopes or variables response); "@MEMREF@"
+(the last successful evaluate's memoryReference, else the first 0x… address in its result).
 
 A row passes when every expectation holds: `PASS dap ROW`. An expectation that does not hold is a red by comparison:
 `FAIL dap ROW WHAT: …`. A timeout, an adapter that ends while a response is awaited, a body that is not JSON, or a
@@ -269,7 +270,7 @@ def run_row(row, argv, fixtures, sources, cc, out):
         log.flush()
         count[0] += 1
 
-    state = {'thread': None, 'frames': [], 'scopes': [], 'vars': [], 'threads': [], 'started': []}
+    state = {'thread': None, 'frames': [], 'scopes': [], 'vars': [], 'threads': [], 'started': [], 'memref': None}
     pending, posted, seq = [], {}, [0]
     a = Adapter(argv, cwd, os.path.join(out, name + '.stderr'))
 
@@ -281,6 +282,11 @@ def run_row(row, argv, fixtures, sources, cc, out):
                     if pick is not None:
                         return pick
                 raise Fault('no thread id for @THREAD@')
+            if v == '@MEMREF@':
+                drain()
+                if state['memref'] is None:
+                    raise Fault('no address for @MEMREF@')
+                return state['memref']
             m = re.fullmatch(r'@(FRAME|SCOPE|VAR)(\d+)@', v)
             if m:
                 lst = {'FRAME': state['frames'], 'SCOPE': state['scopes'], 'VAR': state['vars']}[m.group(1)]
@@ -310,6 +316,9 @@ def run_row(row, argv, fixtures, sources, cc, out):
                 state['vars'] = [x.get('variablesReference') for x in body.get('variables', []) if x.get('variablesReference')]
             elif msg.get('command') == 'threads':
                 state['threads'] = [t.get('id') for t in body.get('threads', [])]
+            elif msg.get('command') == 'evaluate':
+                at = re.search(r'0x[0-9a-fA-F]+', body.get('result', '') or '')
+                state['memref'] = body.get('memoryReference') or (at.group(0) if at else None)
 
     def take_in(deadline):
         while True:
