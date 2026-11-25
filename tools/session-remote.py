@@ -811,12 +811,19 @@ def ask(s, data):
     return got
 
 
-def closed(s, limit=5.0):
+def close_seen(s, limit=5.0):
+    """How the connection's end reads within limit seconds: 'closed' (an orderly end), 'reset by the stub' (the end
+    came as a reset), 'data ...' (it sent more), 'still open', or the error the read met."""
     s.settimeout(limit)
     try:
-        return s.recv(64) == b''
-    except OSError:
-        return False
+        got = s.recv(64)
+    except socket.timeout:
+        return 'still open'
+    except (ConnectionResetError, BrokenPipeError):
+        return 'reset by the stub'
+    except OSError as e:
+        return 'an error: %s' % e
+    return 'closed' if got == b'' else 'data %r' % got
 
 
 def tcp_sockets(port):
@@ -866,8 +873,9 @@ def check_refuse_second(a, row, out):
         r2 = ask(second, 'qSupported:swbreak+')
         if r2 != want:
             problems.append('the second client got %r, not %r' % (r2, want))
-        if not closed(second):
-            problems.append('the second connection was not closed')
+        how = close_seen(second)
+        if how != 'closed':
+            problems.append('the second connection was not closed: %s' % how)
         second.close()
         r3 = ask(first, '?')
         if not r3 or r3[0] not in 'TS':
@@ -1816,6 +1824,44 @@ class StandInTables:
         return 0xF4 if addr == 0xffffffff80000786 else 0x66
 
 
+def selftest_close_seen():
+    """close_seen names each way a loopback connection ends, made deterministically: an orderly close, a close with a
+    byte left unread (a reset), a peer that sends more, and a peer that stays open past the limit."""
+    lst = socket.socket()
+    lst.bind(('127.0.0.1', 0))
+    lst.listen(4)
+    port = lst.getsockname()[1]
+
+    def pair():
+        c = socket.create_connection(('127.0.0.1', port), timeout=5)
+        s, _ = lst.accept()
+        return c, s
+    got = {}
+    c, s = pair()
+    s.close()
+    got['orderly'] = close_seen(c)
+    c.close()
+    c, s = pair()
+    c.sendall(b'+')
+    ready, _, _ = select.select([s], [], [], 5)
+    assert ready, 'the byte never reached the accepted side'
+    s.close()
+    got['unread'] = close_seen(c)
+    c.close()
+    c, s = pair()
+    s.sendall(b'$')
+    got['more'] = close_seen(c)
+    s.close()
+    c.close()
+    c, s = pair()
+    got['open'] = close_seen(c, limit=0.2)
+    s.close()
+    c.close()
+    lst.close()
+    want = {'orderly': 'closed', 'unread': 'reset by the stub', 'more': "data b'$'", 'open': 'still open'}
+    assert got == want, 'close_seen named %r, not %r' % (got, want)
+
+
 def selftest_interrupt_stop(sess):
     """interrupt-stop: the stop the interrupt byte brings is recorded, not gated, once (a) to (f) hold; the five kinds of
     stop the measurement saw pass in gdb's and sniff's forms, and each control is red by its own assertion."""
@@ -1959,7 +2005,8 @@ def cmd_selftest(_a):
     first = loc('Remote debugging using 127.0.0.1:41001\r\n0x000000000000fff0 in ?? ()\r\n')
     assert first == 'Remote debugging using 127.0.0.1:PORT\n0x000000000000fff0 in ?? ()\n', 'stop-location took a first connect: ' + repr(first)
     selftest_interrupt_stop(sess)
-    gold_w = normalise('Hardware watchpoint 2: *(unsigned long *) 0xffffffff80652068\r\n\r\nOld value = 0\r\nNew value = 1\r\n', 0, Path('/k'), sess, ['watch-values'])
+    selftest_close_seen()
+    gold_w =normalise('Hardware watchpoint 2: *(unsigned long *) 0xffffffff80652068\r\n\r\nOld value = 0\r\nNew value = 1\r\n', 0, Path('/k'), sess, ['watch-values'])
     no_hit = normalise('Old value = 0\r\nNew value = 1\r\n', 0, Path('/k'), sess, ['watch-values'])
     assert first_diff(gold_w, no_hit), 'a missing watchpoint line was hidden'
     no_new = normalise('Hardware watchpoint 2: *(unsigned long *) 0xffffffff80652068\r\n\r\nOld value = 0\r\n', 0, Path('/k'), sess, ['watch-values'])
