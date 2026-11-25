@@ -411,7 +411,33 @@ The rows are of two kinds:
   - The client's own units run it against a stand-in adapter: a red is the row's comparison, while a timeout, an
     adapter that ends early, or a body that is not JSON is a fault named as one.
 
-Boundaries that remain: no program runs yet. Launch and attach, breakpoints, stepping, threads, stack traces, scopes,
-variables and `evaluate` come next. They will be held to the pinned gdb's own DAP transcripts and to each request's
-command-language twin.
+### Sessions over the debug adapter (S9, `sniff --dap` with a program)
+
+The protocol's requests run on the same session the command language does (`src/session/dapserve.lu`), and what a
+stop shows is read from the records `bt`, `info args`, `info locals` and `print` print (`src/session/views.lu`):
+- **The views.** A frame is a record (its level, pc, name, arguments, file, path, line and library) whose text is
+  gdb's frame line; a variable is a record (name, value text, type, and its children's counts) whose text is
+  `name = value`. The command language prints from them, so its rows hold the text unchanged.
+- **Launch.** `launch` loads the program and answers; `configurationDone` starts it, as the specification's
+  configuration sequence has it (the pinned gdb starts it at launch: rows name that `launch-start`).
+  `stopAtBeginningOfMainSubprogram` is a temporary breakpoint at main. `stopOnEntry`, `cwd` and `env` are refused by
+  name.
+- **The program's streams.** Its standard output and error are pipes whose bytes come out as `output` events; its
+  standard input is /dev/null. Nothing it writes reaches the protocol stream.
+- **While it runs** the session waits on the program and on standard input together (a wait that never blocks, then
+  50 ms on the descriptors, on Linux): `pause` interrupts it with SIGINT and is reported reason `pause`; `threads` is
+  refused notStopped; `disconnect` and `terminate` kill it and are answered once its end is reported.
+- **What a stop reports** follows the pinned gdb's transcripts: a `breakpoint` changed event for each counted hit,
+  then `stopped` (breakpoint with the ids hit, step, signal, or pause); the end is each thread's `exited`, `exited`
+  with the exit code (0 when a signal or a kill ended it) and `terminated`. Frames count from 0 at the innermost;
+  scopes are the arguments and locals when there are any, then the registers; references are given out per stop.
+  `evaluate` runs the command language in the repl and answers with its text, and answers any other expression as a
+  variable. A type is spelled as gdb prints it: gcc's `short int`, `long int` and `long unsigned int` are `short`,
+  `long` and `unsigned long`, as clang records them (the command language's type names follow the same spelling).
+
+The rows held to gdb (`compare: gdb` in `tests/dap-rows.json`) run over gcc's and clang's session builds on Linux and
+compare with the pinned gdb's DAP transcripts (`tests/evidence/dap/`), taken twice by `session-dap.py capture` and
+kept only when the two agreed. Normalising names ids by first appearance, addresses, process ids and the repository's
+root, and leaves out module events; the named differences are `launch-start` and `registers-scope`. On macOS those rows
+are skipped by name and their count is held (macOS follows in a later change).
 
