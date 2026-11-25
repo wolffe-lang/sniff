@@ -62,7 +62,7 @@ step reader-unit python3 -I tools/test-readers.py --wolf "$wolf"
 step sniff-build "$wolf" build src/main.lu --no-cache -o "$root/target/sniff"
 step version-printed python3 -I tools/check-version --bin "$root/target/sniff"
 # S9: `sniff --dap` over standard input and output: the base protocol's rows, sniff's own (no program runs)
-step dap-rows python3 -I tools/session-dap.py check --sniff "$root/target/sniff" --rows tests/dap-rows.json --out "$root/target/dap-out"
+step dap-rows python3 -I tools/session-dap.py check --sniff "$root/target/sniff" --rows tests/dap-rows.json --program no --out "$root/target/dap-out"
 compilers=(clang)
 [ "$mode" != linux ] || compilers+=(gcc)
 step fixture-builds python3 -I tools/build-fixtures.py --wolf "$wolf" --out "$root/target/fixtures" --compilers "${compilers[@]}"
@@ -106,6 +106,11 @@ if [ "$mode" = linux ]; then
   step session-expr-join python3 -I tools/session-exprs.py --sniff "$root/target/sniff" --values target/values/values.json --fixtures "$root/target/session-fixtures"
   step session-unwind-basis python3 -I tools/session-unwind.py --sniff "$root/target/sniff"
   step session-perf python3 -I tools/session-perf.py --sniff "$root/target/sniff"
+  # S9: sessions over DAP, held to the pinned gdb's DAP transcripts (tests/evidence/dap/) over each compiler's build
+  for cc in gcc clang; do
+    step "dap-session-rows-$cc" python3 -I tools/session-dap.py check --sniff "$root/target/sniff" --rows tests/dap-rows.json --program yes \
+      --fixtures "$root/target/session-fixtures" --sources "$root/fixtures/session" --cc "$cc" --out "$root/target/dap-$cc"
+  done
   # S4: the same rows on the static builds PAX loads, held to the pinned gdb on those builds. Here sniff runs on
   # Linux; tools/gate-pax runs it on PAX under KVM (it needs the PAX tree, a kernel and QEMU, not this image).
   step pax-fixtures python3 -I tools/build-session.py --wolf "$wolf" --out "$root/target/pax-fixtures" --static
@@ -138,4 +143,6 @@ else
   # S8: sniff-server is a Linux and PAX program, and sniff built for macOS cannot debug an x86-64 remote process
   # (a later change): its rows are skipped by name here, and the count is held
   step remote-server-skip python3 -I tools/session-remote.py skip --kind server --reason "sniff-server is a Linux and PAX program; sniff built for macOS cannot debug an x86-64 remote process (a later change)" --expect 33
+  # S9: sniff --dap runs programs on Linux first; its rows that run one are skipped by name here, and the count is held
+  step dap-session-skip python3 -I tools/session-dap.py skip --rows tests/dap-rows.json --program yes --reason "sniff --dap runs programs on Linux first; macOS follows in a later change" --expect 23
 fi
