@@ -163,6 +163,7 @@ fn report_watch(mut s: Session, i: int) {
     let r = src_read(s, w.addr, w.len)
     let now = if r.ok { copy r.data } else { copy w.old }
     s.watches[i].hits += 1
+    if s.adapter.on { s.adapter.stop = dap_stop_watch }
     emit_line(mut s, "")
     emit_line(mut s, "{watch_label(w.kind)} {w.num}: {w.expr}")
     emit_line(mut s, "")
