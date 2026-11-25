@@ -10,8 +10,13 @@ It speaks the Debug Adapter Protocol's base protocol on standard input and outpu
   garbage  answers initialize with a body that is not JSON
   reverse  sends a runInTerminal request before answering initialize
   badcaps  as plain, but initialize declares supportsStepBack too
-  exit3    on disconnect, exits 3 and writes `stand-in: exit 3` on standard error"""
+  exit3    on disconnect, exits 3 and writes `stand-in: exit 3` on standard error
+  gdbish   as plain, but answers configurationDone notStopped (as the pinned gdb, which starts the program at launch),
+           and its thread id and addresses are its own process id's
+  jitter   as plain, but the first frame's line is its own process id's: two takes differ
+  otherline  as plain, but the second frame's line is 99"""
 import json
+import os
 import sys
 
 mode = sys.argv[1] if len(sys.argv) > 1 else 'plain'
@@ -58,6 +63,8 @@ def read():
 
 
 running = False
+tid = os.getpid() if mode == 'gdbish' else 7
+base = os.getpid() * 16 if mode == 'gdbish' else 4096
 while True:
     r = read()
     if r is None:
@@ -80,23 +87,32 @@ while True:
     elif c == 'launch':
         reply(r)
         event('initialized')
-        event('thread', {'reason': 'started', 'threadId': 7})
+        event('thread', {'reason': 'started', 'threadId': tid})
         running = True
     elif c == 'configurationDone':
-        reply(r)
+        if mode == 'gdbish':
+            reply(r, ok=False, message='notStopped')
+        else:
+            reply(r)
     elif c == 'threads':
         if running:
             reply(r, ok=False, message='notStopped')
         else:
-            reply(r, {'threads': [{'id': 7, 'name': 'main'}]})
+            reply(r, {'threads': [{'id': tid, 'name': 'main'}]})
     elif c == 'pause':
         reply(r)
         running = False
-        event('stopped', {'reason': 'pause', 'threadId': 7, 'allThreadsStopped': True})
+        event('stopped', {'reason': 'pause', 'threadId': tid, 'allThreadsStopped': True})
     elif c == 'stackTrace':
         if mode == 'hang':
             continue
-        reply(r, {'stackFrames': [{'id': 100 + i, 'name': 'f%d' % i, 'line': i + 1, 'column': 1} for i in range(3)]})
+        frames = [{'id': 100 + i, 'name': 'f%d' % i, 'line': i + 1, 'column': 1,
+                   'instructionPointerReference': '0x%x' % (base + i)} for i in range(3)]
+        if mode == 'jitter':
+            frames[0]['line'] = os.getpid()
+        if mode == 'otherline':
+            frames[1]['line'] = 99
+        reply(r, {'stackFrames': frames})
     elif c == 'disconnect':
         reply(r)
         event('terminated')
