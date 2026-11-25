@@ -220,5 +220,11 @@
     "dap-envelope",
     "dap-unknown-request",
     "dap-initialize-caps"
+  ],
+  "views_test.lu": [
+    "session-frame-text",
+    "session-var-line",
+    "session-refs",
+    "session-scopes"
   ]
 }
