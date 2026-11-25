@@ -361,3 +361,23 @@ specification sets none.
   DAP mode (`gdb -i=dap`, run only as a binary in the oracle container; its `initialize` answer read off the pipe).
   gdb's DAP support ships as Python files beside the binary; they were hashed as a tree, never opened.
 
+
+## Consulted for S9's sessions over `sniff --dap` (2026-11-25)
+
+The requests, responses and events a session uses came from the same specification and schema, read at the same
+digests as above: `launch` and `configurationDone` (and the configuration sequence between them), `setBreakpoints`,
+`setFunctionBreakpoints` (with `condition` and `hitCondition`), `threads`, `stackTrace`, `scopes`, `variables`,
+`continue`, `next`, `stepIn`, `stepOut` (with `granularity`), `pause`, `evaluate`, `readMemory`, `terminate` and
+`disconnect`; the events `initialized`, `process`, `thread`, `output`, `breakpoint`, `continued`, `stopped`, `exited`
+and `terminated`. readMemory's data is base64; the unit row's values were checked against the pinned gdb's transcript
+(`+f///w==` for -7) and Python's `base64` module. No adapter's or client's source was read.
+
+### Binary observations, not sources
+
+- What each event and body holds where the specification leaves it to the adapter came from the pinned gdb's DAP
+  transcripts of the same rows (`gdb -i=dap`, run only as a binary in the oracle container, over gcc's and clang's
+  session builds; `tools/session-dap.py capture`, each row twice), kept as `tests/evidence/dap/`: the reasons a stop
+  gives, the exit code a killed program reports, a `breakpoint` changed event at each counted hit, the hit condition
+  as an ignore count, how a frame with no source and an aggregate or a pointer variable are shown, the order of the
+  threads, and the spelling of gcc's integer type names (`short`, `long`, `unsigned long` for gcc's `short int`,
+  `long int`, `long unsigned int`). gdb's DAP support was hashed as a tree, never opened.
