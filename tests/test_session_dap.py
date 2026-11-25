@@ -201,6 +201,18 @@ class Normalise(unittest.TestCase):
         self.assertEqual(n['events'][0]['body']['systemProcessId'], 'P1')
         self.assertEqual(n['events'][1]['body']['output'], 'ready <PID> at <ADDR>\n')
 
+    def test_the_repository_root_is_named(self):
+        # a golden taken in one checkout holds in another: the paths of the programs and their sources are the
+        # repository's, wherever it lies
+        m = client()
+        root = str(ROOT)
+        recs = [{'dir': 'c2a', 'msg': {'seq': 1, 'type': 'request', 'command': 'launch', 'arguments': {'program': root + '/target/p/prog'}}},
+                {'dir': 'a2c', 'msg': {'seq': 2, 'type': 'event', 'event': 'process', 'body': {'name': root + '/target/p/prog'}}},
+                {'dir': 'a2c', 'msg': {'seq': 3, 'type': 'response', 'request_seq': 1, 'command': 'launch', 'success': True}}]
+        n = m.normalise(recs, [])
+        self.assertEqual(n['sent'][0]['arguments']['program'], '@ROOT@/target/p/prog')
+        self.assertEqual(n['events'][0]['body']['name'], '@ROOT@/target/p/prog')
+
     def test_launch_start_names_gdb_s_configuration_done(self):
         m = client()
         gdb = {'sent': [], 'events': [], 'responses': [
