@@ -14,7 +14,8 @@ It speaks the Debug Adapter Protocol's base protocol on standard input and outpu
   gdbish   as plain, but answers configurationDone notStopped (as the pinned gdb, which starts the program at launch),
            and its thread id and addresses are its own process id's
   jitter   as plain, but the first frame's line is its own process id's: two takes differ
-  otherline  as plain, but the second frame's line is 99"""
+  otherline  as plain, but the second frame's line is 99
+In every mode evaluate answers `(int *) 0x1234` and readMemory four bytes at the reference it is given."""
 import json
 import os
 import sys
@@ -113,6 +114,10 @@ while True:
         if mode == 'otherline':
             frames[1]['line'] = 99
         reply(r, {'stackFrames': frames})
+    elif c == 'evaluate':
+        reply(r, {'result': '(int *) 0x1234', 'variablesReference': 0})
+    elif c == 'readMemory':
+        reply(r, {'address': r['arguments']['memoryReference'], 'data': '+f///w=='})
     elif c == 'disconnect':
         reply(r)
         event('terminated')
