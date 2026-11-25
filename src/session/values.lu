@@ -130,6 +130,19 @@ fn ty_builtin(t: int) -> bool { t <= 0 - 2 && t >= 0 - 14 && t != ty_voidp && t 
 /// A pointer to a DIE or to a builtin type (ty_pointer_to's).
 fn ty_is_ptr(t: int) -> bool { t <= 0 - 1000 || ty_builtin(0 - 1000 - t) }
 
+/// C's spelling of an integer type gcc records in words of its own (`long unsigned int`): the pinned gdb prints
+/// `unsigned long`, as clang records it (measured for short, long and unsigned long; the other three follow the same
+/// rule). Any other name is returned as it is.
+pub fn c_type_spelling(name: str) -> str {
+    if name == "short int" { return "short" }
+    if name == "short unsigned int" { return "unsigned short" }
+    if name == "long int" { return "long" }
+    if name == "long unsigned int" { return "unsigned long" }
+    if name == "long long int" { return "long long" }
+    if name == "long long unsigned int" { return "unsigned long long" }
+    name
+}
+
 /// gdb's spelling of a type.
 fn ty_name(p: Prog, t: int) -> str {
     if t == ty_int { return "int" }
@@ -154,7 +167,8 @@ fn ty_name(p: Prog, t: int) -> str {
     if t < 0 { return "void" }
     let tag = p.info.entries[t].tag
     let ui = p.info.entries[t].unit
-    if tag == tag_base || tag == tag_typedef { return attr_text(p, ui, t, 3) }
+    if tag == tag_base { return c_type_spelling(attr_text(p, ui, t, 3)) }
+    if tag == tag_typedef { return attr_text(p, ui, t, 3) }
     if tag == tag_struct { return "struct {attr_text(p, ui, t, 3)}" }
     if tag == tag_union { return "union {attr_text(p, ui, t, 3)}" }
     if tag == tag_enum { return "enum {attr_text(p, ui, t, 3)}" }
