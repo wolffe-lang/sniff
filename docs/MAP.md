@@ -340,7 +340,8 @@ skips), and no Mac build for the kernel rows.
 `sniff-server [--non-loopback] [HOST]:PORT PROG [ARGS...]` starts PROG stopped at its first instruction under
 `ptrace(2)` and serves it to one client. The protocol has no authentication, so the address is loopback unless the
 caller names another and asks for it with `--non-loopback`; a second client while one is attached gets an error reply
-naming that and is closed. `requests.lu` parses the requests and the listen address, `replies.lu` writes the stop
+naming that and is closed once its acknowledgment is read (closed with that byte unread, the connection would end in a
+reset). `requests.lu` parses the requests and the listen address, `replies.lu` writes the stop
 replies (signal numbers from `tests/server-signals.tsv`, each measured under the pinned gdbserver; an unmeasured one
 is refused by name), qSupported's reply, the thread list with names and the stub's own target description (core, SSE
 and segment features, EFLAGS's flags from the processor manual), `x87.lu` turns FXSAVE's abridged tag byte into gdb's
