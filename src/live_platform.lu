@@ -25,5 +25,62 @@ fn main() -> int {
     assert(platform.status_exited(st))
     assert(platform.status_exit_code(st) == 3)
     print("PASS platform-exit-code")
+    fd_rows(args[0])
     0
+}
+
+/// The descriptors `sniff --dap` waits on and reads, and a program started with its standard streams given.
+fn fd_rows(exits: str) {
+    let buf = platform.fd_buffer(65536)
+    let (r, w) = platform.fd_pipe()
+    assert(r >= 0 && w >= 0)
+    // nothing written: a wait of no time finds nothing ready
+    assert(platform.fd_poll(buf, [r], 0).len == 0)
+    fs_write_chunk(w, "abc".bytes()) else |_| { assert(false) }
+    let ready = platform.fd_poll(buf, [r], 1000)
+    assert(ready.len == 1 && ready[0] == r)
+    let (n, got) = platform.fd_read(r, buf, 4096)
+    assert(n == 3 && got.len == 3 && got[0] as int == 97 && got[2] as int == 99)
+    // the writer closed: the reader is ready, and reads the end
+    platform.fd_close(w)
+    assert(platform.fd_poll(buf, [r], 1000).len == 1)
+    let (end, _) = platform.fd_read(r, buf, 4096)
+    assert(end == 0)
+    platform.fd_close(r)
+    // /dev/null reads its end at once
+    let z = platform.fd_devnull()
+    assert(z >= 0)
+    let (zn, _) = platform.fd_read(z, buf, 16)
+    assert(zn == 0)
+    platform.fd_close(z)
+    print("PASS platform-fd-pipe")
+    // the sleeper beside the exits program says it is ready, ticks once and says so: its output comes through the
+    // pipe it was given, and its input is /dev/null
+    let parts = exits.split("/c/exits/")
+    assert(parts.len == 2)
+    let sleeper = parts[0] + "/c/sleeper/" + parts[1]
+    let (or, ow) = platform.fd_pipe()
+    let (er, ew) = platform.fd_pipe()
+    let null = platform.fd_devnull()
+    let t = platform.target_spawn_io(sleeper, ["1"], "", "", [null, ow, ew])
+    assert(t.pid > 0)
+    platform.fd_close(ow)
+    platform.fd_close(ew)
+    platform.fd_close(null)
+    assert(platform.target_cont(t, 0) == 0)
+    let st = platform.target_wait(t)
+    assert(platform.status_exited(st) && platform.status_exit_code(st) == 0)
+    var text: List[byte] = []
+    loop {
+        let (k, more) = platform.fd_read(or, buf, 4096)
+        if k <= 0 { break }
+        for x in more { (mut text).push(x) }
+    }
+    let said = str_from_utf8(text) else { "" }
+    assert(said == "ready {t.pid}\ndone 1\n")
+    let (ek, _) = platform.fd_read(er, buf, 4096)
+    assert(ek == 0)
+    platform.fd_close(or)
+    platform.fd_close(er)
+    print("PASS platform-spawn-io")
 }
