@@ -598,6 +598,7 @@ fn refuse_second(lfd: int) {
     let _ = net_write_bytes(fd, [43 as byte])
     let f = remote.frame(second_client_reply, 1024) else { return }
     let _ = net_write_bytes(fd, f)
+    time_sleep_ms(300)
     let _ = net_close(fd)
 }
 
