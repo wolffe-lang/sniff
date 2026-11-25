@@ -3,7 +3,9 @@
 output, records every message both ways, and holds what the adapter answers to the row's expectations.
 
   session-dap.py check (--sniff PATH | --adapter 'CMD ARGS…') --rows FILE --out DIR [--only REGEX]
-                       [--fixtures DIR --sources DIR --cc gcc|clang]
+                       [--fixtures DIR --sources DIR --cc gcc|clang] [--golden DIR]
+  session-dap.py capture --adapter 'CMD ARGS…' --rows FILE --out DIR --golden DIR [--only REGEX]
+                       [--fixtures DIR --sources DIR --cc gcc|clang] [--identity TEXT]
   session-dap.py selftest
 
 The framing and the envelope are the specification's base protocol (a Content-Length header, a UTF-8 JSON body; seq,
@@ -33,7 +35,29 @@ A row passes when every expectation holds: `PASS dap ROW`. An expectation that d
 or a read finds out first), a body that is not JSON, or a placeholder with nothing to name is a fault, never a red:
 `FAIL dap ROW fault: …`. A request from the adapter
 (runInTerminal, startDebugging) is answered success: false and noted. The last line is
-`dap rows (check): P pass, F fail, S skip`; the exit is 1 when any row failed."""
+`dap rows (check): P pass, F fail, S skip`; the exit is 1 when any row failed.
+
+A row with "compare": "gdb" is also held to the pinned gdb's transcript of the same steps, its golden
+(GOLDEN/ROW.CC.json, or GOLDEN/ROW.json for a row whose program is not built per compiler; GOLDEN defaults to
+tests/evidence/dap). `capture` takes the transcript twice, each take on a fresh adapter, and writes the golden only
+when the two agree after normalising (`CAPTURED dap ROW`; else `UNSTABLE dap ROW` with the first difference, or `FAULT
+dap ROW`; the last line `dap rows (capture): C captured, U unstable, F fault`). A take's expectations are not applied:
+they are sniff's. `check` normalises sniff's transcript the same way, applies the row's named differences to both
+sides, and compares; the first difference is a red (`FAIL dap ROW golden: …`). A golden that is missing, or whose
+requests differ from the row's, is a fault. Normalising:
+  seq / request_seq          dropped (the client numbers its requests; the adapter its own messages)
+  thread, frame, variables, breakpoint, source and memory references, systemProcessId   each renamed by first
+                             appearance (T1, F1, V1, B1, S1, M1, P1; a scope's own id V)
+  0x… in text                <ADDR>; a process id in text ("process N", "pid N", "ready N", "thread N", "LWP N") <PID>
+  module and loadedSource events   left out (the system's libraries, loaded in an order of their own)
+  the interleaving of events with responses   not compared: responses in request order, events in their own order
+  the initialize response's body   not compared: sniff's capabilities are its own declared set, which dap-initialize
+                             holds
+Named differences (a row's "differences"), applied to both sides:
+  launch-start      gdb starts the program at launch and answers configurationDone notStopped; sniff starts it at
+                    configurationDone, which it answers success: true
+  registers-scope   the Registers scope holds the general registers `info registers` prints: its count is not
+                    compared"""
 import argparse
 import json
 import os
@@ -47,6 +71,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+GOLDEN = ROOT / 'tests/evidence/dap'
 # An adapter that has gone away is one fault, whichever of a write (a broken pipe) or a read (the end of its output)
 # finds out first.
 GONE = 'the adapter went away'
@@ -127,6 +152,109 @@ class Adapter:
             self.p.kill()
             self.p.wait()
         self.err.close()
+
+
+IDKEYS = {'threadId': 'T', 'frameId': 'F', 'variablesReference': 'V', 'memoryReference': 'M', 'breakpointId': 'B',
+          'sourceReference': 'S', 'systemProcessId': 'P'}
+ID_IN = {'stackFrames': 'F', 'threads': 'T', 'breakpoints': 'B', 'breakpoint': 'B', 'scopes': 'V'}
+UNCOMPARED = ('module', 'loadedSource')
+
+
+def normalise(records, differences):
+    """A transcript (the records of OUT/ROW.jsonl) as compared: {'sent', 'responses', 'events'}, with the named
+    differences applied."""
+    maps = {}
+
+    def name(kind, v):
+        if v in (0, None, '') or isinstance(v, bool):
+            return v
+        m = maps.setdefault(kind, {})
+        if v not in m:
+            m[v] = '%s%d' % (kind, len(m) + 1)
+        return m[v]
+
+    def walk(v, ctx):
+        if isinstance(v, dict):
+            out = {}
+            for k, x in v.items():
+                if k in ('seq', 'request_seq'):
+                    continue
+                if k == 'id' and ctx in ID_IN:
+                    out[k] = name(ID_IN[ctx], x)
+                elif k == 'hitBreakpointIds' and isinstance(x, list):
+                    out[k] = [name('B', y) for y in x]
+                elif k in IDKEYS:
+                    out[k] = name(IDKEYS[k], x)
+                else:
+                    out[k] = walk(x, k)
+            return out
+        if isinstance(v, list):
+            return [walk(x, ctx) for x in v]
+        if isinstance(v, str):
+            v = re.sub(r'0x[0-9a-fA-F]+', '<ADDR>', v)
+            v = re.sub(r'\b(process|pid|ready|thread) \d+', r'\1 <PID>', v, flags=re.I)
+            return re.sub(r'\bLWP \d+', 'LWP <PID>', v)
+        return v
+
+    msgs = [(r['dir'], walk(r['msg'], None)) for r in records if r['dir'] != 'note']
+    side = {'sent': [m for d, m in msgs if d == 'c2a'],
+            'responses': [m for d, m in msgs if d == 'a2c' and m.get('type') == 'response'],
+            'events': [m for d, m in msgs if d == 'a2c' and m.get('type') == 'event' and m.get('event') not in UNCOMPARED]}
+    for r in side['responses']:
+        if r.get('command') == 'initialize':
+            r.pop('body', None)
+    return differ(side, differences)
+
+
+def launch_start(side):
+    for r in side['responses']:
+        if r.get('command') == 'configurationDone' and not r.get('success') and r.get('message') == 'notStopped':
+            r['success'] = True
+            del r['message']
+
+
+def registers_scope(side):
+    for r in side['responses']:
+        if r.get('command') == 'scopes':
+            for s in (r.get('body') or {}).get('scopes', []):
+                if s.get('name') == 'Registers' and 'namedVariables' in s:
+                    s['namedVariables'] = '<registers>'
+
+
+DIFFERENCES = {'launch-start': launch_start, 'registers-scope': registers_scope}
+
+
+def differ(side, names):
+    """SIDE (a normalised transcript) with the named differences applied, as a copy."""
+    out = json.loads(json.dumps(side))
+    for n in names:
+        if n not in DIFFERENCES:
+            raise Fault('no named difference %r' % n)
+        DIFFERENCES[n](out)
+    return out
+
+
+def first_difference(want, got):
+    """The first place two normalised transcripts differ, as text, or None."""
+    for part in ('sent', 'responses', 'events'):
+        a, b = want[part], got[part]
+        for i, (x, y) in enumerate(zip(a, b)):
+            if x != y:
+                what = x.get('command') or x.get('event') or ''
+                return part, '%s[%d] %s differs: want %s got %s' % (part, i, what, json.dumps(x, sort_keys=True)[:300],
+                                                                    json.dumps(y, sort_keys=True)[:300])
+        if len(a) != len(b):
+            return part, '%s: %d, the golden has %d' % (part, len(b), len(a))
+    return None
+
+
+def golden_path(row, cc, golden):
+    stem = row['name'] + ('.' + cc if '@CC@' in row.get('prog', '') else '')
+    return Path(golden) / (stem + '.json')
+
+
+def records_of(path):
+    return [json.loads(line) for line in Path(path).read_text().splitlines() if line.strip()]
 
 
 def run_row(row, argv, fixtures, sources, cc, out):
@@ -364,7 +492,26 @@ def check(args):
             print('SKIP dap %s reason=%s' % (row['name'], row['skip']))
             nskip += 1
             continue
+        golden = None
+        if row.get('compare') == 'gdb':
+            gp = golden_path(row, args.cc, args.golden)
+            if not gp.exists():
+                print('FAIL dap %s fault: no golden %s' % (row['name'], gp))
+                nfail += 1
+                continue
+            golden = json.loads(gp.read_text())
         status, reds = run_row(row, argv, args.fixtures or '', args.sources or '', args.cc, args.out)
+        if status == 'ok' and golden is not None:
+            try:
+                names = row.get('differences', [])
+                mine = normalise(records_of(os.path.join(args.out, row['name'] + '.jsonl')), names)
+                d = first_difference(differ(golden, names), mine)
+                if d and d[0] == 'sent':
+                    status = 'fault: the golden is stale: ' + d[1]
+                elif d:
+                    reds.append('golden: ' + d[1])
+            except Fault as f:
+                status = 'fault: %s' % f
         if status != 'ok':
             print('FAIL dap %s %s' % (row['name'], status))
             nfail += 1
@@ -377,6 +524,43 @@ def check(args):
             npass += 1
     print('dap rows (check): %d pass, %d fail, %d skip' % (npass, nfail, nskip))
     return 1 if nfail else 0
+
+
+def capture(args):
+    rows = json.loads(Path(args.rows).read_text())['rows']
+    args.out = os.path.abspath(args.out)
+    os.makedirs(args.golden, exist_ok=True)
+    argv = args.adapter.split()
+    ncap = nuns = nfault = 0
+    for row in rows:
+        if row.get('compare') != 'gdb' or (args.only and not re.search(args.only, row['name'])):
+            continue
+        takes, why = [], ''
+        for n in (1, 2):
+            out = os.path.join(args.out, 'take%d' % n)
+            os.makedirs(out, exist_ok=True)
+            status, _ = run_row(row, argv, args.fixtures or '', args.sources or '', args.cc, out)
+            if status != 'ok':
+                why = 'take %d %s' % (n, status)
+                break
+            takes.append(normalise(records_of(os.path.join(out, row['name'] + '.jsonl')), []))
+        if why:
+            print('FAULT dap %s %s' % (row['name'], why))
+            nfault += 1
+            continue
+        d = first_difference(takes[0], takes[1])
+        if d:
+            print('UNSTABLE dap %s %s' % (row['name'], d[1]))
+            nuns += 1
+            continue
+        gp = golden_path(row, args.cc, args.golden)
+        body = dict({'schema': 1, 'row': row['name'], 'cc': args.cc if '@CC@' in row.get('prog', '') else None,
+                     'identity': args.identity}, **takes[0])
+        gp.write_text(json.dumps(body, indent=1, sort_keys=True) + '\n')
+        print('CAPTURED dap %s' % row['name'])
+        ncap += 1
+    print('dap rows (capture): %d captured, %d unstable, %d fault' % (ncap, nuns, nfault))
+    return 1 if nuns or nfault else 0
 
 
 def selftest():
@@ -426,10 +610,23 @@ def main():
     c.add_argument('--fixtures', default='')
     c.add_argument('--sources', default='')
     c.add_argument('--cc', default='gcc')
+    c.add_argument('--golden', default=str(GOLDEN))
+    k = sub.add_parser('capture')
+    k.add_argument('--adapter', required=True)
+    k.add_argument('--rows', required=True)
+    k.add_argument('--out', required=True)
+    k.add_argument('--golden', required=True)
+    k.add_argument('--only', default='')
+    k.add_argument('--fixtures', default='')
+    k.add_argument('--sources', default='')
+    k.add_argument('--cc', default='gcc')
+    k.add_argument('--identity', default='')
     sub.add_parser('selftest')
     args = p.parse_args()
     if args.mode == 'selftest':
         return selftest()
+    if args.mode == 'capture':
+        return capture(args)
     return check(args)
 
 
