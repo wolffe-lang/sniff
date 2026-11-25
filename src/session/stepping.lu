@@ -74,6 +74,7 @@ fn report_bp_hit(mut s: Session, idx: int) {
     emit_line(mut s, "{label} {num_text}, {frame_line(s, 0, false)}")
     print_frame_source(mut s, 0, false)
     do_displays(mut s)
+    if s.adapter.on { dap_note_bp(mut s, pc) }
     // temporary breakpoints are deleted once hit
     var keep: List[Bp] = []
     i = 0
@@ -94,6 +95,7 @@ fn report_other(mut s: Session, e: Event) -> bool {
         return false
     }
     if e.kind == ev_signal {
+        if s.adapter.on { dap_note_signal(mut s, e.signal) }
         report_signal_line(mut s, e.signal)
         // a signal names its thread before the switch to it (the reverse of a breakpoint's order)
         switching_line(mut s)

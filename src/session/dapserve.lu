@@ -1,0 +1,1064 @@
+// `sniff --dap` over a session (S9): the Debug Adapter Protocol's requests run on the same session the command
+// language does, and what the protocol shows of a stop is read from the same frames and values `bt`, `info args`,
+// `info locals` and `print` show (views.lu). The base protocol is the dap module's (framing, envelope, the
+// capabilities and the requests answered before a program exists).
+//
+// The program is started at configurationDone, as the specification's configuration sequence has it (the pinned
+// gdb starts it at launch: rows name that difference). Its standard output and error are pipes whose bytes come out
+// as `output` events, never on the protocol stream, and its standard input is /dev/null. While it runs, the session
+// waits on the program and on standard input together (threads.lu's wait_any, through dap_poll): `pause` interrupts
+// it with SIGINT, `threads` is refused notStopped, `disconnect` and `terminate` kill it and are answered once its end
+// is reported, and anything else is refused notStopped. The command language's own text goes to a buffer here, which
+// a repl evaluate answers with and every other request drops. What each event and body holds follows the pinned
+// gdb's DAP transcripts (tests/evidence/dap/).
+
+use dap
+use platform
+use std.fs
+use std.json
+
+/// Why a resume stopped, as the protocol names it (dap_stopped).
+pub const dap_stop_step: int = 0
+/// A breakpoint.
+pub const dap_stop_bp: int = 1
+/// A signal (or, when a pause asked for it, the interrupt).
+pub const dap_stop_signal: int = 2
+/// A watchpoint.
+pub const dap_stop_watch: int = 3
+
+/// `sniff --dap`'s state over the session (Session.adapter); `on` is false for the command language.
+struct Adapter {
+    pub on: bool,
+    pub wire: dap.Session,
+    pub rd: dap.Reader,
+    pub buf: u64,
+    /// The program's standard output and error, -1 when closed.
+    pub out_fd: int,
+    pub err_fd: int,
+    /// Standard input has ended; exit is the server's exit code.
+    pub eof: bool,
+    pub exit: int,
+    /// A launch was accepted and its program loaded; configurationDone starts it.
+    pub launched: bool,
+    pub stop_main: bool,
+    /// The temporary breakpoint stopAtBeginningOfMainSubprogram set (0 for none), and its record as last sent: it is
+    /// sent again when it is removed, after it went.
+    pub main_bp: int,
+    pub main_json: json.Value,
+    /// The numbers of the threads announced started and not yet reported exited.
+    pub threads: List[int],
+    /// Threads that ended during a resume: reported when it stops, unless the program ended.
+    pub gone: List[int],
+    /// The references given out since the last resume, and the values (with their names) ref_value's slot names.
+    pub refs: Refs,
+    pub vals: List[Val],
+    pub val_names: List[str],
+    /// The command language's text since it was last taken.
+    pub cli: List[byte],
+    pub pause_asked: bool,
+    /// A disconnect or terminate that came while the program ran (at most one), answered once its end is reported.
+    pub ending: List[dap.Message],
+    /// What the last resume stopped for (dap_stop_*), the signal, and the user breakpoints hit.
+    pub stop: int,
+    pub stop_signal: int,
+    pub stop_bps: List[int],
+    /// The program's exit code as the protocol reports it (0 when a signal or a kill ended it); whether its end was
+    /// reported.
+    pub end_code: int,
+    pub ended: bool,
+    /// The breakpoints the client set: function breakpoints' numbers, and each source breakpoint's file and number.
+    pub fn_bps: List[int],
+    pub src_paths: List[str],
+    pub src_nums: List[int],
+}
+
+/// The command language's adapter state: off.
+fn adapter_off() -> Adapter {
+    let ni: List[int] = []
+    let ns: List[str] = []
+    let nb: List[byte] = []
+    let nv: List[Val] = []
+    let nm: List[dap.Message] = []
+    Adapter { on: false, wire: dap.session(), rd: dap.reader(), buf: 0, out_fd: 0 - 1, err_fd: 0 - 1, eof: false, exit: 0,
+              launched: false, stop_main: false, main_bp: 0, main_json: json.null(), threads: copy ni, gone: copy ni, refs: refs(), vals: copy nv,
+              val_names: copy ns, cli: copy nb, pause_asked: false, ending: copy nm, stop: dap_stop_step, stop_signal: 0,
+              stop_bps: copy ni, end_code: 0, ended: false, fn_bps: copy ni, src_paths: copy ns, src_nums: copy ni }
+}
+
+// ---- the records (pure: dapsession_test.lu holds them) ----
+
+/// Bytes as base64 (RFC 4648, with padding): readMemory's data.
+pub fn dap_base64(b: List[byte]) -> str {
+    let abc = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".bytes()
+    var out: List[byte] = []
+    var i = 0
+    while i < b.len {
+        let b0 = b[i] as int
+        let b1 = if i + 1 < b.len { b[i + 1] as int } else { 0 }
+        let b2 = if i + 2 < b.len { b[i + 2] as int } else { 0 }
+        let n = b0 * 65536 + b1 * 256 + b2
+        (mut out).push(abc[n / 262144 % 64])
+        (mut out).push(abc[n / 4096 % 64])
+        if i + 1 < b.len { (mut out).push(abc[n / 64 % 64]) } else { (mut out).push(61 as byte) }
+        if i + 2 < b.len { (mut out).push(abc[n % 64]) } else { (mut out).push(61 as byte) }
+        i += 3
+    }
+    str_from_utf8(out) else { "" }
+}
+
+/// A stack frame as the protocol carries it: its level is its id; a frame with no source has line 0 and no source;
+/// a frame gdb cannot name (`??`) is `???`. module is its moduleId: the program, or the library it is in.
+pub fn dap_frame(v: FrameView, module: str) -> json.Value {
+    var f = Map[str, json.Value]()
+    f["id"] = json.from_int(v.level)
+    f["name"] = json.from_str(if v.name == "??" { "???" } else { v.name })
+    f["line"] = json.from_int(if v.path.len() > 0 { v.line } else { 0 })
+    f["column"] = json.from_int(0)
+    f["instructionPointerReference"] = json.from_str("0x{v.pc:x}")
+    f["moduleId"] = json.from_str(module)
+    if v.path.len() > 0 { f["source"] = source_json(v.path) }
+    json.from_map(f)
+}
+
+fn source_json(path: str) -> json.Value {
+    var src = Map[str, json.Value]()
+    src["name"] = json.from_str(path_base_name(path))
+    src["path"] = json.from_str(path)
+    json.from_map(src)
+}
+
+/// A variable as the protocol carries it, with reference as its variablesReference (0 for none). An array or a
+/// structure shows no value of its own, only its children; a pointer shows its value and has one child, the value it
+/// points at.
+pub fn dap_variable(v: VarView, pointer: bool, reference: int) -> json.Value {
+    var f = Map[str, json.Value]()
+    f["name"] = json.from_str(v.name)
+    f["type"] = json.from_str(v.ty)
+    f["variablesReference"] = json.from_int(reference)
+    if v.indexed > 0 || v.named > 0 {
+        f["value"] = json.from_str("")
+        if v.indexed > 0 { f["indexedVariables"] = json.from_int(v.indexed) }
+        if v.named > 0 { f["namedVariables"] = json.from_int(v.named) }
+    } else {
+        f["value"] = json.from_str(v.value)
+        if pointer { f["namedVariables"] = json.from_int(1) }
+    }
+    json.from_map(f)
+}
+
+/// The body of a `stopped` event: every thread is stopped; a breakpoint names the ones hit; a signal is reason
+/// signal, or pause when a pause asked for the interrupt.
+pub fn dap_stopped(kind: int, thread: int, bps: List[int], paused: bool) -> json.Value {
+    var f = Map[str, json.Value]()
+    var reason = "step"
+    if kind == dap_stop_bp { reason = "breakpoint" }
+    if kind == dap_stop_signal { reason = if paused { "pause" } else { "signal" } }
+    if kind == dap_stop_watch { reason = "data breakpoint" }
+    f["reason"] = json.from_str(reason)
+    f["threadId"] = json.from_int(thread)
+    f["allThreadsStopped"] = json.from_bool(true)
+    if kind == dap_stop_bp {
+        var ids: List[json.Value] = []
+        for n in bps { (mut ids).push(json.from_int(n)) }
+        f["hitBreakpointIds"] = json.from_list(ids)
+    }
+    json.from_map(f)
+}
+
+// ---- the wire ----
+
+fn obj(m: Map[str, json.Value]) -> json.Value { json.from_map(m) }
+
+fn send_event(mut s: Session, name: str, body: json.Value) {
+    let t = dap.event(mut s.adapter.wire, name, body)
+    (mut s.adapter.wire.out).push(t)
+}
+
+fn answer(mut s: Session, m: dap.Message, ok: bool, text: str, body: json.Value) {
+    let t = dap.response(mut s.adapter.wire, m, ok, text, body)
+    (mut s.adapter.wire.out).push(t)
+}
+
+/// Write every message made so far, in order.
+fn dap_write(mut s: Session) {
+    if s.adapter.wire.out.len == 0 { return }
+    var o = fs.stdout()
+    for t in s.adapter.wire.out {
+        fs.write_chunk(mut o, dap.encode(t)) else { s.adapter.eof = true; s.adapter.exit = 1 }
+    }
+    let none: List[str] = []
+    s.adapter.wire.out = none
+}
+
+fn args_of(m: dap.Message) -> json.Value { json.get(m.payload, "arguments") else { json.null() } }
+
+fn arg_int(m: dap.Message, key: str, absent: int) -> int {
+    let v = json.get(args_of(m), key) else { return absent }
+    json.as_int(v) else { absent }
+}
+
+fn arg_str(m: dap.Message, key: str) -> str {
+    let v = json.get(args_of(m), key) else { return "" }
+    json.as_str(v) else { "" }
+}
+
+fn arg_bool(m: dap.Message, key: str) -> bool {
+    let v = json.get(args_of(m), key) else { return false }
+    json.as_bool(v) else { false }
+}
+
+fn arg_has(m: dap.Message, key: str) -> bool { json.has(args_of(m), key) }
+
+// ---- the server's loop ----
+
+/// `sniff --dap`: 0 after a disconnect or at the end of the input, 1 when the framing breaks, the input ends inside
+/// a message or the output cannot be written.
+pub fn dap_main() -> int {
+    var s = session_new(take prog_failed(""))
+    s.adapter.on = true
+    s.adapter.buf = platform.fd_buffer(65536)
+    while !s.adapter.wire.done && !s.adapter.eof {
+        dap_write(mut s)
+        let ready = platform.fd_poll(s.adapter.buf, [0, s.adapter.out_fd, s.adapter.err_fd], 0 - 1)
+        dap_ready(mut s, ready, false)
+    }
+    if s.alive && !s.attached { kill_process(mut s) }
+    dap_write(mut s)
+    s.adapter.exit
+}
+
+/// While the program runs: wait at most ms for the program's output or the client's input, and handle what came.
+fn dap_poll(mut s: Session, ms: int) {
+    dap_write(mut s)
+    if s.adapter.eof {
+        // the client is gone: nothing to read, and the program was killed (dap_input); wait for its end
+        let nothing: List[int] = []
+        let _ = platform.fd_poll(s.adapter.buf, nothing, ms)
+        return
+    }
+    let ready = platform.fd_poll(s.adapter.buf, [0, s.adapter.out_fd, s.adapter.err_fd], ms)
+    dap_ready(mut s, ready, true)
+    dap_write(mut s)
+}
+
+fn dap_ready(mut s: Session, ready: List[int], running: bool) {
+    for fd in ready {
+        if fd >= 0 && (fd == s.adapter.out_fd || fd == s.adapter.err_fd) { dap_pipe(mut s, fd) }
+    }
+    for fd in ready {
+        if fd == 0 { dap_input(mut s, running) }
+    }
+}
+
+/// Read what the program wrote on one of its pipes: an `output` event, or the pipe's end.
+fn dap_pipe(mut s: Session, fd: int) {
+    let (n, got) = platform.fd_read(fd, s.adapter.buf, 4096)
+    if n <= 0 {
+        platform.fd_close(fd)
+        if fd == s.adapter.out_fd { s.adapter.out_fd = 0 - 1 } else { s.adapter.err_fd = 0 - 1 }
+        return
+    }
+    var f = Map[str, json.Value]()
+    f["category"] = json.from_str(if fd == s.adapter.out_fd { "stdout" } else { "stderr" })
+    f["output"] = json.from_str(text_of(got))
+    send_event(mut s, "output", obj(f))
+}
+
+/// Bytes as text: UTF-8 as it is, any other byte as U+FFFD.
+fn text_of(b: List[byte]) -> str {
+    let t = str_from_utf8(b) else {
+        var out = ""
+        for x in b {
+            let c = x as int
+            if c < 128 {
+                let one: List[byte] = [x]
+                out = out + (str_from_utf8(one) else { "" })
+            } else {
+                out = out + "�"
+            }
+        }
+        return out
+    }
+    t
+}
+
+/// Read standard input and handle each whole message in it.
+fn dap_input(mut s: Session, running: bool) {
+    let (n, got) = platform.fd_read(0, s.adapter.buf, 65536)
+    if n <= 0 {
+        s.adapter.eof = true
+        // a program sniff started does not outlive the client
+        if running && !s.attached { let _ = platform.target_tgkill(s.inferior, s.inferior.pid, s.inferior.pid, 9) }
+        dap.finish(s.adapter.rd) else |f| {
+            eprint("sniff --dap: the input ended inside a message ({f})")
+            s.adapter.exit = 1
+            return
+        }
+        return
+    }
+    let _ = dap.feed(mut s.adapter.rd, got, 0, got.len) else |e| {
+        eprint("sniff --dap: the stream's framing broke ({e})")
+        s.adapter.eof = true
+        s.adapter.exit = 1
+        return
+    }
+    while !s.adapter.wire.done {
+        let (ok, body) = dap.next_body(mut s.adapter.rd)
+        if !ok { break }
+        let m = dap.decode(body) else |e| {
+            eprint("sniff --dap: a message was skipped ({e})")
+            continue
+        }
+        if m.kind != dap.kind_request { continue }
+        if running { dap_while_running(mut s, m) } else { dap_request(mut s, m) }
+        dap_write(mut s)
+    }
+}
+
+/// A request while the program runs.
+fn dap_while_running(mut s: Session, m: dap.Message) {
+    if m.command == "pause" {
+        s.adapter.pause_asked = true
+        answer(mut s, m, true, "", json.null())
+        let _ = platform.target_tgkill(s.inferior, s.inferior.pid, s.inferior.pid, 2)
+        return
+    }
+    if m.command == "disconnect" || m.command == "terminate" {
+        if s.adapter.ending.len == 0 {
+            (mut s.adapter.ending).push(copy m)
+            let _ = platform.target_tgkill(s.inferior, s.inferior.pid, s.inferior.pid, 9)
+            return
+        }
+    }
+    answer(mut s, m, false, "notStopped", json.null())
+}
+
+// ---- requests while the program is stopped, or before it exists ----
+
+fn dap_request(mut s: Session, m: dap.Message) {
+    let c = m.command
+    if c == "launch" { dap_launch(mut s, m); return }
+    if c == "configurationDone" { dap_configuration_done(mut s, m); return }
+    if c == "setBreakpoints" { dap_set_breakpoints(mut s, m); return }
+    if c == "setFunctionBreakpoints" { dap_set_function_breakpoints(mut s, m); return }
+    if c == "threads" { dap_threads(mut s, m); return }
+    if c == "stackTrace" { dap_stack_trace(mut s, m); return }
+    if c == "scopes" { dap_scopes(mut s, m); return }
+    if c == "variables" { dap_variables(mut s, m); return }
+    if c == "evaluate" { dap_evaluate(mut s, m); return }
+    if c == "readMemory" { dap_read_memory(mut s, m); return }
+    if c == "continue" || c == "next" || c == "stepIn" || c == "stepOut" { dap_step(mut s, m); return }
+    if c == "pause" { answer(mut s, m, true, "", json.null()); return }
+    if c == "terminate" {
+        if s.alive { kill_process(mut s); s.adapter.end_code = 0; dap_end(mut s) }
+        answer(mut s, m, true, "", json.null())
+        return
+    }
+    if c == "disconnect" {
+        if s.alive && !s.attached { kill_process(mut s); s.adapter.end_code = 0; dap_end(mut s) }
+        answer(mut s, m, true, "", json.null())
+        s.adapter.wire.done = true
+        return
+    }
+    // initialize, and every request sniff does not support
+    dap.on_message(mut s.adapter.wire, m)
+}
+
+/// launch: the program is loaded now and started at configurationDone.
+fn dap_launch(mut s: Session, m: dap.Message) {
+    for name in ["stopOnEntry", "cwd", "env"] {
+        if arg_has(m, name) {
+            answer(mut s, m, false, "sniff does not support the launch argument {name}", json.null())
+            return
+        }
+    }
+    let program = arg_str(m, "program")
+    if program.len() == 0 { answer(mut s, m, false, "launch needs a program", json.null()); return }
+    if s.adapter.launched || s.alive { answer(mut s, m, false, "a program is already launched", json.null()); return }
+    let p = prog_load(program)
+    if p.err.len() > 0 && p.data.len == 0 { answer(mut s, m, false, p.err, json.null()); return }
+    s.prog = p
+    var args: List[str] = []
+    let a = json.get(args_of(m), "args") else { json.null() }
+    let items = json.as_arr(a) else { let none: List[json.Value] = []; none }
+    for x in items { (mut args).push(json.as_str(x) else { "" }) }
+    s.args = args
+    s.adapter.stop_main = arg_bool(m, "stopAtBeginningOfMainSubprogram")
+    s.adapter.launched = true
+    answer(mut s, m, true, "", json.null())
+    send_event(mut s, "initialized", json.null())
+}
+
+/// configurationDone: the program starts, and runs to its first stop.
+fn dap_configuration_done(mut s: Session, m: dap.Message) {
+    answer(mut s, m, true, "", json.null())
+    if !s.adapter.launched || s.alive { return }
+    s.adapter.launched = false
+    if s.adapter.stop_main {
+        // a temporary breakpoint at main's first line, as `tbreak main`; announced before the program starts
+        let r = resolve_location(s, "main")
+        if r.err.len() == 0 && r.addrs.len > 0 {
+            let num = s.bp_next
+            s.bp_next += 1
+            (mut s.bps).push(Bp { num: num, addr: r.addrs[0], hits: 0, temp: true, enabled: true, internal: false, abs: r.abs,
+                                  ignore: 0, loc: 1, nloc: 1, orig: 0, inserted: false, cond: "", watch_end: 0, hw: false })
+            s.adapter.main_bp = num
+            bp_event(mut s, "new", num)
+        }
+    }
+    let (or, ow) = platform.fd_pipe()
+    let (er, ew) = platform.fd_pipe()
+    let null = platform.fd_devnull()
+    let why = start_process_io(mut s, [null, ow, ew])
+    platform.fd_close(ow)
+    platform.fd_close(ew)
+    platform.fd_close(null)
+    s.adapter.out_fd = or
+    s.adapter.err_fd = er
+    if why.len() > 0 {
+        var f = Map[str, json.Value]()
+        f["category"] = json.from_str("stderr")
+        f["output"] = json.from_str(why + "\n")
+        send_event(mut s, "output", obj(f))
+        dap_end(mut s)
+        return
+    }
+    s.frames = []
+    s.frames_ok = false
+    s.adapter.ended = false
+    var p = Map[str, json.Value]()
+    p["isLocalProcess"] = json.from_bool(true)
+    p["startMethod"] = json.from_str("process")
+    p["name"] = json.from_str(s.prog.path)
+    p["systemProcessId"] = json.from_int(s.inferior.pid)
+    send_event(mut s, "process", obj(p))
+    var i = 0
+    while i < s.thr.len {
+        thread_event(mut s, "started", s.thr[i].num)
+        (mut s.adapter.threads).push(s.thr[i].num)
+        i += 1
+    }
+    if s.adapter.main_bp > 0 { bp_event(mut s, "changed", s.adapter.main_bp) }
+    dap_resume(mut s, "")
+}
+
+fn thread_event(mut s: Session, reason: str, num: int) {
+    var f = Map[str, json.Value]()
+    f["reason"] = json.from_str(reason)
+    f["threadId"] = json.from_int(num)
+    send_event(mut s, "thread", obj(f))
+}
+
+/// A new thread (threads.lu's thr_add): announced started, and the program goes on (as the pinned gdb reports it,
+/// with the selected thread's continued event).
+fn dap_thread_new(mut s: Session, num: int) {
+    (mut s.adapter.threads).push(num)
+    thread_event(mut s, "started", num)
+    var f = Map[str, json.Value]()
+    f["threadId"] = json.from_int(if s.thr.len > 0 { s.thr[s.thr_cur].num } else { 1 })
+    f["allThreadsContinued"] = json.from_bool(true)
+    send_event(mut s, "continued", obj(f))
+}
+
+/// A thread's end (threads.lu's thr_gone): reported when the resume stops, unless the program ended with it.
+fn dap_thread_gone(mut s: Session, num: int) { (mut s.adapter.gone).push(num) }
+
+// ---- breakpoints ----
+
+/// The breakpoint num as the protocol carries it: verified, where it is, or unverified and pending.
+fn bp_json(s: Session, num: int) -> json.Value {
+    var f = Map[str, json.Value]()
+    f["id"] = json.from_int(num)
+    var i = 0
+    while i < s.bps.len {
+        if s.bps[i].num == num && !s.bps[i].internal {
+            let a = s.bps[i].addr
+            let sal = find_sal(s.prog, a)
+            f["verified"] = json.from_bool(true)
+            if sal.ok {
+                f["source"] = source_json(s.prog.file_paths[sal.file])
+                f["line"] = json.from_int(sal.line)
+            }
+            let at = if s.bps[i].abs { a } else { a + s.base }
+            f["instructionReference"] = json.from_str("0x{at:x}")
+            return obj(f)
+        }
+        i += 1
+    }
+    f["verified"] = json.from_bool(false)
+    f["reason"] = json.from_str("pending")
+    obj(f)
+}
+
+fn bp_event(mut s: Session, reason: str, num: int) {
+    var j = bp_json(s, num)
+    if num == s.adapter.main_bp && num > 0 {
+        if hits_of(s, num) >= 0 { s.adapter.main_json = copy j } else { j = copy s.adapter.main_json }
+    }
+    var f = Map[str, json.Value]()
+    f["reason"] = json.from_str(reason)
+    f["breakpoint"] = j
+    send_event(mut s, "breakpoint", obj(f))
+}
+
+fn bp_delete(mut s: Session, num: int) {
+    var keep: List[Bp] = []
+    var i = 0
+    while i < s.bps.len {
+        if s.bps[i].num != num || s.bps[i].internal { (mut keep).push(copy s.bps[i]) }
+        i += 1
+    }
+    s.bps = keep
+}
+
+/// One breakpoint at location (the command language's), with its condition and hit condition; returns its number.
+/// A location that does not resolve takes a number too, and stays unverified (sniff has no pending breakpoints).
+fn bp_add(mut s: Session, location: str, cond: str, hit: str) -> int {
+    let num = s.bp_next
+    s.bp_next += 1
+    let r = resolve_location(s, location)
+    if r.err.len() > 0 { return num }
+    // the hit condition N passes the first N hits (the pinned gdb's: hitCondition 3 stops at the fourth)
+    var ignore = 0
+    let h = parse_uint(hit.trim())
+    if h.ok { ignore = h.addr as int }
+    var i = 0
+    while i < r.addrs.len {
+        (mut s.bps).push(Bp { num: num, addr: r.addrs[i], hits: 0, temp: false, enabled: true, internal: false, abs: r.abs,
+                              ignore: ignore, loc: i + 1, nloc: r.addrs.len, orig: 0, inserted: false, cond: cond.trim(),
+                              watch_end: 0, hw: false })
+        i += 1
+    }
+    num
+}
+
+fn bp_spec(b: json.Value, key: str) -> str {
+    let v = json.get(b, key) else { return "" }
+    json.as_str(v) else { "" }
+}
+
+/// setBreakpoints: the source's breakpoints are replaced by these lines.
+fn dap_set_breakpoints(mut s: Session, m: dap.Message) {
+    let src = json.get(args_of(m), "source") else { json.null() }
+    let path = bp_spec(src, "path")
+    var keep_paths: List[str] = []
+    var keep_nums: List[int] = []
+    var i = 0
+    while i < s.adapter.src_paths.len {
+        if s.adapter.src_paths[i] == path { bp_delete(mut s, s.adapter.src_nums[i]) }
+        else { (mut keep_paths).push(s.adapter.src_paths[i]); (mut keep_nums).push(s.adapter.src_nums[i]) }
+        i += 1
+    }
+    s.adapter.src_paths = keep_paths
+    s.adapter.src_nums = keep_nums
+    let list = json.get(args_of(m), "breakpoints") else { json.null() }
+    let items = json.as_arr(list) else { let none: List[json.Value] = []; none }
+    var out: List[json.Value] = []
+    for b in items {
+        let line_v = json.get(b, "line") else { json.null() }
+        let line = json.as_int(line_v) else { 0 }
+        let num = bp_add(mut s, "{path}:{line}", bp_spec(b, "condition"), bp_spec(b, "hitCondition"))
+        (mut s.adapter.src_paths).push(path)
+        (mut s.adapter.src_nums).push(num)
+        (mut out).push(bp_json(s, num))
+    }
+    var f = Map[str, json.Value]()
+    f["breakpoints"] = json.from_list(out)
+    answer(mut s, m, true, "", obj(f))
+}
+
+/// setFunctionBreakpoints: every function breakpoint is replaced by these.
+fn dap_set_function_breakpoints(mut s: Session, m: dap.Message) {
+    let old = copy s.adapter.fn_bps
+    for n in old { bp_delete(mut s, n) }
+    let none: List[int] = []
+    s.adapter.fn_bps = none
+    let list = json.get(args_of(m), "breakpoints") else { json.null() }
+    let items = json.as_arr(list) else { let nothing: List[json.Value] = []; nothing }
+    var out: List[json.Value] = []
+    for b in items {
+        let num = bp_add(mut s, bp_spec(b, "name"), bp_spec(b, "condition"), bp_spec(b, "hitCondition"))
+        (mut s.adapter.fn_bps).push(num)
+        (mut out).push(bp_json(s, num))
+    }
+    var f = Map[str, json.Value]()
+    f["breakpoints"] = json.from_list(out)
+    answer(mut s, m, true, "", obj(f))
+}
+
+// ---- resuming, and what a stop reports ----
+
+/// Each user breakpoint's number and hit count, before a resume.
+fn hit_counts(s: Session) -> (List[int], List[int]) {
+    var nums: List[int] = []
+    var hits: List[int] = []
+    var i = 0
+    while i < s.bps.len {
+        if !s.bps[i].internal && s.bps[i].loc == 1 { (mut nums).push(s.bps[i].num); (mut hits).push(s.bps[i].hits) }
+        i += 1
+    }
+    (nums, hits)
+}
+
+fn hits_of(s: Session, num: int) -> int {
+    var i = 0
+    while i < s.bps.len {
+        if s.bps[i].num == num && !s.bps[i].internal && s.bps[i].loc == 1 { return s.bps[i].hits }
+        i += 1
+    }
+    0 - 1
+}
+
+/// continue, next, stepIn and stepOut (an instruction at a time when granularity says so): answered, then run.
+fn dap_step(mut s: Session, m: dap.Message) {
+    if !s.alive { answer(mut s, m, false, "notStopped", json.null()); return }
+    let insn = arg_str(m, "granularity") == "instruction"
+    var line = "continue"
+    if m.command == "next" { line = if insn { "nexti" } else { "next" } }
+    if m.command == "stepIn" { line = if insn { "stepi" } else { "step" } }
+    if m.command == "stepOut" { line = "finish" }
+    if m.command == "continue" {
+        var f = Map[str, json.Value]()
+        f["allThreadsContinued"] = json.from_bool(true)
+        answer(mut s, m, true, "", obj(f))
+    } else {
+        answer(mut s, m, true, "", json.null())
+    }
+    dap_resume(mut s, line)
+}
+
+/// Resume by the command language's line ("" for the program's first run) and report how it stopped.
+fn dap_resume(mut s: Session, line: str) {
+    let (nums, before) = hit_counts(s)
+    s.adapter.stop = dap_stop_step
+    s.adapter.stop_signal = 0
+    let ni: List[int] = []
+    s.adapter.stop_bps = copy ni
+    s.adapter.gone = copy ni
+    s.adapter.pause_asked = false
+    refs_drop(mut s.adapter.refs)
+    let nv: List[Val] = []
+    let ns: List[str] = []
+    s.adapter.vals = nv
+    s.adapter.val_names = ns
+    dap_write(mut s)
+    if line.len() == 0 {
+        let e = cont_user(mut s)
+        report_event(mut s, e)
+    } else {
+        let _ = exec_line(mut s, line)
+    }
+    flush_out(mut s)
+    let nb: List[byte] = []
+    s.adapter.cli = nb
+    // each counted hit (a passed one too) changes its breakpoint: an event each, before the stop
+    var k = 0
+    while k < nums.len {
+        var d = hits_of(s, nums[k]) - before[k]
+        if nums[k] == s.adapter.main_bp && hits_of(s, nums[k]) < 0 && contains_int(s.adapter.stop_bps, nums[k]) { d = 1 }
+        while d > 0 {
+            bp_event(mut s, "changed", nums[k])
+            d -= 1
+        }
+        k += 1
+    }
+    if !s.alive {
+        dap_end(mut s)
+    } else {
+        let gone = copy s.adapter.gone
+        for g in gone {
+            thread_event(mut s, "exited", g)
+            s.adapter.threads = without(s.adapter.threads, g)
+        }
+        let thread = if s.thr.len > 0 { s.thr[s.thr_cur].num } else { 1 }
+        send_event(mut s, "stopped", dap_stopped(s.adapter.stop, thread, s.adapter.stop_bps, s.adapter.pause_asked))
+        if s.adapter.main_bp > 0 && hits_of(s, s.adapter.main_bp) < 0 {
+            // the temporary breakpoint at main went when it was hit
+            bp_event(mut s, "removed", s.adapter.main_bp)
+            s.adapter.main_bp = 0
+        }
+    }
+    // a disconnect or terminate that came while the program ran
+    if s.adapter.ending.len > 0 {
+        let e = copy s.adapter.ending[0]
+        let nm: List[dap.Message] = []
+        s.adapter.ending = nm
+        if s.alive { kill_process(mut s); s.adapter.end_code = 0; dap_end(mut s) }
+        answer(mut s, e, true, "", json.null())
+        if e.command == "disconnect" { s.adapter.wire.done = true }
+    }
+}
+
+fn contains_int(xs: List[int], x: int) -> bool {
+    for y in xs { if y == x { return true } }
+    false
+}
+
+fn without(xs: List[int], x: int) -> List[int] {
+    var out: List[int] = []
+    for y in xs { if y != x { (mut out).push(y) } }
+    out
+}
+
+/// The program's end: what it wrote last, each thread's end, its exit code and the session's end.
+fn dap_end(mut s: Session) {
+    if s.adapter.ended { return }
+    // what the program wrote before it ended comes first
+    var rounds = 0
+    while (s.adapter.out_fd >= 0 || s.adapter.err_fd >= 0) && rounds < 64 {
+        let ready = platform.fd_poll(s.adapter.buf, [s.adapter.out_fd, s.adapter.err_fd], 0)
+        if ready.len == 0 { break }
+        for fd in ready { dap_pipe(mut s, fd) }
+        rounds += 1
+    }
+    platform.fd_close(s.adapter.out_fd)
+    platform.fd_close(s.adapter.err_fd)
+    s.adapter.out_fd = 0 - 1
+    s.adapter.err_fd = 0 - 1
+    var ts = copy s.adapter.threads
+    sort_ints(mut ts)
+    for t in ts { thread_event(mut s, "exited", t) }
+    let none: List[int] = []
+    s.adapter.threads = none
+    var f = Map[str, json.Value]()
+    f["exitCode"] = json.from_int(s.adapter.end_code)
+    send_event(mut s, "exited", obj(f))
+    send_event(mut s, "terminated", json.null())
+    s.adapter.ended = true
+}
+
+fn sort_ints(mut xs: List[int]) {
+    var i = 1
+    while i < xs.len {
+        var j = i
+        while j > 0 && xs[j - 1] > xs[j] {
+            let t = xs[j]
+            xs[j] = xs[j - 1]
+            xs[j - 1] = t
+            j -= 1
+        }
+        i += 1
+    }
+}
+
+/// A breakpoint stop (stepping.lu's report_bp_hit): the user breakpoints at its pc.
+fn dap_note_bp(mut s: Session, pc: u64) {
+    if s.adapter.stop == dap_stop_bp { return }
+    s.adapter.stop = dap_stop_bp
+    var ids: List[int] = []
+    var i = 0
+    while i < s.bps.len {
+        if s.bps[i].enabled && !s.bps[i].internal && bp_rt(s, i) == pc && !contains_int(ids, s.bps[i].num) {
+            (mut ids).push(s.bps[i].num)
+        }
+        i += 1
+    }
+    s.adapter.stop_bps = ids
+}
+
+/// A signal stop (stepping.lu's report_other).
+fn dap_note_signal(mut s: Session, sig: int) {
+    s.adapter.stop = dap_stop_signal
+    s.adapter.stop_signal = sig
+}
+
+/// The program's end (commands.lu's report_end): its exit code, or 0 when a signal ended it.
+fn dap_note_end(mut s: Session, code: int) { s.adapter.end_code = code }
+
+// ---- what a stop shows ----
+
+fn thread_at(s: Session, num: int) -> int {
+    var i = 0
+    while i < s.thr.len {
+        if s.thr[i].num == num { return i }
+        i += 1
+    }
+    0 - 1
+}
+
+/// threads: newest first, each by its name.
+fn dap_threads(mut s: Session, m: dap.Message) {
+    var list: List[json.Value] = []
+    var i = s.thr.len - 1
+    while i >= 0 {
+        var t = Map[str, json.Value]()
+        t["id"] = json.from_int(s.thr[i].num)
+        t["name"] = json.from_str(thr_name(s, i))
+        (mut list).push(obj(t))
+        i -= 1
+    }
+    var f = Map[str, json.Value]()
+    f["threads"] = json.from_list(list)
+    answer(mut s, m, true, "", obj(f))
+}
+
+/// The moduleId of a frame: the library it is in, else the program.
+fn module_of(s: Session, v: FrameView) -> str {
+    if v.lib.len() > 0 { return v.lib }
+    s.prog.path
+}
+
+/// stackTrace: the thread's frames from the innermost.
+fn dap_stack_trace(mut s: Session, m: dap.Message) {
+    if !s.alive { answer(mut s, m, false, "notStopped", json.null()); return }
+    let k = thread_at(s, arg_int(m, "threadId", 0))
+    let tid = arg_int(m, "threadId", 0)
+    if k < 0 { answer(mut s, m, false, "no thread {tid}", json.null()); return }
+    if k != s.thr_cur { thr_select(mut s, k) }
+    if !s.frames_ok { compute_frames(mut s) }
+    let start = arg_int(m, "startFrame", 0)
+    let levels = arg_int(m, "levels", 0)
+    var list: List[json.Value] = []
+    var i = if start > 0 { start } else { 0 }
+    while i < s.frames.len && (levels <= 0 || i < start + levels) {
+        let v = frame_view(s, i, false)
+        (mut list).push(dap_frame(v, module_of(s, v)))
+        i += 1
+    }
+    var f = Map[str, json.Value]()
+    f["stackFrames"] = json.from_list(list)
+    answer(mut s, m, true, "", obj(f))
+}
+
+/// The frame a request names by its frameId, or -1.
+fn frame_level(s: Session, m: dap.Message) -> int {
+    let id = arg_int(m, "frameId", 0 - 1)
+    if id < 0 || id >= s.frames.len { return 0 - 1 }
+    id
+}
+
+/// scopes: the frame's arguments and locals when it has any, then its registers.
+fn dap_scopes(mut s: Session, m: dap.Message) {
+    if !s.alive { answer(mut s, m, false, "notStopped", json.null()); return }
+    if !s.frames_ok { compute_frames(mut s) }
+    let level = frame_level(s, m)
+    let id = arg_int(m, "frameId", 0 - 1)
+    if level < 0 { answer(mut s, m, false, "no frame {id}", json.null()); return }
+    let fr = copy s.frames[level]
+    let args = visible_vars(s, fr, level, tag_formal)
+    let locals = visible_vars(s, fr, level, tag_variable)
+    let line = frame_view(s, level, false).line
+    let nregs = register_lines(mut s).len
+    var list: List[json.Value] = []
+    for name in scope_names(args.len, locals.len) {
+        var kind = ref_registers
+        var hint = "registers"
+        var count = nregs
+        if name == "Arguments" { kind = ref_args; hint = "arguments"; count = args.len }
+        if name == "Locals" { kind = ref_locals; hint = "locals"; count = locals.len }
+        var f = Map[str, json.Value]()
+        f["name"] = json.from_str(name)
+        f["presentationHint"] = json.from_str(hint)
+        f["variablesReference"] = json.from_int(ref_add(mut s.adapter.refs, kind, level, 0 - 1))
+        f["namedVariables"] = json.from_int(count)
+        f["expensive"] = json.from_bool(false)
+        f["line"] = json.from_int(line)
+        (mut list).push(obj(f))
+    }
+    var f = Map[str, json.Value]()
+    f["scopes"] = json.from_list(list)
+    answer(mut s, m, true, "", obj(f))
+}
+
+/// The selected frame's general registers as `info registers` prints them: one line each.
+fn register_lines(mut s: Session) -> List[str] {
+    flush_out(mut s)
+    let nb: List[byte] = []
+    s.adapter.cli = copy nb
+    let _ = exec_line(mut s, "info registers")
+    flush_out(mut s)
+    let text = text_of(s.adapter.cli)
+    s.adapter.cli = nb
+    var out: List[str] = []
+    for ln in text.lines() { if ln.trim().len() > 0 { (mut out).push(ln) } }
+    out
+}
+
+/// Whether a value of type t has the value it points at as a child: a pointer to something with a type.
+fn points_at(s: Session, t: int) -> bool {
+    if t == ty_voidp || t == ty_codep { return false }
+    if ty_is_ptr(t) { return true }
+    if t < 0 { return false }
+    let st = ty_strip(s.prog, t)
+    if st < 0 || s.prog.info.entries[st].tag != tag_pointer { return false }
+    let inner = ty_strip(s.prog, attr_ref(s.prog, st, 73))
+    inner >= 0 && s.prog.info.entries[inner].tag != tag_subroutine_type
+}
+
+/// The view of a value read under name (a variable, a child or an expression's result).
+fn val_view(s: Session, name: str, v: Val) -> VarView {
+    if !v.ok { return VarView { name: name, value: v.why, ty: "", indexed: 0, named: 0 } }
+    let (indexed, named) = child_counts(s.prog, v.ty)
+    VarView { name: name, value: format_bytes(s.prog, s, v.ty, v.bytes, false), ty: ty_name(s.prog, v.ty), indexed: indexed, named: named }
+}
+
+/// A value's entry, with a reference to its children when it has any.
+fn val_json(mut s: Session, level: int, name: str, v: Val) -> json.Value {
+    let view = val_view(s, name, v)
+    let ptr = v.ok && points_at(s, v.ty) && view.indexed == 0 && view.named == 0
+    var reference = 0
+    if v.ok && (view.indexed > 0 || view.named > 0 || ptr) {
+        (mut s.adapter.vals).push(copy v)
+        (mut s.adapter.val_names).push(name)
+        reference = ref_add(mut s.adapter.refs, ref_value, level, s.adapter.vals.len - 1)
+    }
+    dap_variable(view, ptr, reference)
+}
+
+/// A value's children: an array's elements, a structure's members, or the value a pointer points at.
+fn val_children(s: Session, name: str, v: Val) -> (List[str], List[Val]) {
+    var names: List[str] = []
+    var vals: List[Val] = []
+    let st = if v.ty >= 0 { ty_strip(s.prog, v.ty) } else { 0 - 1 }
+    if st >= 0 && s.prog.info.entries[st].tag == tag_array {
+        let elem = attr_ref(s.prog, st, 73)
+        let es = ty_size(s.prog, elem)
+        let n = array_count(s.prog, st)
+        var i = 0
+        while i < n && es > 0 {
+            (mut names).push("{i}")
+            (mut vals).push(Val { ok: true, why: "", ty: elem, bytes: slice_bytes(v.bytes, i * es, es), addr: v.addr + (i * es) as u64,
+                                  has_addr: v.has_addr, reg: -1 })
+            i += 1
+        }
+        return (names, vals)
+    }
+    if st >= 0 && (s.prog.info.entries[st].tag == tag_struct || s.prog.info.entries[st].tag == tag_union) {
+        for e in children_with_tag(s.prog, st, tag_member) {
+            let off = attr_uint(s.prog, e, 56, 0) as int
+            let mt = attr_ref(s.prog, e, 73)
+            let ms = ty_size(s.prog, mt)
+            (mut names).push(attr_text(s.prog, s.prog.info.entries[e].unit, e, 3))
+            (mut vals).push(Val { ok: true, why: "", ty: mt, bytes: slice_bytes(v.bytes, off, ms), addr: v.addr + off as u64,
+                                  has_addr: v.has_addr, reg: -1 })
+        }
+        return (names, vals)
+    }
+    if points_at(s, v.ty) {
+        var inner = 0 - 1
+        if ty_is_ptr(v.ty) { inner = 0 - 1000 - v.ty } else { inner = attr_ref(s.prog, st, 73) }
+        let at = as_u64(v.bytes)
+        let r = src_read(s, at, ty_size(s.prog, inner))
+        (mut names).push("*{name}")
+        if r.ok {
+            (mut vals).push(Val { ok: true, why: "", ty: inner, bytes: r.data, addr: at, has_addr: true, reg: -1 })
+        } else {
+            (mut vals).push(val_fail("<error: Cannot access memory at address 0x{at:x}>"))
+        }
+    }
+    (names, vals)
+}
+
+/// variables: a scope's variables, the registers, or a value's children.
+fn dap_variables(mut s: Session, m: dap.Message) {
+    let k = ref_find(s.adapter.refs, arg_int(m, "variablesReference", 0))
+    let asked = arg_int(m, "variablesReference", 0)
+    if k < 0 || !s.alive { answer(mut s, m, false, "no variables {asked}", json.null()); return }
+    let kind = s.adapter.refs.kind[k]
+    let level = s.adapter.refs.level[k]
+    var list: List[json.Value] = []
+    if kind == ref_args || kind == ref_locals {
+        let fr = copy s.frames[level]
+        let dies = visible_vars(s, fr, level, if kind == ref_args { tag_formal } else { tag_variable })
+        for die in dies {
+            let ui = s.prog.info.entries[die].unit
+            let name = attr_text(s.prog, ui, die, 3)
+            let v = var_val(s, fr, die)
+            if v.ok {
+                (mut list).push(val_json(mut s, level, name, v))
+            } else {
+                let ty = attr_ref(s.prog, die, 73)
+                (mut list).push(dap_variable(VarView { name: name, value: v.why, ty: ty_name(s.prog, ty), indexed: 0, named: 0 }, false, 0))
+            }
+        }
+    } else if kind == ref_registers {
+        let keep = s.sel
+        s.sel = level
+        for ln in register_lines(mut s) {
+            let w = ln.words()
+            if w.len >= 3 {
+                var natural = w[2]
+                var i = 3
+                while i < w.len { natural = natural + " " + w[i]; i += 1 }
+                let none = VarView { name: w[0], value: natural, ty: "", indexed: 0, named: 0 }
+                (mut list).push(dap_variable(none, false, 0))
+            }
+        }
+        s.sel = keep
+    } else {
+        let slot = s.adapter.refs.slot[k]
+        let (names, vals) = val_children(s, s.adapter.val_names[slot], copy s.adapter.vals[slot])
+        var i = 0
+        while i < vals.len {
+            (mut list).push(val_json(mut s, level, names[i], copy vals[i]))
+            i += 1
+        }
+    }
+    var f = Map[str, json.Value]()
+    f["variables"] = json.from_list(list)
+    answer(mut s, m, true, "", obj(f))
+}
+
+/// evaluate: repl runs the command language and answers with its text; anything else is an expression, answered as
+/// a variable is.
+fn dap_evaluate(mut s: Session, m: dap.Message) {
+    let expr = arg_str(m, "expression")
+    let keep = s.sel
+    if s.alive {
+        if !s.frames_ok { compute_frames(mut s) }
+        let level = frame_level(s, m)
+        if level >= 0 { s.sel = level }
+    }
+    if arg_str(m, "context") == "repl" {
+        flush_out(mut s)
+        let nb: List[byte] = []
+        s.adapter.cli = copy nb
+        let err = exec_line(mut s, expr)
+        flush_out(mut s)
+        let text = text_of(s.adapter.cli)
+        s.adapter.cli = nb
+        s.sel = keep
+        if err.len() > 0 { answer(mut s, m, false, err, json.null()); return }
+        var f = Map[str, json.Value]()
+        f["result"] = json.from_str(text)
+        f["variablesReference"] = json.from_int(0)
+        answer(mut s, m, true, "", obj(f))
+        return
+    }
+    let v = eval_expr(s, expr)
+    if !v.ok {
+        s.sel = keep
+        answer(mut s, m, false, if v.why.len() > 0 { v.why } else { "cannot evaluate {expr}" }, json.null())
+        return
+    }
+    let j = val_json(mut s, s.sel, expr, v)
+    s.sel = keep
+    var f = Map[str, json.Value]()
+    f["result"] = json.get(j, "value") else { json.from_str("") }
+    f["type"] = json.get(j, "type") else { json.from_str("") }
+    f["variablesReference"] = json.get(j, "variablesReference") else { json.from_int(0) }
+    for key in ["indexedVariables", "namedVariables"] {
+        if json.has(j, key) { f[key] = json.get(j, key) else { json.null() } }
+    }
+    answer(mut s, m, true, "", obj(f))
+}
+
+/// readMemory: count bytes at memoryReference plus offset.
+fn dap_read_memory(mut s: Session, m: dap.Message) {
+    if !s.alive { answer(mut s, m, false, "notStopped", json.null()); return }
+    let at_text = arg_str(m, "memoryReference")
+    let base = parse_uint(at_text)
+    if !base.ok { answer(mut s, m, false, "no memory at {at_text}", json.null()); return }
+    let off = arg_int(m, "offset", 0)
+    let count = arg_int(m, "count", 0)
+    let at = if off >= 0 { base.addr + off as u64 } else { base.addr - (0 - off) as u64 }
+    let r = src_read(s, at, count)
+    var f = Map[str, json.Value]()
+    f["address"] = json.from_str("0x{at:x}")
+    if r.ok {
+        f["data"] = json.from_str(dap_base64(r.data))
+    } else {
+        f["unreadableBytes"] = json.from_int(count)
+    }
+    answer(mut s, m, true, "", obj(f))
+}

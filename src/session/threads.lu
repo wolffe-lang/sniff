@@ -98,6 +98,7 @@ fn thr_add(mut s: Session, tid: int) -> int {
     let i = s.thr.len - 1
     let id = thr_target_id(mut s, i)
     emit_line(mut s, "[New {id}]")
+    if s.adapter.on { dap_thread_new(mut s, s.thr[i].num) }
     i
 }
 
@@ -105,6 +106,7 @@ fn thr_add(mut s: Session, tid: int) -> int {
 fn thr_gone(mut s: Session, i: int) {
     let id = thr_target_id(mut s, i)
     emit_line(mut s, "[{id} exited]")
+    if s.adapter.on { dap_thread_gone(mut s, s.thr[i].num) }
     let cur_tid = s.thr[s.thr_cur].tid
     var keep: List[Thr] = []
     var k = 0
@@ -208,6 +210,19 @@ fn stop_others(mut s: Session) {
     }
 }
 
+/// The next event of any traced thread. Under `sniff --dap` the wait never blocks: between waits the client's
+/// input and the program's output are read (dapserve.lu's dap_poll, at most 50 ms each), so a pause is heard while
+/// the program runs.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+fn wait_any(mut s: Session) -> platform.Waited {
+    if !s.adapter.on { return platform.target_wait_any(s.inferior) }
+    loop {
+        let w = platform.target_wait_any_now(s.inferior)
+        if w.tid != 0 { return w }
+        dap_poll(mut s, 50)
+    }
+}
+
 /// The next stop the session reports, with every thread stopped and the stopping thread selected; or the
 /// program's end. New threads and the ends of threads are printed on the way, as they happen.
 #[cfg(target = "x86_64-unknown-linux-gnu")]
@@ -225,7 +240,7 @@ fn wait_stop(mut s: Session) -> int {
             }
             i += 1
         }
-        let w = platform.target_wait_any(s.inferior)
+        let w = wait_any(mut s)
         if w.tid < 0 { return 0 - 1 }
         let k = thr_index(s, w.tid)
         if k < 0 {
