@@ -1,0 +1,94 @@
+//! member: false
+// The session's structured views: the frame records behind `bt` and `frame`, the variable records behind
+// `info args`, `info locals` and `print`, and the references a protocol client reads them by. The command
+// language prints the text these records give; the live rows hold that text to the pinned gdb's.
+use session
+
+fn args_of(items: List[str]) -> List[str] {
+    var out: List[str] = []
+    for a in items { (mut out).push(a) }
+    out
+}
+
+fn view(pc: u64, show_pc: bool, name: str, args: List[str], file: str, line: int, lib: str) -> session.FrameView {
+    session.FrameView { level: 0, pc: pc, show_pc: show_pc, name: name, args: copy args, file: file, path: "", line: line, lib: lib }
+}
+
+fn frame_text_row() {
+    // 0x555555555149, a breakpoint's address in a position-independent program at the pinned gdb's base
+    let at: u64 = 93824992235849
+    // the innermost frame at the start of its line shows no address
+    assert(session.frame_text(view(at, false, "tick", args_of(["n=0"]), "main.c", 4, "")) == "tick (n=0) at main.c:4")
+    // a caller, or a frame mid-line, shows its pc as 0x and 16 digits
+    assert(session.frame_text(view(at, true, "tick", args_of(["n=0"]), "main.c", 4, "")) == "0x0000555555555149 in tick (n=0) at main.c:4")
+    // the arguments are joined as gdb joins them
+    let two = args_of(["c=122 'z'", "s=-2"])
+    assert(session.frame_text(view(at, false, "inspect", two, "/w/c/values/main.c", 20, "")) == "inspect (c=122 'z', s=-2) at /w/c/values/main.c:20")
+    // a frame with no source in a shared library names the library (0x7ffff7c29d90)
+    let lib_pc: u64 = 140737350114704
+    let none: List[str] = []
+    assert(session.frame_text(view(lib_pc, true, "__libc_start_call_main", none, "", 0, "/lib/x86_64-linux-gnu/libc.so.6")) == "0x00007ffff7c29d90 in __libc_start_call_main () from /lib/x86_64-linux-gnu/libc.so.6")
+    // and a frame with neither names nothing more (0x401000)
+    let bare: u64 = 4198400
+    assert(session.frame_text(view(bare, true, "??", args_of([]), "", 0, "")) == "0x0000000000401000 in ?? ()")
+    print("PASS session-frame-text")
+}
+
+fn var_line_row() {
+    // `info locals` and `info args` print each variable as `name = value`, the value as print shows it inside
+    // an aggregate (no pointer type prefix)
+    let v = session.VarView { name: "c", value: "122 'z'", ty: "char", indexed: 0, named: 0 }
+    assert(session.var_line(v) == "c = 122 'z'")
+    let w = session.VarView { name: "words", value: "{{1, 2, 3, 4}}", ty: "int [4]", indexed: 4, named: 0 }
+    assert(session.var_line(w) == "words = {{1, 2, 3, 4}}")
+    // a value that cannot be read prints its reason in its place
+    let gone = session.VarView { name: "x", value: "<optimized out>", ty: "int", indexed: 0, named: 0 }
+    assert(session.var_line(gone) == "x = <optimized out>")
+    print("PASS session-var-line")
+}
+
+fn refs_row() {
+    // references are given out from 1 at each stop, and every one given out is found again until the next resume
+    var r = session.refs()
+    assert(session.ref_add(mut r, session.ref_args, 0, -1) == 1)
+    assert(session.ref_add(mut r, session.ref_locals, 0, -1) == 2)
+    assert(session.ref_add(mut r, session.ref_value, 2, 7) == 3)
+    let k = session.ref_find(r, 3)
+    assert(k >= 0 && r.kind[k] == session.ref_value && r.level[k] == 2 && r.slot[k] == 7)
+    let a = session.ref_find(r, 1)
+    assert(a >= 0 && r.kind[a] == session.ref_args && r.level[a] == 0)
+    // 0 is "no children" in the protocol, and nothing past the last is known
+    assert(session.ref_find(r, 0) == -1 && session.ref_find(r, 4) == -1 && session.ref_find(r, -1) == -1)
+    // the next resume drops them all, and the next stop counts from 1 again
+    session.refs_drop(mut r)
+    assert(session.ref_find(r, 1) == -1 && session.ref_find(r, 3) == -1)
+    assert(session.ref_add(mut r, session.ref_registers, 1, -1) == 1)
+    print("PASS session-refs")
+}
+
+fn same(a: List[str], b: List[str]) -> bool {
+    if a.len != b.len { return false }
+    var i = 0
+    while i < a.len {
+        if a[i] != b[i] { return false }
+        i += 1
+    }
+    true
+}
+
+fn scopes_row() {
+    // a frame's scopes are its arguments and its locals when it has any, then its registers, as the pinned gdb
+    // lists them (U0: inspect has all three, main of the values program no arguments, wolf's tick no locals)
+    assert(same(session.scope_names(10, 3), ["Arguments", "Locals", "Registers"]))
+    assert(same(session.scope_names(0, 12), ["Locals", "Registers"]))
+    assert(same(session.scope_names(1, 0), ["Arguments", "Registers"]))
+    assert(same(session.scope_names(0, 0), ["Registers"]))
+    print("PASS session-scopes")
+}
+
+fn main() {
+    frame_text_row()
+    var_line_row()
+    refs_row()
+    scopes_row()
+}
