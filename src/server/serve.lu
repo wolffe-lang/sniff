@@ -574,7 +574,8 @@ fn scan_at(buf: List[byte], at: int) -> remote.Scan ! ServerError {
     s
 }
 
-// A second client while one is attached: its first packet gets the E.text reply, then its connection is closed.
+// A second client while one is attached: its first packet gets the E.text reply, then, once its acknowledgment is read,
+// its connection is closed.
 fn refuse_second(lfd: int) {
     let fd = net_accept(lfd) else { return }
     say("refused a second client: one client at a time")
@@ -598,6 +599,9 @@ fn refuse_second(lfd: int) {
     let _ = net_write_bytes(fd, [43 as byte])
     let f = remote.frame(second_client_reply, 1024) else { return }
     let _ = net_write_bytes(fd, f)
+    // the client acknowledges the reply ('+'); a close with that byte unread would end the connection with a reset
+    // rather than an orderly close, so it is read first (under the same 2 s deadline) whenever it comes
+    let _ = net_read_bytes(fd, 64)
     let _ = net_close(fd)
 }
 
