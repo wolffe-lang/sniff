@@ -212,6 +212,9 @@ class Normalise(unittest.TestCase):
         n = m.normalise(recs, [])
         self.assertEqual(n['sent'][0]['arguments']['program'], '@ROOT@/target/p/prog')
         self.assertEqual(n['events'][0]['body']['name'], '@ROOT@/target/p/prog')
+        # only the root itself, as a path's leading part: a checkout at /work leaves /workers alone
+        recs[1]['msg']['body']['name'] = root + 'ers/prog'
+        self.assertEqual(m.normalise(recs, [])['events'][0]['body']['name'], root + 'ers/prog')
 
     def test_launch_start_names_gdb_s_configuration_done(self):
         m = client()
