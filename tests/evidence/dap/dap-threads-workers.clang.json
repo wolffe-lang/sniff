@@ -8,7 +8,7 @@
   {
    "body": {
     "isLocalProcess": true,
-    "name": "@ROOT@/target/session-fixtures/c@ROOT@ers/clang-O0/prog",
+    "name": "@ROOT@/target/session-fixtures/c/workers/clang-O0/prog",
     "startMethod": "process",
     "systemProcessId": "P1"
    },
@@ -79,7 +79,7 @@
      "line": 62,
      "source": {
       "name": "main.c",
-      "path": "@ROOT@/fixtures/session/c@ROOT@ers/main.c"
+      "path": "@ROOT@/fixtures/session/c/workers/main.c"
      },
      "verified": true
     },
@@ -165,7 +165,7 @@
       "line": 62,
       "source": {
        "name": "main.c",
-       "path": "@ROOT@/fixtures/session/c@ROOT@ers/main.c"
+       "path": "@ROOT@/fixtures/session/c/workers/main.c"
       },
       "verified": true
      }
@@ -214,11 +214,11 @@
       "id": 0,
       "instructionPointerReference": "<ADDR>",
       "line": 62,
-      "moduleId": "@ROOT@/target/session-fixtures/c@ROOT@ers/clang-O0/prog",
+      "moduleId": "@ROOT@/target/session-fixtures/c/workers/clang-O0/prog",
       "name": "work",
       "source": {
        "name": "main.c",
-       "path": "@ROOT@/fixtures/session/c@ROOT@ers/main.c"
+       "path": "@ROOT@/fixtures/session/c/workers/main.c"
       }
      },
      {
@@ -226,11 +226,11 @@
       "id": "F1",
       "instructionPointerReference": "<ADDR>",
       "line": 73,
-      "moduleId": "@ROOT@/target/session-fixtures/c@ROOT@ers/clang-O0/prog",
+      "moduleId": "@ROOT@/target/session-fixtures/c/workers/clang-O0/prog",
       "name": "worker",
       "source": {
        "name": "main.c",
-       "path": "@ROOT@/fixtures/session/c@ROOT@ers/main.c"
+       "path": "@ROOT@/fixtures/session/c/workers/main.c"
       }
      },
      {
@@ -281,7 +281,7 @@
   },
   {
    "arguments": {
-    "program": "@ROOT@/target/session-fixtures/c@ROOT@ers/clang-O0/prog"
+    "program": "@ROOT@/target/session-fixtures/c/workers/clang-O0/prog"
    },
    "command": "launch",
    "type": "request"
