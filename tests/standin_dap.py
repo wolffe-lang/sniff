@@ -10,9 +10,15 @@ It speaks the Debug Adapter Protocol's base protocol on standard input and outpu
   garbage  answers initialize with a body that is not JSON
   reverse  sends a runInTerminal request before answering initialize
   badcaps  as plain, but initialize declares supportsStepBack too
-  exit3    on disconnect, exits 3 and writes `stand-in: exit 3` on standard error"""
+  exit3    on disconnect, exits 3 and writes `stand-in: exit 3` on standard error
+  deaf     closes its standard input before it answers initialize, then stays (its output open) for 5 s: the client's
+           next write finds it gone, before any read could
+  mute     closes its standard output after it answers initialize, then stays (its input open) for 5 s: the client's
+           next write succeeds and its read finds it gone"""
 import json
+import os
 import sys
+import time
 
 mode = sys.argv[1] if len(sys.argv) > 1 else 'plain'
 inp, out = sys.stdin.buffer, sys.stdout.buffer
@@ -74,8 +80,17 @@ while True:
         caps = {'supportsConfigurationDoneRequest': True}
         if mode == 'badcaps':
             caps['supportsStepBack'] = True
+        if mode == 'deaf':
+            os.close(0)
         reply(r, caps)
         if mode == 'eof':
+            sys.exit(0)
+        if mode == 'deaf':
+            time.sleep(5)
+            sys.exit(0)
+        if mode == 'mute':
+            os.close(1)
+            time.sleep(5)
             sys.exit(0)
     elif c == 'launch':
         reply(r)

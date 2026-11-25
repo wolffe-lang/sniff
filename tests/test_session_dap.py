@@ -102,9 +102,23 @@ class Faults(unittest.TestCase):
                                ['send', 'stackTrace', {'threadId': '@THREAD@'}], ['send', 'disconnect', {}])], mode='hang', timeout='1')
         self.assertTrue(any(ln.startswith('FAIL dap f1 fault: no response to stackTrace within 1s') for ln in said), said)
 
+    # An adapter that has gone away is one fault with one name, "the adapter went away", whichever of the client's
+    # write (a broken pipe) or its read (the end of the adapter's output) finds out first. The stand-in's `eof` mode
+    # exits, so either may; `deaf` and `mute` force each order.
     def test_an_adapter_that_ends_early_is_a_fault(self):
         rc, said, _ = run([row('f2', INIT, ['send', 'threads', {}])], mode='eof')
-        self.assertTrue(any(ln.startswith('FAIL dap f2 fault: the adapter closed its output') for ln in said), said)
+        self.assertTrue(any(ln.startswith('FAIL dap f2 fault: the adapter went away') for ln in said), said)
+
+    def test_a_write_that_finds_the_adapter_gone_is_the_same_fault(self):
+        # its input closed before it answered: the next write breaks the pipe before any read could see an end
+        rc, said, _ = run([row('f2w', INIT, ['send', 'threads', {}])], mode='deaf')
+        self.assertTrue(any(ln.startswith('FAIL dap f2w fault: the adapter went away') for ln in said), said)
+        self.assertFalse(any('Broken pipe' in ln for ln in said), said)
+
+    def test_a_read_that_finds_the_adapter_gone_is_the_same_fault(self):
+        # its output closed while its input stays open: the write succeeds and the read sees the end
+        rc, said, _ = run([row('f2r', INIT, ['send', 'threads', {}])], mode='mute')
+        self.assertTrue(any(ln.startswith('FAIL dap f2r fault: the adapter went away') for ln in said), said)
 
     def test_a_body_that_is_not_json_is_a_fault(self):
         rc, said, _ = run([row('f3', INIT)], mode='garbage')
