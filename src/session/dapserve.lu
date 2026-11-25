@@ -152,7 +152,7 @@ pub fn dap_stopped(kind: int, thread: int, bps: List[int], paused: bool) -> json
     var f = Map[str, json.Value]()
     var reason = "step"
     if kind == dap_stop_bp { reason = "breakpoint" }
-    if kind == dap_stop_signal { reason = if paused { "pause" } else { "signal" } }
+    if kind == dap_stop_signal { reason = if paused { "pause" } else { "exception" } }  // PLANT: a signal named as an exception
     if kind == dap_stop_watch { reason = "data breakpoint" }
     f["reason"] = json.from_str(reason)
     f["threadId"] = json.from_int(thread)
