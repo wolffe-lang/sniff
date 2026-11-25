@@ -1,0 +1,148 @@
+// The session's structured views: a frame and a variable as records. The command language prints their text
+// (`bt`, `frame`, `info args`, `info locals`); a protocol client reads the same records (a stack trace, a frame's
+// scopes, their variables), so both show one frame and one value the same way.
+
+/// One frame as the session shows it.
+pub struct FrameView {
+    pub level: int,
+    pub pc: u64,
+    /// Whether the frame's text shows its pc (`0x... in `): every caller, and an innermost frame mid-line.
+    pub show_pc: bool,
+    pub name: str,
+    /// Its arguments as `name=value`, in order.
+    pub args: List[str],
+    /// Its source file as gdb shows it, the path the file is read from, and its line: "", "" and 0 when the frame
+    /// has no source.
+    pub file: str,
+    pub path: str,
+    pub line: int,
+    /// The shared library its pc is in, when it has no source ("" for none).
+    pub lib: str,
+}
+
+/// gdb's text for a frame: `[0x... in ]name (args)[ at file:line| from lib]`.
+pub fn frame_text(v: FrameView) -> str {
+    var out = ""
+    if v.show_pc { out = "{addr16(v.pc)} in " }
+    var args = ""
+    var i = 0
+    while i < v.args.len {
+        if i > 0 { args = "{args}, " }
+        args = "{args}{v.args[i]}"
+        i += 1
+    }
+    out = "{out}{v.name} ({args})"
+    if v.file.len() > 0 { return "{out} at {v.file}:{v.line}" }
+    if v.lib.len() > 0 { return "{out} from {v.lib}" }
+    out
+}
+
+/// The view of frame `level`; force_pc shows its pc whatever its place.
+fn frame_view(s: Session, level: int, force_pc: bool) -> FrameView {
+    let fr = copy s.frames[level]
+    let lookup = file_or_zero(frame_lookup_pc(s, level), s.base)
+    let sal = find_sal(s.prog, lookup)
+    var show_pc = force_pc || level > 0
+    if level == 0 && !(sal.ok && sal.start == file_or_zero(fr.pc, s.base) && stmt_start(s.prog, sal.start)) { show_pc = true }
+    var file = ""
+    var path = ""
+    var line = 0
+    var lib = ""
+    if sal.ok && fr.func >= 0 {
+        file = s.prog.files[sal.file]
+        path = s.prog.file_paths[sal.file]
+        line = sal.line
+    } else if fr.func < 0 && !in_image(s.prog, lookup) {
+        lib = solib_of(s, fr.pc)
+    }
+    FrameView { level: level, pc: fr.pc, show_pc: show_pc, name: frame_func_name(s, fr), args: frame_arg_list(s, fr),
+                file: file, path: path, line: line, lib: lib }
+}
+
+/// One variable, or one child of a value, as the session shows it.
+pub struct VarView {
+    pub name: str,
+    /// Its value as print shows it inside an aggregate (no pointer type prefix), or why it cannot be read.
+    pub value: str,
+    /// gdb's spelling of its type.
+    pub ty: str,
+    /// Its children: an array's elements (indexed) or a structure's members (named); 0 for none.
+    pub indexed: int,
+    pub named: int,
+}
+
+/// `info args` and `info locals` print a variable as `name = value`.
+pub fn var_line(v: VarView) -> str { "{v.name} = {v.value}" }
+
+/// The view of the variable DIE in frame fr.
+fn var_view(s: Session, fr: Frame, die: int) -> VarView {
+    let ui = s.prog.info.entries[die].unit
+    let ty = attr_ref(s.prog, die, 73)
+    let (indexed, named) = child_counts(s.prog, ty)
+    VarView { name: attr_text(s.prog, ui, die, 3), value: var_text(s, fr, die, false), ty: ty_name(s.prog, ty),
+              indexed: indexed, named: named }
+}
+
+/// How many children a value of type t has: an array's elements, or a structure's or union's members.
+fn child_counts(p: Prog, t: int) -> (int, int) {
+    if t < 0 { return (0, 0) }
+    let st = ty_strip(p, t)
+    if st < 0 { return (0, 0) }
+    let tag = p.info.entries[st].tag
+    if tag == tag_array { return (array_count(p, st), 0) }
+    if tag == tag_struct || tag == tag_union { return (0, children_with_tag(p, st, tag_member).len) }
+    (0, 0)
+}
+
+/// What a reference names: a frame's arguments, its locals or its registers, or a value's children.
+pub const ref_args: int = 1
+/// A frame's locals.
+pub const ref_locals: int = 2
+/// A frame's registers.
+pub const ref_registers: int = 3
+/// A value's children (slot: the value's index in the session's kept values).
+pub const ref_value: int = 4
+
+/// The references given out since the last resume: the reference n is entry n - 1. The protocol's 0 is "no
+/// children", so references count from 1, and every resume drops them.
+pub struct Refs {
+    pub kind: List[int],
+    pub level: List[int],
+    pub slot: List[int],
+}
+
+/// No references.
+pub fn refs() -> Refs {
+    let k: List[int] = []
+    let l: List[int] = []
+    let v: List[int] = []
+    Refs { kind: k, level: l, slot: v }
+}
+
+/// Give out the next reference, to `kind` in frame `level` (slot: ref_value's value).
+pub fn ref_add(mut r: Refs, kind: int, level: int, slot: int) -> int {
+    (mut r.kind).push(kind)
+    (mut r.level).push(level)
+    (mut r.slot).push(slot)
+    r.kind.len
+}
+
+/// The entry of reference id, or -1 when it was not given out since the last resume.
+pub fn ref_find(r: Refs, id: int) -> int {
+    if id < 1 || id > r.kind.len { return 0 - 1 }
+    id - 1
+}
+
+/// Drop every reference (at a resume).
+pub fn refs_drop(mut r: Refs) {
+    r = refs()
+}
+
+/// A frame's scopes, in gdb's order: its arguments and its locals when it has any, then its registers.
+pub fn scope_names(nargs: int, nlocals: int) -> List[str] {
+    var out: List[str] = []
+    if nargs > 0 { (mut out).push("Arguments") }
+    if nlocals > 0 { (mut out).push("Locals") }
+    (mut out).push("Registers")
+    out
+}

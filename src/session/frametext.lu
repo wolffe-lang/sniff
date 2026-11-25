@@ -140,11 +140,11 @@ fn is_scalar(p: Prog, t: int) -> bool {
     tag == tag_base || tag == tag_pointer || tag == tag_enum
 }
 
-/// "n=3, b=4" for the arguments of the function in frame fr.
-fn frame_args(s: Session, fr: Frame) -> str {
-    if fr.func < 0 { return "" }
+/// The arguments of the function in frame fr as gdb's frame line shows them: ["n=3", "b=4"].
+fn frame_arg_list(s: Session, fr: Frame) -> List[str] {
+    var out: List[str] = []
+    if fr.func < 0 { return out }
     let params = children_with_tag(s.prog, s.prog.funcs[fr.func].die, tag_formal)
-    var out = ""
     var i = 0
     while i < params.len {
         let pd = params[i]
@@ -165,8 +165,7 @@ fn frame_args(s: Session, fr: Frame) -> str {
                 if sym.len() > 0 { text = "{text} {sym}" }
             }
         }
-        if i > 0 { out = "{out}, " }
-        out = "{out}{name}={text}"
+        (mut out).push("{name}={text}")
         i += 1
     }
     out
@@ -221,22 +220,5 @@ fn solib_name(s: Session, file: str) -> str {
     file
 }
 
-/// "[0x... in ]func (args) at file:line" for frame `level`; print_pc forces the address.
-fn frame_line(s: Session, level: int, force_pc: bool) -> str {
-    let fr = copy s.frames[level]
-    let lookup = file_or_zero(frame_lookup_pc(s, level), s.base)
-    let sal = find_sal(s.prog, lookup)
-    var show_pc = force_pc || level > 0
-    if level == 0 && !(sal.ok && sal.start == file_or_zero(fr.pc, s.base) && stmt_start(s.prog, sal.start)) { show_pc = true }
-    var out = ""
-    if show_pc { out = "{addr16(fr.pc)} in " }
-    let name = frame_func_name(s, fr)
-    out = "{out}{name} ({frame_args(s, fr)})"
-    if sal.ok && fr.func >= 0 {
-        out = "{out} at {s.prog.files[sal.file]}:{sal.line}"
-    } else if fr.func < 0 && !in_image(s.prog, lookup) {
-        let lib = solib_of(s, fr.pc)
-        if lib.len() > 0 { out = "{out} from {lib}" }
-    }
-    out
-}
+/// "[0x... in ]func (args) at file:line" for frame `level`; force_pc forces the address.
+fn frame_line(s: Session, level: int, force_pc: bool) -> str { frame_text(frame_view(s, level, force_pc)) }
