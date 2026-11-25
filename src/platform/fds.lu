@@ -6,6 +6,7 @@
 import c "stdlib.h"
 
 extern "c" fn read(fd: i32, buf: *u8, n: u64) -> i64
+extern "c" fn write(fd: i32, buf: *u8, n: u64) -> i64
 extern "c" fn poll(fds: *u8, n: u64, timeout: i32) -> i32
 extern "c" fn pipe(fds: *i32) -> i32
 // ioctl(2) is variadic, and FIOCLEX reads no third argument: it is declared with the two it takes (aarch64 macOS
@@ -50,6 +51,20 @@ pub fn fd_read(fd: int, buf: u64, n: int) -> (int, List[byte]) {
             i += 1
         }
         (got as int, out)
+    }
+}
+
+/// Write bytes to fd through buf (at least as long as bytes): the count written, or -1 on an error.
+pub fn fd_write(fd: int, buf: u64, bytes: List[byte]) -> int {
+    unsafe {
+        // # Safety: buf is fd_buffer's, at least bytes.len long; write(2) reads only that many.
+        let p = buf as *u8
+        var i = 0
+        while i < bytes.len {
+            p[i] = bytes[i] as int as u8
+            i += 1
+        }
+        write(fd as i32, p, bytes.len as u64) as int
     }
 }
 
