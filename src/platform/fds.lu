@@ -8,15 +8,20 @@ import c "stdlib.h"
 extern "c" fn read(fd: i32, buf: *u8, n: u64) -> i64
 extern "c" fn poll(fds: *u8, n: u64, timeout: i32) -> i32
 extern "c" fn pipe(fds: *i32) -> i32
-extern "c" fn fcntl(fd: i32, cmd: i32, ...) -> i32
+// ioctl(2) is variadic, and FIOCLEX reads no third argument: it is declared with the two it takes (aarch64 macOS
+// passes a variadic argument differently from a named one, so nothing variadic is declared here)
+extern "c" fn ioctl(fd: i32, request: u64) -> i32
 #[cfg(target = "aarch64-apple-darwin")]
 extern "c" fn close(fd: i32) -> i32
+// open(2) reads its third argument only with O_CREAT, which is never given here
 #[cfg(target = "aarch64-apple-darwin")]
-extern "c" fn open(path: *u8, flags: i32, ...) -> i32
+extern "c" fn open(path: *u8, flags: i32) -> i32
 
-/// fcntl(2)'s F_SETFD and FD_CLOEXEC (the same on Linux and macOS).
-const f_setfd: int = 2
-const fd_cloexec: int = 1
+/// ioctl(2)'s FIOCLEX: the descriptor is closed across an exec.
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+const fioclex: u64 = 21585
+#[cfg(target = "aarch64-apple-darwin")]
+const fioclex: u64 = 536897025
 /// poll(2)'s POLLIN; a hung-up or failed descriptor is reported whatever was asked.
 const pollin: int = 1
 /// The most descriptors one fd_poll waits on (8 bytes each in its buffer).
@@ -87,8 +92,8 @@ pub fn fd_pipe() -> (int, int) {
         if pipe(p) != 0 { return (0 - 1, 0 - 1) }
         let r = p[0] as int
         let w = p[1] as int
-        let _ = fcntl(r as i32, f_setfd as i32, fd_cloexec as i32)
-        let _ = fcntl(w as i32, f_setfd as i32, fd_cloexec as i32)
+        let _ = ioctl(r as i32, fioclex)
+        let _ = ioctl(w as i32, fioclex)
         (r, w)
     }
 }
