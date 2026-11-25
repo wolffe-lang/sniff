@@ -181,8 +181,7 @@ fn cmd_info_locals(mut s: Session) -> str {
     if vars.len == 0 { emit_line(mut s, "No locals."); return "" }
     var i = 0
     while i < vars.len {
-        let ui = s.prog.info.entries[vars[i]].unit
-        emit_line(mut s, "{attr_text(s.prog, ui, vars[i], 3)} = {var_text(s, fr, vars[i], false)}")
+        emit_line(mut s, var_line(var_view(s, fr, vars[i])))
         i += 1
     }
     ""
@@ -197,8 +196,7 @@ fn cmd_info_args(mut s: Session) -> str {
     if vars.len == 0 { emit_line(mut s, "No arguments."); return "" }
     var i = 0
     while i < vars.len {
-        let ui = s.prog.info.entries[vars[i]].unit
-        emit_line(mut s, "{attr_text(s.prog, ui, vars[i], 3)} = {var_text(s, fr, vars[i], false)}")
+        emit_line(mut s, var_line(var_view(s, fr, vars[i])))
         i += 1
     }
     ""
