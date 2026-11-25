@@ -31,6 +31,10 @@ extern "c" fn posix_spawn(pid: u64, path: u64, actions: u64, attr: u64, argv: u6
 #[cfg(target = "aarch64-apple-darwin")]
 extern "c" fn _NSGetEnviron() -> u64
 #[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn posix_spawn_file_actions_init(actions: u64) -> i32
+#[cfg(target = "aarch64-apple-darwin")]
+extern "c" fn posix_spawn_file_actions_adddup2(actions: u64, fd: i32, newfd: i32) -> i32
+#[cfg(target = "aarch64-apple-darwin")]
 extern "c" fn task_for_pid(host: u32, pid: i32, task: u64) -> i32
 #[cfg(target = "aarch64-apple-darwin")]
 extern "c" fn mach_task_self() -> u32
@@ -501,6 +505,15 @@ fn resume(t: Target, sig: int, step: bool) -> int {
 /// Target has pid 0 (and memfd naming the refusal) when anything fails.
 #[cfg(target = "aarch64-apple-darwin")]
 pub fn target_spawn(path: str, args: List[str], env_lines: str, env_columns: str) -> Target {
+    let inherit: List[int] = []
+    target_spawn_io(path, args, env_lines, env_columns, inherit)
+}
+
+/// target_spawn with the child's standard input, output and error (io[0], io[1], io[2]; -1, or a shorter list,
+/// keeps sniff's own) made the given descriptors (posix_spawn's file actions): `sniff --dap` gives a program
+/// /dev/null and two pipes, so that nothing it writes reaches the protocol stream.
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_spawn_io(path: str, args: List[str], env_lines: str, env_columns: str, io: List[int]) -> Target {
     let tgt = target_none()
     unsafe {
         // # Safety: buffers are calloc'd and sized for each call; the pid is the lane's own spawned child.
@@ -519,7 +532,17 @@ pub fn target_spawn(path: str, args: List[str], env_lines: str, env_columns: str
         let _ = posix_spawnattr_setflags(attr, 384)
         let pidbuf = c.calloc(1, 8) as *i32
         let envp = (_NSGetEnviron() as *u64)[0]
-        let rc = posix_spawn(pidbuf as u64, cpath, 0, attr, argv as u64, envp)
+        var actions: u64 = 0
+        if io.len > 0 {
+            actions = c.calloc(1, 64) as u64
+            let _ = posix_spawn_file_actions_init(actions)
+            var k = 0
+            while k < io.len && k < 3 {
+                if io[k] >= 0 { let _ = posix_spawn_file_actions_adddup2(actions, io[k] as i32, k as i32) }
+                k += 1
+            }
+        }
+        let rc = posix_spawn(pidbuf as u64, cpath, actions, attr, argv as u64, envp)
         if rc != 0 { return Target { pid: 0, memfd: -3, status: tgt.status, regs: tgt.regs, word: tgt.word } }
         let pid = pidbuf[0] as int
         let tbuf = c.calloc(1, 8) as *u32
