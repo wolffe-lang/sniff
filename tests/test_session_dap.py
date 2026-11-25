@@ -249,6 +249,30 @@ class Golden(unittest.TestCase):
             self.assertTrue(any(ln.startswith('FAIL dap g5 fault: the golden is stale') for ln in said), said)
 
 
+class Selection(unittest.TestCase):
+    def test_program_selects_rows_with_or_without_a_program(self):
+        rows = [row('b1', INIT, ['send', 'disconnect', {}], ['exit', 0]),
+                dict(row('p1', INIT), prog='c/calls/@CC@-O0/prog', src='c/calls')]
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, 'rows.json')
+            with open(path, 'w') as f:
+                json.dump({'schema': 1, 'rows': rows}, f)
+            base = [sys.executable, '-I', str(ROOT / 'tools/session-dap.py')]
+            env = {'PATH': os.environ['PATH'], 'LC_ALL': 'C', 'SESSION_DAP_TIMEOUT': '3'}
+            p = subprocess.run(base + ['check', '--adapter', STANDIN + ' plain', '--rows', path, '--out', os.path.join(d, 'o'),
+                                       '--program', 'no'], capture_output=True, text=True, cwd=ROOT, env=env)
+            self.assertEqual(p.stdout.splitlines(), ['PASS dap b1', 'dap rows (check): 1 pass, 0 fail, 0 skip'])
+            # a host that cannot run the programs skips those rows by name, and the count is held
+            p = subprocess.run(base + ['skip', '--rows', path, '--program', 'yes', '--reason', 'no programs here', '--expect', '1'],
+                               capture_output=True, text=True, cwd=ROOT, env=env)
+            self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+            self.assertEqual(p.stdout.splitlines(), ['SKIP dap p1 reason=no programs here', 'dap rows (skip): 1 skip'])
+            p = subprocess.run(base + ['skip', '--rows', path, '--program', 'yes', '--reason', 'x', '--expect', '2'],
+                               capture_output=True, text=True, cwd=ROOT, env=env)
+            self.assertEqual(p.returncode, 1)
+            self.assertIn('FAIL dap skip count: 1, not 2', p.stdout.splitlines())
+
+
 class RowsFile(unittest.TestCase):
     def test_the_rows_file_is_well_formed(self):
         rows = json.loads((ROOT / 'tests/dap-rows.json').read_text())['rows']
