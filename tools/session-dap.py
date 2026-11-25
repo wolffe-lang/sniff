@@ -29,8 +29,9 @@ else the first thread a thread event reported started); "@FRAMEk@", "@SCOPEk@", 
 variablesReference or nonzero variable reference of the last stackTrace, scopes or variables response).
 
 A row passes when every expectation holds: `PASS dap ROW`. An expectation that does not hold is a red by comparison:
-`FAIL dap ROW WHAT: …`. A timeout, an adapter that ends while a response is awaited, a body that is not JSON, or a
-placeholder with nothing to name is a fault, never a red: `FAIL dap ROW fault: …`. A request from the adapter
+`FAIL dap ROW WHAT: …`. A timeout, an adapter that has gone away (one fault, `the adapter went away`, whether a write
+or a read finds out first), a body that is not JSON, or a placeholder with nothing to name is a fault, never a red:
+`FAIL dap ROW fault: …`. A request from the adapter
 (runInTerminal, startDebugging) is answered success: false and noted. The last line is
 `dap rows (check): P pass, F fail, S skip`; the exit is 1 when any row failed."""
 import argparse
@@ -46,6 +47,9 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+# An adapter that has gone away is one fault, whichever of a write (a broken pipe) or a read (the end of its output)
+# finds out first.
+GONE = 'the adapter went away'
 TIMEOUT = float(os.environ.get('SESSION_DAP_TIMEOUT', '30'))
 
 
@@ -99,8 +103,11 @@ class Adapter:
             self.q.put(('bad', 'the reader: %r' % (e,)))
 
     def write(self, data):
-        self.p.stdin.write(data)
-        self.p.stdin.flush()
+        try:
+            self.p.stdin.write(data)
+            self.p.stdin.flush()
+        except (BrokenPipeError, ConnectionResetError):
+            raise Fault(GONE)
 
     def send(self, msg):
         body = json.dumps(msg).encode('utf-8')
@@ -193,7 +200,7 @@ def run_row(row, argv, fixtures, sources, cc, out):
             except queue.Empty:
                 return None
             if kind == 'eof':
-                raise Fault('the adapter closed its output')
+                raise Fault(GONE)
             if kind == 'bad':
                 raise Fault(msg)
             rec('a2c', msg)
@@ -327,7 +334,7 @@ def run_row(row, argv, fixtures, sources, cc, out):
                 raise Fault('no step %r' % (op,))
     except Fault as f:
         status = 'fault: %s' % f
-    except (BrokenPipeError, OSError) as e:
+    except OSError as e:
         status = 'fault: the adapter pipe: %s' % e
     while True:
         try:
@@ -379,7 +386,7 @@ def selftest():
     cases = [
         ('plain', ['send', 'disconnect', {}, {'success': True}], 'PASS'),
         ('hang', ['post', 'launch', {}], None),
-        ('eof', ['send', 'threads', {}], 'FAIL dap s fault: the adapter closed its output'),
+        ('eof', ['send', 'threads', {}], 'FAIL dap s fault: ' + GONE),
         ('garbage', None, 'FAIL dap s fault: a body that is not JSON'),
         ('badcaps', None, 'FAIL dap s initialize: the body declares supportsStepBack'),
     ]
