@@ -36,7 +36,7 @@ fn fd_rows(exits: str) {
     assert(r >= 0 && w >= 0)
     // nothing written: a wait of no time finds nothing ready
     assert(platform.fd_poll(buf, [r], 0).len == 0)
-    fs_write_chunk(w, "abc".bytes()) else |_| { assert(false) }
+    assert(platform.fd_write(w, buf, "abc".bytes()) == 3)
     let ready = platform.fd_poll(buf, [r], 1000)
     assert(ready.len == 1 && ready[0] == r)
     let (n, got) = platform.fd_read(r, buf, 4096)
