@@ -2,7 +2,8 @@
 
 A debugger written in [wolf](https://github.com/wolffe-lang/wolf-lang),
 for x86-64 Linux and PAX, and macOS arm64. The command language is GDB's;
-a Debug Adapter Protocol server is planned for editor integration.
+`sniff --dap` is a Debug Adapter Protocol server on standard input and output: so far it speaks the base protocol,
+answers `initialize` and `disconnect`, and refuses other requests by name; sessions over it come next.
 
 **Status: milestones S0 to S6 are met on Linux x86-64, macOS arm64 and PAX; core files (S7) are read on Linux, at PAX's console and on macOS; cores PAX writes itself come next. S8's remote client is in, and so is its stub, `sniff-server`, on Linux and PAX.** `sniff -batch -x SCRIPT PROG` starts PROG
 (under `ptrace(2)` on Linux; as a suspended child with its task port and exception port on macOS) and debugs it with gdb's command language (breakpoints,
