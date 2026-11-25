@@ -200,7 +200,8 @@ def normalise(records, differences):
             return [walk(x, ctx) for x in v]
         if isinstance(v, str):
             for r in ROOTS:
-                v = v.replace(r, '@ROOT@')
+                # the root as a path's leading part only (a checkout at /work leaves /workers alone)
+                v = re.sub(re.escape(r) + r'(?=/|$|[^A-Za-z0-9_.+-])', '@ROOT@', v)
             v = re.sub(r'0x[0-9a-fA-F]+', '<ADDR>', v)
             v = re.sub(r'\b(process|pid|ready|thread) \d+', r'\1 <PID>', v, flags=re.I)
             return re.sub(r'\bLWP \d+', 'LWP <PID>', v)
