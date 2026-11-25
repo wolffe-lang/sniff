@@ -190,7 +190,8 @@ fn dap_write(mut s: Session) {
     s.adapter.wire.out = none
 }
 
-fn args_of(m: dap.Message) -> json.Value { json.get(m.payload, "arguments") else { json.null() } }
+/// A request's arguments (the envelope's `arguments`, which decoding keeps as the payload).
+fn args_of(m: dap.Message) -> json.Value { copy m.payload }
 
 fn arg_int(m: dap.Message, key: str, absent: int) -> int {
     let v = json.get(args_of(m), key) else { return absent }
