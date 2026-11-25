@@ -1,0 +1,219 @@
+{
+ "cc": "clang",
+ "events": [
+  {
+   "event": "initialized",
+   "type": "event"
+  },
+  {
+   "body": {
+    "isLocalProcess": true,
+    "name": "@ROOT@/target/session-fixtures/c/sigusr/clang-O0/prog",
+    "startMethod": "process",
+    "systemProcessId": "P1"
+   },
+   "event": "process",
+   "type": "event"
+  },
+  {
+   "body": {
+    "reason": "started",
+    "threadId": "T1"
+   },
+   "event": "thread",
+   "type": "event"
+  },
+  {
+   "body": {
+    "allThreadsStopped": true,
+    "reason": "signal",
+    "threadId": "T1"
+   },
+   "event": "stopped",
+   "type": "event"
+  },
+  {
+   "body": {
+    "allThreadsStopped": true,
+    "reason": "signal",
+    "threadId": "T1"
+   },
+   "event": "stopped",
+   "type": "event"
+  },
+  {
+   "body": {
+    "allThreadsStopped": true,
+    "reason": "signal",
+    "threadId": "T1"
+   },
+   "event": "stopped",
+   "type": "event"
+  },
+  {
+   "body": {
+    "reason": "exited",
+    "threadId": "T1"
+   },
+   "event": "thread",
+   "type": "event"
+  },
+  {
+   "body": {
+    "exitCode": 21
+   },
+   "event": "exited",
+   "type": "event"
+  },
+  {
+   "event": "terminated",
+   "type": "event"
+  }
+ ],
+ "identity": "GNU gdb (Ubuntu 15.1-1ubuntu1~24.04.1) 15.1 sha256=3832cc070ae1716e322105d3b39fb398695e5f031c9d39224cf227a8c2b889f6",
+ "responses": [
+  {
+   "command": "initialize",
+   "success": true,
+   "type": "response"
+  },
+  {
+   "command": "launch",
+   "success": true,
+   "type": "response"
+  },
+  {
+   "command": "configurationDone",
+   "success": true,
+   "type": "response"
+  },
+  {
+   "body": {
+    "stackFrames": [
+     {
+      "column": 0,
+      "id": 0,
+      "instructionPointerReference": "<ADDR>",
+      "line": 18,
+      "moduleId": "@ROOT@/target/session-fixtures/c/sigusr/clang-O0/prog",
+      "name": "deliver",
+      "source": {
+       "name": "main.c",
+       "path": "@ROOT@/fixtures/session/c/sigusr/main.c"
+      }
+     },
+     {
+      "column": 0,
+      "id": "F1",
+      "instructionPointerReference": "<ADDR>",
+      "line": 31,
+      "moduleId": "@ROOT@/target/session-fixtures/c/sigusr/clang-O0/prog",
+      "name": "main",
+      "source": {
+       "name": "main.c",
+       "path": "@ROOT@/fixtures/session/c/sigusr/main.c"
+      }
+     }
+    ]
+   },
+   "command": "stackTrace",
+   "success": true,
+   "type": "response"
+  },
+  {
+   "body": {
+    "allThreadsContinued": true
+   },
+   "command": "continue",
+   "success": true,
+   "type": "response"
+  },
+  {
+   "body": {
+    "allThreadsContinued": true
+   },
+   "command": "continue",
+   "success": true,
+   "type": "response"
+  },
+  {
+   "body": {
+    "allThreadsContinued": true
+   },
+   "command": "continue",
+   "success": true,
+   "type": "response"
+  },
+  {
+   "command": "disconnect",
+   "success": true,
+   "type": "response"
+  }
+ ],
+ "row": "dap-signal",
+ "schema": 1,
+ "sent": [
+  {
+   "arguments": {
+    "adapterID": "rows",
+    "clientID": "rows",
+    "clientName": "sniff's DAP rows",
+    "columnsStartAt1": true,
+    "linesStartAt1": true,
+    "locale": "en-US",
+    "pathFormat": "path",
+    "supportsRunInTerminalRequest": false,
+    "supportsVariableType": true
+   },
+   "command": "initialize",
+   "type": "request"
+  },
+  {
+   "arguments": {
+    "program": "@ROOT@/target/session-fixtures/c/sigusr/clang-O0/prog"
+   },
+   "command": "launch",
+   "type": "request"
+  },
+  {
+   "arguments": {},
+   "command": "configurationDone",
+   "type": "request"
+  },
+  {
+   "arguments": {
+    "threadId": "T1"
+   },
+   "command": "stackTrace",
+   "type": "request"
+  },
+  {
+   "arguments": {
+    "threadId": "T1"
+   },
+   "command": "continue",
+   "type": "request"
+  },
+  {
+   "arguments": {
+    "threadId": "T1"
+   },
+   "command": "continue",
+   "type": "request"
+  },
+  {
+   "arguments": {
+    "threadId": "T1"
+   },
+   "command": "continue",
+   "type": "request"
+  },
+  {
+   "arguments": {
+    "terminateDebuggee": true
+   },
+   "command": "disconnect",
+   "type": "request"
+  }
+ ]
+}

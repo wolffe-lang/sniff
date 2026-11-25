@@ -10,5 +10,7 @@
   "normalizations": [
     "named transcript display normalizations as recorded in each session",
     "exact lane-root prefixes replaced in published path metadata; all binary digests remain unnormalized"
-  ]
+  ],
+  "dap_capture_tool_commit": "bd5f743",
+  "dap_collection": "tools/session-dap.py capture over the pinned gdb (-i=dap) in the Linux oracle image, gcc and clang builds of the session fixtures; each row taken twice on a fresh gdb and kept only when the two takes agree after normalising; a second capture from an earlier client agreed with these in every row both held"
 }

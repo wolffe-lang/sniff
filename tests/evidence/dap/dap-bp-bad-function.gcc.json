@@ -1,0 +1,133 @@
+{
+ "cc": "gcc",
+ "events": [
+  {
+   "event": "initialized",
+   "type": "event"
+  },
+  {
+   "body": {
+    "isLocalProcess": true,
+    "name": "@ROOT@/target/session-fixtures/c/calls/gcc-O0/prog",
+    "startMethod": "process",
+    "systemProcessId": "P1"
+   },
+   "event": "process",
+   "type": "event"
+  },
+  {
+   "body": {
+    "reason": "started",
+    "threadId": "T1"
+   },
+   "event": "thread",
+   "type": "event"
+  },
+  {
+   "body": {
+    "reason": "exited",
+    "threadId": "T1"
+   },
+   "event": "thread",
+   "type": "event"
+  },
+  {
+   "body": {
+    "exitCode": 0
+   },
+   "event": "exited",
+   "type": "event"
+  },
+  {
+   "event": "terminated",
+   "type": "event"
+  }
+ ],
+ "identity": "GNU gdb (Ubuntu 15.1-1ubuntu1~24.04.1) 15.1 sha256=3832cc070ae1716e322105d3b39fb398695e5f031c9d39224cf227a8c2b889f6",
+ "responses": [
+  {
+   "command": "initialize",
+   "success": true,
+   "type": "response"
+  },
+  {
+   "command": "launch",
+   "success": true,
+   "type": "response"
+  },
+  {
+   "body": {
+    "breakpoints": [
+     {
+      "id": "B1",
+      "reason": "pending",
+      "verified": false
+     }
+    ]
+   },
+   "command": "setFunctionBreakpoints",
+   "success": true,
+   "type": "response"
+  },
+  {
+   "command": "configurationDone",
+   "message": "notStopped",
+   "success": false,
+   "type": "response"
+  },
+  {
+   "command": "disconnect",
+   "success": true,
+   "type": "response"
+  }
+ ],
+ "row": "dap-bp-bad-function",
+ "schema": 1,
+ "sent": [
+  {
+   "arguments": {
+    "adapterID": "rows",
+    "clientID": "rows",
+    "clientName": "sniff's DAP rows",
+    "columnsStartAt1": true,
+    "linesStartAt1": true,
+    "locale": "en-US",
+    "pathFormat": "path",
+    "supportsRunInTerminalRequest": false,
+    "supportsVariableType": true
+   },
+   "command": "initialize",
+   "type": "request"
+  },
+  {
+   "arguments": {
+    "program": "@ROOT@/target/session-fixtures/c/calls/gcc-O0/prog"
+   },
+   "command": "launch",
+   "type": "request"
+  },
+  {
+   "arguments": {
+    "breakpoints": [
+     {
+      "name": "nosuch"
+     }
+    ]
+   },
+   "command": "setFunctionBreakpoints",
+   "type": "request"
+  },
+  {
+   "arguments": {},
+   "command": "configurationDone",
+   "type": "request"
+  },
+  {
+   "arguments": {
+    "terminateDebuggee": true
+   },
+   "command": "disconnect",
+   "type": "request"
+  }
+ ]
+}
