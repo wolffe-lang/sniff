@@ -446,5 +446,15 @@
     "interrupt-stop for the pause's frame"
    ]
   }
- ]
+ ],
+ "revised_after_code": {
+  "note": "what U3's measurements changed; the predictions above stand as they were written",
+  "coreFile": "refused by name: the pinned gdb 15.1 answers an attach with coreFile \"attach requires either 'pid' or 'target'\" although the current GDB manual lists it, so no row can hold sniff to it; dap-attach-core became sniff's own dap-attach-core-refused, and the core row returns when the pinned oracle takes cores",
+  "launch": "cwd and env are taken (rows dap-launch-cwd and dap-launch-env over the fixture c/where): env is the program's whole environment plus PWD, as measured of the pinned gdb",
+  "rows_added": "dap-attach-pid-running (a disconnect while the attached process runs), dap-launch-cwd, dap-launch-env",
+  "named_differences_added": {
+   "breakpoint-echo": "the pinned gdb answers a breakpoint request only at a stop; one answered at the stop in main echoes gdb's own Breakpoint N at line as an output event; which side a take falls on follows the host, so the echo is left out (tests/dap-race/ holds a take of each side)",
+   "interrupt-stop": "the stack after a pause is where the interrupt found the machine: not compared, named on a LOCATION line"
+  }
+ }
 }
