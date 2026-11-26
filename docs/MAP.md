@@ -421,12 +421,26 @@ stop shows is read from the records `bt`, `info args`, `info locals` and `print`
   `name = value`. The command language prints from them, so its rows hold the text unchanged.
 - **Launch.** `launch` loads the program and answers; `configurationDone` starts it, as the specification's
   configuration sequence has it (the pinned gdb starts it at launch: rows name that `launch-start`).
-  `stopAtBeginningOfMainSubprogram` is a temporary breakpoint at main. `stopOnEntry`, `cwd` and `env` are refused by
-  name.
+  `stopAtBeginningOfMainSubprogram` is a temporary breakpoint at main, made at launch as the pinned gdb makes it (so
+  it is breakpoint 1). `cwd` is entered by sniff itself before the program is read, as gdb's `cd` is, so a relative
+  program is found from it and the program starts there. `env` is the program's whole environment: exactly the
+  object, plus `PWD` as the shell the pinned gdb starts a program through adds it (measured). `stopOnEntry` is refused
+  by name.
+- **Attach.** `attach` with `pid` traces the running process as `attach PID` does, stops it where it is, and reports
+  it at once: `initialized`, `process` (start method `attach`), each thread started, and `stopped` with reason
+  `attach`. Its `program` names the executable (sniff reads no /proc link for it). A disconnect lets the process go,
+  untraced, unless `terminateDebuggee` asks for its end; one that comes while the process runs interrupts it first,
+  and is answered at once with no event, as gdb answers it. `attach` with `target` connects to a remote stub as
+  `target remote` does (QEMU's gdbstub on the record host): the process is not local and has no id, each thread is
+  named by the stub's thread information, a pause sends the stub the interrupt byte, and a frame outside the
+  program's image has no `moduleId`. `coreFile` is refused by name: the pinned gdb answers an attach with a core
+  "attach requires either 'pid' or 'target'", so no row can hold sniff to one (the row returns when the pinned
+  oracle takes cores).
 - **The program's streams.** Its standard output and error are pipes whose bytes come out as `output` events; its
   standard input is /dev/null. Nothing it writes reaches the protocol stream.
 - **While it runs** the session waits on the program and on standard input together (a wait that never blocks, then
-  50 ms on the descriptors, on Linux): `pause` interrupts it with SIGINT and is reported reason `pause`; `threads` is
+  50 ms on the descriptors, on Linux; a remote target's stop reply in 100 ms waits): `pause` interrupts it with SIGINT
+  (a remote target with the interrupt byte) and is reported reason `pause`; `threads` is
   refused notStopped; `disconnect` and `terminate` kill it and are answered once its end is reported.
 - **What a stop reports** follows the pinned gdb's transcripts: a `breakpoint` changed event for each counted hit,
   then `stopped` (breakpoint with the ids hit, step, signal, or pause); the end is each thread's `exited`, `exited`
@@ -434,11 +448,26 @@ stop shows is read from the records `bt`, `info args`, `info locals` and `print`
   scopes are the arguments and locals when there are any, then the registers; references are given out per stop.
   `evaluate` runs the command language in the repl and answers with its text, and answers any other expression as a
   variable. A type is spelled as gdb prints it: gcc's `short int`, `long int` and `long unsigned int` are `short`,
-  `long` and `unsigned long`, as clang records them (the command language's type names follow the same spelling).
+  `long` and `unsigned long`, as clang records them (the command language's type names follow the same spelling). A
+  pointer has the value it points at as its one child, except a pointer to char, which is a string and has none.
 
 The rows held to gdb (`compare: gdb` in `tests/dap-rows.json`) run over gcc's and clang's session builds on Linux and
 compare with the pinned gdb's DAP transcripts (`tests/evidence/dap/`), taken twice by `session-dap.py capture` and
 kept only when the two agreed. Normalising names ids by first appearance, addresses, process ids and the repository's
-root, and leaves out module events; the named differences are `launch-start` and `registers-scope`. On macOS those rows
-are skipped by name and their count is held (macOS follows in a later change).
+root, and leaves out module events; the named differences are `launch-start`, `registers-scope`, `breakpoint-echo` and
+`interrupt-stop`. On macOS those rows are skipped by name and their count is held (macOS follows in a later change).
+
+The attach rows start the sleeper fixture as the client's own child, wait until it sleeps in its nap, attach by its
+pid, and after the disconnect read the sleeper's own last line (`done 500`: the debugger left it unharmed); one
+disconnects while the sleeper is stopped, one while it runs. The cwd and env rows run `c/where`, a program that reads
+its working directory, `SNIFF_ROW` and its environment's size and sorted names into globals before it calls `seen()`.
+Both stop in main first (`stopAtBeginningOfMainSubprogram`): the pinned gdb starts a program at launch and answers a
+breakpoint request only at a stop, so without it a program this short can end before the breakpoint is in. Where gdb
+answers that request (at a library's load, or at the stop in main) follows the host's load; only the second echoes
+gdb's own `Breakpoint N at` line, which the rows name (`breakpoint-echo`). `tests/dap-race/` keeps a recorded take of
+each side, and the client's units hold the comparison to them, so every gate exercises the difference.
+The target row (`"needs": "kvm"`) boots PAX's console image through PAX's `tools/qemu-run` with QEMU's gdbstub on a
+free port and attaches to its kernel; where the pause after a `continue` finds the machine is timing's, so that stack
+is named (`interrupt-stop`: a `LOCATION` line, never compared). Only the record host boots it (`tools/gate-remote`'s
+`dap-target-kvm`); every other gate host skips it by name, its count held.
 
