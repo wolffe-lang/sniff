@@ -381,3 +381,33 @@ and `terminated`. readMemory's data is base64; the unit row's values were checke
   as an ignore count, how a frame with no source and an aggregate or a pointer variable are shown, the order of the
   threads, and the spelling of gcc's integer type names (`short`, `long`, `unsigned long` for gcc's `short int`,
   `long int`, `long unsigned int`). gdb's DAP support was hashed as a tree, never opened.
+
+## Consulted for S9's attach, cwd and env over `sniff --dap` (2026-11-26)
+
+| Source | sha256 | Used for |
+| --- | --- | --- |
+| [GDB manual, Debug Adapter Protocol](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Debug-Adapter-Protocol.html) (the current manual, not 15.1's) | `e0048cb62b937827c1e78944095165a76ae38714cef93dc566c7764717776305` | launch's `cwd` (gdb changes its own directory, as by `cd`, before the program is read) and `env` ("the environment of the inferior will be set to exactly as passed in"); attach's `pid`, `target` and `coreFile` |
+
+The `attach` request, `disconnect`'s `terminateDebuggee` and the `process` event's members came from the
+specification and schema at the digests above. No adapter's or client's source was read.
+
+### Binary observations, not sources
+
+- The pinned gdb's DAP transcripts of the attach, cwd and env rows (`gdb -i=dap`, run only as a binary in the oracle
+  container; `tools/session-dap.py capture`, each row twice), kept in `tests/evidence/dap/`:
+  - attach by pid: a `process` event with start method `attach`, the thread started, and a stop with reason
+    `attach`; a disconnect without `terminateDebuggee` leaves the process running untraced, whether it is stopped
+    or running, and is answered at once with no event;
+  - gdb 15.1 answers an attach with `coreFile` "attach requires either 'pid' or 'target'", though the current
+    manual lists `coreFile`: sniff refuses it by name;
+  - launch's `env` gives the program exactly the object plus `PWD`, which the shell gdb starts it through adds
+    (the fixture's sorted names, measured);
+  - stopAtBeginningOfMainSubprogram's temporary breakpoint is made at launch, before configuration's breakpoints;
+  - a pointer to char has no child;
+  - attach with `target` over QEMU's gdbstub: a `process` event that is not local and has no process id, the
+    thread named by the stub's thread information (`CPU#0 [running]`), and frames outside the program's image with
+    no `moduleId`.
+- gdb answers a breakpoint request only at a stop, so which side of its launch-start race a take falls on follows
+  the host: measured over 80 takes with a probe, and kept as two recorded takes, one each side, in
+  `tests/dap-race/`.
+- QEMU (the oracle image's build) and PAX's `tools/qemu-run` were run as binaries, as the S8 kernel rows run them.
