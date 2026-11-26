@@ -45,7 +45,6 @@ struct Adapter {
     pub exit: int,
     /// A launch was accepted and its program loaded; configurationDone starts it.
     pub launched: bool,
-    pub stop_main: bool,
     /// The temporary breakpoint stopAtBeginningOfMainSubprogram set (0 for none), and its record as last sent: it is
     /// sent again when it is removed, after it went.
     pub main_bp: int,
@@ -85,7 +84,7 @@ fn adapter_off() -> Adapter {
     let nv: List[Val] = []
     let nm: List[dap.Message] = []
     Adapter { on: false, wire: dap.session(), rd: dap.reader(), buf: 0, out_fd: 0 - 1, err_fd: 0 - 1, eof: false, exit: 0,
-              launched: false, stop_main: false, main_bp: 0, main_json: json.null(), threads: copy ni, gone: copy ni, refs: refs(), vals: copy nv,
+              launched: false, main_bp: 0, main_json: json.null(), threads: copy ni, gone: copy ni, refs: refs(), vals: copy nv,
               val_names: copy ns, cli: copy nb, pause_asked: false, ending: copy nm, stop: dap_stop_step, stop_signal: 0,
               stop_bps: copy ni, end_code: 0, ended: false, fn_bps: copy ni, src_paths: copy ns, src_nums: copy ni }
 }
@@ -485,10 +484,22 @@ fn dap_launch(mut s: Session, m: dap.Message) {
     let items = json.as_arr(a) else { let none: List[json.Value] = []; none }
     for x in items { (mut args).push(json.as_str(x) else { "" }) }
     s.args = args
-    s.adapter.stop_main = arg_bool(m, "stopAtBeginningOfMainSubprogram")
     s.adapter.launched = true
     answer(mut s, m, true, "", json.null())
     send_event(mut s, "initialized", json.null())
+    if arg_bool(m, "stopAtBeginningOfMainSubprogram") {
+        // a temporary breakpoint at main's first line, as `tbreak main`, made and announced at launch as the pinned
+        // gdb makes it: it is breakpoint 1, and those set during configuration come after it
+        let r = resolve_location(s, "main")
+        if r.err.len() == 0 && r.addrs.len > 0 {
+            let num = s.bp_next
+            s.bp_next += 1
+            (mut s.bps).push(Bp { num: num, addr: r.addrs[0], hits: 0, temp: true, enabled: true, internal: false, abs: r.abs,
+                                  ignore: 0, loc: 1, nloc: 1, orig: 0, inserted: false, cond: "", watch_end: 0, hw: false })
+            s.adapter.main_bp = num
+            bp_event(mut s, "new", num)
+        }
+    }
 }
 
 /// attach: to a running process by its pid, as `attach PID` does (attach.lu): traced, stopped where it is, and
@@ -542,18 +553,6 @@ fn dap_configuration_done(mut s: Session, m: dap.Message) {
     answer(mut s, m, true, "", json.null())
     if !s.adapter.launched || s.alive { return }
     s.adapter.launched = false
-    if s.adapter.stop_main {
-        // a temporary breakpoint at main's first line, as `tbreak main`; announced before the program starts
-        let r = resolve_location(s, "main")
-        if r.err.len() == 0 && r.addrs.len > 0 {
-            let num = s.bp_next
-            s.bp_next += 1
-            (mut s.bps).push(Bp { num: num, addr: r.addrs[0], hits: 0, temp: true, enabled: true, internal: false, abs: r.abs,
-                                  ignore: 0, loc: 1, nloc: 1, orig: 0, inserted: false, cond: "", watch_end: 0, hw: false })
-            s.adapter.main_bp = num
-            bp_event(mut s, "new", num)
-        }
-    }
     let (or, ow) = platform.fd_pipe()
     let (er, ew) = platform.fd_pipe()
     let null = platform.fd_devnull()
