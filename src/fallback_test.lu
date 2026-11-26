@@ -21,6 +21,22 @@ fn nowhere_row() {
     print("PASS session-fallback-nowhere")
 }
 
+fn after_frame_row() {
+    // after a frame, gdb's rules (the GDB manual's backtrace past-main and past-entry, both off by default): stop at
+    // main, and at the function holding the program's entry point, before any caller
+    assert(session.unwind_after(true, false, true, 4096, true) == session.unwind_stop)
+    assert(session.unwind_after(false, true, true, 4096, true) == session.unwind_stop)
+    // no caller: stop
+    assert(session.unwind_after(false, false, false, 4096, true) == session.unwind_stop)
+    // a caller at pc 0 is shown as the last frame where gdb shows it (measured: QEMU's reset vector gives frame 1 at
+    // 0x0), and not where the oracle shows none
+    assert(session.unwind_after(false, false, true, 0, true) == session.unwind_last_zero)
+    assert(session.unwind_after(false, false, true, 0, false) == session.unwind_stop)
+    // otherwise the caller is the next frame
+    assert(session.unwind_after(false, false, true, 4096, true) == session.unwind_go_on)
+    print("PASS session-unwind-after")
+}
+
 fn arm64_before_row() {
     // the instruction before pc: none below 4, where a call through a null pointer stops (sniff trapped there)
     let (low, _) = session.arm64_insn_before(0)
@@ -43,6 +59,7 @@ fn arm64_lr_row() {
 }
 
 fn main() {
+    after_frame_row()
     rules_row()
     nowhere_row()
     arm64_before_row()
