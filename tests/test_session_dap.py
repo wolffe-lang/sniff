@@ -251,6 +251,93 @@ class Faults(unittest.TestCase):
         self.assertTrue(any(ln.startswith('FAIL dap f5 fault: no thread id for @THREAD@') for ln in said), said)
 
 
+def target_tree(d, image=b'console image'):
+    """A PAX tree whose tools/qemu-run is the stand-in, a kernel and an image: the --pax, --kernel and --image a target
+    row is given."""
+    tools = Path(d, 'pax', 'tools')
+    tools.mkdir(parents=True)
+    run_ = tools / 'qemu-run'
+    run_.write_text('#!/bin/sh\nexec %s -I %s "$@"\n' % (sys.executable, ROOT / 'tests/standin_qemu_run.py'))
+    run_.chmod(0o755)
+    Path(d, 'kernel.elf').write_bytes(b'\x7fELF')
+    Path(d, 'image.iso').write_bytes(image)
+    return ['--program', 'target', '--kernel', str(Path(d, 'kernel.elf')), '--image', str(Path(d, 'image.iso')),
+            '--pax', str(Path(d, 'pax')), '--qemu', '/bin/true', '--accel', 'kvm']
+
+
+def target_row(name, *steps, **extra):
+    return dict({'name': name, 'prog': '-', 'needs': 'kvm', 'steps': list(steps)}, **extra)
+
+
+BOOTED = [['boot'], INIT, ['post', 'attach', {'program': '@KERNEL@', 'target': '@TARGET@'}], ['wait', 'initialized'],
+          ['send', 'configurationDone', {}], ['reply', 'attach', {'success': True}]]
+
+
+class Target(unittest.TestCase):
+    def test_boot_starts_paxs_qemu_run_and_names_its_gdb_port(self):
+        with tempfile.TemporaryDirectory() as d:
+            extra = target_tree(d)
+            rc, said, recs = run_kept([target_row('t1', *BOOTED, ['send', 'disconnect', {}], ['exit', 0])], extra=extra)
+            self.assertIn('PASS dap t1', said, said)
+            booted = [r['msg']['booted'] for r in recs['t1'] if r['dir'] == 'note' and 'booted' in r['msg']][0]
+            argv = booted['argv']
+            self.assertEqual(argv[0], str(Path(d, 'pax', 'tools', 'qemu-run')))
+            self.assertEqual(argv[1:5], ['--accel', 'kvm', '--gdb', str(booted['port'])])
+            self.assertEqual(argv[-1], str(Path(d, 'image.iso')))
+            sent = [r['msg'] for r in recs['t1'] if r['dir'] == 'c2a' and r['msg'].get('command') == 'attach'][0]
+            self.assertEqual(sent['arguments'], {'program': str(Path(d, 'kernel.elf')),
+                                                 'target': '127.0.0.1:%d' % booted['port']})
+            ended = [r['msg']['qemu'] for r in recs['t1'] if r['dir'] == 'note' and 'qemu' in r['msg']]
+            self.assertEqual(len(ended), 1, recs['t1'])
+
+    def test_a_target_row_without_its_kernel_and_image_is_a_fault(self):
+        rc, said, _ = run_kept([target_row('t2', *BOOTED)], extra=['--program', 'target'])
+        self.assertTrue(any(ln.startswith('FAIL dap t2 fault: the target rows need --kernel, --image, --pax and --qemu')
+                            for ln in said), said)
+
+    def test_a_boot_that_never_listens_is_a_fault(self):
+        with tempfile.TemporaryDirectory() as d:
+            rc, said, _ = run_kept([target_row('t3', *BOOTED)], extra=target_tree(d, image=b'silent'), timeout='2')
+            self.assertTrue(any(ln.startswith('FAIL dap t3 fault: qemu-run never listened on 127.0.0.1:') for ln in said), said)
+
+    def test_the_target_rows_are_their_own_selection(self):
+        rows = [{'name': 'p1', 'prog': 'c/x/@CC@-O0/prog', 'steps': []}, target_row('t4'), row('n1')]
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, 'rows.json')
+            with open(path, 'w') as f:
+                json.dump({'schema': 1, 'rows': rows}, f)
+            base = [sys.executable, '-I', str(ROOT / 'tools/session-dap.py'), 'skip', '--rows', path, '--reason', 'r']
+            got = {}
+            for prog in ('yes', 'no', 'target'):
+                p = subprocess.run(base + ['--program', prog, '--expect', '1'], capture_output=True, text=True, cwd=ROOT)
+                got[prog] = [ln.split()[2] for ln in p.stdout.splitlines() if ln.startswith('SKIP dap ')]
+            self.assertEqual(got, {'yes': ['p1'], 'no': ['n1'], 'target': ['t4']})
+
+    def test_the_kernel_and_the_port_are_named(self):
+        recs = [{'dir': 'c2a', 'msg': {'seq': 1, 'type': 'request', 'command': 'attach',
+                                       'arguments': {'program': '/pax/out/kernel.elf', 'target': '127.0.0.1:41001'}}}]
+        side = client().normalise(recs, [], named={'/pax/out/kernel.elf': '@KERNEL@'})
+        self.assertEqual(side['sent'][0]['arguments'], {'program': '@KERNEL@', 'target': '127.0.0.1:PORT'})
+
+    def test_interrupt_stop_leaves_the_stack_after_a_pause_uncompared(self):
+        sent = [{'command': c} for c in ('stackTrace', 'continue', 'pause', 'stackTrace')]
+        frames = lambda name: {'command': 'stackTrace', 'body': {'stackFrames': [{'name': name}]}}  # noqa: E731
+        side = {'sent': sent, 'responses': [frames('reset'), {'command': 'continue'}, {'command': 'pause'}, frames('pax_idle')],
+                'events': []}
+        out = client().differ(side, ['interrupt-stop'])
+        self.assertEqual(out['responses'][0]['body'], {'stackFrames': [{'name': 'reset'}]})
+        self.assertEqual(out['responses'][3]['body'], '<interrupt-stop>')
+
+    def test_the_stop_after_a_pause_is_named_on_a_location_line(self):
+        with tempfile.TemporaryDirectory() as d:
+            r = target_row('t5', *BOOTED, ['send', 'pause', {'threadId': '@THREAD@'}], ['wait', 'stopped'],
+                           ['send', 'stackTrace', {'threadId': '@THREAD@'}], ['send', 'disconnect', {}], ['exit', 0],
+                           differences=['interrupt-stop'])
+            rc, said, _ = run_kept([r], extra=target_tree(d))
+            self.assertIn('PASS dap t5', said, said)
+            self.assertIn('LOCATION dap t5 frame=f0 line=1', said, said)
+
+
 class Selftest(unittest.TestCase):
     def test_the_selftest_passes(self):
         p = subprocess.run([sys.executable, '-I', str(ROOT / 'tools/session-dap.py'), 'selftest'], capture_output=True,
