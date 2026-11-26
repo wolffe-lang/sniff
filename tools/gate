@@ -147,5 +147,5 @@ else
   # (a later change): its rows are skipped by name here, and the count is held
   step remote-server-skip python3 -I tools/session-remote.py skip --kind server --reason "sniff-server is a Linux and PAX program; sniff built for macOS cannot debug an x86-64 remote process (a later change)" --expect 33
   # S9: sniff --dap runs programs on Linux first; its rows that run one are skipped by name here, and the count is held
-  step dap-session-skip python3 -I tools/session-dap.py skip --rows tests/dap-rows.json --program yes --reason "sniff --dap runs programs on Linux first; macOS follows in a later change" --expect 26
+  step dap-session-skip python3 -I tools/session-dap.py skip --rows tests/dap-rows.json --program yes --reason "sniff --dap runs programs on Linux first; macOS follows in a later change" --expect 28
 fi
