@@ -176,15 +176,24 @@ class FakeAPI:
         return 404, {'message': 'Not Found'}, {}
 
 
+STAND_IN_GIT = '''#!/bin/sh
+# A stand-in for git: the plan's two questions, the pushed commit and its tree,
+# and nothing else (any other call fails, so a plan that asks another fails too).
+if [ "$*" = "rev-parse HEAD" ]; then echo "$STAND_IN_HEAD"; exit 0; fi
+if [ "$*" = "rev-parse HEAD^{tree}" ]; then echo "$STAND_IN_TREE"; exit 0; fi
+echo "stand-in git: not answered: $*" >&2
+exit 1
+'''
+
+
 def scratch_repo():
-    d = tempfile.mkdtemp(prefix='tiers-test-repo-')
-    g = ['git', '-C', d, '-c', 'user.name=tiers-test', '-c', 'user.email=tiers-test@invalid', '-c', 'commit.gpgsign=false']
-    subprocess.run(['git', '-c', 'init.defaultBranch=trunk', 'init', '-q', d], check=True)
-    Path(d, 'f').write_text('the pushed commit\n')
-    subprocess.run(g + ['add', 'f'], check=True)
-    subprocess.run(g + ['commit', '-q', '-m', 'the pushed commit'], check=True)
-    rev = lambda r: subprocess.run(['git', '-C', d, 'rev-parse', r], capture_output=True, text=True, check=True).stdout.strip()
-    return d, rev('HEAD'), rev('HEAD^{tree}')
+    """A directory whose `git` answers for a pushed commit and its tree. The
+    Linux gate runs this file in a container that has no git, so the plan's
+    calls are answered here and never need one."""
+    d = tempfile.mkdtemp(prefix='tiers-test-git-')
+    Path(d, 'git').write_text(STAND_IN_GIT)
+    os.chmod(Path(d, 'git'), 0o755)
+    return d, 'a1' * 20, 'b2' * 20
 
 
 def wrun(rid, sha, event='pull_request', conclusion='success', status='completed', path='.github/workflows/ci.yml'):
@@ -226,7 +235,9 @@ class TrunkPushCover(unittest.TestCase):
         out = Path(tempfile.mkdtemp(prefix='tiers-test-out-')) / 'output'
         out.write_text('')
         env = clean_env(GITHUB_EVENT_NAME=event_name, GITHUB_REF=ref, GITHUB_SHA=sha or self.sha,
-                        GITHUB_REPOSITORY=REPO, GITHUB_API_URL=api.url, GITHUB_SERVER_URL='https://github.com')
+                        GITHUB_REPOSITORY=REPO, GITHUB_API_URL=api.url, GITHUB_SERVER_URL='https://github.com',
+                        STAND_IN_HEAD=self.sha, STAND_IN_TREE=self.tree)
+        env['PATH'] = self.dir + os.pathsep + env.get('PATH', '')
         if token:
             env['PLAN_TOKEN'] = token
         if timeout:
