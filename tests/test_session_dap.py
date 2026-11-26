@@ -338,6 +338,33 @@ class Target(unittest.TestCase):
             self.assertIn('PASS dap t5', said, said)
             self.assertIn('LOCATION dap t5 frame=f0 line=1', said, said)
 
+    def test_capture_holds_its_two_takes_to_the_rows_named_differences(self):
+        # the stack after a pause differs between takes (the stand-in's wander mode): with interrupt-stop named the
+        # takes agree and the golden is written, and check over it passes; without it the same takes are unstable
+        steps = [['wait', 'stopped', {'reason': 'attach'}], ['send', 'stackTrace', {'threadId': '@THREAD@'}],
+                 ['send', 'pause', {'threadId': '@THREAD@'}], ['wait', 'stopped', {'reason': 'pause'}],
+                 ['send', 'stackTrace', {'threadId': '@THREAD@'}], ['send', 'disconnect', {}], ['exit', 0]]
+        for named, want in ((['interrupt-stop'], 'CAPTURED dap t6'), ([], 'UNSTABLE dap t6')):
+            with tempfile.TemporaryDirectory() as d:
+                extra = target_tree(d)
+                r = target_row('t6', *BOOTED, *steps, compare='gdb', differences=named)
+                path = os.path.join(d, 'rows.json')
+                with open(path, 'w') as f:
+                    json.dump({'schema': 1, 'rows': [r]}, f)
+                env = {'PATH': os.environ['PATH'], 'LC_ALL': 'C', 'SESSION_DAP_TIMEOUT': '5'}
+                tool = [sys.executable, '-I', str(ROOT / 'tools/session-dap.py')]
+                g = os.path.join(d, 'golden')
+                p = subprocess.run(tool + ['capture', '--adapter', STANDIN + ' wander', '--rows', path, '--golden', g,
+                                           '--out', os.path.join(d, 'takes')] + extra[2:],
+                                   capture_output=True, text=True, cwd=ROOT, env=env)
+                said = p.stdout.splitlines()
+                self.assertTrue(any(ln.startswith(want) for ln in said), (named, said, p.stderr))
+                if named:
+                    p = subprocess.run(tool + ['check', '--adapter', STANDIN + ' wander', '--rows', path, '--golden', g,
+                                               '--out', os.path.join(d, 'out')] + extra,
+                                       capture_output=True, text=True, cwd=ROOT, env=env)
+                    self.assertIn('PASS dap t6', p.stdout.splitlines(), p.stdout + p.stderr)
+
 
 class Selftest(unittest.TestCase):
     def test_the_selftest_passes(self):
