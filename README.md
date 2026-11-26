@@ -43,7 +43,14 @@ closure and the seven oracle, producer and target binaries. The Linux image uses
 archive snapshot and a digest-checked certificate bootstrap; an index failure
 stops the build. The bootstrap is the snapshot's own `ca-certificates`
 package, kept in `ci/bootstrap/` by SHA-256, so the image build fetches
-nothing before apt. The macOS symbol oracle is
+nothing before apt. Hosted CI's Linux job builds the image only when its
+pins change: it restores the image from a cache entry keyed on the five pin
+files (`tools/oracle-image-key`, the key `tools/in-container` tags the image
+with), loads it, and sets `SNIFF_IMAGE_RESTORED=1` so that `tools/in-container`
+uses it as it is. A restored image is diffed against `ci/packages.txt` and
+`ci/oracle-binaries.lock` exactly as a built one is. Only a run on trunk saves
+an entry, on a miss and once those diffs pass; a pull request's run reads
+trunk's entry and saves none. The macOS symbol oracle is
 also pinned in `sniff-oracle.toml`. The symbol guard checks `--version` and
 SHA-256 before fixture work on either platform; a mismatched PATH binary is
 refused by name. Nothing is installed globally. Built fixture binaries and
