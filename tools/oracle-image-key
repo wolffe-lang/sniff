@@ -1,0 +1,63 @@
+#!/usr/bin/env python3
+"""The oracle image's key, and the Linux job's cache entry for it.
+
+  oracle-image-key [ROOT]            the key tools/in-container tags the image with: the first 20 hex digits of a
+                                     sha256 over the five files that pin the image (its Containerfile, the package
+                                     versions, the snapshot's date and the two scripts that read the snapshot)
+  oracle-image-key --cache [ROOT]    key=, save= and image= lines for the job's GITHUB_OUTPUT, from GITHUB_EVENT_NAME,
+                                     GITHUB_REF, RUNNER_ARCH, BRANCH_CACHE_ENTRY (a dispatch's branch-cache-entry
+                                     input) and SNIFF_IMAGE_PREFIX
+
+The job restores `key` and, when its restore missed and `save` is yes, saves the image it built under it. Only a run
+on trunk (a push, the nightly, a dispatch) saves under trunk's entry, `sniff-oracle-ARCH-KEY`. A dispatch on another
+branch with branch-cache-entry true reads and saves `sniff-oracle-branch-ARCH-KEY`, which trunk never restores (and
+GitHub keeps a branch's entries from trunk besides). Every other run, a pull request's above all, restores trunk's
+entry and saves nothing. A dispatch on trunk that asks for a branch entry is refused.
+"""
+import hashlib
+import os
+from pathlib import Path
+import sys
+
+PINS = ('ci/oracle.Containerfile', 'ci/packages.txt', 'ci/apt-snapshot', 'ci/snapshot-update.sh',
+        'ci/snapshot-install.sh')
+TRUNK = 'refs/heads/trunk'
+TRUNK_EVENTS = ('push', 'schedule', 'workflow_dispatch')
+
+
+def key(root):
+    h = hashlib.sha256()
+    for name in PINS:
+        h.update((root / name).read_bytes())
+    return h.hexdigest()[:20]
+
+
+def cache(root, env):
+    k = key(root)
+    event, ref = env.get('GITHUB_EVENT_NAME', ''), env.get('GITHUB_REF', '')
+    arch = env.get('RUNNER_ARCH', '') or 'unknown'
+    branch_entry = env.get('BRANCH_CACHE_ENTRY', '') == 'true'
+    trunk_entry = 'sniff-oracle-%s-%s' % (arch, k)
+    entry, save = trunk_entry, 'no'
+    if event == 'pull_request':
+        pass
+    elif event == 'workflow_dispatch' and branch_entry:
+        if ref == TRUNK:
+            raise SystemExit('oracle-image-key: branch-cache-entry is for a branch; on trunk the job saves trunk\'s '
+                             'entry by itself')
+        entry, save = 'sniff-oracle-branch-%s-%s' % (arch, k), 'yes'
+    elif event in TRUNK_EVENTS and ref == TRUNK:
+        save = 'yes'
+    image = '%s:%s' % (env.get('SNIFF_IMAGE_PREFIX', '') or 'sn00-oracle', k)
+    return 'key=%s\nsave=%s\nimage=%s\n' % (entry, save, image)
+
+
+def main(argv):
+    mode = argv[1:2] == ['--cache']
+    rest = argv[2:] if mode else argv[1:]
+    root = Path(rest[0]) if rest else Path(__file__).resolve().parent.parent
+    sys.stdout.write(cache(root, os.environ) if mode else key(root) + '\n')
+
+
+if __name__ == '__main__':
+    main(sys.argv)
