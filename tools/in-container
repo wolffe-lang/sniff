@@ -16,7 +16,13 @@ key=$(python3 -I "$root/tools/oracle-image-key" "$root")
 image="${SNIFF_IMAGE_PREFIX:-sn00-oracle}:$key"
 build_args=(--build-arg "BUILD_CPUS=$cpus")
 if [ -n "${SNIFF_BUILD_MEMORY:-}" ]; then build_args+=(--memory "$SNIFF_BUILD_MEMORY"); fi
-"$engine" build "${build_args[@]}" -f "$root/ci/oracle.Containerfile" -t "$image" "$root"
+# SNIFF_IMAGE_RESTORED=1: the Linux job loaded this image from its cache, so it is used as it is; without the
+# switch, or with no image under the tag, it is built. The pin diffs below run either way.
+if [ "${SNIFF_IMAGE_RESTORED:-0}" = 1 ] && "$engine" image inspect "$image" > /dev/null 2>&1; then
+  echo "oracle image $image restored: not built"
+else
+  "$engine" build "${build_args[@]}" -f "$root/ci/oracle.Containerfile" -t "$image" "$root"
+fi
 mkdir -p "$root/target/oracle"
 "$engine" image inspect "$image" --format '{{.Id}}' | tee "$root/target/oracle/image-id.txt"
 for file in oracle-packages.txt oracle-binaries.txt; do
