@@ -546,7 +546,7 @@ fn dap_attach(mut s: Session, m: dap.Message) {
     s.adapter.ended = false
     let none: List[int] = []
     let thread = if s.thr.len > 0 { s.thr[s.thr_cur].num } else { 1 }
-    send_event(mut s, "stopped", dap_stopped(dap_stop_attach, thread, none, false))
+    send_event(mut s, "stopped", dap_stopped(dap_stop_step, thread, none, false))
 }
 
 /// attach with target: a remote stub, connected to as `target remote HOST:PORT` does (remote_target.lu), stopped
