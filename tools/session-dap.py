@@ -3,9 +3,9 @@
 output, records every message both ways, and holds what the adapter answers to the row's expectations.
 
   session-dap.py check (--sniff PATH | --adapter 'CMD ARGS…') --rows FILE --out DIR [--only REGEX]
-                       [--fixtures DIR --sources DIR --cc gcc|clang] [--golden DIR]
+                       [--fixtures DIR --sources DIR --cc gcc|clang] [--cores DIR] [--golden DIR]
   session-dap.py capture --adapter 'CMD ARGS…' --rows FILE --out DIR --golden DIR [--only REGEX]
-                       [--fixtures DIR --sources DIR --cc gcc|clang] [--identity TEXT]
+                       [--fixtures DIR --sources DIR --cc gcc|clang] [--cores DIR] [--identity TEXT]
   session-dap.py skip --rows FILE --reason TEXT --expect N [--program yes|no]
   session-dap.py selftest
 
@@ -24,13 +24,20 @@ Steps (lists in the rows file):
   ["exit", CODE]                     the adapter ends within 10 s, with CODE
   ["stderr", TEXT]                   after the end, a line of the adapter's standard error holds TEXT
   ["sleep", SECONDS]
+  ["spawn", ARGV]                    the client starts ARGV itself (its own child, from the row's directory), waits for
+                                     its `ready PID` line and then for it to sleep (state S), and notes its pid; an
+                                     attach then stops it where it sleeps. At the row's end a child still running is
+                                     ended by its recorded pid (noted `killed`), else its exit is noted
+  ["says", TEXT, SECONDS?]           the spawned program's output holds TEXT within SECONDS (10): a red when not
 EXPECT: {"success": bool, "message": text, "body_true": [names]: exactly these body members are true and no other
 member is}.
 Placeholders, resolved when a step is sent: "@PROG@", "@SRC@" and "@CWD@" inside strings (from the row's prog and
 src); "@THREAD@" (the last consumed stopped event's threadId, else the first thread of the last threads response,
 else the first thread a thread event reported started); "@FRAMEk@", "@SCOPEk@", "@VARk@" (the k-th frame id, scope
 variablesReference or nonzero variable reference of the last stackTrace, scopes or variables response); "@MEMREF@"
-(the last successful evaluate's memoryReference, else the first 0x… address in its result).
+(the last successful evaluate's memoryReference, else the first 0x… address in its result); "@PID@" (the spawned
+program's pid); "@CORE@" (the row's "core", @CC@ named, as CORES/NAME.core: --cores, else target/cores/s2 beside the
+fixtures, where tools/session.py writes them; a core not there is a fault).
 
 `--program no` takes only the rows that run no program, `yes` only those that do (a host with no fixtures or no
 Linux process runs the first; `skip` names the second, each `SKIP dap ROW reason=TEXT`, and fails unless there are N).
@@ -51,7 +58,7 @@ they are sniff's. `check` normalises sniff's transcript the same way, applies th
 sides, and compares; the first difference is a red (`FAIL dap ROW golden: …`). A golden that is missing, or whose
 requests differ from the row's, is a fault. Normalising:
   seq / request_seq          dropped (the client numbers its requests; the adapter its own messages)
-  thread, frame, variables, breakpoint, source and memory references, systemProcessId   each renamed by first
+  thread, frame, variables, breakpoint, source and memory references, systemProcessId and pid   each renamed by first
                              appearance (T1, F1, V1, B1, S1, M1, P1; a scope's own id V)
   the repository's root      @ROOT@ (a golden taken in one checkout holds in another)
   0x… in text                <ADDR>; a process id in text ("process N", "pid N", "ready N", "thread N", "LWP N") <PID>
@@ -163,7 +170,7 @@ class Adapter:
 # the repository's root as given and as resolved: the fixtures and their sources are under it
 ROOTS = sorted({str(ROOT), os.path.realpath(str(ROOT))}, key=len, reverse=True)
 IDKEYS = {'threadId': 'T', 'frameId': 'F', 'variablesReference': 'V', 'memoryReference': 'M', 'breakpointId': 'B',
-          'sourceReference': 'S', 'systemProcessId': 'P'}
+          'sourceReference': 'S', 'systemProcessId': 'P', 'pid': 'P'}
 ID_IN = {'stackFrames': 'F', 'threads': 'T', 'breakpoints': 'B', 'breakpoint': 'B', 'scopes': 'V'}
 UNCOMPARED = ('module', 'loadedSource')
 
@@ -268,7 +275,71 @@ def records_of(path):
     return [json.loads(line) for line in Path(path).read_text().splitlines() if line.strip()]
 
 
-def run_row(row, argv, fixtures, sources, cc, out):
+def process_state(pid):
+    """The state letter of process PID (S sleeping, R running, …): /proc/PID/status where there is one, else ps."""
+    status = Path('/proc/%d/status' % pid)
+    if status.exists():
+        for ln in status.read_text(errors='replace').splitlines():
+            if ln.startswith('State:') and len(ln.split()) > 1:
+                return ln.split()[1]
+        return ''
+    p = subprocess.run(['ps', '-o', 'stat=', '-p', str(pid)], capture_output=True, text=True)
+    return p.stdout.strip()[:1]
+
+
+class Child:
+    """A program the client starts itself (a row's `spawn`): its output read line by line as it comes."""
+
+    def __init__(self, argv, cwd):
+        self.p = subprocess.Popen(argv, cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                  stderr=subprocess.STDOUT)
+        self.lines = []
+        self.t = threading.Thread(target=self.read, daemon=True)
+        self.t.start()
+
+    def read(self):
+        for raw in self.p.stdout:
+            self.lines.append(raw.decode('utf-8', 'replace').rstrip('\n'))
+
+    def says(self, text, seconds):
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            if any(text in ln for ln in self.lines):
+                return True
+            time.sleep(0.05)
+        return any(text in ln for ln in self.lines)
+
+    def ready(self):
+        """Wait for `ready PID`, then for the program to sleep (an attach then stops it where it sleeps, as the CLI
+        attach rows wait for state S): its pid, or a Fault."""
+        deadline = time.monotonic() + TIMEOUT
+        while not any(ln.startswith('ready ') for ln in self.lines):
+            if self.p.poll() is not None or time.monotonic() > deadline:
+                self.t.join(1)
+                if any(ln.startswith('ready ') for ln in self.lines):
+                    break
+                raise Fault('the program never said ready (%s)' % ('it exited %d' % self.p.returncode
+                                                                    if self.p.poll() is not None else 'in %gs' % TIMEOUT))
+            time.sleep(0.02)
+        while process_state(self.p.pid) != 'S':
+            if self.p.poll() is not None or time.monotonic() > deadline:
+                raise Fault('the program never slept after it said ready')
+            time.sleep(0.02)
+        return self.p.pid
+
+    def end(self):
+        """'killed' when it was still running (ended by its recorded pid), else 'exited N'."""
+        if self.p.poll() is None:
+            self.p.kill()
+            self.p.wait()
+            how = 'killed'
+        else:
+            how = 'exited %d' % self.p.returncode
+        self.t.join(1)
+        return how
+
+
+def run_row(row, argv, fixtures, sources, cc, out, cores=''):
     """Run one row: returns (status, reds). status is 'ok' or 'fault: …'; reds lists each comparison that failed."""
     name = row['name']
     if row.get('prog', '-') == '-':
@@ -289,10 +360,22 @@ def run_row(row, argv, fixtures, sources, cc, out):
 
     state = {'thread': None, 'frames': [], 'scopes': [], 'vars': [], 'threads': [], 'started': [], 'memref': None}
     pending, posted, seq = [], {}, [0]
+    child = [None]
     a = Adapter(argv, cwd, os.path.join(out, name + '.stderr'))
 
     def subst(v):
         if isinstance(v, str):
+            if v == '@PID@':
+                if child[0] is None:
+                    raise Fault('no program spawned for @PID@')
+                return child[0].p.pid
+            if v == '@CORE@':
+                if not row.get('core'):
+                    raise Fault('the row names no core for @CORE@')
+                path = os.path.join(cores, row['core'].replace('@CC@', cc) + '.core')
+                if not os.path.isfile(path):
+                    raise Fault('no core at %s' % path)
+                return path
             if v == '@THREAD@':
                 drain()
                 for pick in (state['thread'],) + tuple(state['threads'][:1]) + tuple(state['started'][:1]):
@@ -477,6 +560,16 @@ def run_row(row, argv, fixtures, sources, cc, out):
                 text = Path(a.err_path).read_text(errors='replace')
                 if not any(step[1] in ln for ln in text.splitlines()):
                     reds.append('stderr: no line holds %r' % step[1])
+            elif op == 'spawn':
+                if child[0] is not None:
+                    raise Fault('a row spawns one program')
+                child[0] = Child([str(x) for x in subst(step[1])], cwd)
+                rec('note', {'spawned': child[0].ready()})
+            elif op == 'says':
+                if child[0] is None:
+                    raise Fault('no program spawned for says')
+                if not child[0].says(step[1], float(step[2]) if len(step) > 2 else 10.0):
+                    reds.append('says: the program did not say %r' % step[1])
             else:
                 raise Fault('no step %r' % (op,))
     except Fault as f:
@@ -492,9 +585,19 @@ def run_row(row, argv, fixtures, sources, cc, out):
             break
         rec('a2c', m)
     a.end()
+    if child[0] is not None:
+        rec('note', {'child': child[0].end(), 'said': child[0].lines[-5:]})
     rec('note', {'status': status, 'reds': reds, 'adapter_exit': a.p.returncode})
     log.close()
     return status, reds
+
+
+def cores_of(args):
+    """Where the rows' cores are: --cores, else target/cores/s2 beside the fixtures (where tools/session.py writes
+    them), else nowhere."""
+    if args.cores:
+        return os.path.abspath(args.cores)
+    return str(Path(args.fixtures).resolve().parent / 'cores' / 's2') if args.fixtures else ''
 
 
 def selected(row, args):
@@ -537,7 +640,7 @@ def check(args):
                 nfail += 1
                 continue
             golden = json.loads(gp.read_text())
-        status, reds = run_row(row, argv, args.fixtures or '', args.sources or '', args.cc, args.out)
+        status, reds = run_row(row, argv, args.fixtures or '', args.sources or '', args.cc, args.out, cores_of(args))
         if status == 'ok' and golden is not None:
             try:
                 names = row.get('differences', [])
@@ -576,7 +679,7 @@ def capture(args):
         for n in (1, 2):
             out = os.path.join(args.out, 'take%d' % n)
             os.makedirs(out, exist_ok=True)
-            status, _ = run_row(row, argv, args.fixtures or '', args.sources or '', args.cc, out)
+            status, _ = run_row(row, argv, args.fixtures or '', args.sources or '', args.cc, out, cores_of(args))
             if status != 'ok':
                 why = 'take %d %s' % (n, status)
                 break
@@ -647,6 +750,7 @@ def main():
     c.add_argument('--fixtures', default='')
     c.add_argument('--sources', default='')
     c.add_argument('--cc', default='gcc')
+    c.add_argument('--cores', default='')
     c.add_argument('--golden', default=str(GOLDEN))
     c.add_argument('--program', choices=('yes', 'no', 'any'), default='any')
     s = sub.add_parser('skip')
@@ -664,6 +768,7 @@ def main():
     k.add_argument('--fixtures', default='')
     k.add_argument('--sources', default='')
     k.add_argument('--cc', default='gcc')
+    k.add_argument('--cores', default='')
     k.add_argument('--identity', default='')
     sub.add_parser('selftest')
     args = p.parse_args()
