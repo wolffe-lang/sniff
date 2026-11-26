@@ -190,6 +190,51 @@ pub fn dap_process(name: str, pid: int, attach: bool) -> json.Value {
     json.from_map(p)
 }
 
+/// launch's env as the program's environment, NAME=VALUE sorted by name, and why it is refused ("" when it is not):
+/// exactly the object, as the GDB manual says gdb sets it, plus PWD=cwd as the shell that starts the pinned gdb's
+/// program adds it (measured: an env of SNIFF_ROW and LC_ALL gives the names LC_ALL PWD SNIFF_ROW). A PWD the object
+/// gives is kept as given.
+pub fn dap_env(e: json.Value, cwd: str) -> (List[str], str) {
+    var out: List[str] = []
+    let names = json.keys(e) else { return (out, "launch's env is not an object") }
+    var has_pwd = false
+    for k in names {
+        let v = json.get(e, k) else { continue }
+        let text = json.as_str(v) else { return (out, "launch's env value for {k} is not a string") }
+        if k == "PWD" { has_pwd = true }
+        (mut out).push("{k}={text}")
+    }
+    if !has_pwd { (mut out).push("PWD={cwd}") }
+    sort_strs(mut out)
+    (out, "")
+}
+
+/// Sort by the bytes, an insertion sort (an environment is short).
+fn sort_strs(mut xs: List[str]) {
+    var i = 1
+    while i < xs.len {
+        var j = i
+        while j > 0 && bytes_before(xs[j], xs[j - 1]) {
+            let t = xs[j]
+            xs[j] = xs[j - 1]
+            xs[j - 1] = t
+            j -= 1
+        }
+        i += 1
+    }
+}
+
+fn bytes_before(a: str, b: str) -> bool {
+    let x = a.bytes()
+    let y = b.bytes()
+    var i = 0
+    while i < x.len && i < y.len {
+        if x[i] != y[i] { return (x[i] as int) < (y[i] as int) }
+        i += 1
+    }
+    x.len < y.len
+}
+
 // ---- the wire ----
 
 fn obj(m: Map[str, json.Value]) -> json.Value { json.from_map(m) }
