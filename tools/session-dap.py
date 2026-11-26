@@ -29,6 +29,9 @@ Steps (lists in the rows file):
                                      attach then stops it where it sleeps. At the row's end a child still running is
                                      ended by its recorded pid (noted `killed`), else its exit is noted
   ["says", TEXT, SECONDS?]           the spawned program's output holds TEXT within SECONDS (10): a red when not
+  ["boot"]                           a target row's machine: PAX's console image through PAX's tools/qemu-run with
+                                     its gdbstub on a free port (--kernel, --image, --pax, --qemu, --accel); at the
+                                     row's end it is ended by its recorded pid if still running 10 s on
 EXPECT: {"success": bool, "message": text, "body_true": [names]: exactly these body members are true and no other
 member is}.
 Placeholders, resolved when a step is sent: "@PROG@", "@SRC@" and "@CWD@" inside strings (from the row's prog and
@@ -37,10 +40,13 @@ else the first thread a thread event reported started); "@FRAMEk@", "@SCOPEk@", 
 variablesReference or nonzero variable reference of the last stackTrace, scopes or variables response); "@MEMREF@"
 (the last successful evaluate's memoryReference, else the first 0x… address in its result); "@PID@" (the spawned
 program's pid); "@CORE@" (the row's "core", @CC@ named, as CORES/NAME.core: --cores, else target/cores/s2 beside the
-fixtures, where tools/session.py writes them; a core not there is a fault).
+fixtures, where tools/session.py writes them; a core not there is a fault); "@TARGET@" (127.0.0.1:PORT of the
+booted gdbstub) and "@KERNEL@" (--kernel).
 
 `--program no` takes only the rows that run no program, `yes` only those that do (a host with no fixtures or no
 Linux process runs the first; `skip` names the second, each `SKIP dap ROW reason=TEXT`, and fails unless there are N).
+`target` takes only the rows that need a kernel under KVM ("needs": "kvm"), which yes and no leave out: the record
+host runs them (tools/gate-remote), every other host skips them by count.
 
 A row passes when every expectation holds: `PASS dap ROW`. An expectation that does not hold is a red by comparison:
 `FAIL dap ROW WHAT: …`. A timeout, an adapter that has gone away (one fault, `the adapter went away`, whether a write
@@ -70,12 +76,16 @@ Named differences (a row's "differences"), applied to both sides:
   launch-start      gdb starts the program at launch and answers configurationDone notStopped; sniff starts it at
                     configurationDone, which it answers success: true
   registers-scope   the Registers scope holds the general registers `info registers` prints: its count is not
-                    compared"""
+                    compared
+  interrupt-stop    the stack after a pause is where the interrupt found the machine: not compared; check prints
+                    its first frame on a LOCATION line (recorded, never gated), and a stack with no frame is a red
+Normalising also names the kernel a target row is given (@KERNEL@) and the gdbstub's port (127.0.0.1:PORT)."""
 import argparse
 import json
 import os
 import queue
 import re
+import socket
 import subprocess
 import sys
 import tempfile
@@ -175,10 +185,11 @@ ID_IN = {'stackFrames': 'F', 'threads': 'T', 'breakpoints': 'B', 'breakpoint': '
 UNCOMPARED = ('module', 'loadedSource')
 
 
-def normalise(records, differences):
+def normalise(records, differences, named=None):
     """A transcript (the records of OUT/ROW.jsonl) as compared: {'sent', 'responses', 'events'}, with the named
-    differences applied."""
+    differences applied. NAMED maps paths outside the repository (the kernel a target row is given) to their names."""
     maps = {}
+    named = sorted((named or {}).items(), key=lambda kv: len(kv[0]), reverse=True)
 
     def name(kind, v):
         if v in (0, None, '') or isinstance(v, bool):
@@ -206,9 +217,12 @@ def normalise(records, differences):
         if isinstance(v, list):
             return [walk(x, ctx) for x in v]
         if isinstance(v, str):
+            for path, as_ in named:
+                v = v.replace(path, as_)
             for r in ROOTS:
                 # the root as a path's leading part only (a checkout at /work leaves /workers alone)
                 v = re.sub(re.escape(r) + r'(?=/|$|[^A-Za-z0-9_.+-])', '@ROOT@', v)
+            v = re.sub(r'\b127\.0\.0\.1:\d+\b', '127.0.0.1:PORT', v)
             v = re.sub(r'0x[0-9a-fA-F]+', '<ADDR>', v)
             v = re.sub(r'\b(process|pid|ready|thread) \d+', r'\1 <PID>', v, flags=re.I)
             return re.sub(r'\bLWP \d+', 'LWP <PID>', v)
@@ -239,7 +253,25 @@ def registers_scope(side):
                     s['namedVariables'] = '<registers>'
 
 
-DIFFERENCES = {'launch-start': launch_start, 'registers-scope': registers_scope}
+def interrupt_stop(side):
+    """The stack after a pause is where the interrupt found the machine: timing's, never compared (the LOCATION line
+    names it, recorded and never gated)."""
+    before = 0
+    for m in side['sent']:
+        if m.get('command') == 'pause':
+            break
+        before += m.get('command') == 'stackTrace'
+    else:
+        return
+    n = 0
+    for r in side['responses']:
+        if r.get('command') == 'stackTrace':
+            if n >= before and 'body' in r:
+                r['body'] = '<interrupt-stop>'
+            n += 1
+
+
+DIFFERENCES = {'launch-start': launch_start, 'registers-scope': registers_scope, 'interrupt-stop': interrupt_stop}
 
 
 def differ(side, names):
@@ -339,7 +371,74 @@ class Child:
         return how
 
 
-def run_row(row, argv, fixtures, sources, cc, out, cores=''):
+def free_port():
+    s = socket.socket()
+    s.bind(('127.0.0.1', 0))
+    port = s.getsockname()[1]
+    s.close()
+    return port
+
+
+def listening(port, limit):
+    end = time.monotonic() + limit
+    while time.monotonic() < end:
+        try:
+            socket.create_connection(('127.0.0.1', port), 0.5).close()
+            return True
+        except OSError:
+            time.sleep(0.05)
+    return False
+
+
+class Boot:
+    """PAX's console image booted through PAX's tools/qemu-run with its gdbstub on a free port (the processor frozen
+    at reset), as the S8 kernel rows boot it."""
+
+    def __init__(self, target, row, out):
+        self.port = free_port()
+        name = row['name']
+        env = dict(os.environ)
+        env.update({'PAX_QEMU': target['qemu'], 'PAX_BUILD': os.path.join(out, name + '.qemu'),
+                    'TMPDIR': os.path.join(out, name + '.tmp'), 'SHELL': '/bin/sh'})
+        os.makedirs(env['PAX_BUILD'], exist_ok=True)
+        os.makedirs(env['TMPDIR'], exist_ok=True)
+        self.argv = [os.path.join(target['pax'], 'tools', 'qemu-run'), '--accel', target['accel'], '--gdb', str(self.port),
+                     '--timeout', str(row.get('qemu_timeout', 300)), '--serial', os.path.join(out, name + '.serial'),
+                     target['image']]
+        self.p = subprocess.Popen(self.argv, stdout=open(os.path.join(out, name + '.qemu-run'), 'w'),
+                                  stderr=subprocess.STDOUT, env=env)
+        if not listening(self.port, TIMEOUT):
+            self.p.terminate()
+            self.p.wait()
+            raise Fault('qemu-run never listened on 127.0.0.1:%d' % self.port)
+
+    def end(self):
+        """'ended N', or 'terminated' when it was still running 10 s after the row (TERM to its recorded pid)."""
+        try:
+            self.p.wait(10)
+            return 'ended %d' % self.p.returncode
+        except subprocess.TimeoutExpired:
+            self.p.terminate()
+            self.p.wait()
+            return 'terminated'
+
+
+def location(records):
+    """The first frame of the first stack after a pause (interrupt-stop's LOCATION line), or None."""
+    paused, seqs = False, set()
+    for r in records:
+        m = r['msg']
+        if r['dir'] == 'c2a' and m.get('command') == 'pause':
+            paused = True
+        elif r['dir'] == 'c2a' and paused and m.get('command') == 'stackTrace':
+            seqs.add(m.get('seq'))
+        elif r['dir'] == 'a2c' and m.get('type') == 'response' and m.get('request_seq') in seqs:
+            frames = (m.get('body') or {}).get('stackFrames') or []
+            return frames[0] if frames else {}
+    return None
+
+
+def run_row(row, argv, fixtures, sources, cc, out, cores='', target=None):
     """Run one row: returns (status, reds). status is 'ok' or 'fault: …'; reds lists each comparison that failed."""
     name = row['name']
     if row.get('prog', '-') == '-':
@@ -361,10 +460,19 @@ def run_row(row, argv, fixtures, sources, cc, out, cores=''):
     state = {'thread': None, 'frames': [], 'scopes': [], 'vars': [], 'threads': [], 'started': [], 'memref': None}
     pending, posted, seq = [], {}, [0]
     child = [None]
+    boot = [None]
     a = Adapter(argv, cwd, os.path.join(out, name + '.stderr'))
 
     def subst(v):
         if isinstance(v, str):
+            if v == '@TARGET@':
+                if boot[0] is None:
+                    raise Fault('nothing booted for @TARGET@')
+                return '127.0.0.1:%d' % boot[0].port
+            if v == '@KERNEL@':
+                if not target:
+                    raise Fault('the target rows need --kernel, --image, --pax and --qemu')
+                return target['kernel']
             if v == '@PID@':
                 if child[0] is None:
                     raise Fault('no program spawned for @PID@')
@@ -560,6 +668,11 @@ def run_row(row, argv, fixtures, sources, cc, out, cores=''):
                 text = Path(a.err_path).read_text(errors='replace')
                 if not any(step[1] in ln for ln in text.splitlines()):
                     reds.append('stderr: no line holds %r' % step[1])
+            elif op == 'boot':
+                if not target:
+                    raise Fault('the target rows need --kernel, --image, --pax and --qemu')
+                boot[0] = Boot(target, row, out)
+                rec('note', {'booted': {'argv': boot[0].argv, 'port': boot[0].port}})
             elif op == 'spawn':
                 if child[0] is not None:
                     raise Fault('a row spawns one program')
@@ -587,6 +700,8 @@ def run_row(row, argv, fixtures, sources, cc, out, cores=''):
     a.end()
     if child[0] is not None:
         rec('note', {'child': child[0].end(), 'said': child[0].lines[-5:]})
+    if boot[0] is not None:
+        rec('note', {'qemu': boot[0].end()})
     rec('note', {'status': status, 'reds': reds, 'adapter_exit': a.p.returncode})
     log.close()
     return status, reds
@@ -600,11 +715,29 @@ def cores_of(args):
     return str(Path(args.fixtures).resolve().parent / 'cores' / 's2') if args.fixtures else ''
 
 
+def target_of(args):
+    """The target rows' kernel, image, PAX tree, QEMU and accelerator, or None when any is not given."""
+    if not all(getattr(args, k, '') for k in ('kernel', 'image', 'pax', 'qemu')):
+        return None
+    return {'kernel': os.path.abspath(args.kernel), 'image': os.path.abspath(args.image), 'pax': os.path.abspath(args.pax),
+            'qemu': args.qemu, 'accel': args.accel}
+
+
+def named_of(args):
+    return {os.path.abspath(args.kernel): '@KERNEL@'} if getattr(args, 'kernel', '') else {}
+
+
 def selected(row, args):
+    """--program yes: the rows that run a program here; no: the rows that run none; target: the rows that need a kernel
+    under KVM (left out of yes and no); any: all."""
     if args.only and not re.search(args.only, row['name']):
         return False
+    if args.program == 'any':
+        return True
+    if row.get('needs'):
+        return args.program == 'target'
     has = row.get('prog', '-') != '-'
-    return args.program == 'any' or (args.program == 'yes') == has
+    return args.program != 'target' and (args.program == 'yes') == has
 
 
 def skip(args):
@@ -640,11 +773,19 @@ def check(args):
                 nfail += 1
                 continue
             golden = json.loads(gp.read_text())
-        status, reds = run_row(row, argv, args.fixtures or '', args.sources or '', args.cc, args.out, cores_of(args))
+        status, reds = run_row(row, argv, args.fixtures or '', args.sources or '', args.cc, args.out, cores_of(args),
+                               target_of(args))
+        if status == 'ok' and 'interrupt-stop' in row.get('differences', []):
+            # where the pause found the machine: recorded, never gated; a stop with no frame is a red
+            f = location(records_of(os.path.join(args.out, row['name'] + '.jsonl')))
+            if not f or not f.get('name'):
+                reds.append('interrupt-stop: the stack after the pause has no frame')
+            else:
+                print('LOCATION dap %s frame=%s line=%s' % (row['name'], f.get('name'), f.get('line')))
         if status == 'ok' and golden is not None:
             try:
                 names = row.get('differences', [])
-                mine = normalise(records_of(os.path.join(args.out, row['name'] + '.jsonl')), names)
+                mine = normalise(records_of(os.path.join(args.out, row['name'] + '.jsonl')), names, named_of(args))
                 d = first_difference(differ(golden, names), mine)
                 if d and d[0] == 'sent':
                     status = 'fault: the golden is stale: ' + d[1]
@@ -679,11 +820,12 @@ def capture(args):
         for n in (1, 2):
             out = os.path.join(args.out, 'take%d' % n)
             os.makedirs(out, exist_ok=True)
-            status, _ = run_row(row, argv, args.fixtures or '', args.sources or '', args.cc, out, cores_of(args))
+            status, _ = run_row(row, argv, args.fixtures or '', args.sources or '', args.cc, out, cores_of(args),
+                                target_of(args))
             if status != 'ok':
                 why = 'take %d %s' % (n, status)
                 break
-            takes.append(normalise(records_of(os.path.join(out, row['name'] + '.jsonl')), []))
+            takes.append(normalise(records_of(os.path.join(out, row['name'] + '.jsonl')), [], named_of(args)))
         if why:
             print('FAULT dap %s %s' % (row['name'], why))
             nfault += 1
@@ -752,12 +894,12 @@ def main():
     c.add_argument('--cc', default='gcc')
     c.add_argument('--cores', default='')
     c.add_argument('--golden', default=str(GOLDEN))
-    c.add_argument('--program', choices=('yes', 'no', 'any'), default='any')
+    c.add_argument('--program', choices=('yes', 'no', 'target', 'any'), default='any')
     s = sub.add_parser('skip')
     s.add_argument('--rows', required=True)
     s.add_argument('--reason', required=True)
     s.add_argument('--expect', type=int, required=True)
-    s.add_argument('--program', choices=('yes', 'no', 'any'), default='any')
+    s.add_argument('--program', choices=('yes', 'no', 'target', 'any'), default='any')
     s.add_argument('--only', default='')
     k = sub.add_parser('capture')
     k.add_argument('--adapter', required=True)
@@ -771,6 +913,13 @@ def main():
     k.add_argument('--cores', default='')
     k.add_argument('--identity', default='')
     sub.add_parser('selftest')
+    for q in (c, k):
+        # the target rows: PAX's console image booted under QEMU (tools/qemu-run), its kernel the program
+        q.add_argument('--kernel', default='')
+        q.add_argument('--image', default='')
+        q.add_argument('--pax', default='')
+        q.add_argument('--qemu', default='')
+        q.add_argument('--accel', choices=('kvm', 'tcg'), default='kvm')
     args = p.parse_args()
     if args.mode == 'selftest':
         return selftest()
