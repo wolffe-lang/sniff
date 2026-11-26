@@ -16,6 +16,7 @@
 
 use dap
 use platform
+use std.env
 use std.fs
 use std.json
 
@@ -405,7 +406,7 @@ fn dap_request(mut s: Session, m: dap.Message) {
 
 /// launch: the program is loaded now and started at configurationDone.
 fn dap_launch(mut s: Session, m: dap.Message) {
-    for name in ["stopOnEntry", "cwd", "env"] {
+    for name in ["stopOnEntry", "env"] {
         if arg_has(m, name) {
             answer(mut s, m, false, "sniff does not support the launch argument {name}", json.null())
             return
@@ -414,6 +415,16 @@ fn dap_launch(mut s: Session, m: dap.Message) {
     let program = arg_str(m, "program")
     if program.len() == 0 { answer(mut s, m, false, "launch needs a program", json.null()); return }
     if s.adapter.launched || s.alive { answer(mut s, m, false, "a program is already launched", json.null()); return }
+    // cwd: sniff's own directory changes, as gdb's does (by cd), before the program is read, so a relative program
+    // is found from it; the program starts there
+    let cwd = arg_str(m, "cwd")
+    if cwd.len() > 0 {
+        env.set_cwd(cwd) else |e| match e {
+            not_found => { answer(mut s, m, false, "{cwd}: No such file or directory.", json.null()); return },
+            denied => { answer(mut s, m, false, "{cwd}: Permission denied.", json.null()); return },
+            _ => { answer(mut s, m, false, "{cwd}: Not a directory.", json.null()); return },
+        }
+    }
     let p = prog_load(program)
     if p.err.len() > 0 && p.data.len == 0 { answer(mut s, m, false, p.err, json.null()); return }
     s.prog = p
