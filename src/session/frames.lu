@@ -135,6 +135,39 @@ pub const unwind_after_push: int = 2
 /// The fallback's rule anywhere else in a function: the frame pointer's chain, cfa = rbp + 16.
 pub const unwind_frame_pointer: int = 3
 
+/// What the unwind does after a frame (unwind_after): take the caller as the next frame,
+pub const unwind_go_on: int = 10
+/// stop with this frame the outermost,
+pub const unwind_stop: int = 11
+/// or show the caller, whose pc is 0, as the outermost frame.
+pub const unwind_last_zero: int = 12
+
+/// After a frame: stop at main (backtrace past-main) and at the function holding the program's entry point
+/// (backtrace past-entry; both off by default, the GDB manual's Backtrace), before any caller; stop when there is no
+/// caller; show a caller at pc 0 as the outermost frame where the oracle shows it (zero_shown: measured, the pinned
+/// gdb at QEMU's reset vector shows `0x0000000000000000 in ?? ()` as frame 1), else stop there; otherwise go on.
+pub fn unwind_after(at_main: bool, at_entry: bool, caller_ok: bool, caller_pc: u64, zero_shown: bool) -> int {
+    if at_main || at_entry || !caller_ok { return unwind_stop }
+    if caller_pc == 0 { return if zero_shown { unwind_last_zero } else { unwind_stop } }
+    unwind_go_on
+}
+
+/// Whether the unwind follows the pinned gdb's rules past main's callers (the entry point's function, a caller at
+/// pc 0): the Linux build, whose oracle is gdb (PAX's rows are held to gdb too).
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+fn gdb_unwind_rules() -> bool { true }
+
+/// Apple's lldb is the macOS oracle: none of gdb's rules past main's callers.
+#[cfg(target = "aarch64-apple-darwin")]
+fn gdb_unwind_rules() -> bool { false }
+
+/// Whether file_pc is in the function holding the program's entry point (its nearest symbol starts there).
+fn in_entry_func(p: Prog, file_pc: u64) -> bool {
+    if p.entry == 0 { return false }
+    let k = sym_at(p, file_pc)
+    k >= 0 && p.syms[k].addr == p.entry
+}
+
 /// Which rule a frame takes: whether its pc is in code the session knows (the program's image or a library's),
 /// is a ret, is at or before its function's `push %rbp`, or just past it. A pc in no code (a call through a null
 /// pointer stops at 0) is where a call just went: the return address is at the stack pointer and the frame pointer
@@ -255,8 +288,8 @@ fn unwind_rules(s: Session, f: Frame, fdata: List[byte], fde: CfiFde, file_pc: u
     Frame { pc: regs[ra], cfa: cfa, regs: regs, func: -1, fallback: false, cfa_ok: true, basis: "cfi" }
 }
 
-/// Compute the stack of the stopped child. Stops after the frame of main
-/// (backtrace past-main off), at an undefined return address, or at 4096.
+/// Compute the stack of the stopped child. Stops after the frame of main (backtrace past-main off) or of the entry
+/// point's function (past-entry off), at an undefined return address, after a caller at pc 0, or at 4096.
 fn compute_frames(mut s: Session) {
     s.frames = []
     s.frames_ok = true
@@ -299,9 +332,17 @@ fn compute_frames(mut s: Session) {
         }
         if next_ok { f.cfa = caller.cfa; f.cfa_ok = true }
         (mut s.frames).push(copy f)
-        if stop_at != 0 && start == stop_at { return }
-        if !next_ok { return }
-        if caller.pc == 0 { return }
+        let gdb = gdb_unwind_rules()
+        let after = unwind_after(stop_at != 0 && start == stop_at, gdb && in_entry_func(s.prog, file_pc), next_ok, caller.pc, gdb)
+        if after == unwind_stop { return }
+        if after == unwind_last_zero {
+            // the caller at pc 0 is the outermost frame, and nothing is unwound past it
+            var z = copy caller
+            z.func = -1
+            z.cfa_ok = false
+            (mut s.frames).push(z)
+            return
+        }
         // the stack grows downward, so a caller's sp is above the callee's; at a function's first
         // instruction on arm64 the CFA equals sp, so equality is allowed when the pc moved
         let csp = caller.regs[platform.arch_sp_col()]
