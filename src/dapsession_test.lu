@@ -96,9 +96,34 @@ fn stopped_row() {
     print("PASS session-dap-stopped")
 }
 
+fn parsed(text: str) -> json.Value { json.parse(text) else { json.null() } }
+
+fn attach_row() {
+    // what an attach needs: a pid or a target (the pinned gdb's words when neither is given); coreFile is refused by
+    // name, whatever else comes with it (the pinned gdb takes no core over DAP, so no row can hold sniff to one)
+    assert(session.dap_attach_check(parsed("{{\"program\": \"/w/prog\", \"pid\": 22}}")) == "")
+    assert(session.dap_attach_check(parsed("{{\"program\": \"/w/k.elf\", \"target\": \"127.0.0.1:41001\"}}")) == "")
+    assert(session.dap_attach_check(parsed("{{\"program\": \"/w/prog\"}}")) == "attach requires either 'pid' or 'target'")
+    let core = "sniff does not support the attach argument coreFile"
+    assert(session.dap_attach_check(parsed("{{\"program\": \"/w/prog\", \"coreFile\": \"/w/core\"}}")) == core)
+    assert(session.dap_attach_check(parsed("{{\"pid\": 22, \"coreFile\": \"/w/core\"}}")) == core)
+    // the process event: how the program was started, its path and its process id
+    let a = session.dap_process("/w/prog", 22, true)
+    assert(field_str(a, "startMethod") == "attach" && field_str(a, "name") == "/w/prog" && field_int(a, "systemProcessId") == 22)
+    assert(field_bool(a, "isLocalProcess") == 1)
+    assert(field_str(session.dap_process("/w/prog", 23, false), "startMethod") == "process")
+    // the stop an attach makes: reason attach, every thread stopped, no breakpoint
+    let none: List[int] = []
+    let s = session.dap_stopped(session.dap_stop_attach, 1, none, false)
+    assert(field_str(s, "reason") == "attach" && field_int(s, "threadId") == 1 && field_bool(s, "allThreadsStopped") == 1)
+    assert(field_str(s, "hitBreakpointIds") == "<absent>")
+    print("PASS session-dap-attach")
+}
+
 fn main() {
     base64_row()
     frame_row()
     variable_row()
     stopped_row()
+    attach_row()
 }
