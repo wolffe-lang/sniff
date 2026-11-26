@@ -40,6 +40,96 @@ def row(name, *steps):
     return {'name': name, 'prog': '-', 'steps': list(steps)}
 
 
+SLEEPER = [sys.executable, '-I', str(ROOT / 'tests/standin_sleeper.py')]
+
+
+def run_kept(rows, extra=(), timeout='5'):
+    """As run, and each row's transcript (its records) by name."""
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, 'rows.json')
+        with open(path, 'w') as f:
+            json.dump({'schema': 1, 'rows': rows}, f)
+        out = os.path.join(d, 'out')
+        p = subprocess.run([sys.executable, '-I', str(ROOT / 'tools/session-dap.py'), 'check',
+                            '--adapter', STANDIN + ' plain', '--rows', path, '--out', out] + list(extra),
+                           capture_output=True, text=True, cwd=ROOT,
+                           env={'PATH': os.environ['PATH'], 'LC_ALL': 'C', 'SESSION_DAP_TIMEOUT': timeout})
+        recs = {}
+        for r in rows:
+            f = os.path.join(out, r['name'] + '.jsonl')
+            recs[r['name']] = [json.loads(ln) for ln in open(f)] if os.path.exists(f) else []
+        return p.returncode, p.stdout.splitlines(), recs
+
+
+def alive(pid):
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+
+ATTACH = [['post', 'attach', {'pid': '@PID@', 'program': 'x'}], ['wait', 'initialized'],
+          ['send', 'configurationDone', {}], ['reply', 'attach', {'success': True}]]
+
+
+class Attach(unittest.TestCase):
+    def test_spawn_names_the_childs_pid_and_says_reads_its_output(self):
+        rc, said, recs = run_kept([row('a1', ['spawn', SLEEPER + ['25']], INIT, *ATTACH,
+                                       ['send', 'disconnect', {'terminateDebuggee': False}], ['exit', 0],
+                                       ['says', 'done 25', 10])])
+        self.assertIn('PASS dap a1', said, said)
+        sent = [r['msg'] for r in recs['a1'] if r['dir'] == 'c2a' and r['msg'].get('command') == 'attach']
+        spawned = [r['msg']['spawned'] for r in recs['a1'] if r['dir'] == 'note' and 'spawned' in r['msg']]
+        self.assertEqual(len(spawned), 1, recs['a1'])
+        self.assertEqual(sent[0]['arguments']['pid'], spawned[0], sent)
+        self.assertIsInstance(spawned[0], int)
+
+    def test_a_line_the_child_never_says_is_a_red(self):
+        rc, said, _ = run_kept([row('a2', ['spawn', SLEEPER + ['5']], INIT, ['send', 'disconnect', {}], ['exit', 0],
+                                    ['says', 'done 99', 2])])
+        self.assertTrue(any(ln.startswith("FAIL dap a2 says: the program did not say 'done 99'") for ln in said), said)
+        self.assertFalse(any('fault:' in ln for ln in said), said)
+
+    def test_a_child_still_running_at_the_end_is_ended_by_its_pid(self):
+        rc, said, recs = run_kept([row('a3', ['spawn', SLEEPER + ['100000']], INIT, ['send', 'disconnect', {}], ['exit', 0])])
+        self.assertIn('PASS dap a3', said, said)
+        spawned = [r['msg']['spawned'] for r in recs['a3'] if r['dir'] == 'note' and 'spawned' in r['msg']]
+        ended = [r['msg']['child'] for r in recs['a3'] if r['dir'] == 'note' and 'child' in r['msg']]
+        self.assertEqual(ended, ['killed'], recs['a3'])
+        self.assertFalse(alive(spawned[0]))
+
+    def test_a_program_that_never_says_ready_is_a_fault(self):
+        rc, said, _ = run_kept([row('a4', ['spawn', [sys.executable, '-I', '-c', 'print("hello")']], INIT,
+                                    ['send', 'disconnect', {}], ['exit', 0])])
+        self.assertTrue(any(ln.startswith('FAIL dap a4 fault: the program never said ready') for ln in said), said)
+
+    def test_a_pid_placeholder_with_nothing_spawned_is_a_fault(self):
+        rc, said, _ = run_kept([row('a5', INIT, *ATTACH)])
+        self.assertTrue(any(ln.startswith('FAIL dap a5 fault: no program spawned for @PID@') for ln in said), said)
+
+    def test_core_names_the_rows_core_under_the_cores_directory(self):
+        with tempfile.TemporaryDirectory() as cores:
+            Path(cores, 'gcc-break.core').write_bytes(b'\x7fELF')
+            r = dict(row('a6', INIT, ['post', 'attach', {'program': 'x', 'coreFile': '@CORE@'}], ['wait', 'initialized'],
+                         ['send', 'configurationDone', {}], ['reply', 'attach'], ['send', 'disconnect', {}], ['exit', 0]),
+                     core='@CC@-break')
+            rc, said, recs = run_kept([r], extra=['--cores', cores, '--cc', 'gcc'])
+            self.assertIn('PASS dap a6', said, said)
+            sent = [x['msg'] for x in recs['a6'] if x['dir'] == 'c2a' and x['msg'].get('command') == 'attach']
+            self.assertEqual(sent[0]['arguments']['coreFile'], os.path.join(cores, 'gcc-break.core'))
+            Path(cores, 'gcc-break.core').unlink()
+            rc, said, _ = run_kept([r], extra=['--cores', cores, '--cc', 'gcc'])
+            self.assertTrue(any(ln.startswith('FAIL dap a6 fault: no core at ') for ln in said), said)
+
+    def test_a_pid_is_named_with_the_system_process_ids(self):
+        recs = [{'dir': 'c2a', 'msg': {'seq': 1, 'type': 'request', 'command': 'attach', 'arguments': {'pid': 4242}}},
+                {'dir': 'a2c', 'msg': {'seq': 1, 'type': 'event', 'event': 'process', 'body': {'systemProcessId': 4242}}}]
+        side = client().normalise(recs, [])
+        self.assertEqual(side['sent'][0]['arguments']['pid'], 'P1')
+        self.assertEqual(side['events'][0]['body']['systemProcessId'], 'P1')
+
+
 class Steps(unittest.TestCase):
     def test_a_session_passes(self):
         rc, said, _ = run([row('r1', INIT, ['send', 'disconnect', {}, {'success': True}], ['exit', 0])])
@@ -316,7 +406,8 @@ class RowsFile(unittest.TestCase):
                 for dname in r.get('differences', []):
                     self.assertIn(dname, client().DIFFERENCES, r['name'])
             for s in r['steps']:
-                self.assertIn(s[0], ('send', 'post', 'reply', 'wait', 'raw', 'close', 'exit', 'stderr', 'sleep'), r['name'])
+                self.assertIn(s[0], ('send', 'post', 'reply', 'wait', 'raw', 'close', 'exit', 'stderr', 'sleep',
+                                     'spawn', 'says'), r['name'])
 
 
 if __name__ == '__main__':
