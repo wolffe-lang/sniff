@@ -120,10 +120,31 @@ fn attach_row() {
     print("PASS session-dap-attach")
 }
 
+fn env_row() {
+    // launch's env: the program's environment is exactly the object, sorted by name, and PWD as the shell that starts
+    // the pinned gdb's program adds it (measured: LC_ALL PWD SNIFF_ROW for an env of SNIFF_ROW and LC_ALL)
+    let (got, why) = session.dap_env(parsed("{{\"SNIFF_ROW\": \"env-row\", \"LC_ALL\": \"C\"}}"), "/w/c/where")
+    assert(why == "" && got.len == 3)
+    assert(got[0] == "LC_ALL=C" && got[1] == "PWD=/w/c/where" && got[2] == "SNIFF_ROW=env-row")
+    // a PWD the object gives is kept as given
+    let (mine, _) = session.dap_env(parsed("{{\"PWD\": \"/elsewhere\"}}"), "/w/c/where")
+    assert(mine.len == 1 && mine[0] == "PWD=/elsewhere")
+    // an empty object is an environment of PWD alone
+    let (bare, _) = session.dap_env(parsed("{{}}"), "/w")
+    assert(bare.len == 1 && bare[0] == "PWD=/w")
+    // a value that is not a string is refused, by its name
+    let (_, bad) = session.dap_env(parsed("{{\"N\": 3}}"), "/w")
+    assert(bad == "launch's env value for N is not a string")
+    let (_, notobj) = session.dap_env(parsed("[1]"), "/w")
+    assert(notobj == "launch's env is not an object")
+    print("PASS session-dap-env")
+}
+
 fn main() {
     base64_row()
     frame_row()
     variable_row()
     stopped_row()
     attach_row()
+    env_row()
 }

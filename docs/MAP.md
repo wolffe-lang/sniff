@@ -421,8 +421,15 @@ stop shows is read from the records `bt`, `info args`, `info locals` and `print`
   `name = value`. The command language prints from them, so its rows hold the text unchanged.
 - **Launch.** `launch` loads the program and answers; `configurationDone` starts it, as the specification's
   configuration sequence has it (the pinned gdb starts it at launch: rows name that `launch-start`).
-  `stopAtBeginningOfMainSubprogram` is a temporary breakpoint at main. `stopOnEntry`, `cwd` and `env` are refused by
-  name.
+  `stopAtBeginningOfMainSubprogram` is a temporary breakpoint at main. `cwd` is entered by sniff itself before the
+  program is read, as gdb's `cd` is, so a relative program is found from it and the program starts there.
+  `stopOnEntry` and `env` are refused by name.
+- **Attach.** `attach` with `pid` traces the running process as `attach PID` does, stops it where it is, and reports
+  it at once: `initialized`, `process` (start method `attach`), each thread started, and `stopped` with reason
+  `attach`. Its `program` names the executable (sniff reads no /proc link for it). A disconnect lets the process go,
+  untraced, unless `terminateDebuggee` asks for its end; one that comes while the process runs interrupts it first.
+  `coreFile` is refused by name: the pinned gdb answers an attach with a core "attach requires either 'pid' or
+  'target'", so no row can hold sniff to one (the row returns when the pinned oracle takes cores).
 - **The program's streams.** Its standard output and error are pipes whose bytes come out as `output` events; its
   standard input is /dev/null. Nothing it writes reaches the protocol stream.
 - **While it runs** the session waits on the program and on standard input together (a wait that never blocks, then
@@ -439,6 +446,16 @@ stop shows is read from the records `bt`, `info args`, `info locals` and `print`
 The rows held to gdb (`compare: gdb` in `tests/dap-rows.json`) run over gcc's and clang's session builds on Linux and
 compare with the pinned gdb's DAP transcripts (`tests/evidence/dap/`), taken twice by `session-dap.py capture` and
 kept only when the two agreed. Normalising names ids by first appearance, addresses, process ids and the repository's
-root, and leaves out module events; the named differences are `launch-start` and `registers-scope`. On macOS those rows
-are skipped by name and their count is held (macOS follows in a later change).
+root, and leaves out module events; the named differences are `launch-start`, `registers-scope` and `interrupt-stop`.
+On macOS those rows are skipped by name and their count is held (macOS follows in a later change).
+
+The attach row starts the sleeper fixture as the client's own child, waits until it sleeps in its nap, attaches by its
+pid, and after the disconnect reads the sleeper's own last line (`done 500`: the debugger left it unharmed). The cwd
+and env rows run `c/where`, a program that reads its working directory, `SNIFF_ROW`, its environment's size and names
+into globals before it calls `seen()`; both stop in main first (`stopAtBeginningOfMainSubprogram`), because the
+pinned gdb starts a program at launch and one this short can end before a breakpoint set during configuration is in.
+The target row (`"needs": "kvm"`) boots PAX's console image through PAX's `tools/qemu-run` with QEMU's gdbstub on a
+free port and attaches to its kernel; where the pause after a `continue` finds the machine is timing's, so its stack
+is named (`interrupt-stop`: a `LOCATION` line, never compared). Only the record host boots it (`tools/gate-remote`'s
+`dap-target-kvm`); every other gate host skips it by name, its count held.
 
