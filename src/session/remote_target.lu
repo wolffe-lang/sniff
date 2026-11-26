@@ -55,6 +55,15 @@ fn remote_thread_id(s: Session, i: int) -> str {
     "Thread 1.{s.thr[i].tid} ({extra})"
 }
 
+/// The remote thread's name as the protocol carries it (`sniff --dap`'s threads): what qThreadExtraInfo names, as
+/// the pinned gdb names it over QEMU's gdbstub (`CPU#0 [running]`); `Thread 1.N` when the stub names nothing.
+fn remote_thread_name(s: Session, i: int) -> str {
+    if s.rt.len == 0 { return "Thread 1.{s.thr[i].tid}" }
+    let extra = remote.thread_extra(s.rt[0], remote.hex_u64(s.thr[i].tid as u64)) else { return "Thread 1.{s.thr[i].tid}" }
+    if extra.len() == 0 { return "Thread 1.{s.thr[i].tid}" }
+    extra
+}
+
 /// The first n bytes of t.
 fn remote_prefix(t: str, n: int) -> str {
     let b = t.bytes()
@@ -217,13 +226,16 @@ fn remote_resume(mut s: Session, step: bool) -> bool {
 }
 
 /// Wait for the remote target's stop, in 100 ms waits: between them a terminal interrupt (SIGINT) is sent on as
-/// the interrupt byte 0x03 (Interrupts), and the wait goes on for its stop reply. The stop as a wait status, as
+/// the interrupt byte 0x03 (Interrupts), and the wait goes on for its stop reply. Under `sniff --dap` the client is
+/// heard between the waits instead (dapserve.lu's dap_poll): a pause, a disconnect or terminate, or the end of its
+/// input sends the interrupt byte once. The stop as a wait status, as
 /// classify() reads a process's: a signal stop is (signal << 8) | 0x7f, an exit its status << 8, a kill its
 /// signal; -1 for a lost connection.
 fn remote_wait(mut s: Session) -> int {
     if s.rt.len == 0 { return 0 - 1 }
     var waiting = true
     var lost = false
+    var interrupted = false
     while waiting {
         var timed = false
         remote.wait_stop(mut s.rt[0], 100) else |e| match e {
@@ -231,8 +243,17 @@ fn remote_wait(mut s: Session) -> int {
             _ => { lost = true },
         }
         if lost { waiting = false } else if timed {
-            let heard = signal.poll(signal.interrupt()) else { 0 }
-            if heard != 0 { remote.interrupt_target(s.rt[0]) else { } }
+            if s.adapter.on {
+                dap_poll(mut s, 0)
+                let asked = s.adapter.pause_asked || s.adapter.ending.len > 0 || s.adapter.eof
+                if asked && !interrupted && s.rt.len > 0 {
+                    remote.interrupt_target(s.rt[0]) else { }
+                    interrupted = true
+                }
+            } else {
+                let heard = signal.poll(signal.interrupt()) else { 0 }
+                if heard != 0 { remote.interrupt_target(s.rt[0]) else { } }
+            }
         } else {
             waiting = false
         }
