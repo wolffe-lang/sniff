@@ -24,11 +24,7 @@ int main(void) {
 }
 
 // The environment's names, sorted and joined by spaces, made by a constructor before main runs. It is after main in
-// this file so that the lines the rows stop at stay where they were. The constructor then naps half a second: the
-// pinned gdb starts a program at launch, and without the nap the program reaches main 2 to 3 ms after gdb answers the
-// requests made during configuration, so a take could fall either side of that race (a configurationDone answered
-// notStopped, or answered after the stop in main with a "Breakpoint 2 at" output). With it, every take answers them
-// before main, the side a debugger that starts the program at configurationDone is always on.
+// this file so that the lines the rows stop at stay where they were.
 char *names;
 
 static int name_order(const void *a, const void *b) {
@@ -63,5 +59,4 @@ __attribute__((constructor)) static void name_them(void) {
     }
     *out = 0;
     free(sorted);
-    usleep(500000);
 }
