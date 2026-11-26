@@ -54,6 +54,10 @@ fn frame_row() {
     let g = session.dap_frame(w, "/lib/x86_64-linux-gnu/libc.so.6")
     assert(field_str(g, "name") == "???" && field_int(g, "line") == 0 && field_str(g, "source") == "<absent>")
     assert(field_str(g, "moduleId") == "/lib/x86_64-linux-gnu/libc.so.6")
+    // a frame in no module (a remote target's pc outside the program's image, as at the reset vector) has no moduleId
+    let r = session.FrameView { level: 0, pc: 65520, show_pc: true, name: "??", args: copy none, file: "", path: "", line: 0, lib: "" }
+    let h = session.dap_frame(r, "")
+    assert(field_str(h, "moduleId") == "<absent>" && field_str(h, "name") == "???" && field_int(h, "line") == 0)
     print("PASS session-dap-frame")
 }
 
@@ -112,6 +116,10 @@ fn attach_row() {
     assert(field_str(a, "startMethod") == "attach" && field_str(a, "name") == "/w/prog" && field_int(a, "systemProcessId") == 22)
     assert(field_bool(a, "isLocalProcess") == 1)
     assert(field_str(session.dap_process("/w/prog", 23, false), "startMethod") == "process")
+    // a remote target (attach with target): not a local process, and no process id (the pinned gdb's, measured)
+    let k = session.dap_remote_process("/w/kernel.elf")
+    assert(field_bool(k, "isLocalProcess") == 0 && field_str(k, "startMethod") == "attach" && field_str(k, "name") == "/w/kernel.elf")
+    assert(field_int(k, "systemProcessId") == -1)
     // the stop an attach makes: reason attach, every thread stopped, no breakpoint
     let none: List[int] = []
     let s = session.dap_stopped(session.dap_stop_attach, 1, none, false)
