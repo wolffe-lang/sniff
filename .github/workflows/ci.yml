@@ -19,19 +19,37 @@ concurrency:
   group: ${{ github.event_name == 'pull_request' && format('sniff-{0}-{1}', github.head_ref, contains(github.event.pull_request.labels.*.name, 'full-matrix') && 'full' || 'pr') || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
+  # A trunk push runs the commit its pull request's run has just passed (merges
+  # are fast-forwards), so the plan leaves it the macOS job already green there:
+  # it reads this workflow's runs at the commit with the job's own token, which
+  # may read the repository and its runs and nothing more. Each run names the
+  # tree it tests in a step's name, where the jobs listing shows it; a pull
+  # request's run tests its merge with the base.
   plan:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
     outputs:
       tier: ${{ steps.plan.outputs.tier }}
       jobs: ${{ steps.plan.outputs.jobs }}
+      covered: ${{ steps.plan.outputs.covered }}
     steps:
       - uses: actions/checkout@v4
+      - name: the tree under test
+        id: tree
+        run: |
+          tree=$(git rev-parse 'HEAD^{tree}')
+          echo "tree=$tree" >> "$GITHUB_OUTPUT"
+      - name: the tree under test is ${{ steps.tree.outputs.tree }}
+        run: test "$(git rev-parse 'HEAD^{tree}')" = "${{ steps.tree.outputs.tree }}"
       - id: plan
         env:
           EVENT: ${{ github.event_name }}
           LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
           IN_JOBS: ${{ inputs.jobs }}
+          PLAN_TOKEN: ${{ github.token }}
         run: python3 -I ci/tiers.py plan --github-output "$GITHUB_OUTPUT"
   plan-test:
     needs: plan
