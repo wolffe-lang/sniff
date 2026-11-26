@@ -2,10 +2,12 @@
 
 A debugger written in [wolf](https://github.com/wolffe-lang/wolf-lang),
 for x86-64 Linux and PAX, and macOS arm64. The command language is GDB's;
-`sniff --dap` is a Debug Adapter Protocol server on standard input and output: on Linux it launches a program and
-debugs it (breakpoints by line or function, with conditions and hit counts; stepping by line or instruction; threads,
-stack traces, scopes, variables and their children; `evaluate`, whose repl runs the command language; `readMemory`;
-`pause`, `terminate` and `disconnect`), its answers held to the pinned gdb's own DAP transcripts; macOS follows.
+`sniff --dap` is a Debug Adapter Protocol server on standard input and output: on Linux it launches a program (with
+its working directory and environment) or attaches to a running process by its pid or to a remote stub such as
+QEMU's gdbstub, and debugs it (breakpoints by line or function, with conditions and hit counts; stepping by line or
+instruction; threads, stack traces, scopes, variables and their children; `evaluate`, whose repl runs the command
+language; `readMemory`; `pause`, `terminate` and `disconnect`), its answers held to the pinned gdb's own DAP
+transcripts; macOS follows.
 
 **Status: milestones S0 to S6 are met on Linux x86-64, macOS arm64 and PAX; core files (S7) are read on Linux, at PAX's console and on macOS; cores PAX writes itself come next. S8's remote client is in, and so is its stub, `sniff-server`, on Linux and PAX.** `sniff -batch -x SCRIPT PROG` starts PROG
 (under `ptrace(2)` on Linux; as a suspended child with its task port and exception port on macOS) and debugs it with gdb's command language (breakpoints,
