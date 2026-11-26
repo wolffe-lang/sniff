@@ -41,6 +41,9 @@ step remote-kernel-skip python3 -I tools/session-remote.py skip --reason "$remot
 # S8: sniff-server on PAX needs PAX's console image and KVM, which only the record host has (tools/gate-pax builds the
 # image, tools/gate-remote runs the rows): every gate host skips them by name, and the count is held
 step remote-server-pax-skip python3 -I tools/session-remote.py skip --kind server-pax --reason "the stub on PAX needs PAX's console image and KVM, which only the record host has" --expect 8
+# S9: the DAP target row attaches to PAX's console kernel under QEMU, which only the record host boots (tools/gate-remote
+# runs it there under KVM): every gate host skips it by name, and the count is held
+step dap-target-skip python3 -I tools/session-dap.py skip --rows tests/dap-rows.json --program target --reason "the target row needs PAX's console image and KVM, which only the record host has" --expect 1
 step abi-constants python3 -I tools/check-abi.py check
 for platform in macos linux; do
   if [ -f "tests/evidence/$platform-session/record.json" ]; then
