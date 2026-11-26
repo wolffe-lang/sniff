@@ -133,7 +133,9 @@ only that job sets; Linux rows never skip.
 Unlabelled PRs run the cheap `tier local` unit/replay gate. `ci` requests
 Linux `tier pr`; `full-matrix` requests Linux plus macOS `tier full`. Nightly,
 relevant trunk pushes and a manual dispatch without a job filter run the full
-release gate. Saved oracle observations and passing harness selftests are not
+release gate; a trunk push leaves out the macOS job when a run at the same
+commit, over the same tree, already ran it green, and names that run. Saved
+oracle observations and passing harness selftests are not
 sniff command parity; the S2 rows run sniff itself (`tools/session.py`).
 
 ## Clean room
