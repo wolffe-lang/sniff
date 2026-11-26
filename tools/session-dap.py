@@ -81,6 +81,9 @@ Named differences (a row's "differences"), applied to both sides:
                     compared
   interrupt-stop    the stack after a pause is where the interrupt found the machine: not compared; check prints
                     its first frame on a LOCATION line (recorded, never gated), and a stack with no frame is a red
+  breakpoint-echo   gdb's own `Breakpoint N at ...` output event, which it sends when it answers a breakpoint request
+                    at the stop in main rather than at a library's load before it: left out (with launch-start, the
+                    two sides of that race compare equal; tests/dap-race/ holds one take of each)
 Normalising also names the kernel a target row is given (@KERNEL@) and the gdbstub's port (127.0.0.1:PORT)."""
 import argparse
 import json
@@ -273,7 +276,19 @@ def interrupt_stop(side):
             n += 1
 
 
-DIFFERENCES = {'launch-start': launch_start, 'registers-scope': registers_scope, 'interrupt-stop': interrupt_stop}
+ECHO = re.compile(r'^Breakpoint \d+ at ')
+
+
+def breakpoint_echo(side):
+    """The pinned gdb answers a breakpoint request only at a stop; one answered at the stop in main (not at a library's
+    load before it) comes with gdb's own `Breakpoint N at ...` line as an output event. Which side a take falls on
+    follows gdb's ordering and the host's load: the echo is left out (tests/dap-race/ holds a take of each side)."""
+    side['events'] = [e for e in side['events']
+                      if not (e.get('event') == 'output' and ECHO.match((e.get('body') or {}).get('output', '')))]
+
+
+DIFFERENCES = {'launch-start': launch_start, 'registers-scope': registers_scope, 'interrupt-stop': interrupt_stop,
+               'breakpoint-echo': breakpoint_echo}
 
 
 def differ(side, names):
