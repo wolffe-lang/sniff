@@ -11,14 +11,8 @@ if grep -vE '^#|^$|^[^=]+=[^=]+$' "$root/ci/packages.txt" | grep -q .; then
   fi
   bootstrap=1
 fi
-key=$(python3 -I - "$root" <<'PY'
-import hashlib, pathlib, sys
-r=pathlib.Path(sys.argv[1]); h=hashlib.sha256()
-for name in ('ci/oracle.Containerfile', 'ci/packages.txt', 'ci/apt-snapshot', 'ci/snapshot-update.sh', 'ci/snapshot-install.sh'):
-    h.update((r/name).read_bytes())
-print(h.hexdigest()[:20])
-PY
-)
+# the key over the image's five pin files, as the Linux job's cache steps read it
+key=$(python3 -I "$root/tools/oracle-image-key" "$root")
 image="${SNIFF_IMAGE_PREFIX:-sn00-oracle}:$key"
 build_args=(--build-arg "BUILD_CPUS=$cpus")
 if [ -n "${SNIFF_BUILD_MEMORY:-}" ]; then build_args+=(--memory "$SNIFF_BUILD_MEMORY"); fi
