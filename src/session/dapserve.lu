@@ -8,7 +8,9 @@
 // as `output` events, never on the protocol stream, and its standard input is /dev/null. While it runs, the session
 // waits on the program and on standard input together (threads.lu's wait_any, through dap_poll): `pause` interrupts
 // it with SIGINT, `threads` is refused notStopped, `disconnect` and `terminate` kill it and are answered once its end
-// is reported, and anything else is refused notStopped. The command language's own text goes to a buffer here, which
+// is reported, and anything else is refused notStopped. `attach` takes a running process by its pid instead (stopped
+// where it is, as `attach PID` does); a disconnect lets such a process go, untraced, unless terminateDebuggee asks
+// for its end, and when it comes while the process runs, the process is interrupted first and let go at that stop. The command language's own text goes to a buffer here, which
 // a repl evaluate answers with and every other request drops. What each event and body holds follows the pinned
 // gdb's DAP transcripts (tests/evidence/dap/).
 
@@ -245,7 +247,9 @@ pub fn dap_main() -> int {
         let ready = platform.fd_poll(s.adapter.buf, [0, s.adapter.out_fd, s.adapter.err_fd], 0 - 1)
         dap_ready(mut s, ready, false)
     }
-    if s.alive && !s.attached { kill_process(mut s) }
+    // a process sniff attached to goes on; a program it started is killed
+    if s.alive && s.attached { dap_detach(mut s) }
+    if s.alive { kill_process(mut s) }
     dap_write(mut s)
     s.adapter.exit
 }
@@ -310,8 +314,11 @@ fn dap_input(mut s: Session, running: bool) {
     let (n, got) = platform.fd_read(0, s.adapter.buf, 65536)
     if n <= 0 {
         s.adapter.eof = true
-        // a program sniff started does not outlive the client
-        if running && !s.attached { let _ = platform.target_tgkill(s.inferior, s.inferior.pid, s.inferior.pid, 9) }
+        // a program sniff started does not outlive the client; one it attached to is stopped, to be let go
+        if running {
+            let sig = if s.attached { 2 } else { 9 }
+            let _ = platform.target_tgkill(s.inferior, s.inferior.pid, s.inferior.pid, sig)
+        }
         dap.finish(s.adapter.rd) else |f| {
             eprint("sniff --dap: the input ended inside a message ({f})")
             s.adapter.exit = 1
@@ -349,18 +356,25 @@ fn dap_while_running(mut s: Session, m: dap.Message) {
     if m.command == "disconnect" || m.command == "terminate" {
         if s.adapter.ending.len == 0 {
             (mut s.adapter.ending).push(copy m)
-            let _ = platform.target_tgkill(s.inferior, s.inferior.pid, s.inferior.pid, 9)
+            // a process sniff attached to is interrupted, to be let go at its stop; anything else is killed
+            let sig = if lets_go(s, m) { 2 } else { 9 }
+            let _ = platform.target_tgkill(s.inferior, s.inferior.pid, s.inferior.pid, sig)
             return
         }
     }
     answer(mut s, m, false, "notStopped", json.null())
 }
 
+/// Whether ending request m lets the process go rather than kill it: a disconnect from a process sniff attached to,
+/// without terminateDebuggee.
+fn lets_go(s: Session, m: dap.Message) -> bool { s.attached && m.command == "disconnect" && !arg_bool(m, "terminateDebuggee") }
+
 // ---- requests while the program is stopped, or before it exists ----
 
 fn dap_request(mut s: Session, m: dap.Message) {
     let c = m.command
     if c == "launch" { dap_launch(mut s, m); return }
+    if c == "attach" { dap_attach(mut s, m); return }
     if c == "configurationDone" { dap_configuration_done(mut s, m); return }
     if c == "setBreakpoints" { dap_set_breakpoints(mut s, m); return }
     if c == "setFunctionBreakpoints" { dap_set_function_breakpoints(mut s, m); return }
@@ -378,7 +392,9 @@ fn dap_request(mut s: Session, m: dap.Message) {
         return
     }
     if c == "disconnect" {
-        if s.alive && !s.attached { kill_process(mut s); s.adapter.end_code = 0; dap_end(mut s) }
+        // a program sniff started is killed; one it attached to is let go, unless terminateDebuggee asks otherwise
+        if s.alive && s.attached && !arg_bool(m, "terminateDebuggee") { dap_detach(mut s) }
+        if s.alive { kill_process(mut s); s.adapter.end_code = 0; dap_end(mut s) }
         answer(mut s, m, true, "", json.null())
         s.adapter.wire.done = true
         return
@@ -410,6 +426,52 @@ fn dap_launch(mut s: Session, m: dap.Message) {
     s.adapter.launched = true
     answer(mut s, m, true, "", json.null())
     send_event(mut s, "initialized", json.null())
+}
+
+/// attach: to a running process by its pid, as `attach PID` does (attach.lu): traced, stopped where it is, and
+/// reported at once, as the pinned gdb reports it: initialized, the process (startMethod attach), each thread started,
+/// and a stop with reason attach. The program is the attach's own argument (sniff reads no /proc link for it).
+fn dap_attach(mut s: Session, m: dap.Message) {
+    let why = dap_attach_check(args_of(m))
+    if why.len() > 0 { answer(mut s, m, false, why, json.null()); return }
+    if s.adapter.launched || s.alive { answer(mut s, m, false, "a program is already launched", json.null()); return }
+    let program = arg_str(m, "program")
+    if program.len() == 0 { answer(mut s, m, false, "sniff needs the attach argument program", json.null()); return }
+    if arg_has(m, "target") { answer(mut s, m, false, "sniff does not support the attach argument target", json.null()); return }
+    let p = prog_load(program)
+    if p.err.len() > 0 && p.data.len == 0 { answer(mut s, m, false, p.err, json.null()); return }
+    s.prog = p
+    let pid = arg_int(m, "pid", 0)
+    let refused = attach_to(mut s, pid)
+    // the command language's text of the stop is not the protocol's
+    flush_out(mut s)
+    let nb: List[byte] = []
+    s.adapter.cli = nb
+    if refused.len() > 0 { answer(mut s, m, false, refused, json.null()); return }
+    answer(mut s, m, true, "", json.null())
+    send_event(mut s, "initialized", json.null())
+    send_event(mut s, "process", dap_process(s.prog.path, pid, true))
+    var i = 0
+    while i < s.thr.len {
+        thread_event(mut s, "started", s.thr[i].num)
+        (mut s.adapter.threads).push(s.thr[i].num)
+        i += 1
+    }
+    s.adapter.ended = false
+    let none: List[int] = []
+    let thread = if s.thr.len > 0 { s.thr[s.thr_cur].num } else { 1 }
+    send_event(mut s, "stopped", dap_stopped(dap_stop_attach, thread, none, false))
+}
+
+/// Let a process sniff attached to go on untraced (attach.lu's detach, or the remote stub's): the protocol sees no
+/// event of it, as the pinned gdb sends none.
+fn dap_detach(mut s: Session) {
+    if s.remote_on { remote_detach(mut s) } else { detach_process(mut s) }
+    flush_out(mut s)
+    let nb: List[byte] = []
+    s.adapter.cli = nb
+    let none: List[int] = []
+    s.adapter.threads = none
 }
 
 /// configurationDone: the program starts, and runs to its first stop.
@@ -680,9 +742,11 @@ fn dap_resume(mut s: Session, line: str) {
         }
         k += 1
     }
+    // a disconnect that lets an attached process go: the stop it asked for is not reported
+    let letting_go = s.alive && s.adapter.ending.len > 0 && lets_go(s, s.adapter.ending[0])
     if !s.alive {
         dap_end(mut s)
-    } else {
+    } else if !letting_go {
         let gone = copy s.adapter.gone
         for g in gone {
             thread_event(mut s, "exited", g)
@@ -701,6 +765,7 @@ fn dap_resume(mut s: Session, line: str) {
         let e = copy s.adapter.ending[0]
         let nm: List[dap.Message] = []
         s.adapter.ending = nm
+        if letting_go { dap_detach(mut s) }
         if s.alive { kill_process(mut s); s.adapter.end_code = 0; dap_end(mut s) }
         answer(mut s, e, true, "", json.null())
         if e.command == "disconnect" { s.adapter.wire.done = true }
