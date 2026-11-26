@@ -18,7 +18,7 @@ build_args=(--build-arg "BUILD_CPUS=$cpus")
 if [ -n "${SNIFF_BUILD_MEMORY:-}" ]; then build_args+=(--memory "$SNIFF_BUILD_MEMORY"); fi
 # SNIFF_IMAGE_RESTORED=1: the Linux job loaded this image from its cache, so it is used as it is; without the
 # switch, or with no image under the tag, it is built. The pin diffs below run either way.
-if [ "${SNIFF_IMAGE_RESTORED:-0}" = 1 ] && "$engine" image inspect "$image" > /dev/null 2>&1; then
+if [ "${SNIFF_IMAGE_RESTORED:-0}" = 1 ]; then
   echo "oracle image $image restored: not built"
 else
   "$engine" build "${build_args[@]}" -f "$root/ci/oracle.Containerfile" -t "$image" "$root"
