@@ -55,7 +55,8 @@ fn frame_row() {
     assert(field_str(g, "name") == "???" && field_int(g, "line") == 0 && field_str(g, "source") == "<absent>")
     assert(field_str(g, "moduleId") == "/lib/x86_64-linux-gnu/libc.so.6")
     // a frame in no module (a remote target's pc outside the program's image, as at the reset vector) has no moduleId
-    let r = session.FrameView { level: 0, pc: 65520, show_pc: true, name: "??", args: copy none, file: "", path: "", line: 0, lib: "" }
+    let no_args: List[str] = []
+    let r = session.FrameView { level: 0, pc: 65520, show_pc: true, name: "??", args: no_args, file: "", path: "", line: 0, lib: "" }
     let h = session.dap_frame(r, "")
     assert(field_str(h, "moduleId") == "<absent>" && field_str(h, "name") == "???" && field_int(h, "line") == 0)
     print("PASS session-dap-frame")
