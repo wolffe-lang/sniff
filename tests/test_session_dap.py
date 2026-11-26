@@ -366,6 +366,44 @@ class Target(unittest.TestCase):
                     self.assertIn('PASS dap t6', p.stdout.splitlines(), p.stdout + p.stderr)
 
 
+class LaunchRace(unittest.TestCase):
+    """The pinned gdb's two sides of its launch-start race, recorded (tests/dap-race/): launch-start and
+    breakpoint-echo together make them one transcript, and without breakpoint-echo the echo is what differs."""
+    def takes(self):
+        c = client()
+        return c, [c.records_of(ROOT / 'tests/dap-race' / n) for n in ('requests-first.jsonl', 'main-first.jsonl')]
+
+    def test_the_kept_takes_are_one_on_each_side(self):
+        c, (a, b) = self.takes()
+        def answers(recs):
+            cd = [r['msg'] for r in recs if r['dir'] == 'a2c' and r['msg'].get('command') == 'configurationDone'][0]
+            echo = [r for r in recs if r['msg'].get('event') == 'output'
+                    and r['msg']['body']['output'].startswith('Breakpoint ')]
+            return cd.get('success'), len(echo)
+        self.assertEqual(answers(a), (False, 0))
+        self.assertEqual(answers(b), (True, 1))
+
+    def test_the_two_sides_compare_equal_under_the_named_differences(self):
+        c, (a, b) = self.takes()
+        names = ['launch-start', 'breakpoint-echo']
+        self.assertIsNone(c.first_difference(c.normalise(a, names), c.normalise(b, names)))
+
+    def test_without_breakpoint_echo_the_echo_is_the_difference(self):
+        c, (a, b) = self.takes()
+        d = c.first_difference(c.normalise(a, ['launch-start']), c.normalise(b, ['launch-start']))
+        self.assertIsNotNone(d)
+        self.assertEqual(d[0], 'events')
+        self.assertIn('Breakpoint 2 at <ADDR>', d[1])
+
+    def test_breakpoint_echo_leaves_other_output_alone(self):
+        side = {'sent': [], 'responses': [], 'events': [
+            {'event': 'output', 'body': {'category': 'stdout', 'output': 'Breakpoint 2 at <ADDR>: file x.c, line 3.\n'}},
+            {'event': 'output', 'body': {'category': 'stdout', 'output': 'ready 7\n'}},
+            {'event': 'output', 'body': {'category': 'stdout', 'output': 'a line that says Breakpoint 2 at\n'}}]}
+        out = client().differ(side, ['breakpoint-echo'])
+        self.assertEqual([e['body']['output'] for e in out['events']], ['ready 7\n', 'a line that says Breakpoint 2 at\n'])
+
+
 class Selftest(unittest.TestCase):
     def test_the_selftest_passes(self):
         p = subprocess.run([sys.executable, '-I', str(ROOT / 'tools/session-dap.py'), 'selftest'], capture_output=True,
