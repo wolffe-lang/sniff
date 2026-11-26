@@ -414,20 +414,11 @@
     ["send", "disconnect", {"terminateDebuggee": false}],
     ["exit", 0],
     ["says", "done 500", 30]]},
-  {"name": "dap-attach-core", "prog": "c/calls/@CC@-O0/prog", "src": "c/calls", "core": "@CC@-break", "compare": "gdb", "twin": "core-gcc-break", "differences": [], "why": "attach to a core and its program: the core's stop, its frames, scopes and values; continue is answered as gdb answers it",
+  {"name": "dap-attach-core-refused", "prog": "c/calls/@CC@-O0/prog", "src": "c/calls", "compare": "own", "why": "coreFile is refused by name: the pinned gdb answers attach with a core \"attach requires either 'pid' or 'target'\", so Linux has no oracle for it",
    "steps": [
     ["send", "initialize", {"clientID": "rows", "clientName": "sniff's DAP rows", "adapterID": "rows", "linesStartAt1": true, "columnsStartAt1": true, "pathFormat": "path", "locale": "en-US", "supportsVariableType": true, "supportsRunInTerminalRequest": false}],
-    ["post", "attach", {"program": "@PROG@", "coreFile": "@CORE@"}],
-    ["wait", "initialized"],
-    ["send", "configurationDone", {}],
-    ["reply", "attach"],
-    ["sleep", 1],
-    ["send", "threads", {}],
-    ["send", "stackTrace", {"threadId": "@THREAD@"}],
-    ["send", "scopes", {"frameId": "@FRAME0@"}],
-    ["send", "variables", {"variablesReference": "@SCOPE0@"}],
-    ["send", "continue", {"threadId": "@THREAD@"}],
-    ["send", "disconnect", {}],
+    ["send", "attach", {"program": "@PROG@", "coreFile": "@CWD@/core"}, {"success": false, "message": "sniff does not support the attach argument coreFile"}],
+    ["send", "disconnect", {}, {"success": true}],
     ["exit", 0]]}
  ]
 }
