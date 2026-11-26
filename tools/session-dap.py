@@ -58,8 +58,10 @@ or a read finds out first), a body that is not JSON, or a placeholder with nothi
 A row with "compare": "gdb" is also held to the pinned gdb's transcript of the same steps, its golden
 (GOLDEN/ROW.CC.json, or GOLDEN/ROW.json for a row whose program is not built per compiler; GOLDEN defaults to
 tests/evidence/dap). `capture` takes the transcript twice, each take on a fresh adapter, and writes the golden only
-when the two agree after normalising (`CAPTURED dap ROW`; else `UNSTABLE dap ROW` with the first difference, or `FAULT
-dap ROW`; the last line `dap rows (capture): C captured, U unstable, F fault`). A take's expectations are not applied:
+when the two agree after normalising with the row's named differences applied (`CAPTURED dap ROW`; else `UNSTABLE dap
+ROW` with the first difference, or `FAULT dap ROW`; the last line `dap rows (capture): C captured, U unstable, F
+fault`). The golden is the first take as normalised, the differences not applied: what the pinned gdb said where it
+differs is kept. A take's expectations are not applied:
 they are sniff's. `check` normalises sniff's transcript the same way, applies the row's named differences to both
 sides, and compares; the first difference is a red (`FAIL dap ROW golden: …`). A golden that is missing, or whose
 requests differ from the row's, is a fault. Normalising:
@@ -830,7 +832,7 @@ def capture(args):
             print('FAULT dap %s %s' % (row['name'], why))
             nfault += 1
             continue
-        d = first_difference(takes[0], takes[1])
+        d = first_difference(*(differ(t, row.get('differences', [])) for t in takes))
         if d:
             print('UNSTABLE dap %s %s' % (row['name'], d[1]))
             nuns += 1
