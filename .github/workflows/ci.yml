@@ -13,6 +13,10 @@ on:
         description: 'Optional job IDs, space-separated; empty runs the full release gate'
         type: string
         default: ''
+      branch-cache-entry:
+        description: 'On a branch other than trunk only: read and save the oracle image cache under an entry of the branch alone, which trunk never reads'
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -68,6 +72,40 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+      # The oracle image from a cache keyed on its pins (tools/oracle-image-key). A hit is loaded and used as it is,
+      # a miss is built as before, and either way in-container diffs the image against its pins before the gate. Only
+      # a run on trunk saves under trunk's entry, once those diffs pass; a pull request's run reads it and saves
+      # nothing; a dispatch on another branch with branch-cache-entry reads and saves an entry of its own.
+      - name: the oracle image's cache entry
+        id: cache
+        env:
+          BRANCH_CACHE_ENTRY: ${{ inputs.branch-cache-entry }}
+        run: python3 -I tools/oracle-image-key --cache | tee -a "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v4
+        id: restore
+        with:
+          path: target/oracle-image.tar
+          key: ${{ steps.cache.outputs.key }}
+      - name: load the restored image
+        if: ${{ steps.restore.outputs.cache-hit == 'true' }}
+        run: |
+          docker load -i target/oracle-image.tar
+          rm target/oracle-image.tar
+          echo SNIFF_IMAGE_RESTORED=1 >> "$GITHUB_ENV"
+      - name: the oracle image, checked against its pins
+        run: bash tools/in-container
+        env:
+          SNIFF_ENGINE: docker
+          SNIFF_CPUS: '0'
+          SNIFF_PREPARE_ONLY: '1'
+      - name: the image built on a miss, for the cache
+        if: ${{ steps.restore.outputs.cache-hit != 'true' && steps.cache.outputs.save == 'yes' }}
+        run: docker save -o target/oracle-image.tar "${{ steps.cache.outputs.image }}"
+      - uses: actions/cache/save@v4
+        if: ${{ steps.restore.outputs.cache-hit != 'true' && steps.cache.outputs.save == 'yes' }}
+        with:
+          path: target/oracle-image.tar
+          key: ${{ steps.cache.outputs.key }}
       - run: bash tools/in-container
         env:
           SNIFF_ENGINE: docker
