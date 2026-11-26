@@ -330,7 +330,8 @@ class Target(unittest.TestCase):
 
     def test_the_stop_after_a_pause_is_named_on_a_location_line(self):
         with tempfile.TemporaryDirectory() as d:
-            r = target_row('t5', *BOOTED, ['send', 'pause', {'threadId': '@THREAD@'}], ['wait', 'stopped'],
+            r = target_row('t5', *BOOTED, ['wait', 'stopped', {'reason': 'attach'}],
+                           ['send', 'pause', {'threadId': '@THREAD@'}], ['wait', 'stopped', {'reason': 'pause'}],
                            ['send', 'stackTrace', {'threadId': '@THREAD@'}], ['send', 'disconnect', {}], ['exit', 0],
                            differences=['interrupt-stop'])
             rc, said, _ = run_kept([r], extra=target_tree(d))
