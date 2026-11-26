@@ -495,7 +495,9 @@ class RowsFile(unittest.TestCase):
                     self.assertIn(dname, client().DIFFERENCES, r['name'])
             for s in r['steps']:
                 self.assertIn(s[0], ('send', 'post', 'reply', 'wait', 'raw', 'close', 'exit', 'stderr', 'sleep',
-                                     'spawn', 'says'), r['name'])
+                                     'spawn', 'says', 'boot'), r['name'])
+            # a row that boots a machine needs a kernel under KVM: --program target, and no other selection, runs it
+            self.assertEqual(any(s[0] == 'boot' for s in r['steps']), r.get('needs') == 'kvm', r['name'])
 
 
 if __name__ == '__main__':

@@ -419,6 +419,24 @@
     ["send", "initialize", {"clientID": "rows", "clientName": "sniff's DAP rows", "adapterID": "rows", "linesStartAt1": true, "columnsStartAt1": true, "pathFormat": "path", "locale": "en-US", "supportsVariableType": true, "supportsRunInTerminalRequest": false}],
     ["send", "attach", {"program": "@PROG@", "coreFile": "@CWD@/core"}, {"success": false, "message": "sniff does not support the attach argument coreFile"}],
     ["send", "disconnect", {}, {"success": true}],
+    ["exit", 0]]},
+  {"name": "dap-attach-target", "prog": "-", "needs": "kvm", "qemu_timeout": 120, "compare": "gdb", "twin": "remote-kernel-interrupt", "differences": ["interrupt-stop"], "why": "attach to PAX's console kernel through QEMU's gdbstub at one processor: the stop at reset, continue, then a pause, whose stop is where the interrupt found the machine (interrupt-stop: named on a LOCATION line, never compared)",
+   "steps": [
+    ["boot"],
+    ["send", "initialize", {"clientID": "rows", "clientName": "sniff's DAP rows", "adapterID": "rows", "linesStartAt1": true, "columnsStartAt1": true, "pathFormat": "path", "locale": "en-US", "supportsVariableType": true, "supportsRunInTerminalRequest": false}],
+    ["post", "attach", {"program": "@KERNEL@", "target": "@TARGET@"}],
+    ["wait", "initialized"],
+    ["send", "configurationDone", {}],
+    ["reply", "attach"],
+    ["sleep", 1],
+    ["send", "threads", {}],
+    ["send", "stackTrace", {"threadId": "@THREAD@"}],
+    ["send", "continue", {"threadId": "@THREAD@"}],
+    ["sleep", 2],
+    ["send", "pause", {"threadId": "@THREAD@"}],
+    ["wait", "stopped"],
+    ["send", "stackTrace", {"threadId": "@THREAD@"}],
+    ["send", "disconnect", {}],
     ["exit", 0]]}
  ]
 }
