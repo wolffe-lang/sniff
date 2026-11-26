@@ -181,7 +181,9 @@ stepping, and the command interpreter. `src/numfmt/` formats floats exactly.
 The platform boundary is the list under "For S3 and S4" in
 `notes/sn02-the-linux-core.md`. Boundaries that remain: no CFI from wolf
 (frame-pointer fallback), eager DWARF loading, signed encodings for unsigned
-wolf types, and the unimplemented commands listed in the note.
+wolf types, and the unimplemented commands listed in the note. A backtrace stops at main and, on Linux (gdb the
+oracle), at the function holding the program's entry point (gdb's `backtrace past-main` and `past-entry`, both off
+by default); a caller at pc 0 is shown there as the outermost frame, as gdb shows one at QEMU's reset vector.
 
 ### S3 as implemented
 
