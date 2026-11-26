@@ -90,7 +90,9 @@ fn start_process_io(mut s: Session, io: List[int]) -> str {
     if s.alive { kill_process(mut s) }
     // a program that runs replaces the core the session read
     if s.core_on { core_drop(mut s) }
-    let t = platform.target_spawn_io(s.prog.path, s.args, "24", "80", io)
+    // launch's env is the program's whole environment; otherwise sniff's own, with gdb's LINES, COLUMNS and PWD
+    let t = if s.env_exact { platform.target_spawn_env(s.prog.path, s.args, io, s.env_list) }
+            else { platform.target_spawn_io(s.prog.path, s.args, "24", "80", io) }
     if t.pid == 0 {
         let why = platform.target_refusal(t)
         if why.len() > 0 { return why }
