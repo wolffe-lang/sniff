@@ -19,6 +19,8 @@ It speaks the Debug Adapter Protocol's base protocol on standard input and outpu
            and its thread id and addresses are its own process id's
   jitter   as plain, but the first frame's line is its own process id's: two takes differ
   otherline  as plain, but the second frame's line is 99
+  wander   as plain, but after a pause the first frame's line is its own process id's (where an interrupt found the
+           machine): two takes differ there and nowhere else
 In every mode evaluate answers `(int *) 0x1234` and readMemory four bytes at the reference it is given, and attach
 (whatever its arguments) is answered, then initialized and a stop of thread 7 with reason attach."""
 import json
@@ -70,6 +72,7 @@ def read():
 
 
 running = False
+paused = False
 tid = os.getpid() if mode == 'gdbish' else 7
 base = os.getpid() * 16 if mode == 'gdbish' else 4096
 while True:
@@ -124,6 +127,7 @@ while True:
     elif c == 'pause':
         reply(r)
         running = False
+        paused = True
         event('stopped', {'reason': 'pause', 'threadId': tid, 'allThreadsStopped': True})
     elif c == 'stackTrace':
         if mode == 'hang':
@@ -134,6 +138,8 @@ while True:
             frames[0]['line'] = os.getpid()
         if mode == 'otherline':
             frames[1]['line'] = 99
+        if mode == 'wander' and paused:
+            frames[0]['line'] = os.getpid()
         reply(r, {'stackFrames': frames})
     elif c == 'evaluate':
         reply(r, {'result': '(int *) 0x1234', 'variablesReference': 0})
