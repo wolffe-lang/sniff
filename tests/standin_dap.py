@@ -19,7 +19,8 @@ It speaks the Debug Adapter Protocol's base protocol on standard input and outpu
            and its thread id and addresses are its own process id's
   jitter   as plain, but the first frame's line is its own process id's: two takes differ
   otherline  as plain, but the second frame's line is 99
-In every mode evaluate answers `(int *) 0x1234` and readMemory four bytes at the reference it is given."""
+In every mode evaluate answers `(int *) 0x1234` and readMemory four bytes at the reference it is given, and attach
+(whatever its arguments) is answered, then initialized and a stop of thread 7 with reason attach."""
 import json
 import os
 import sys
@@ -104,6 +105,12 @@ while True:
         event('initialized')
         event('thread', {'reason': 'started', 'threadId': tid})
         running = True
+    elif c == 'attach':
+        # whatever it is given (a pid, a core), the stand-in attaches nothing: it answers, and stops its thread
+        reply(r)
+        event('initialized')
+        event('stopped', {'reason': 'attach', 'threadId': tid, 'allThreadsStopped': True})
+        running = False
     elif c == 'configurationDone':
         if mode == 'gdbish':
             reply(r, ok=False, message='notStopped')
