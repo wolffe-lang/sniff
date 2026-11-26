@@ -1019,9 +1019,13 @@ fn register_lines(mut s: Session) -> List[str] {
     out
 }
 
-/// Whether a value of type t has the value it points at as a child: a pointer to something with a type.
+/// Whether a value of type t has the value it points at as a child: a pointer to something with a type, but not a
+/// string (a pointer to char).
 fn points_at(s: Session, t: int) -> bool {
     if t == ty_voidp || t == ty_codep { return false }
+    // a pointer to char is a string, as print shows it, and the pinned gdb gives it no child (tests/evidence/dap/
+    // dap-launch-cwd: a char * global, null or not, answers variablesReference 0)
+    if is_char_pointer(s, t) { return false }
     if ty_is_ptr(t) { return true }
     if t < 0 { return false }
     let st = ty_strip(s.prog, t)
