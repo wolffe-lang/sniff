@@ -1,0 +1,224 @@
+{
+ "cc": null,
+ "events": [
+  {
+   "event": "initialized",
+   "type": "event"
+  },
+  {
+   "body": {
+    "isLocalProcess": false,
+    "name": "@KERNEL@",
+    "startMethod": "attach"
+   },
+   "event": "process",
+   "type": "event"
+  },
+  {
+   "body": {
+    "reason": "started",
+    "threadId": "T1"
+   },
+   "event": "thread",
+   "type": "event"
+  },
+  {
+   "body": {
+    "allThreadsStopped": true,
+    "reason": "attach",
+    "threadId": "T1"
+   },
+   "event": "stopped",
+   "type": "event"
+  },
+  {
+   "body": {
+    "allThreadsStopped": true,
+    "reason": "pause",
+    "threadId": "T1"
+   },
+   "event": "stopped",
+   "type": "event"
+  },
+  {
+   "body": {
+    "reason": "exited",
+    "threadId": "T1"
+   },
+   "event": "thread",
+   "type": "event"
+  },
+  {
+   "body": {
+    "exitCode": 0
+   },
+   "event": "exited",
+   "type": "event"
+  },
+  {
+   "event": "terminated",
+   "type": "event"
+  }
+ ],
+ "identity": "GNU gdb (Ubuntu 15.1-1ubuntu1~24.04.1) 15.1 sha256=3832cc070ae1716e322105d3b39fb398695e5f031c9d39224cf227a8c2b889f6; QEMU emulator version 11.1.2 sha256=b5cb670e0eda020fba60bb3249226d7ae424695fe2d190ad3ff76de1abcef447; kvm",
+ "responses": [
+  {
+   "command": "initialize",
+   "success": true,
+   "type": "response"
+  },
+  {
+   "command": "attach",
+   "success": true,
+   "type": "response"
+  },
+  {
+   "command": "configurationDone",
+   "success": true,
+   "type": "response"
+  },
+  {
+   "body": {
+    "threads": [
+     {
+      "id": "T1",
+      "name": "CPU#0 [running]"
+     }
+    ]
+   },
+   "command": "threads",
+   "success": true,
+   "type": "response"
+  },
+  {
+   "body": {
+    "stackFrames": [
+     {
+      "column": 0,
+      "id": 0,
+      "instructionPointerReference": "<ADDR>",
+      "line": 0,
+      "name": "???"
+     },
+     {
+      "column": 0,
+      "id": "F1",
+      "instructionPointerReference": "<ADDR>",
+      "line": 0,
+      "name": "???"
+     }
+    ]
+   },
+   "command": "stackTrace",
+   "success": true,
+   "type": "response"
+  },
+  {
+   "body": {
+    "allThreadsContinued": true
+   },
+   "command": "continue",
+   "success": true,
+   "type": "response"
+  },
+  {
+   "command": "pause",
+   "success": true,
+   "type": "response"
+  },
+  {
+   "body": {
+    "stackFrames": [
+     {
+      "column": 0,
+      "id": 0,
+      "instructionPointerReference": "<ADDR>",
+      "line": 0,
+      "moduleId": "@KERNEL@",
+      "name": "pax_idle"
+     }
+    ]
+   },
+   "command": "stackTrace",
+   "success": true,
+   "type": "response"
+  },
+  {
+   "command": "disconnect",
+   "success": true,
+   "type": "response"
+  }
+ ],
+ "row": "dap-attach-target",
+ "schema": 1,
+ "sent": [
+  {
+   "arguments": {
+    "adapterID": "rows",
+    "clientID": "rows",
+    "clientName": "sniff's DAP rows",
+    "columnsStartAt1": true,
+    "linesStartAt1": true,
+    "locale": "en-US",
+    "pathFormat": "path",
+    "supportsRunInTerminalRequest": false,
+    "supportsVariableType": true
+   },
+   "command": "initialize",
+   "type": "request"
+  },
+  {
+   "arguments": {
+    "program": "@KERNEL@",
+    "target": "127.0.0.1:PORT"
+   },
+   "command": "attach",
+   "type": "request"
+  },
+  {
+   "arguments": {},
+   "command": "configurationDone",
+   "type": "request"
+  },
+  {
+   "arguments": {},
+   "command": "threads",
+   "type": "request"
+  },
+  {
+   "arguments": {
+    "threadId": "T1"
+   },
+   "command": "stackTrace",
+   "type": "request"
+  },
+  {
+   "arguments": {
+    "threadId": "T1"
+   },
+   "command": "continue",
+   "type": "request"
+  },
+  {
+   "arguments": {
+    "threadId": "T1"
+   },
+   "command": "pause",
+   "type": "request"
+  },
+  {
+   "arguments": {
+    "threadId": "T1"
+   },
+   "command": "stackTrace",
+   "type": "request"
+  },
+  {
+   "arguments": {
+    "terminateDebuggee": true
+   },
+   "command": "disconnect",
+   "type": "request"
+  }
+ ]
+}
