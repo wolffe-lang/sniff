@@ -514,6 +514,20 @@ pub fn target_spawn(path: str, args: List[str], env_lines: str, env_columns: str
 /// /dev/null and two pipes, so that nothing it writes reaches the protocol stream.
 #[cfg(target = "aarch64-apple-darwin")]
 pub fn target_spawn_io(path: str, args: List[str], env_lines: str, env_columns: str, io: List[int]) -> Target {
+    let none: List[str] = []
+    spawn_traced(path, args, io, none, false)
+}
+
+/// target_spawn_io with exactly the environment env (NAME=VALUE each) and nothing else, posix_spawn's envp: none of
+/// sniff's own (`sniff --dap`'s launch env, whose caller adds what it measured).
+#[cfg(target = "aarch64-apple-darwin")]
+pub fn target_spawn_env(path: str, args: List[str], io: List[int], env: List[str]) -> Target {
+    spawn_traced(path, args, io, env, true)
+}
+
+/// The suspended start both share: with exact, env is the child's whole environment, else sniff's own.
+#[cfg(target = "aarch64-apple-darwin")]
+fn spawn_traced(path: str, args: List[str], io: List[int], env: List[str], exact: bool) -> Target {
     let tgt = target_none()
     unsafe {
         // # Safety: buffers are calloc'd and sized for each call; the pid is the lane's own spawned child.
@@ -531,7 +545,17 @@ pub fn target_spawn_io(path: str, args: List[str], env_lines: str, env_columns: 
         let _ = posix_spawnattr_init(attr)
         let _ = posix_spawnattr_setflags(attr, 384)
         let pidbuf = c.calloc(1, 8) as *i32
-        let envp = (_NSGetEnviron() as *u64)[0]
+        var envp = (_NSGetEnviron() as *u64)[0]
+        if exact {
+            let given = c.calloc((env.len + 1) as uint, 8) as *u64
+            var e = 0
+            while e < env.len {
+                given[e] = cstr(env[e])
+                e += 1
+            }
+            given[env.len] = 0
+            envp = given as u64
+        }
         var actions: u64 = 0
         if io.len > 0 {
             actions = c.calloc(1, 64) as u64
