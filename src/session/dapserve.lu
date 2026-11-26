@@ -25,6 +25,8 @@ pub const dap_stop_bp: int = 1
 pub const dap_stop_signal: int = 2
 /// A watchpoint.
 pub const dap_stop_watch: int = 3
+/// An attach, which stops the process where it is.
+pub const dap_stop_attach: int = 4
 
 /// `sniff --dap`'s state over the session (Session.adapter); `on` is false for the command language.
 struct Adapter {
@@ -154,6 +156,7 @@ pub fn dap_stopped(kind: int, thread: int, bps: List[int], paused: bool) -> json
     if kind == dap_stop_bp { reason = "breakpoint" }
     if kind == dap_stop_signal { reason = if paused { "pause" } else { "signal" } }
     if kind == dap_stop_watch { reason = "data breakpoint" }
+    if kind == dap_stop_attach { reason = "attach" }
     f["reason"] = json.from_str(reason)
     f["threadId"] = json.from_int(thread)
     f["allThreadsStopped"] = json.from_bool(true)
@@ -163,6 +166,25 @@ pub fn dap_stopped(kind: int, thread: int, bps: List[int], paused: bool) -> json
         f["hitBreakpointIds"] = json.from_list(ids)
     }
     json.from_map(f)
+}
+
+/// Why an attach's arguments are refused, or "": coreFile by name, whatever comes with it (the pinned gdb takes no
+/// core over DAP, so no row could hold sniff to one); else a pid or a target is needed, in the pinned gdb's words.
+pub fn dap_attach_check(a: json.Value) -> str {
+    if json.has(a, "coreFile") { return "sniff does not support the attach argument coreFile" }
+    if !json.has(a, "pid") && !json.has(a, "target") { return "attach requires either 'pid' or 'target'" }
+    ""
+}
+
+/// The body of a `process` event: the program's path, its process id, and whether sniff attached to it or started
+/// it.
+pub fn dap_process(name: str, pid: int, attach: bool) -> json.Value {
+    var p = Map[str, json.Value]()
+    p["isLocalProcess"] = json.from_bool(true)
+    p["startMethod"] = json.from_str(if attach { "attach" } else { "process" })
+    p["name"] = json.from_str(name)
+    p["systemProcessId"] = json.from_int(pid)
+    json.from_map(p)
 }
 
 // ---- the wire ----
@@ -427,12 +449,7 @@ fn dap_configuration_done(mut s: Session, m: dap.Message) {
     s.frames = []
     s.frames_ok = false
     s.adapter.ended = false
-    var p = Map[str, json.Value]()
-    p["isLocalProcess"] = json.from_bool(true)
-    p["startMethod"] = json.from_str("process")
-    p["name"] = json.from_str(s.prog.path)
-    p["systemProcessId"] = json.from_int(s.inferior.pid)
-    send_event(mut s, "process", obj(p))
+    send_event(mut s, "process", dap_process(s.prog.path, s.inferior.pid, false))
     var i = 0
     while i < s.thr.len {
         thread_event(mut s, "started", s.thr[i].num)
