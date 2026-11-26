@@ -451,11 +451,9 @@ fn dap_request(mut s: Session, m: dap.Message) {
 
 /// launch: the program is loaded now and started at configurationDone.
 fn dap_launch(mut s: Session, m: dap.Message) {
-    for name in ["stopOnEntry", "env"] {
-        if arg_has(m, name) {
-            answer(mut s, m, false, "sniff does not support the launch argument {name}", json.null())
-            return
-        }
+    if arg_has(m, "stopOnEntry") {
+        answer(mut s, m, false, "sniff does not support the launch argument stopOnEntry", json.null())
+        return
     }
     let program = arg_str(m, "program")
     if program.len() == 0 { answer(mut s, m, false, "launch needs a program", json.null()); return }
@@ -469,6 +467,15 @@ fn dap_launch(mut s: Session, m: dap.Message) {
             denied => { answer(mut s, m, false, "{cwd}: Permission denied.", json.null()); return },
             _ => { answer(mut s, m, false, "{cwd}: Not a directory.", json.null()); return },
         }
+    }
+    // env: the program's whole environment, with PWD (the directory it starts in) as the pinned gdb's start adds it
+    if arg_has(m, "env") {
+        let here = env.cwd() else { "" }
+        let given = json.get(args_of(m), "env") else { json.null() }
+        let (list, why) = dap_env(given, here)
+        if why.len() > 0 { answer(mut s, m, false, why, json.null()); return }
+        s.env_exact = true
+        s.env_list = list
     }
     let p = prog_load(program)
     if p.err.len() > 0 && p.data.len == 0 { answer(mut s, m, false, p.err, json.null()); return }
