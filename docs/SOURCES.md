@@ -387,6 +387,7 @@ and `terminated`. readMemory's data is base64; the unit row's values were checke
 | Source | sha256 | Used for |
 | --- | --- | --- |
 | [GDB manual, Debug Adapter Protocol](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Debug-Adapter-Protocol.html) (the current manual, not 15.1's) | `e0048cb62b937827c1e78944095165a76ae38714cef93dc566c7764717776305` | launch's `cwd` (gdb changes its own directory, as by `cd`, before the program is read) and `env` ("the environment of the inferior will be set to exactly as passed in"); attach's `pid`, `target` and `coreFile` |
+| [GDB manual, Backtrace](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Backtrace.html) | `1906e6f08d1f6f44bffd632b1f572e13874907a83d8b00ddc3c29056ea66f683` | `set backtrace past-entry`: off by default, a backtrace stops at the program's internal entry point (as `past-main` stops at main) |
 
 The `attach` request, `disconnect`'s `terminateDebuggee` and the `process` event's members came from the
 specification and schema at the digests above. No adapter's or client's source was read.
@@ -407,6 +408,8 @@ specification and schema at the digests above. No adapter's or client's source w
   - attach with `target` over QEMU's gdbstub: a `process` event that is not local and has no process id, the
     thread named by the stub's thread information (`CPU#0 [running]`), and frames outside the program's image with
     no `moduleId`.
+  - at QEMU's reset vector gdb shows two frames: the reset vector and a caller at pc 0 (the raw take keeps both pcs),
+    and unwinds no further.
 - gdb answers a breakpoint request only at a stop, so which side of its launch-start race a take falls on follows
   the host: measured over 80 takes with a probe, and kept as two recorded takes, one each side, in
   `tests/dap-race/`.
