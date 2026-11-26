@@ -111,7 +111,8 @@ pub fn dap_base64(b: List[byte]) -> str {
 }
 
 /// A stack frame as the protocol carries it: its level is its id; a frame with no source has line 0 and no source;
-/// a frame gdb cannot name (`??`) is `???`. module is its moduleId: the program, or the library it is in.
+/// a frame gdb cannot name (`??`) is `???`. module is its moduleId: the program, or the library it is in; "" (a
+/// remote target's pc outside the program's image, as at the reset vector) gives none, as the pinned gdb gives none.
 pub fn dap_frame(v: FrameView, module: str) -> json.Value {
     var f = Map[str, json.Value]()
     f["id"] = json.from_int(v.level)
@@ -119,7 +120,7 @@ pub fn dap_frame(v: FrameView, module: str) -> json.Value {
     f["line"] = json.from_int(if v.path.len() > 0 { v.line } else { 0 })
     f["column"] = json.from_int(0)
     f["instructionPointerReference"] = json.from_str("0x{v.pc:x}")
-    f["moduleId"] = json.from_str(module)
+    if module.len() > 0 { f["moduleId"] = json.from_str(module) }
     if v.path.len() > 0 { f["source"] = source_json(v.path) }
     json.from_map(f)
 }
@@ -232,6 +233,16 @@ fn bytes_before(a: str, b: str) -> bool {
         i += 1
     }
     x.len < y.len
+}
+
+/// The body of a `process` event for a remote target (attach with target): not a local process, and no process id,
+/// as the pinned gdb sends it over QEMU's gdbstub.
+pub fn dap_remote_process(name: str) -> json.Value {
+    var p = Map[str, json.Value]()
+    p["isLocalProcess"] = json.from_bool(false)
+    p["startMethod"] = json.from_str("attach")
+    p["name"] = json.from_str(name)
+    json.from_map(p)
 }
 
 // ---- the wire ----
