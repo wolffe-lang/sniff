@@ -1,6 +1,6 @@
 // `target remote`: the session over a stub (the GDB manual's Connecting node) as the third source of what a
 // stopped program answers (source.lu), beside a process and a core. sniff connects over TCP only, and to one
-// target: QEMU's gdbstub on a kernel at one processor in S8a, whose single thread is the processor. The words
+// target: QEMU's gdbstub on a kernel, whose threads are its processors. The words
 // of each refusal are the pinned gdb's, as its transcripts showed them, where the manual gives none.
 
 use platform
@@ -166,6 +166,10 @@ fn cmd_target(mut s: Session, rest: str) -> str {
 
 /// Drop the remote target from the session (its connection is closed or let go already).
 fn remote_forget(mut s: Session) {
+    while s.rt.len > 0 {
+        let target = (mut s.rt).pop() else { break }
+        remote.disconnect(take target) else { }
+    }
     s.rt = []
     s.remote_on = false
     s.alive = false
