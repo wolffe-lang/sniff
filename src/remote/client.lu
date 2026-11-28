@@ -46,6 +46,32 @@ pub const sniff_features: str = "swbreak+;hwbreak+;vContSupported+;xmlRegisters=
 pub const annex_chunk: int = 4096
 /// The most annexes one description may name.
 pub const annex_cap: int = 16
+/// The bounded all-stop thread list; every identity is a positive plain remote ID.
+pub const thread_cap: int = 1024
+
+/// Decode the list without losing order or aliases, and locate qC's selected thread.
+/// A stub with no list retains its current thread (or the historical thread-one fallback).
+pub fn thread_ids(ids: List[str], current: str) -> (List[int], int) ! ClientError {
+    if ids.len > thread_cap { return bad_reply }
+    var texts = copy ids
+    if texts.len == 0 { texts = [if current == "" { "1" } else { current }] }
+    var numbers: List[int] = []
+    for text in texts {
+        let value = parse_hex(text.bytes()) else { return bad_reply }
+        if value == 0 || value > 1073741823 { return bad_reply }
+        for number in numbers { if number == value as int { return bad_reply } }
+        (mut numbers).push(value as int)
+    }
+    let selected = if current == "" { numbers[0] as u64 } else { parse_hex(current.bytes()) else { return bad_reply } }
+    var at = 0 - 1
+    var i = 0
+    while i < numbers.len {
+        if numbers[i] as u64 == selected { at = i }
+        i += 1
+    }
+    if at < 0 { return bad_reply }
+    (numbers, at)
+}
 
 /// A stop reply's kind: the target stopped with a signal (`T` or `S`), exited (`W`), or was ended by
 /// a signal (`X`).
@@ -249,12 +275,16 @@ pub fn read_threads(mut t: Target) -> () ! ClientError {
         if r[0] as int == 108 {
             more = false
         } else if r[0] as int == 109 {
-            for id in split(text_of(from(r, 1)), 44) { (mut ids).push(id) }
+            for id in split(text_of(from(r, 1)), 44) {
+                if ids.len >= thread_cap { return bad_reply }
+                (mut ids).push(id)
+            }
             r = request(mut t.link, "qsThreadInfo")?
         } else {
             return bad_reply
         }
     }
+    let _ = thread_ids(ids, "")?
     t.threads = ids
 }
 
