@@ -6,6 +6,7 @@ import io
 import importlib.util
 import json
 import os
+import re
 from pathlib import Path
 import tempfile
 import unittest
@@ -19,6 +20,12 @@ spec.loader.exec_module(remote)
 
 
 class ProcessorInputs(unittest.TestCase):
+    def test_combined_gate_step_names_are_unique(self):
+        names = []
+        for file in ('tools/gate', 'tools/gate-remote-smp'):
+            names.extend(re.findall(r'^step ([A-Za-z0-9_-]+) ', (ROOT / file).read_text(), re.M))
+        self.assertEqual(len(names), len(set(names)), 'combined record has duplicate literal leaf names')
+
     def test_count(self):
         self.assertEqual(remote.smp_count({}), 1)
         self.assertEqual(remote.smp_count({'smp': 1}), 1)
