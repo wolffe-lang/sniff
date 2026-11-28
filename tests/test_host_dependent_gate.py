@@ -20,6 +20,7 @@ class HostDependentGate(unittest.TestCase):
             env = dict(os.environ, HOME=d, SHELL='/bin/sh', SNIFF_UNJUDGED_STEPS=names,
                        GITHUB_ACTIONS='true' if hosted else 'false', BASH_ENV='', ENV='')
             script = ('set -euo pipefail\nsource ' + shlex.quote(str(ROOT / 'tools/gate-steps.sh')) + '\n'
+                      'source ' + shlex.quote(str(ROOT / 'tools/host-dependent-steps.sh')) + '\n'
                       'host_dependent_validate\n'
                       'host_dependent_step ' + shlex.quote(step) +
                       " sh -c 'printf \"FAIL oracle-drift standin\\n\"; exit " + str(code) + "'\n"

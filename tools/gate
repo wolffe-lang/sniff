@@ -11,6 +11,7 @@ export XDG_CONFIG_HOME="$HOME/config"
 export TMPDIR="$root/target/tmp"
 export LC_ALL=C TZ=UTC TERM=dumb
 source "$root/tools/gate-steps.sh"
+source "$root/tools/host-dependent-steps.sh"
 host_dependent_validate
 step pin-metadata python3 -I tools/check-pins.py
 step pin-metadata-unit python3 -I tests/test_pins.py
