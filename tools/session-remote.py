@@ -189,6 +189,17 @@ def script_lines(row, port, ap_record=None):
     return lines
 
 
+def driver_fault(ends):
+    """A rescue interrupt after an unexpected timeout is not an ordinary prompt."""
+    for command, ending in ends:
+        if ending == 'prompt':
+            continue
+        if command.startswith('!interrupt ') and ending == 'interrupt:prompt':
+            continue
+        return 'fault: no prompt after: %s (%s)' % (command, ending)
+    return ''
+
+
 def run_tty(argv, lines, prompt, env, timeout):
     """The tool on a new pty that is its controlling terminal; returns (text, exit status, how each line ended)."""
     tag = prompt.encode()
@@ -224,6 +235,8 @@ def run_tty(argv, lines, prompt, env, timeout):
 
     first = read_for(timeout)
     ok = first == 'prompt'
+    if not ok:
+        ends.append(('<initial>', first))
     for line in lines if ok else []:
         wait = None
         cmd = line
@@ -242,7 +255,7 @@ def run_tty(argv, lines, prompt, env, timeout):
                 os.write(master, b'\x03')
                 how = 'timeout,interrupt:' + read_for(GRACE)
         ends.append((line, how))
-        if not how.endswith('prompt'):
+        if driver_fault([(line, how)]):
             break
     try:
         os.write(master, b'quit\n')
@@ -648,12 +661,14 @@ def run_row(a, row, sess, out):
             print('qemu-run %d still running 10 s after row %s: TERM to its recorded pid' % (qr.pid, row['name']))
             qr.terminate()
             qr.wait()
-    bad = [line for line, how in ends if not how.endswith('prompt')]
+    why = driver_fault(ends)
     notes = {}
     got = normalise(text, port, kernel, sess, row.get('normalise', []), ends=ends, tables=getattr(a, 'tables', None), notes=notes)
-    why = ('no prompt after: ' + bad[0]) if bad else ''
-    if notes.get('problems'):
-        why = 'interrupt-stop ' + '; '.join(notes['problems'])
+    comparison_problem = 'interrupt-stop ' + '; '.join(notes['problems']) if notes.get('problems') else ''
+    (out / (row['name'] + '.driver.json')).write_text(json.dumps(
+        {'exit': rc, 'ends': ends, 'driver_fault': why, 'comparison_problem': comparison_problem}, indent=2) + '\n')
+    if not why:
+        why = comparison_problem
     if notes.get('location'):
         # recorded, never gated: where the interrupt byte stopped the machine this time
         print('LOCATION remote %s accel=%s client=%s %s' % (row['name'], a.accel, 'gdb' if a.mode in ('capture', 'gdb-check') else 'sniff', notes['location']))
@@ -715,10 +730,14 @@ def cmd_run(a):
             continue
         got, why = run_row(a, row, sess, out)
         if got is None:
-            print('FAIL remote %s %s' % (row['name'], why))
+            print('FAIL remote %s %s' % (row['name'], why if why.startswith('fault:') else 'fault: ' + why))
             counts['fail'] += 1
             continue
         (out / (row['name'] + '.txt')).write_text(got)
+        if why and not why.startswith('interrupt-stop '):
+            print('FAIL remote %s %s' % (row['name'], why if why.startswith('fault:') else 'fault: ' + why))
+            counts['fail'] += 1
+            continue
         if row.get('observe'):
             processors, selected = observe_processors(got)
             print('LOCATION remote %s client=%s processors=%d selected=%s unjudged' %
