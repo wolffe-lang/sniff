@@ -43,7 +43,6 @@ fn remote_select(mut s: Session, i: int) -> bool {
     if s.rt.len == 0 || i < 0 || i >= s.thr.len { return false }
     remote.select_thread(mut s.rt[0], remote.hex_u64(s.thr[i].tid as u64)) else { return false }
     s.thr_cur = i
-    s.rt_regs_ok = false
     s.frames_ok = false
     true
 }
