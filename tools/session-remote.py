@@ -772,7 +772,7 @@ def cmd_run(a):
 
 
 def cmd_skip(a):
-    rows = load_rows(None, a.kind)
+    rows = load_rows(None, a.kind, path=getattr(a, 'rows', None))
     for row in rows:
         print('SKIP remote %s reason=%s' % (row['name'], row.get('skip') or a.reason))
     print('remote rows (skip): 0 pass, 0 fail, %d skip' % len(rows))
@@ -2259,6 +2259,7 @@ def main():
     ps.add_argument('--only')
     ps.add_argument('--out', default=str(ROOT / 'target/server-pax-out'))
     sk = sub.add_parser('skip')
+    sk.add_argument('--rows', help='another row inventory, including the SMP fixtures')
     sk.add_argument('--kind', choices=('kernel', 'server', 'server-pax'), default='kernel')
     sk.add_argument('--reason', required=True)
     sk.add_argument('--expect', type=int, help='the held number of rows, refused by name when the row file differs')
