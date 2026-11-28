@@ -130,8 +130,63 @@ def listening(port, limit=60.0):
     return False
 
 
-def script_lines(row, port):
-    return [line.replace('@PORT@', str(port)) for line in row['script']]
+def observe_processors(text):
+    ids = set(re.findall(r'^[* ] +\d+ +Thread 1\.(\d+)\b', text, re.M))
+    selected = re.findall(r'\[Current thread is (\d+) \(', text)
+    return len(ids), selected[-1] if selected else 'unknown'
+
+
+def smp_count(row):
+    count = row.get('smp', 1)
+    if type(count) is not int or count not in (1, 4):
+        raise ValueError('CPU count must be 1 or 4')
+    return count
+
+
+def smp_environment(env, row):
+    return dict(env, PAX_SMP=str(smp_count(row)))
+
+
+def smp_record(pax, kernel, image, prediction):
+    """Derive the condition from the pinned producer's declarations, never from a row literal."""
+    import hashlib
+    try:
+        evidence = prediction['input_evidence']
+        source = Path(pax) / 'kernel/smp/smp.lu'
+        for path, want in ((Path(kernel), evidence['kernel']['sha256']),
+                           (Path(image), evidence['image']['sha256']),
+                           (source, evidence['smp_source_sha256'])):
+            if hashlib.sha256(path.read_bytes()).hexdigest() != want:
+                raise ValueError('input digest differs: ' + path.name)
+        text = source.read_text()
+        values = {}
+        for name in ('CPUS', 'SPAN'):
+            found = re.findall(r'^pub const ' + name + r': u64 = (0x[0-9a-fA-F_]+|[0-9_]+);?$', text, re.M)
+            if len(found) != 1:
+                raise ValueError('input declaration missing or ambiguous: ' + name)
+            values[name] = int(found[0].replace('_', ''), 0)
+            if values[name] != int(prediction['oracle_census'][name.lower()], 0):
+                raise ValueError('input constant moved: ' + name)
+        index = prediction['oracle_census']['cpu_index']
+        if type(index) is not int or index != 1:
+            raise ValueError('input CPU index must be 1')
+        record = values['CPUS'] + values['SPAN'] * index
+        if not 0 <= record < 1 << 64:
+            raise ValueError('input record overflows the target address')
+        return record - (1 << 64) if record >= 1 << 63 else record
+    except (OSError, KeyError, TypeError) as e:
+        raise ValueError('input unreadable: ' + str(e)) from e
+
+
+def script_lines(row, port, ap_record=None):
+    lines = []
+    for line in row['script']:
+        if '@AP_RECORD@' in line:
+            if ap_record is None:
+                raise ValueError('input missing for AP record condition')
+            line = line.replace('@AP_RECORD@', str(ap_record))
+        lines.append(line.replace('@PORT@', str(port)))
+    return lines
 
 
 def run_tty(argv, lines, prompt, env, timeout):
@@ -554,6 +609,17 @@ def tool_argv(a, kernel):
 
 def run_row(a, row, sess, out):
     kernel = Path(a.kernel).resolve()
+    try:
+        qenv = smp_environment(dict(os.environ), row)
+        if type(row.get('capture_boots', 2)) is not int or row.get('capture_boots', 2) not in (2, 5):
+            raise ValueError('input capture boots must be 2 or 5')
+        record = None
+        if row.get('input') == 's8b':
+            prediction = json.loads((ROOT / 'tests/s8b-prediction.json').read_text())
+            record = smp_record(a.pax, a.kernel, a.image, prediction)
+        script_lines(row, 0, ap_record=record)
+    except (ValueError, OSError) as e:
+        return None, 'fault: input ' + str(e)
     env = dict(sess.ENV_BASE)
     env['HOME'] = str(out / 'home')
     env['SHELL'] = '/bin/sh'
@@ -562,7 +628,6 @@ def run_row(a, row, sess, out):
     qr = None
     if row.get('qemu', True):
         port = free_port()
-        qenv = dict(os.environ)
         qenv.update({'PAX_QEMU': a.qemu, 'PAX_BUILD': str(out / 'qemu'), 'TMPDIR': str(out / 'tmp'), 'SHELL': '/bin/sh'})
         (out / 'qemu').mkdir(parents=True, exist_ok=True)
         (out / 'tmp').mkdir(parents=True, exist_ok=True)
@@ -574,7 +639,7 @@ def run_row(a, row, sess, out):
             qr.wait()
             return None, 'qemu-not-listening'
     argv, prompt = tool_argv(a, kernel)
-    text, rc, ends = run_tty(argv, script_lines(row, port), prompt, env, row.get('timeout', 120))
+    text, rc, ends = run_tty(argv, script_lines(row, port, ap_record=record), prompt, env, row.get('timeout', 120))
     (out / (row['name'] + '.tty')).write_text(text)
     if qr is not None:
         try:
@@ -618,7 +683,7 @@ def cmd_run(a):
     sess = load_session()
     out = Path(a.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
-    counts = {'pass': 0, 'fail': 0, 'skip': 0}
+    counts = {'pass': 0, 'fail': 0, 'skip': 0, 'observe': 0}
     a.tables = None
     if any('interrupt-stop' in r.get('normalise', []) and not r.get('skip') for r in load_rows(a.only, path=a.rows)):
         # the kernel's own tables, by the pinned tools only: a missing or unpinned tool is a refusal by name, never a skip
@@ -654,18 +719,28 @@ def cmd_run(a):
             counts['fail'] += 1
             continue
         (out / (row['name'] + '.txt')).write_text(got)
+        if row.get('observe'):
+            processors, selected = observe_processors(got)
+            print('LOCATION remote %s client=%s processors=%d selected=%s unjudged' %
+                  (row['name'], 'gdb' if a.mode != 'check' else 'sniff', processors, selected))
+            counts['observe'] += 1
+            continue
         gold = GOLD / (row['name'] + '.out')
         if a.mode == 'capture':
-            # a golden is written only when a second capture, its own boot, holds the first
-            again, why2 = run_row(a, row, sess, out / 'second')
-            if why or why2 or again is None or again != got:
-                d = why or why2 or ('second capture: ' + first_diff(got, again or ''))
-                print('FAIL remote %s capture not held by a second capture: %s' % (row['name'], d))
+            # The SMP stop/step/reconnect fixtures require five independent boots, declared per row.
+            problem = ''
+            for take in range(2, row.get('capture_boots', 2) + 1):
+                again, why2 = run_row(a, row, sess, out / ('take-%d' % take))
+                if why or why2 or again is None or again != got:
+                    problem = why or why2 or ('capture %d: ' % take + first_diff(got, again or ''))
+                    break
+            if problem:
+                print('FAIL remote %s capture not held by independent boots: %s' % (row['name'], problem))
                 counts['fail'] += 1
                 continue
             GOLD.mkdir(parents=True, exist_ok=True)
             gold.write_text(got)
-            print('CAPTURED remote %s (held by a second capture)' % row['name'])
+            print('CAPTURED remote %s (held by %d separate boots)' % (row['name'], row.get('capture_boots', 2)))
             counts['pass'] += 1
             continue
         if row.get('own') is not None:
@@ -690,6 +765,8 @@ def cmd_run(a):
         else:
             print('PASS remote %s' % row['name'])
             counts['pass'] += 1
+    if counts['observe']:
+        print('remote observations: %d unjudged' % counts['observe'])
     print('remote rows (%s, %s): %d pass, %d fail, %d skip' % (a.mode, a.accel, counts['pass'], counts['fail'], counts['skip']))
     return 1 if counts['fail'] else 0
 
