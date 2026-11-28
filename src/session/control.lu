@@ -320,6 +320,12 @@ fn step_insn(mut s: Session) -> Event {
     classify(mut s, st, true)
 }
 
+/// Eligibility for advancing another stopped thread; kept pure for the all-stop counterexamples.
+pub fn step_over_candidate(tid: int, keep: int, running: bool, pending: int, event_tid: int,
+                          _remote_on: bool, _remote_stop: int) -> bool {
+    tid != keep && !running && pending < 0 && (event_tid == 0 || tid == event_tid)
+}
+
 /// Every other stopped thread whose pc is at a breakpoint (the one that reported it, after a `thread` to
 /// another) steps past it before the program resumes, or it would hit it again at once. They step with no
 /// signal: the selected thread's waits for the resume. An event on the way is returned, its thread selected.
@@ -336,7 +342,7 @@ fn step_others_over(mut s: Session) -> Event {
     var i = 0
     while i < s.thr.len {
         let tid = s.thr[i].tid
-        if tid != keep && !s.thr[i].running && s.thr[i].pending < 0 && (ev == 0 || tid == ev) { (mut tids).push(tid) }
+        if step_over_candidate(tid, keep, s.thr[i].running, s.thr[i].pending, ev, s.remote_on, 0) { (mut tids).push(tid) }
         i += 1
     }
     for tid in tids {
