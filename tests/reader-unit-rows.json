@@ -173,6 +173,12 @@
     "remote-link-refused",
     "remote-link-ask"
   ],
+  "remote_threads_test.lu": [
+    "remote-thread-identities",
+    "remote-thread-fallback",
+    "remote-thread-invalid",
+    "remote-thread-cap"
+  ],
   "client_test.lu": [
     "remote-client-start",
     "remote-client-noack",
