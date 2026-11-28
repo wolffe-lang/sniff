@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 """The remote harness binds CPU count and conditional stops to their inputs."""
+import contextlib
 import hashlib
+import io
 import importlib.util
 import json
 import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
+from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('remote_rows', ROOT / 'tools/session-remote.py')
@@ -66,6 +70,48 @@ class ProcessorInputs(unittest.TestCase):
         self.assertEqual(remote.observe_processors(text), (2, '1'))
         self.assertEqual(remote.observe_processors(text.replace('thread is 1', 'thread is 2')), (2, '2'))
         self.assertEqual(remote.observe_processors(''), (0, 'unknown'))
+
+    def test_fault_precedes_transcript_difference(self):
+        temp_root = Path(os.environ.get('TMPDIR', ROOT / 'target/test-tmp'))
+        temp_root.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=temp_root) as d:
+            p = Path(d)
+            (p / 'standin.out').write_text('expected transcript\n')
+            a = SimpleNamespace(mode='check', out=str(p / 'out'), rows=None, only=None,
+                                accel='tcg', kernel='unused')
+            row = {'name': 'standin', 'script': [], 'qemu': False}
+            output = io.StringIO()
+            with patch.object(remote, 'load_rows', return_value=[row]), \
+                 patch.object(remote, 'load_session', return_value=None), \
+                 patch.object(remote, 'run_row', return_value=('different transcript\n', 'no prompt after: continue')), \
+                 patch.object(remote, 'GOLD', p), contextlib.redirect_stdout(output):
+                self.assertEqual(remote.cmd_run(a), 1)
+            self.assertIn('FAIL remote standin fault: no prompt after: continue', output.getvalue())
+            self.assertNotIn("line 1: want", output.getvalue())
+
+    def test_run_row_preserves_timeout_reason(self):
+        temp_root = Path(os.environ.get('TMPDIR', ROOT / 'target/test-tmp'))
+        temp_root.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=temp_root) as d:
+            p = Path(d)
+            a = SimpleNamespace(kernel=str(p / 'kernel'), mode='check', sniff='standin')
+            row = {'name': 'standin', 'script': ['continue'], 'qemu': False}
+            endings = [('continue', 'timeout,interrupt:prompt')]
+            with patch.object(remote, 'tool_argv', return_value=(['standin'], '(standin) ')), \
+                 patch.object(remote, 'run_tty', return_value=('different transcript', 0, endings)), \
+                 patch.object(remote, 'normalise', return_value='different transcript'):
+                text, fault = remote.run_row(a, row, SimpleNamespace(ENV_BASE={}), p)
+            self.assertEqual(text, 'different transcript')
+            self.assertIn('fault:', fault)
+            self.assertEqual(json.loads((p / 'standin.driver.json').read_text())['driver_fault'], fault)
+
+    def test_timeout_interrupt_is_not_a_successful_prompt(self):
+        self.assertEqual(remote.driver_fault([('continue', 'prompt')]), '')
+        self.assertEqual(remote.driver_fault([('!interrupt 1 continue', 'interrupt:prompt')]), '')
+        for command, ending in [('continue', 'timeout,interrupt:prompt'),
+                                ('continue', 'eof'), ('<initial>', 'time')]:
+            with self.subTest(ending=ending):
+                self.assertIn('fault:', remote.driver_fault([(command, ending)]))
 
     def test_condition_placeholder_requires_binding(self):
         row = {'script': ['break pax_ap_main if rec == @AP_RECORD@']}
