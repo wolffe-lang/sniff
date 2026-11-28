@@ -8,7 +8,7 @@ pax=$1 kernel=$2 image=$3 qemu=$4 sniff=$5 out=$6
 mkdir -p "$out"
 rc=0
 source "$root/tools/gate-remote"
-step remote-smp-harness-unit python3 -I "$root/tests/test_remote_smp.py"
+step remote-smp-input-unit python3 -I "$root/tests/test_remote_smp.py"
 gdb=$(command -v gdb || true)
 step remote-smp-oracle-pin python3 -I - "$root/sniff-oracle.toml" "$gdb" <<'PY'
 import hashlib, subprocess, sys, tomllib
