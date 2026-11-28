@@ -19,5 +19,5 @@ rsp            0xffffd0800004bfa0  0xffffd0800004bfa0
 rbp            0xffffd0800004bff0  0xffffd0800004bff0
 gs_base        0xffffd08000040000  -52226802057216
 #0  pax_ap_main (rec=-52226802057216) at ./smp/smp.lu:781
-(More stack frames follow...)
+781	    percpu.put(rec, percpu.GS_SEEN, unsafe { pax_rdmsr(GS_BASE) })
 [Inferior 1 (process 1) killed]
