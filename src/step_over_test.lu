@@ -1,0 +1,24 @@
+//! member: false
+// A CPU at the address of a conditional breakpoint has not necessarily reported that stop.
+use session
+
+fn main() {
+    // CPU 3 reported the stop; CPU 2 is poised at the same address. Advancing CPU 2 here would
+    // consume its hit without evaluating its condition when execution resumes.
+    assert(!session.step_over_candidate(2, 3, false, -1, 0, true, 3))
+    print("PASS remote-unreported-conditional-stop")
+
+    // After selecting CPU 2, the already reported stop of CPU 3 still needs stepping over.
+    assert(session.step_over_candidate(3, 2, false, -1, 0, true, 3))
+    assert(!session.step_over_candidate(2, 2, false, -1, 0, true, 2))
+    assert(!session.step_over_candidate(3, 2, true, -1, 0, true, 3))
+    assert(!session.step_over_candidate(3, 2, false, 5, 0, true, 3))
+    assert(!session.step_over_candidate(3, 2, false, -1, 0, true, 0))
+    print("PASS remote-consumed-breakpoint-owner")
+
+    // Native all-stop eligibility retains the process backend's event-thread semantics.
+    assert(session.step_over_candidate(3, 2, false, -1, 0, false, 0))
+    assert(session.step_over_candidate(3, 2, false, -1, 3, false, 0))
+    assert(!session.step_over_candidate(4, 2, false, -1, 3, false, 0))
+    print("PASS native-step-over-eligibility")
+}

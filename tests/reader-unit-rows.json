@@ -173,6 +173,11 @@
     "remote-link-refused",
     "remote-link-ask"
   ],
+  "step_over_test.lu": [
+    "remote-unreported-conditional-stop",
+    "remote-consumed-breakpoint-owner",
+    "native-step-over-eligibility"
+  ],
   "remote_threads_test.lu": [
     "remote-thread-identities",
     "remote-thread-fallback",
