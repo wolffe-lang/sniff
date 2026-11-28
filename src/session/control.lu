@@ -322,8 +322,10 @@ fn step_insn(mut s: Session) -> Event {
 
 /// Eligibility for advancing another stopped thread; kept pure for the all-stop counterexamples.
 pub fn step_over_candidate(tid: int, keep: int, running: bool, pending: int, event_tid: int,
-                          _remote_on: bool, _remote_stop: int) -> bool {
-    tid != keep && !running && pending < 0 && (event_tid == 0 || tid == event_tid)
+                          remote_on: bool, remote_stop: int) -> bool {
+    let reported = if remote_on { remote_stop } else { event_tid }
+    tid != keep && !running && pending < 0 &&
+        (if remote_on { reported > 0 && tid == reported } else { reported == 0 || tid == reported })
 }
 
 /// Every other stopped thread whose pc is at a breakpoint (the one that reported it, after a `thread` to
@@ -338,11 +340,12 @@ fn step_others_over(mut s: Session) -> Event {
     // on macOS only the thread that took the exception can be at a breakpoint it reported; another thread
     // stopped at a trap is still waiting to report it
     let ev = platform.target_event_thread(s.inferior)
+    let remote_stop = if s.remote_on { remote_event_thread(s) } else { 0 }
     var tids: List[int] = []
     var i = 0
     while i < s.thr.len {
         let tid = s.thr[i].tid
-        if step_over_candidate(tid, keep, s.thr[i].running, s.thr[i].pending, ev, s.remote_on, 0) { (mut tids).push(tid) }
+        if step_over_candidate(tid, keep, s.thr[i].running, s.thr[i].pending, ev, s.remote_on, remote_stop) { (mut tids).push(tid) }
         i += 1
     }
     for tid in tids {

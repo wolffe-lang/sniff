@@ -48,6 +48,14 @@ fn remote_select(mut s: Session, i: int) -> bool {
     true
 }
 
+/// The processor that actually reported the last stop, not the one a later thread command selected.
+fn remote_event_thread(s: Session) -> int {
+    if s.rt.len == 0 { return 0 }
+    let tid = remote.parse_hex(s.rt[0].stop.thread.bytes()) else { return 0 }
+    if tid == 0 || tid > 1073741823 { return 0 }
+    tid as int
+}
+
 /// n bytes at addr from the stopped target; a short read is a failed one, as a process's is.
 fn remote_mem(s: Session, addr: u64, n: int) -> platform.Bytes {
     let none: List[byte] = []
