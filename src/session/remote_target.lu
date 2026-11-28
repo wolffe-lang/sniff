@@ -38,6 +38,16 @@ fn remote_refresh(mut s: Session) {
     s.rt_regs_ok = s.rt_regs.len > 0
 }
 
+/// Select the CPU for subsequent reads, invalidating both register and frame caches.
+fn remote_select(mut s: Session, i: int) -> bool {
+    if s.rt.len == 0 || i < 0 || i >= s.thr.len { return false }
+    remote.select_thread(mut s.rt[0], remote.hex_u64(s.thr[i].tid as u64)) else { return false }
+    s.thr_cur = i
+    s.rt_regs_ok = false
+    s.frames_ok = false
+    true
+}
+
 /// n bytes at addr from the stopped target; a short read is a failed one, as a process's is.
 fn remote_mem(s: Session, addr: u64, n: int) -> platform.Bytes {
     let none: List[byte] = []
@@ -46,8 +56,11 @@ fn remote_mem(s: Session, addr: u64, n: int) -> platform.Bytes {
     platform.Bytes { ok: d.len == n, data: d }
 }
 
-/// gdb's target id of the remote thread: `Thread 1.N (EXTRA)`, EXTRA what qThreadExtraInfo names.
-fn remote_thread_id(s: Session, i: int) -> str {
+/// gdb's plain target id in current-thread and switching messages.
+fn remote_thread_id(s: Session, i: int) -> str { "Thread 1.{s.thr[i].tid}" }
+
+/// The thread table alone adds the stub's extra information.
+fn remote_thread_table_id(s: Session, i: int) -> str {
     if s.rt.len == 0 { return "Thread 1.{s.thr[i].tid}" }
     let id = remote.hex_u64(s.thr[i].tid as u64)
     let extra = remote.thread_extra(s.rt[0], id) else { return "Thread 1.{s.thr[i].tid}" }
@@ -115,6 +128,10 @@ fn cmd_target(mut s: Session, rest: str) -> str {
         timeout => { return "could not connect: Connection timed out." },
         _ => { return "could not connect: {e}." },
     }
+    let (ids, selected) = remote.thread_ids(target.threads, target.current) else {
+        remote.disconnect(take target) else { }
+        return "could not connect: bad_reply."
+    }
     s.rt = [target]
     s.remote_on = true
     s.alive = true
@@ -126,13 +143,16 @@ fn cmd_target(mut s: Session, rest: str) -> str {
     s.signal_given = false
     s.frames = []
     s.frames_ok = false
-    let tid = if s.rt[0].current == "" { 1 } else { remote.parse_hex(s.rt[0].current.bytes()) else { 1 } }
-    s.thr = [Thr { num: 1, tid: tid as int, tls: 0, running: false, pending: 0 - 1, expect_stop: false }]
-    s.thr_cur = 0
-    s.thr_next = 2
-    s.thr_multi = false
-    s.thr_prev = tid as int
+    s.thr = []
+    for tid in ids {
+        (mut s.thr).push(Thr { num: s.thr.len + 1, tid: tid, tls: 0, running: false, pending: 0 - 1, expect_stop: false })
+    }
+    s.thr_cur = selected
+    s.thr_next = s.thr.len + 1
+    s.thr_multi = s.thr.len > 1
+    s.thr_prev = s.thr[selected].tid
     s.early = []
+    if !remote_select(mut s, selected) { remote_forget(mut s); return "could not connect: bad_reply." }
     remote_refresh(mut s)
     emit_line(mut s, "Remote debugging using {addr}")
     // the pinned gdb reports the stop a connect finds as a signal when the last stop it reported was one (measured)
@@ -264,6 +284,12 @@ fn remote_wait(mut s: Session) -> int {
     }
     let kind = s.rt[0].stop.kind
     let code = s.rt[0].stop.code
+    if kind == remote.stop_signal {
+        let tid = remote.parse_hex(s.rt[0].current.bytes()) else { remote_forget(mut s); return 0 - 1 }
+        if tid > 1073741823 { remote_forget(mut s); return 0 - 1 }
+        let at = thr_index(s, tid as int)
+        if at < 0 || !remote_select(mut s, at) { remote_forget(mut s); return 0 - 1 }
+    }
     remote_disarm_watches(mut s)
     remote_refresh(mut s)
     if kind == remote.stop_exited { return code * 256 }

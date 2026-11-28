@@ -29,6 +29,7 @@ fn thr_reset(mut s: Session) {
 
 /// Select thread i: its registers are the session's from now on.
 fn thr_select(mut s: Session, i: int) {
+    if s.remote_on { let _ = remote_select(mut s, i); return }
     s.thr_cur = i
     s.target = platform.target_thread(s.inferior, s.thr[i].tid)
     s.frames_ok = false
@@ -330,6 +331,7 @@ fn thr_refresh(mut s: Session) {
 /// The stop line's thread: `Thread 4 "prog" ` once the program has had more than one thread, else "".
 fn stop_thread_prefix(s: Session) -> str {
     if !s.thr_multi { return "" }
+    if s.remote_on { return "Thread {s.thr[s.thr_cur].num} " }
     "Thread {s.thr[s.thr_cur].num} \"{thr_name(s, s.thr_cur)}\" "
 }
 
@@ -395,7 +397,7 @@ fn cmd_info_threads(mut s: Session, rest: str) -> str {
     var ids: List[str] = []
     var width = 9
     for k in rows {
-        let id = thr_target_id(mut s, k)
+        let id = if s.remote_on { remote_thread_table_id(s, k) } else { thr_target_id(mut s, k) }
         // a core's threads and a remote target's carry no name (the stub's extra information is in the id)
         let t = if s.core_on || s.remote_on { id } else { "{id} \"{thr_name(s, k)}\"" }
         if t.len() > width { width = t.len() }
@@ -434,7 +436,11 @@ fn cmd_thread(mut s: Session, rest: str) -> str {
         i += 1
     }
     if k < 0 { return "Unknown thread {t}." }
-    thr_select(mut s, k)
+    if s.remote_on {
+        if !remote_select(mut s, k) { return "Could not select thread {t}." }
+    } else {
+        thr_select(mut s, k)
+    }
     compute_frames(mut s)
     let id = thr_target_id(mut s, k)
     emit_line(mut s, "[Switching to thread {s.thr[k].num} ({id})]")
