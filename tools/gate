@@ -11,6 +11,7 @@ export XDG_CONFIG_HOME="$HOME/config"
 export TMPDIR="$root/target/tmp"
 export LC_ALL=C TZ=UTC TERM=dumb
 source "$root/tools/gate-steps.sh"
+host_dependent_validate
 step pin-metadata python3 -I tools/check-pins.py
 step pin-metadata-unit python3 -I tests/test_pins.py
 step snapshot-index python3 -I tests/test_snapshot.py
@@ -22,6 +23,7 @@ step harness-unit python3 -I tests/test_harness.py
 step census-unit python3 -I tests/test_census.py
 step symbol-oracle-unit python3 -I tests/test_symbol_oracle.py
 step gate-switch-unit python3 -I tests/test_gate_switch.py
+step host-dependent-switch-unit python3 -I tests/test_host_dependent_gate.py
 step reader-runner-unit python3 -I tests/test_reader_runner.py
 step tier-planner python3 -I ci/tiers-test.py
 step version-rows python3 -I tools/check-version --self-test
@@ -107,8 +109,8 @@ if [ "$mode" = linux ]; then
   step session-fixtures python3 -I tools/build-session.py --wolf "$wolf" --out "$root/target/session-fixtures"
   step abi-probe-stable python3 -I tools/check-abi.py capture --compare
   step platform-live bash -c "'$wolf' build src/live_platform.lu --no-cache -o '$root/target/live_platform' && '$root/target/live_platform' '$root/target/session-fixtures/c/exits/gcc-O0/prog'"
-  step session-oracle-stable python3 -I tools/session.py oracle
-  step session-rows python3 -I tools/session.py check
+  host_dependent_step session-oracle-stable python3 -I tools/session.py oracle
+  host_dependent_step session-rows python3 -I tools/session.py check
   step session-lupin-join python3 -I tools/session-values.py --sniff "$root/target/sniff" --values target/values/values.json --fixtures "$root/target/session-fixtures"
   step session-expr-join python3 -I tools/session-exprs.py --sniff "$root/target/sniff" --values target/values/values.json --fixtures "$root/target/session-fixtures"
   step session-unwind-basis python3 -I tools/session-unwind.py --sniff "$root/target/sniff"
