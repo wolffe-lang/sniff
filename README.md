@@ -123,6 +123,20 @@ bash tools/gate-remote-smp PAXTREE KERNEL.elf IMAGE.iso QEMU SNIFF OUTDIR
 The six judged rows preserve each accelerator's literal processor IDs, state text, registers and frames. The AP
 condition comes from the pinned PAX source, not a row literal. A seventh row reports start-up reconnect selection
 without judging its incidental frame. A machine without these inputs skips all seven by name; that is no SMP proof.
+The remote driver saves command outcomes and treats an unexpected timeout as a fault even when a rescue interrupt
+brings the prompt back; a differing transcript cannot hide that fault.
+
+Some saved native/core goldens include the kernel and loader's fixed-address layout. If an unchanged baseline has
+already demonstrated a different layout, a local take may explicitly report just these leaves without judging them:
+
+```sh
+SNIFF_UNJUDGED_STEPS=session-oracle-stable,session-rows bash tools/gate linux
+```
+
+Both commands still run. Their complete output and exit status are retained under separately named `report-` leaves
+with an `UNJUDGED` line; the later leaves still run. This is not a matching-golden result. Unknown or duplicate names,
+wildcards and use in hosted CI are refused. With the switch unset, including in CI, both leaves remain strict. The
+hosted matrix must judge them; no saved golden is rewritten or normalized by this switch.
 
 The Linux wrapper also accepts `SNIFF_ENGINE=podman`. Choose CPUs permitted by
 the execution environment. Shared development machines require their CPU and

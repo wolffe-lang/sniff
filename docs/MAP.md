@@ -394,7 +394,10 @@ On Linux, a remote connection keeps every processor from the stub's thread list,
 identity. Plain positive thread IDs are bounded at 1,024 and decoded before the session is made; duplicate aliases,
 invalid IDs and an unlisted current thread are refused. Selecting a processor sends `Hg` and invalidates both the
 register and frame views. A stop's `thread:` selects its owner before the next read; `vCont;s:THREAD` steps that
-processor alone. Only the thread table adds `qThreadExtraInfo`; current-thread and switching lines use the plain ID.
+processor alone. Another processor poised at a conditional breakpoint is not stepped past merely because its PC
+matches: only a processor that actually reported its stop is eligible, so an unreported hit still evaluates its
+condition. A pure counterexample row holds that distinction and keeps native-process eligibility unchanged.
+Only the thread table adds `qThreadExtraInfo`; current-thread and switching lines use the plain ID.
 
 `tests/remote-smp-rows.json` and `tools/gate-remote-smp` hold enumeration, selection and invalid selection, a
 conditional stop on a secondary processor, that processor's instruction step, and reconnect at reset to GDB under
@@ -406,7 +409,9 @@ its own literal golden: KVM reports reset APs as running, TCG as halted. No proc
 A reconnect after start-up selects the BSP, whose stopped frame is incidental. That row prints one unjudged
 processor-count/selection observation rather than comparing its frames. The judged reconnect instead steps the BSP
 once at reset, selects an AP with a different PC, reconnects and checks the fresh selection and all four processors.
-These are QEMU processors, not the kernel's scheduled tasks. Mac-host cross-architecture debugging remains open;
+These are QEMU processors, not the kernel's scheduled tasks. Every remote row stores its command outcomes in a
+`.driver.json` file. An unexpected timeout is a driver fault, even if its rescue interrupt produces a prompt and a
+transcript difference; fault classification precedes comparison. Mac-host cross-architecture debugging remains open;
 this unit does not complete S8.
 
 ### The debug adapter's base protocol (S9, `sniff --dap`)

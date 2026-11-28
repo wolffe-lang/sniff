@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Every END is a real child exit, including pipeline-independent failures.
+# Ordinary leaves retain child exits. Explicit host-layout reports are separately named and unjudged.
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$root"
