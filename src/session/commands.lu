@@ -36,6 +36,9 @@ fn report_end(mut s: Session, e: Event) {
 
 /// Report how a resume ended.
 fn report_event(mut s: Session, e: Event) {
+    if s.remote_on && e.kind == ev_breakpoint && s.thr_cur > 0 {
+        let _ = remote_select(mut s, 0)
+    }
     if e.kind == ev_watch { report_watch(mut s, e.bp); return }
     if e.kind == ev_scope { return }
     if e.kind == ev_breakpoint {
