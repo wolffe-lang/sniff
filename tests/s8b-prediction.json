@@ -1,0 +1,32 @@
+{
+  "purpose": "Four-processor remote kernel sessions, before implementation. This unit is Linux-hosted; the Mac cross-architecture client and the rest of S8 remain outstanding.",
+  "base": "e925c88df3d19ab9e901f92b249c7949eda13739",
+  "input_evidence": {
+    "pax_commit": "c316d799115a26d4faf477645886b0978f67dcae",
+    "builds": 2,
+    "identical": true,
+    "kernel": {"size": 4056440, "sha256": "3f9f45871d982f191b72a1f37d13cb7c430134e08d32e842be051ef0b799adb1"},
+    "image": {"size": 8376320, "sha256": "64e5144dad5de893b94c8943c133bd14ae25e452d5bf331b5cff26999943f97a"},
+    "initramfs": {"size": 12104, "sha256": "b0286e1f4b01474004c5271060d45ec80eafa51b68c936f2dbb045e053362b1f"},
+    "ask": {"size": 11488, "sha256": "8135a52198469ad157920df8281b00a13853f7dbcafd79614be0df8d1fd74933"},
+    "recipe": "PAX tools/fetch-wolf, fetch-limine, build-kernel --src kernel/kmain_console.lu, mkuser, mkinitramfs and mkimage with limine-initramfs-quiet.conf. The console runs /bin/ask tty. mkuser's CC hook adds -save-temps=obj: otherwise a random temporary object FILE symbol changes ask's bytes. Two fresh output directories agree without byte normalization.",
+    "wolf_archive_sha256": "4cc4045bbbb605c07835bc4f32685953c784eeef4cd3139a48b457dfc90dad1a",
+    "limine_archive_sha256": "5cdebc518daa3af30b22c2322ba0dba2e0e2046fa8b087b9e13071b8dbcdcff4",
+    "clang_sha256": "8ef402d453d1ba4902e4ee0f0f847f6cfa01400c95aa43c24e97818b9c0e3f45",
+    "gcc_sha256": "1b99826121ae6682a634e5efe09bd3e3df58ce58e0b28f849114ab5b89139c26",
+    "lld_sha256": "7ad9a0e8fe6d0e79b71172d731e33872c0274e49fceb7b516d774876d5a58ade",
+    "xorriso_sha256": "c66a5be11a674e97ed8983af520eae8fad900b47d104c92bc63e5cf254391922"
+  },
+  "oracle": "The existing binary pins: GDB 15.1 and QEMU 11.1.2, with version and SHA-256 checked before a judged row. Capture twice on separate boots under KVM and TCG. Old one-processor artifacts and goldens are unchanged.",
+  "predictions": [
+    {"row": "remote-smp4-threads", "claim": "GDB lists four QEMU CPUs as four distinct debugger threads. Trunk sniff lists only one; the comparison is red before the fix."},
+    {"row": "remote-smp4-select", "claim": "After one BSP instruction at reset, CPU selection exposes that CPU's own registers and frame. Trunk cannot select CPUs 2 to 4. Switching back must not reuse another CPU's cache; an invalid thread number leaves the selection unchanged."},
+    {"row": "remote-smp4-ap-break", "claim": "A breakpoint at the existing pax_ap_main secondary-CPU entry has a repeatable first secondary-CPU stop. The stop reply's thread, current-thread line, frame and registers agree. Trunk does not synchronize its session thread with the stop reply."},
+    {"row": "remote-smp4-step-selected", "claim": "A single step after the AP stop advances the selected CPU through vCont;s:THREAD and refreshes its registers/frame, rather than the BSP's."},
+    {"row": "remote-smp4-reconnect", "claim": "A reconnect re-enumerates all CPUs and selects the stop actually reported, dropping the previous connection's caches."},
+    {"row": "harness-smp", "claim": "The explicit row CPU count reaches QEMU and is bound to its golden. An invalid count or mismatched count is refused, not silently run as one CPU."},
+    {"row": "plants", "claim": "Forcing BSP ownership after an AP stop fails remote-smp4-ap-break; preserving the old CPU's cache across selection fails remote-smp4-select. Both fail by comparison, never by timeout."}
+  ],
+  "comparison": "Keep CPU count, identity, selection, stop ownership and instruction progression asserted. Existing port/path/terminal normalization only. If a secondary CPU's stop or another CPU's incidental frame makes two oracle captures unstable, record it and settle the comparison before changing debugger code; do not mask it with a broad SMP normalization.",
+  "scope": "QEMU vCPUs, all-stop, at one and four processors. No scheduled-task enumeration, PAX kernel changes, assignments, flags types, DAP changes, Mac remote implementation or performance claims. Rows already green on trunk are regression guards, not natural reds."
+}
