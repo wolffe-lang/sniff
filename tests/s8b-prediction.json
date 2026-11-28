@@ -15,7 +15,8 @@
     "clang_sha256": "8ef402d453d1ba4902e4ee0f0f847f6cfa01400c95aa43c24e97818b9c0e3f45",
     "gcc_sha256": "1b99826121ae6682a634e5efe09bd3e3df58ce58e0b28f849114ab5b89139c26",
     "lld_sha256": "7ad9a0e8fe6d0e79b71172d731e33872c0274e49fceb7b516d774876d5a58ade",
-    "xorriso_sha256": "c66a5be11a674e97ed8983af520eae8fad900b47d104c92bc63e5cf254391922"
+    "xorriso_sha256": "c66a5be11a674e97ed8983af520eae8fad900b47d104c92bc63e5cf254391922",
+    "smp_source_sha256": "5492c14503a3078de8ef17e21e7559e2fdf02deb847b18fe34e1b55c8a1b0c55"
   },
   "oracle": "The existing binary pins: GDB 15.1 and QEMU 11.1.2, with version and SHA-256 checked before a judged row. Capture twice on separate boots under KVM and TCG. Old one-processor artifacts and goldens are unchanged.",
   "oracle_census": {
@@ -25,7 +26,8 @@
     "cpus": "0xffffd08000000000",
     "span": "0x40000",
     "cpu_index": 1,
-    "acceptance": "Each of the conditional AP-break, selected-step and reconnect rows must agree across five separate boots under each accelerator before it gets a golden. Any differing take stops implementation for a decision."
+    "acceptance": "Each of the conditional AP-break, selected-step and reconnect rows must agree across five separate boots under each accelerator before it gets a golden. Any differing take stops implementation for a decision.",
+    "conditional_measurement": "AP-break and selected-step each agreed across all five boots under each accelerator (twenty captures). Reconnect agreed in five KVM boots but not five TCG boots: after connecting again, GDB selects the BSP and prints its contemporaneous stopped frame, not the AP frame. Four TCG takes differed from the first: clock.read32, smp.start_aps or apic.read, with differing clock-register arguments. No reconnect golden is accepted; implementation stops for a decision. The CPU-1 record condition itself remained literal and stable; no identity normalization was applied."
   },
   "predictions": [
     {"row": "remote-smp4-threads", "claim": "GDB lists four QEMU CPUs as four distinct debugger threads. Trunk sniff lists only one; the comparison is red before the fix."},
