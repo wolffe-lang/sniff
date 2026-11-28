@@ -1,0 +1,6 @@
+Reading symbols from KERNEL...
+Remote debugging using 127.0.0.1:PORT
+0x000000000000fff0 in ?? ()
+  Id   Target Id                    Frame 
+* 1    Thread 1.1 (CPU#0 [running]) 0x000000000000fff0 in ?? ()
+[Inferior 1 (process 1) killed]

@@ -1,0 +1,22 @@
+Reading symbols from KERNEL...
+Remote debugging using 127.0.0.1:PORT
+0x000000000000fff0 in ?? ()
+Hardware assisted breakpoint 1 at 0xffffffff8011ab13: file ./kmain_console.lu, line 555.
+Continuing.
+
+Thread 1 hit Breakpoint 1, kmain () at ./kmain_console.lu:555
+555	    identity.mark_entry() // px87 (pax#253): the TSC at the entry, for the boot line
+Breakpoint 2 at 0xffffffff8014b612: file ./smp/smp.lu, line 781.
+Continuing.
+[Switching to Thread 1.2]
+
+Thread 2 hit Breakpoint 2, pax_ap_main (rec=-52226802057216) at ./smp/smp.lu:781
+781	    percpu.put(rec, percpu.GS_SEEN, unsafe { pax_rdmsr(GS_BASE) })
+[Current thread is 2 (Thread 1.2)]
+rip            0xffffffff8014b612  0xffffffff8014b612 <pax_ap_main+42>
+rsp            0xffffd0800004bfa0  0xffffd0800004bfa0
+rbp            0xffffd0800004bff0  0xffffd0800004bff0
+gs_base        0xffffd08000040000  -52226802057216
+#0  pax_ap_main (rec=-52226802057216) at ./smp/smp.lu:781
+(More stack frames follow...)
+[Inferior 1 (process 1) killed]
