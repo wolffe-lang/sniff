@@ -58,6 +58,15 @@ class ProcessorInputs(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'input'):
                 remote.smp_record(p, kernel, image, prediction)
 
+    def test_unjudged_observation_preserves_actual_selection(self):
+        text = ('  Id Target Id Frame\n'
+                '* 1 Thread 1.1 (CPU#0 [running]) any_frame\n'
+                '  2 Thread 1.2 (CPU#1 [running]) another_frame\n'
+                '[Current thread is 1 (Thread 1.1)]\n')
+        self.assertEqual(remote.observe_processors(text), (2, '1'))
+        self.assertEqual(remote.observe_processors(text.replace('thread is 1', 'thread is 2')), (2, '2'))
+        self.assertEqual(remote.observe_processors(''), (0, 'unknown'))
+
     def test_condition_placeholder_requires_binding(self):
         row = {'script': ['break pax_ap_main if rec == @AP_RECORD@']}
         with self.assertRaisesRegex(ValueError, 'input'):
