@@ -388,6 +388,27 @@ nothing instead of trapping. A frame at a pc in no known code takes its caller f
 and on arm64, at a pc whose instruction cannot be read, from the link register with the frame unchanged, as the pinned
 gdb and Apple's lldb name the calling function there.
 
+### Four-processor kernel sessions (S8b, first unit)
+
+On Linux, a remote connection keeps every processor from the stub's thread list, its original order and selected
+identity. Plain positive thread IDs are bounded at 1,024 and decoded before the session is made; duplicate aliases,
+invalid IDs and an unlisted current thread are refused. Selecting a processor sends `Hg` and invalidates both the
+register and frame views. A stop's `thread:` selects its owner before the next read; `vCont;s:THREAD` steps that
+processor alone. Only the thread table adds `qThreadExtraInfo`; current-thread and switching lines use the plain ID.
+
+`tests/remote-smp-rows.json` and `tools/gate-remote-smp` hold enumeration, selection and invalid selection, a
+conditional stop on a secondary processor, that processor's instruction step, and reconnect at reset to GDB under
+KVM and TCG. The kernel/image and the source declarations are digest-bound in `tests/s8b-prediction.json`. The
+condition derives CPU index 1's record from PAX's own `CPUS + SPAN`, with changed inputs refused as input faults.
+The stop, step and reset reconnect goldens each require five agreeing boots per accelerator. Each accelerator keeps
+its own literal golden: KVM reports reset APs as running, TCG as halted. No processor identity or frame is normalized.
+
+A reconnect after start-up selects the BSP, whose stopped frame is incidental. That row prints one unjudged
+processor-count/selection observation rather than comparing its frames. The judged reconnect instead steps the BSP
+once at reset, selects an AP with a different PC, reconnects and checks the fresh selection and all four processors.
+These are QEMU processors, not the kernel's scheduled tasks. Mac-host cross-architecture debugging remains open;
+this unit does not complete S8.
+
 ### The debug adapter's base protocol (S9, `sniff --dap`)
 
 `sniff --dap` speaks the Debug Adapter Protocol on standard input and output, and nowhere else. The protocol has no

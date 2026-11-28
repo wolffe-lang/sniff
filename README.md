@@ -16,7 +16,10 @@ stepping, frames, values, registers, watchpoints, threads (all-stop) and signals
 a core file as a stopped program: an ELF core of a Linux program, or on macOS a Mach-O core lldb wrote. On Linux,
 `target remote HOST:PORT` debugs a target over the GDB remote protocol (S8): held so far to QEMU's gdbstub on PAX's
 console kernel at one processor (reads, breakpoints including `hbreak`, stepping, the interrupt, watchpoints, `detach`,
-`disconnect` and `kill`); assignment over a remote target, and the Mac's kernel rows, come later. It is held to transcripts of the pinned gdb
+`disconnect` and `kill`). Its four-processor rows additionally hold CPU enumeration and selection, a secondary-CPU
+conditional stop and instruction step, and reconnect at reset to gdb under KVM and TCG. These are QEMU processors,
+not PAX tasks. Assignment over a remote target and the Mac's cross-architecture kernel client remain open; S8 is not
+complete. It is held to transcripts of the pinned gdb
 and, on macOS, to Apple's lldb (facts) and to lupin's values; `sniff dump` still prints the S1 reader views.
 On PAX it is a static program of the dev image and debugs static programs with PAX's ptrace (see notes/sn04-sniff-on-pax.md). [MAP](docs/MAP.md) separates planned
 capabilities from measured ones.
@@ -109,6 +112,17 @@ bash tools/gate unit                 # parser/comparator/tier contracts and save
 bash tools/gate macos                # SDK tools; downloads only pinned wolf/lupin archives
 SNIFF_CPUS=0 bash tools/in-container  # Docker; bounded Linux fixture and oracle gates
 ```
+
+The SMP kernel input is separate from the original one-processor fixture. Build the exact PAX commit and artifacts
+recorded in `tests/s8b-prediction.json`, then run the pinned image's GDB and QEMU with:
+
+```sh
+bash tools/gate-remote-smp PAXTREE KERNEL.elf IMAGE.iso QEMU SNIFF OUTDIR
+```
+
+The six judged rows preserve each accelerator's literal processor IDs, state text, registers and frames. The AP
+condition comes from the pinned PAX source, not a row literal. A seventh row reports start-up reconnect selection
+without judging its incidental frame. A machine without these inputs skips all seven by name; that is no SMP proof.
 
 The Linux wrapper also accepts `SNIFF_ENGINE=podman`. Choose CPUs permitted by
 the execution environment. Shared development machines require their CPU and
