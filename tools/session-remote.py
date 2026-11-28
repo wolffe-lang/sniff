@@ -725,7 +725,7 @@ def cmd_run(a):
                   (row['name'], 'gdb' if a.mode != 'check' else 'sniff', processors, selected))
             counts['observe'] += 1
             continue
-        gold = GOLD / (row['name'] + '.out')
+        gold = GOLD / (row['name'] + ('.' + a.accel if row.get('golden_by_accel') else '') + '.out')
         if a.mode == 'capture':
             # The SMP stop/step/reconnect fixtures require five independent boots, declared per row.
             problem = ''

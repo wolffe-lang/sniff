@@ -1,0 +1,26 @@
+Reading symbols from KERNEL...
+Remote debugging using 127.0.0.1:PORT
+0x000000000000fff0 in ?? ()
+0x000000000000e05b in ?? ()
+  Id   Target Id                    Frame 
+* 1    Thread 1.1 (CPU#0 [running]) 0x000000000000e05b in ?? ()
+  2    Thread 1.2 (CPU#1 [halted ]) 0x000000000000fff0 in ?? ()
+  3    Thread 1.3 (CPU#2 [halted ]) 0x000000000000fff0 in ?? ()
+  4    Thread 1.4 (CPU#3 [halted ]) 0x000000000000fff0 in ?? ()
+[Switching to thread 2 (Thread 1.2)]
+#0  0x000000000000fff0 in ?? ()
+rip            0xfff0              0xfff0
+cs             0xf000              61440
+gs_base        0x0                 0
+[Switching to thread 1 (Thread 1.1)]
+#0  0x000000000000e05b in ?? ()
+rip            0xe05b              0xe05b
+cs             0xf000              61440
+gs_base        0x0                 0
+[Switching to thread 4 (Thread 1.4)]
+#0  0x000000000000fff0 in ?? ()
+[Switching to thread 3 (Thread 1.3)]
+#0  0x000000000000fff0 in ?? ()
+Unknown thread 5.
+[Current thread is 3 (Thread 1.3)]
+[Inferior 1 (process 1) killed]
